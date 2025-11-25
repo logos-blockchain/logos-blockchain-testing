@@ -1,0 +1,50 @@
+# Config file reference can be found at https://embarkstudios.github.io/cargo-deny/checks/cfg.html.
+
+[graph]
+all-features        = true
+exclude-dev         = true
+no-default-features = true
+
+[advisories]
+ignore = [
+  # Keep local ignores in sync with nomos-node if needed. Unused entries removed.
+]
+yanked = "deny"
+
+[bans]
+allow-wildcard-paths = false
+multiple-versions    = "allow"
+
+[licenses]
+allow = [
+  "Apache-2.0 WITH LLVM-exception",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "BlueOak-1.0.0",
+  "CC0-1.0",
+  "CDDL-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "NCSA",
+  "Unicode-3.0",
+  "Zlib",
+]
+private = { ignore = false }
+unused-allowed-license = "deny"
+
+[[licenses.clarify]]
+expression    = "MIT AND ISC"
+license-files = [{ hash = 0xbd0eed23, path = "LICENSE" }]
+name          = "ring"
+
+[sources]
+allow-git        = ["https://github.com/EspressoSystems/jellyfish.git"]
+unknown-git      = "deny"
+unknown-registry = "deny"
+
+[sources.allow-org]
+github = ["logos-co"]

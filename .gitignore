@@ -1,0 +1,10 @@
+/target
+**/target
+.tmp/
+# IDE / OS cruft
+.idea/
+.DS_Store
+
+# Local test artifacts (kept when NOMOS_TESTS_KEEP_LOGS=1)
+tests/workflows/.tmp*
+tests/workflows/.tmp*/

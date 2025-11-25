@@ -1,0 +1,40 @@
+repos:
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        # We're running `fmt` with `--all` and `pass_filenames: false` to format the entire workspace at once.
+        # Otherwise, `pre-commit` passes staged files one by one, which can lead to inconsistent results
+        # due to, presumably, the lack of full workspace context.
+        entry: cargo +nightly-2025-09-14 fmt
+        pass_filenames: false
+      - id: clippy
+        args: ["--all", "--all-targets", "--all-features", "--", "-D", "warnings"]
+  - repo: https://github.com/EmbarkStudios/cargo-deny
+    rev: 0.18.2
+    hooks:
+      - id: cargo-deny
+        args:
+          - check
+          - --hide-inclusion-graph
+          - -c
+          - .cargo-deny.toml
+          - --show-stats
+          - -D
+          - warnings
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
+      - id: taplo-lint
+  - repo: https://github.com/bnjbvr/cargo-machete
+    rev: ba1bcd4 # No tag yet with .pre-commit-hooks.yml
+    hooks:
+      - id: cargo-machete
+  - repo: local
+    hooks:
+      - id: cargo-hack-check
+        language: script
+        name: cargo hack check
+        entry: ./hooks/cargo-hack.sh
+        stages: [manual]
