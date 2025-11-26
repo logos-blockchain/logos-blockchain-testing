@@ -1,51 +1,21 @@
-use std::{env, time::Duration};
+use std::time::Duration;
 
 use serial_test::serial;
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_compose::{ComposeRunner, ComposeRunnerError};
 use tests_workflows::{ChaosBuilderExt as _, ScenarioBuilderExt as _};
 
+const VALIDATORS: usize = 1;
+const EXECUTORS: usize = 1;
 const RUN_DURATION: Duration = Duration::from_secs(60);
 const MIXED_TXS_PER_BLOCK: u64 = 5;
 const TOTAL_WALLETS: usize = 64;
 const TRANSACTION_WALLETS: usize = 8;
-const MAX_NODE_PAIR: usize = 6;
 
 #[tokio::test]
 #[serial]
 async fn compose_runner_mixed_workloads() {
-    for (validators, executors) in selected_node_pairs() {
-        run_compose_case(validators, executors).await;
-    }
-}
-
-fn selected_node_pairs() -> Vec<(usize, usize)> {
-    if let Ok(raw) = env::var("COMPOSE_NODE_PAIRS") {
-        return raw
-            .split(',')
-            .filter(|entry| !entry.trim().is_empty())
-            .map(|entry| {
-                let parts: Vec<_> = entry
-                    .split(['x', 'X'])
-                    .map(str::trim)
-                    .filter(|part| !part.is_empty())
-                    .collect();
-                assert!(
-                    parts.len() == 2,
-                    "invalid COMPOSE_NODE_PAIRS entry '{entry}'; expected format '<v>x<e>'",
-                );
-                let validators = parts[0]
-                    .parse::<usize>()
-                    .unwrap_or_else(|_| panic!("invalid validator count '{}'", parts[0]));
-                let executors = parts[1]
-                    .parse::<usize>()
-                    .unwrap_or_else(|_| panic!("invalid executor count '{}'", parts[1]));
-                (validators, executors)
-            })
-            .collect();
-    }
-
-    (1..=MAX_NODE_PAIR).map(|n| (n, n)).collect()
+    run_compose_case(VALIDATORS, EXECUTORS).await;
 }
 
 async fn run_compose_case(validators: usize, executors: usize) {

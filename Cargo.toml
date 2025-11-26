@@ -1,6 +1,5 @@
 [workspace]
 members = [
-  "patches/services-utils",
   "testing-framework/configs",
   "testing-framework/core",
   "testing-framework/runners/compose",
@@ -28,10 +27,6 @@ unsafe_code = "allow"
 [workspace.lints.clippy]
 all = "allow"
 
-[patch."https://github.com/logos-co/nomos-node.git"]
-cfgsync        = { path = "testnet/cfgsync" }
-services-utils = { path = "patches/services-utils" }
-
 [workspace.dependencies]
 # Local testing framework crates
 integration-configs              = { default-features = false, path = "testing-framework/configs" }
@@ -43,7 +38,7 @@ testing-framework-workflows      = { default-features = false, path = "testing-f
 
 # Nomos git dependencies (tracking master)
 broadcast-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", branch = "master" }
-cfgsync = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", branch = "master" }
+cfgsync = { default-features = false, path = "testnet/cfgsync" }
 chain-leader = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", branch = "master", features = [
   "pol-dev-mode",
 ] }

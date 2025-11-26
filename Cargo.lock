@@ -6782,18 +6782,15 @@ dependencies = [
 [[package]]
 name = "services-utils"
 version = "0.1.0"
+source = "git+https://github.com/logos-co/nomos-node.git?branch=master#2f60a0372c228968c3526c341ebc7e58bbd178dd"
 dependencies = [
  "async-trait",
- "bincode",
  "futures",
- "hex",
  "log",
  "overwatch",
- "overwatch-derive",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "tokio",
  "tracing",
 ]
 

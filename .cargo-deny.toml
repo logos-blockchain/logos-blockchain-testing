@@ -8,6 +8,12 @@ no-default-features = true
 [advisories]
 ignore = [
   # Keep local ignores in sync with nomos-node if needed. Unused entries removed.
+  "RUSTSEC-2024-0370", # proc-macro-error unmaintained; upstream dependency
+  "RUSTSEC-2024-0384", # instant unmaintained; upstream dependency
+  "RUSTSEC-2024-0388", # derivative unmaintained; no safe upgrade available upstream
+  "RUSTSEC-2024-0436", # paste unmaintained; upstream dependency
+  "RUSTSEC-2025-0012", # backoff unmaintained; upstream workspace still relies on it
+  "RUSTSEC-2025-0055", # tracing-subscriber ansi escape issue; upstream dependency
 ]
 yanked = "deny"
 
@@ -22,14 +28,12 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "BSL-1.0",
-  "BlueOak-1.0.0",
   "CC0-1.0",
   "CDDL-1.0",
   "CDLA-Permissive-2.0",
   "ISC",
   "MIT",
   "MPL-2.0",
-  "NCSA",
   "Unicode-3.0",
   "Zlib",
 ]
