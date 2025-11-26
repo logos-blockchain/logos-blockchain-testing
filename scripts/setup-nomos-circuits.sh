@@ -121,7 +121,7 @@ download_release() {
         print_error "Please check that version ${VERSION} exists for platform ${platform}"
         print_error "Available releases: https://github.com/${REPO}/releases"
         rm -rf "$temp_dir"
-        exit 1
+        return 1
     fi
 
     print_success "Download complete"
@@ -132,7 +132,7 @@ download_release() {
     if ! tar -xzf "${temp_dir}/${artifact}" -C "$INSTALL_DIR" --strip-components=1; then
         print_error "Failed to extract archive"
         rm -rf "$temp_dir"
-        exit 1
+        return 1
     fi
 
     rm -rf "$temp_dir"
@@ -171,8 +171,18 @@ main() {
     # Check existing installation
     check_existing_installation
 
-    # Download and extract
-    download_release "$platform"
+    # Download and extract (retry with x86_64 bundle on aarch64 if needed)
+    if ! download_release "$platform"; then
+        if [[ "$platform" == linux-aarch64 ]]; then
+            print_warning "Falling back to linux-x86_64 circuits bundle; will rebuild prover for aarch64."
+            rm -rf "$INSTALL_DIR"
+            if ! download_release "linux-x86_64"; then
+                exit 1
+            fi
+        else
+            exit 1
+        fi
+    fi
 
     # Handle macOS quarantine if needed
     if [[ "$platform" == macos-* ]]; then

@@ -14,5 +14,9 @@ export CFG_FILE_PATH="/config.yaml" \
 # persist state.
 mkdir -p /recovery
 
-/usr/bin/cfgsync-client && \
-    exec /usr/bin/nomos-node /config.yaml
+/usr/bin/cfgsync-client
+
+# Align bootstrap timing with executors to keep configs consistent.
+sed -i "s/prolonged_bootstrap_period: .*/prolonged_bootstrap_period: '3.000000000'/" /config.yaml
+
+exec /usr/bin/nomos-node /config.yaml

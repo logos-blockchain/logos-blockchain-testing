@@ -82,7 +82,7 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
             // non-string keys and keep services alive.
             recovery_file: PathBuf::new(),
             bootstrap: chain_service::BootstrapConfig {
-                prolonged_bootstrap_period: Duration::from_secs(3),
+                prolonged_bootstrap_period: config.bootstrapping_config.prolonged_bootstrap_period,
                 force_bootstrap: false,
                 offline_grace_period: chain_service::OfflineGracePeriodConfig {
                     grace_period: Duration::from_secs(20 * 60),

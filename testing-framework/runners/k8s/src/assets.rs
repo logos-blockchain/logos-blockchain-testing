@@ -204,7 +204,8 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let validators = topology
         .validators()
         .iter()
-        .map(|validator| {
+        .enumerate()
+        .map(|(index, validator)| {
             let mut env = BTreeMap::new();
             env.insert(
                 "CFG_NETWORK_PORT".into(),
@@ -225,6 +226,8 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
                     .port()
                     .to_string(),
             );
+            env.insert("CFG_HOST_KIND".into(), "validator".into());
+            env.insert("CFG_HOST_IDENTIFIER".into(), format!("validator-{index}"));
 
             NodeValues {
                 api_port: validator.general.api_config.address.port(),
@@ -237,7 +240,8 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let executors = topology
         .executors()
         .iter()
-        .map(|executor| {
+        .enumerate()
+        .map(|(index, executor)| {
             let mut env = BTreeMap::new();
             env.insert(
                 "CFG_NETWORK_PORT".into(),
@@ -258,6 +262,8 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
                     .port()
                     .to_string(),
             );
+            env.insert("CFG_HOST_KIND".into(), "executor".into());
+            env.insert("CFG_HOST_IDENTIFIER".into(), format!("executor-{index}"));
 
             NodeValues {
                 api_port: executor.general.api_config.address.port(),

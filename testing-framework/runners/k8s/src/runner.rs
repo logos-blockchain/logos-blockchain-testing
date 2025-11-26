@@ -22,7 +22,7 @@ use crate::{
     helm::{HelmError, install_release},
     host::node_host,
     logs::dump_namespace_logs,
-    wait::{ClusterPorts, ClusterWaitError, NodeConfigPorts, wait_for_cluster_ready},
+    wait::{ClusterPorts, ClusterReady, ClusterWaitError, NodeConfigPorts, wait_for_cluster_ready},
 };
 
 pub struct K8sRunner {
@@ -66,6 +66,7 @@ struct ClusterEnvironment {
     executor_api_ports: Vec<u16>,
     executor_testing_ports: Vec<u16>,
     prometheus_port: u16,
+    port_forwards: Vec<std::process::Child>,
 }
 
 impl ClusterEnvironment {
@@ -75,6 +76,7 @@ impl ClusterEnvironment {
         release: String,
         cleanup: RunnerCleanup,
         ports: &ClusterPorts,
+        port_forwards: Vec<std::process::Child>,
     ) -> Self {
         Self {
             client,
@@ -86,6 +88,7 @@ impl ClusterEnvironment {
             executor_api_ports: ports.executors.iter().map(|ports| ports.api).collect(),
             executor_testing_ports: ports.executors.iter().map(|ports| ports.testing).collect(),
             prometheus_port: ports.prometheus,
+            port_forwards,
         }
     }
 
@@ -97,15 +100,17 @@ impl ClusterEnvironment {
             "k8s stack failure; collecting diagnostics"
         );
         dump_namespace_logs(&self.client, &self.namespace).await;
+        kill_port_forwards(&mut self.port_forwards);
         if let Some(guard) = self.cleanup.take() {
             Box::new(guard).cleanup();
         }
     }
 
-    fn into_cleanup(mut self) -> RunnerCleanup {
-        self.cleanup
-            .take()
-            .expect("cleanup guard should be available")
+    fn into_cleanup(self) -> (RunnerCleanup, Vec<std::process::Child>) {
+        (
+            self.cleanup.expect("cleanup guard should be available"),
+            self.port_forwards,
+        )
     }
 }
 
@@ -264,12 +269,15 @@ impl Deployer for K8sRunner {
                 return Err(err);
             }
         };
-        let cleanup = cluster
+        let (cleanup, port_forwards) = cluster
             .take()
             .expect("cluster should still be available")
             .into_cleanup();
-        let cleanup_guard: Box<dyn CleanupGuard> =
-            Box::new(K8sCleanupGuard::new(cleanup, block_feed_guard));
+        let cleanup_guard: Box<dyn CleanupGuard> = Box::new(K8sCleanupGuard::new(
+            cleanup,
+            block_feed_guard,
+            port_forwards,
+        ));
         let context = RunContext::new(
             descriptors,
             None,
@@ -299,6 +307,14 @@ fn ensure_supported_topology(descriptors: &GeneratedTopology) -> Result<(), K8sR
         });
     }
     Ok(())
+}
+
+fn kill_port_forwards(handles: &mut Vec<std::process::Child>) {
+    for handle in handles.iter_mut() {
+        let _ = handle.kill();
+        let _ = handle.wait();
+    }
+    handles.clear();
 }
 
 fn collect_port_specs(descriptors: &GeneratedTopology) -> PortSpecs {
@@ -386,11 +402,11 @@ async fn setup_cluster(
     let mut cleanup_guard =
         Some(install_stack(client, &assets, &namespace, &release, validators, executors).await?);
 
-    let cluster_ports =
+    let cluster_ready =
         wait_for_ports_or_cleanup(client, &namespace, &release, specs, &mut cleanup_guard).await?;
 
     info!(
-        prometheus_port = cluster_ports.prometheus,
+        prometheus_port = cluster_ready.ports.prometheus,
         "discovered prometheus endpoint"
     );
 
@@ -401,7 +417,8 @@ async fn setup_cluster(
         cleanup_guard
             .take()
             .expect("cleanup guard must exist after successful cluster startup"),
-        &cluster_ports,
+        &cluster_ready.ports,
+        cluster_ready.port_forwards,
     );
 
     if readiness_checks {
@@ -448,7 +465,7 @@ async fn wait_for_ports_or_cleanup(
     release: &str,
     specs: &PortSpecs,
     cleanup_guard: &mut Option<RunnerCleanup>,
-) -> Result<ClusterPorts, K8sRunnerError> {
+) -> Result<ClusterReady, K8sRunnerError> {
     match wait_for_cluster_ready(
         client,
         namespace,
@@ -498,13 +515,19 @@ async fn ensure_cluster_readiness(
 struct K8sCleanupGuard {
     cleanup: RunnerCleanup,
     block_feed: Option<BlockFeedTask>,
+    port_forwards: Vec<std::process::Child>,
 }
 
 impl K8sCleanupGuard {
-    const fn new(cleanup: RunnerCleanup, block_feed: BlockFeedTask) -> Self {
+    const fn new(
+        cleanup: RunnerCleanup,
+        block_feed: BlockFeedTask,
+        port_forwards: Vec<std::process::Child>,
+    ) -> Self {
         Self {
             cleanup,
             block_feed: Some(block_feed),
+            port_forwards,
         }
     }
 }
@@ -514,6 +537,7 @@ impl CleanupGuard for K8sCleanupGuard {
         if let Some(block_feed) = self.block_feed.take() {
             CleanupGuard::cleanup(Box::new(block_feed));
         }
+        kill_port_forwards(&mut self.port_forwards);
         CleanupGuard::cleanup(Box::new(self.cleanup));
     }
 }
