@@ -5,6 +5,14 @@
 .idea/
 .DS_Store
 
+# Builder/test artifacts
+.tmp_check/
+.tmp_docker/
+ci-artifacts/
+tests/kzgrs/circuits_bundle/
+NOMOS_RUST_SOURCES_ONLY.txt
+dump.zsh
+
 # Local test artifacts (kept when NOMOS_TESTS_KEEP_LOGS=1)
 tests/workflows/.tmp*
 tests/workflows/.tmp*/
