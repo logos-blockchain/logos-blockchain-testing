@@ -536,14 +536,13 @@ fn host_gateway_entry() -> Option<String> {
         return Some(value);
     }
 
-    if cfg!(any(target_os = "macos", target_os = "windows")) {
-        return Some("host.docker.internal:host-gateway".into());
+    if let Ok(gateway) = env::var("DOCKER_HOST_GATEWAY") {
+        if !gateway.is_empty() {
+            return Some(format!("host.docker.internal:{gateway}"));
+        }
     }
 
-    env::var("DOCKER_HOST_GATEWAY")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .map(|gateway| format!("host.docker.internal:{gateway}"))
+    Some("host.docker.internal:host-gateway".into())
 }
 
 async fn run_compose_command(

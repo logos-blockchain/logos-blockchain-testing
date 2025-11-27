@@ -19,6 +19,9 @@ FORCE_REBUILD="${RAPIDSNARK_FORCE_REBUILD:-0}"
 BUILD_DIR=""
 PACKAGE_DIR=""
 CMAKE_TARGET_PLATFORM=""
+USE_ASM="${RAPIDSNARK_USE_ASM:-ON}"
+CMAKE_C_FLAGS="${RAPIDSNARK_C_FLAGS:-}"
+CMAKE_CXX_FLAGS="${RAPIDSNARK_CXX_FLAGS:-}"
 
 if [ ! -d "$CIRCUITS_DIR" ]; then
     echo "circuits directory '$CIRCUITS_DIR' does not exist" >&2
@@ -50,6 +53,17 @@ case "$TARGET_ARCH" in
         if [ "$FORCE_REBUILD" != "1" ]; then
             echo "rapidsnark rebuild skipped for architecture '$TARGET_ARCH' (set RAPIDSNARK_FORCE_REBUILD=1 to override)" >&2
             exit 0
+        fi
+        if [ -z "$CMAKE_C_FLAGS" ]; then
+            # Keep CPU requirements minimal so binaries run under emulation (e.g. act on Apple hosts).
+            CMAKE_C_FLAGS="-march=x86-64 -mno-avx -mno-avx2 -mno-sse4.2"
+        fi
+        if [ -z "$CMAKE_CXX_FLAGS" ]; then
+            CMAKE_CXX_FLAGS="$CMAKE_C_FLAGS"
+        fi
+        # Assembly paths assume modern CPU features; disable by default for x86_64 unless overridden.
+        if [ "${RAPIDSNARK_USE_ASM:-}" = "" ]; then
+            USE_ASM="OFF"
         fi
         CMAKE_TARGET_PLATFORM="x86_64"
         BUILD_DIR="build_prover_x86_64"
@@ -97,7 +111,10 @@ cmake .. \
     -DTARGET_PLATFORM="$CMAKE_TARGET_PLATFORM" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="../${PACKAGE_DIR}" \
-    -DBUILD_SHARED_LIBS=OFF >&2
+    -DBUILD_SHARED_LIBS=OFF \
+    -DUSE_ASM="$USE_ASM" \
+    ${CMAKE_C_FLAGS:+-DCMAKE_C_FLAGS="$CMAKE_C_FLAGS"} \
+    ${CMAKE_CXX_FLAGS:+-DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS"} >&2
 cmake --build . --target prover verifier -- -j"$(nproc)" >&2
 
 install -m 0755 "src/prover" "$CIRCUITS_DIR/prover"

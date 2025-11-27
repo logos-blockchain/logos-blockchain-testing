@@ -57,6 +57,7 @@ jobs:
           NOMOS_CIRCUITS_REBUILD_RAPIDSNARK: "1"
           RAPIDSNARK_FORCE_REBUILD: "1"
           RAPIDSNARK_BUILD_GMP: "0"
+          RAPIDSNARK_USE_ASM: "OFF"
         run: |
           CIRCUITS_DIR="${TMPDIR}/nomos-circuits"
           chmod +x scripts/setup-nomos-circuits.sh
@@ -86,6 +87,7 @@ jobs:
           POL_PROOF_DEV_MODE: "true"
           COMPOSE_NODE_PAIRS: "1x1"
           NOMOS_TESTNET_IMAGE: ${{ env.NOMOS_TESTNET_IMAGE }}
+          COMPOSE_RUNNER_HOST: ${{ env.ACT == 'true' && 'host.docker.internal' || '127.0.0.1' }}
           RUST_BACKTRACE: "1"
         run: |
           mkdir -p "$TMPDIR"

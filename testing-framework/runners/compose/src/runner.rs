@@ -29,7 +29,7 @@ use url::ParseError;
 use uuid::Uuid;
 
 use crate::{
-    cfgsync::{CfgsyncServerHandle, start_cfgsync_server, update_cfgsync_config},
+    cfgsync::{CfgsyncServerHandle, update_cfgsync_config},
     cleanup::RunnerCleanup,
     compose::{
         ComposeCommandError, ComposeDescriptor, DescriptorBuildError, HostPortMapping,
@@ -70,6 +70,10 @@ const DEFAULT_PROMETHEUS_PORT: u16 = 9090;
 const IMAGE_BUILD_TIMEOUT: Duration = Duration::from_secs(600);
 const BLOCK_FEED_MAX_ATTEMPTS: usize = 5;
 const BLOCK_FEED_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+fn compose_runner_host() -> String {
+    env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ComposeRunnerError {
@@ -438,7 +442,7 @@ impl NodeControlHandle for ComposeNodeControl {
 }
 
 fn localhost_url(port: u16) -> Result<Url, ParseError> {
-    Url::parse(&format!("http://127.0.0.1:{port}/"))
+    Url::parse(&format!("http://{}:{port}/", compose_runner_host()))
 }
 
 async fn discover_host_ports(
@@ -629,10 +633,11 @@ async fn prepare_environment(
     prometheus_port: u16,
 ) -> Result<StackEnvironment, ComposeRunnerError> {
     let workspace = prepare_workspace_logged()?;
-    update_cfgsync_logged(&workspace, descriptors)?;
+    let cfgsync_port = allocate_cfgsync_port()?;
+    update_cfgsync_logged(&workspace, descriptors, cfgsync_port)?;
     ensure_compose_image().await?;
 
-    let (cfgsync_port, mut cfgsync_handle) = start_cfgsync_stage(&workspace).await?;
+    let mut cfgsync_handle = start_cfgsync_stage(&workspace, cfgsync_port).await?;
     let compose_path =
         render_compose_logged(&workspace, descriptors, cfgsync_port, prometheus_port)?;
 
@@ -675,34 +680,42 @@ fn prepare_workspace_logged() -> Result<WorkspaceState, ComposeRunnerError> {
 fn update_cfgsync_logged(
     workspace: &WorkspaceState,
     descriptors: &GeneratedTopology,
+    cfgsync_port: u16,
 ) -> Result<(), ComposeRunnerError> {
     info!("updating cfgsync configuration");
-    configure_cfgsync(workspace, descriptors).map_err(Into::into)
+    configure_cfgsync(workspace, descriptors, cfgsync_port).map_err(Into::into)
 }
 
 async fn start_cfgsync_stage(
     workspace: &WorkspaceState,
-) -> Result<(u16, CfgsyncServerHandle), ComposeRunnerError> {
-    let cfgsync_port = allocate_cfgsync_port()?;
+    cfgsync_port: u16,
+) -> Result<CfgsyncServerHandle, ComposeRunnerError> {
     info!(cfgsync_port = cfgsync_port, "launching cfgsync server");
     let handle = launch_cfgsync(&workspace.cfgsync_path, cfgsync_port).await?;
-    Ok((cfgsync_port, handle))
+    Ok(handle)
 }
 
 fn configure_cfgsync(
     workspace: &WorkspaceState,
     descriptors: &GeneratedTopology,
+    cfgsync_port: u16,
 ) -> Result<(), ConfigError> {
-    update_cfgsync_config(&workspace.cfgsync_path, descriptors, workspace.use_kzg).map_err(
-        |source| ConfigError::Cfgsync {
-            path: workspace.cfgsync_path.clone(),
-            source,
-        },
+    update_cfgsync_config(
+        &workspace.cfgsync_path,
+        descriptors,
+        workspace.use_kzg,
+        cfgsync_port,
     )
+    .map_err(|source| ConfigError::Cfgsync {
+        path: workspace.cfgsync_path.clone(),
+        source,
+    })
 }
 
 fn allocate_cfgsync_port() -> Result<u16, ConfigError> {
-    let listener = StdTcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+    // Bind on all interfaces so the Docker containers can reach the cfgsync
+    // server via the host gateway (e.g. host.docker.internal).
+    let listener = StdTcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
         .context("allocating cfgsync port")
         .map_err(|source| ConfigError::Port { source })?;
 
@@ -718,9 +731,56 @@ async fn launch_cfgsync(
     cfgsync_path: &Path,
     port: u16,
 ) -> Result<CfgsyncServerHandle, ConfigError> {
-    start_cfgsync_server(cfgsync_path, port)
+    let testnet_dir = cfgsync_path
+        .parent()
+        .ok_or_else(|| ConfigError::CfgsyncStart {
+            port,
+            source: anyhow!("cfgsync path {cfgsync_path:?} has no parent directory"),
+        })?;
+    let (image, _) = resolve_image();
+    let container_name = format!("nomos-cfgsync-{}", Uuid::new_v4());
+
+    let mut command = Command::new("docker");
+    command
+        .arg("run")
+        .arg("-d")
+        .arg("--name")
+        .arg(&container_name)
+        .arg("--entrypoint")
+        .arg("cfgsync-server")
+        .arg("-p")
+        .arg(format!("{port}:{port}"))
+        .arg("-v")
+        .arg(format!(
+            "{}:/etc/nomos:ro",
+            testnet_dir
+                .canonicalize()
+                .unwrap_or_else(|_| testnet_dir.to_path_buf())
+                .display()
+        ))
+        .arg(&image)
+        .arg("/etc/nomos/cfgsync.yaml");
+
+    let output = command
+        .output()
         .await
-        .map_err(|source| ConfigError::CfgsyncStart { port, source })
+        .context("spawning cfgsync container")
+        .map_err(|source| ConfigError::CfgsyncStart { port, source })?;
+
+    if !output.status.success() {
+        return Err(ConfigError::CfgsyncStart {
+            port,
+            source: anyhow!(
+                "cfgsync container failed (status {}): {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        });
+    }
+
+    Ok(CfgsyncServerHandle::Container {
+        name: container_name,
+    })
 }
 
 fn write_compose_artifacts(

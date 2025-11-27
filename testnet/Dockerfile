@@ -23,7 +23,7 @@ COPY . .
 
 # Install dependencies needed for building RocksDB.
 RUN apt-get update && apt-get install -yq \
-    git gcc g++ clang make cmake m4 xz-utils libgmp-dev libssl-dev pkg-config ca-certificates curl wget
+    git gcc g++ clang make cmake m4 xz-utils libgmp-dev libssl-dev pkg-config ca-certificates curl wget file
 
 RUN mkdir -p /opt/circuits && \
     select_circuits_source() { \
@@ -45,6 +45,21 @@ RUN mkdir -p /opt/circuits && \
             cp -R "${CIRCUITS_PATH}/." /opt/circuits; \
         else \
             cp "${CIRCUITS_PATH}" /opt/circuits/; \
+        fi; \
+    fi; \
+    TARGET_ARCH="$(uname -m)"; \
+    if [ -f "/opt/circuits/prover" ]; then \
+        PROVER_INFO="$(file -b /opt/circuits/prover || true)"; \
+        case "$TARGET_ARCH" in \
+            x86_64) EXPECT_ARCH="x86-64" ;; \
+            aarch64|arm64) EXPECT_ARCH="aarch64" ;; \
+            *) EXPECT_ARCH="$TARGET_ARCH" ;; \
+        esac; \
+        if [ -n "$PROVER_INFO" ] && ! echo "$PROVER_INFO" | grep -qi "$EXPECT_ARCH"; then \
+            echo "Circuits prover architecture ($PROVER_INFO) does not match target ${TARGET_ARCH}; rebuilding rapidsnark binaries"; \
+            chmod +x scripts/build-rapidsnark.sh && \
+            RAPIDSNARK_FORCE_REBUILD=1 \
+                scripts/build-rapidsnark.sh /opt/circuits; \
         fi; \
     fi; \
     if [ ! -f "/opt/circuits/pol/verification_key.json" ]; then \
