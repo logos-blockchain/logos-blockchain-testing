@@ -1,0 +1,453 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Best Practices - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html" class="active"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h1>
+<p>This page collects proven patterns for authoring, running, and maintaining test scenarios that are reliable, maintainable, and actionable.</p>
+<h2 id="scenario-design"><a class="header" href="#scenario-design">Scenario Design</a></h2>
+<p><strong>State your intent</strong></p>
+<ul>
+<li>Document the goal of each scenario (throughput, DA validation, resilience) so expectation choices are obvious</li>
+<li>Use descriptive variable names that explain topology purpose (e.g., <code>star_topology_3val_2exec</code> vs <code>topology</code>)</li>
+<li>Add comments explaining why specific rates or durations were chosen</li>
+</ul>
+<p><strong>Keep runs meaningful</strong></p>
+<ul>
+<li>Choose durations that allow multiple blocks and make timing-based assertions trustworthy</li>
+<li>Use <a href="faq.html#how-long-should-a-scenario-run">FAQ: Run Duration Calculator</a> to estimate minimum duration</li>
+<li>Avoid runs shorter than 30 seconds unless testing startup behavior specifically</li>
+</ul>
+<p><strong>Separate concerns</strong></p>
+<ul>
+<li>Start with deterministic workloads for functional checks</li>
+<li>Add chaos in dedicated resilience scenarios to avoid noisy failures</li>
+<li>Don't mix high transaction load with aggressive chaos in the same test (hard to debug)</li>
+</ul>
+<p><strong>Start small, scale up</strong></p>
+<ul>
+<li>Begin with minimal topology (1-2 validators) to validate scenario logic</li>
+<li>Gradually increase topology size and workload rates</li>
+<li>Use Host runner for fast iteration, then validate on Compose before production</li>
+</ul>
+<h2 id="code-organization"><a class="header" href="#code-organization">Code Organization</a></h2>
+<p><strong>Reuse patterns</strong></p>
+<ul>
+<li>Standardize on shared topology and workload presets so results are comparable across environments and teams</li>
+<li>Extract common topology builders into helper functions</li>
+<li>Create workspace-level constants for standard rates and durations</li>
+</ul>
+<p><strong>Example: Topology preset</strong></p>
+<pre><code class="language-rust ignore">pub fn standard_da_topology() -&gt; GeneratedTopology {
+    TopologyBuilder::new()
+        .network_star()
+        .validators(3)
+        .executors(2)
+        .generate()
+}</code></pre>
+<p><strong>Example: Shared constants</strong></p>
+<pre><code class="language-rust ignore">pub const STANDARD_TX_RATE: f64 = 10.0;
+pub const STANDARD_DA_CHANNEL_RATE: f64 = 2.0;
+pub const SHORT_RUN_DURATION: Duration = Duration::from_secs(60);
+pub const LONG_RUN_DURATION: Duration = Duration::from_secs(300);</code></pre>
+<h2 id="debugging--observability"><a class="header" href="#debugging--observability">Debugging &amp; Observability</a></h2>
+<p><strong>Observe first, tune second</strong></p>
+<ul>
+<li>Rely on liveness and inclusion signals to interpret outcomes before tweaking rates or topology</li>
+<li>Enable detailed logging (<code>RUST_LOG=debug</code>, <code>NOMOS_LOG_LEVEL=debug</code>) only after initial failure</li>
+<li>Use <code>NOMOS_TESTS_KEEP_LOGS=1</code> to persist logs when debugging failures</li>
+</ul>
+<p><strong>Use BlockFeed effectively</strong></p>
+<ul>
+<li>Subscribe to BlockFeed in expectations for real-time block monitoring</li>
+<li>Track block production rate to detect liveness issues early</li>
+<li>Use block statistics (<code>block_feed.stats().total_transactions()</code>) to verify inclusion</li>
+</ul>
+<p><strong>Collect metrics</strong></p>
+<ul>
+<li>Set up Prometheus/Grafana via <code>scripts/setup/setup-observability.sh compose up</code> for visualizing node behavior</li>
+<li>Use metrics to identify bottlenecks before adding more load</li>
+<li>Monitor mempool size, block size, and consensus timing</li>
+</ul>
+<h2 id="environment--runner-selection"><a class="header" href="#environment--runner-selection">Environment &amp; Runner Selection</a></h2>
+<p><strong>Environment fit</strong></p>
+<ul>
+<li>Pick runners that match the feedback loop you need:
+<ul>
+<li><strong>Host</strong>: Fast iteration during development, quick CI smoke tests</li>
+<li><strong>Compose</strong>: Reproducible environments (recommended for CI), chaos testing</li>
+<li><strong>K8s</strong>: Production-like fidelity, large topologies (10+ nodes)</li>
+</ul>
+</li>
+</ul>
+<p><strong>Runner-specific considerations</strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Runner</th><th>When to Use</th><th>When to Avoid</th></tr></thead><tbody>
+<tr><td>Host</td><td>Development iteration, fast feedback</td><td>Chaos testing, container-specific issues</td></tr>
+<tr><td>Compose</td><td>CI pipelines, chaos tests, reproducibility</td><td>Very large topologies (&gt;10 nodes)</td></tr>
+<tr><td>K8s</td><td>Production-like testing, cluster behaviors</td><td>Local development, fast iteration</td></tr>
+</tbody></table>
+</div>
+<p><strong>Minimal surprises</strong></p>
+<ul>
+<li>Seed only necessary wallets and keep configuration deltas explicit when moving between CI and developer machines</li>
+<li>Use <code>versions.env</code> to pin node versions consistently across environments</li>
+<li>Document non-default environment variables in scenario comments or README</li>
+</ul>
+<h2 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h2>
+<p><strong>Use matrix builds</strong></p>
+<pre><code class="language-yaml">strategy:
+  matrix:
+    runner: [host, compose]
+    topology: [small, medium]
+</code></pre>
+<p><strong>Cache aggressively</strong></p>
+<ul>
+<li>Cache Rust build artifacts (<code>target/</code>)</li>
+<li>Cache circuit parameters (<code>assets/stack/kzgrs_test_params/</code>)</li>
+<li>Cache Docker layers (use BuildKit cache)</li>
+</ul>
+<p><strong>Collect logs on failure</strong></p>
+<pre><code class="language-yaml">- name: Collect logs on failure
+  if: failure()
+  run: |
+    mkdir -p test-logs
+    find /tmp -name "nomos-*.log" -exec cp {} test-logs/ \;
+- uses: actions/upload-artifact@v3
+  if: failure()
+  with:
+    name: test-logs-${{ matrix.runner }}
+    path: test-logs/
+</code></pre>
+<p><strong>Time limits</strong></p>
+<ul>
+<li>Set job timeout to prevent hung runs: <code>timeout-minutes: 30</code></li>
+<li>Use shorter durations in CI (60s) vs local testing (300s)</li>
+<li>Run expensive tests (k8s, large topologies) only on main branch or release tags</li>
+</ul>
+<p><strong>See also:</strong> <a href="ci-integration.html">CI Integration</a> for complete workflow examples</p>
+<h2 id="anti-patterns-to-avoid"><a class="header" href="#anti-patterns-to-avoid">Anti-Patterns to Avoid</a></h2>
+<p><strong>DON'T: Run without POL_PROOF_DEV_MODE</strong></p>
+<pre><code class="language-bash"># BAD: Will hang/timeout on proof generation
+cargo run -p runner-examples --bin local_runner
+
+# GOOD: Fast mode for testing
+POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+</code></pre>
+<p><strong>DON'T: Use tiny durations</strong></p>
+<pre><code class="language-rust ignore">// BAD: Not enough time for blocks to propagate
+.with_run_duration(Duration::from_secs(5))
+
+// GOOD: Allow multiple consensus rounds
+.with_run_duration(Duration::from_secs(60))</code></pre>
+<p><strong>DON'T: Ignore cleanup failures</strong></p>
+<pre><code class="language-rust ignore">// BAD: Next run inherits leaked state
+runner.run(&amp;mut scenario).await?;
+// forgot to call cleanup or use CleanupGuard
+
+// GOOD: Cleanup via guard (automatic on panic)
+let _cleanup = CleanupGuard::new(runner.clone());
+runner.run(&amp;mut scenario).await?;</code></pre>
+<p><strong>DON'T: Mix concerns in one scenario</strong></p>
+<pre><code class="language-rust ignore">// BAD: Hard to debug when it fails
+.transactions_with(|tx| tx.rate(50).users(100))  // high load
+.chaos_with(|c| c.restart().min_delay(...))        // AND chaos
+.da_with(|da| da.channel_rate(10).blob_rate(20))  // AND DA stress
+
+// GOOD: Separate tests for each concern
+// Test 1: High transaction load only
+// Test 2: Chaos resilience only
+// Test 3: DA stress only</code></pre>
+<p><strong>DON'T: Hardcode paths or ports</strong></p>
+<pre><code class="language-rust ignore">// BAD: Breaks on different machines
+let path = PathBuf::from("/home/user/circuits/kzgrs_test_params");
+let port = 9000; // might conflict
+
+// GOOD: Use env vars and dynamic allocation
+let path = std::env::var("NOMOS_KZGRS_PARAMS_PATH")
+    .unwrap_or_else(|_| "assets/stack/kzgrs_test_params/kzgrs_test_params".to_string());
+let port = get_available_tcp_port();</code></pre>
+<p><strong>DON'T: Ignore resource limits</strong></p>
+<pre><code class="language-bash"># BAD: Large topology without checking resources
+scripts/run/run-examples.sh -v 20 -e 10 compose
+# (might OOM or exhaust ulimits)
+
+# GOOD: Scale gradually and monitor resources
+scripts/run/run-examples.sh -v 3 -e 2 compose  # start small
+docker stats  # monitor resource usage
+# then increase if resources allow
+</code></pre>
+<h2 id="scenario-design-heuristics"><a class="header" href="#scenario-design-heuristics">Scenario Design Heuristics</a></h2>
+<p><strong>Minimal viable topology</strong></p>
+<ul>
+<li>Consensus: 3 validators (minimum for Byzantine fault tolerance)</li>
+<li>DA: 2+ executors (test dispersal and sampling)</li>
+<li>Network: Star topology (simplest for debugging)</li>
+</ul>
+<p><strong>Workload rate selection</strong></p>
+<ul>
+<li>Start with 1-5 tx/s per user, then increase</li>
+<li>DA: 1-2 channels, 1-3 blobs/channel initially</li>
+<li>Chaos: 30s+ intervals between restarts (allow recovery)</li>
+</ul>
+<p><strong>Duration guidelines</strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Test Type</th><th>Minimum Duration</th><th>Typical Duration</th></tr></thead><tbody>
+<tr><td>Smoke test</td><td>30s</td><td>60s</td></tr>
+<tr><td>Integration test</td><td>60s</td><td>120s</td></tr>
+<tr><td>Load test</td><td>120s</td><td>300s</td></tr>
+<tr><td>Resilience test</td><td>120s</td><td>300s</td></tr>
+<tr><td>Soak test</td><td>600s (10m)</td><td>3600s (1h)</td></tr>
+</tbody></table>
+</div>
+<p><strong>Expectation selection</strong></p>
+<div class="table-wrapper"><table><thead><tr><th>Test Goal</th><th>Expectations</th></tr></thead><tbody>
+<tr><td>Basic functionality</td><td><code>expect_consensus_liveness()</code></td></tr>
+<tr><td>Transaction handling</td><td><code>expect_consensus_liveness()</code> + custom inclusion check</td></tr>
+<tr><td>DA correctness</td><td><code>expect_consensus_liveness()</code> + DA dispersal/sampling checks</td></tr>
+<tr><td>Resilience</td><td><code>expect_consensus_liveness()</code> + recovery time measurement</td></tr>
+</tbody></table>
+</div>
+<h2 id="testing-the-tests"><a class="header" href="#testing-the-tests">Testing the Tests</a></h2>
+<p><strong>Validate scenarios before committing</strong></p>
+<ol>
+<li>Run on Host runner first (fast feedback)</li>
+<li>Run on Compose runner (reproducibility check)</li>
+<li>Check logs for warnings or errors</li>
+<li>Verify cleanup (no leaked processes/containers)</li>
+<li>Run 2-3 times to check for flakiness</li>
+</ol>
+<p><strong>Handling flaky tests</strong></p>
+<ul>
+<li>Increase run duration (timing-sensitive assertions need longer runs)</li>
+<li>Reduce workload rates (might be saturating nodes)</li>
+<li>Check resource limits (CPU/RAM/ulimits)</li>
+<li>Add debugging output to identify race conditions</li>
+<li>Consider if test is over-specified (too strict expectations)</li>
+</ul>
+<p><strong>See also:</strong></p>
+<ul>
+<li><a href="troubleshooting.html">Troubleshooting</a> for common failure patterns</li>
+<li><a href="faq.html">FAQ</a> for design decisions and gotchas</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="scenario-builder-ext-patterns.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="usage-patterns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="scenario-builder-ext-patterns.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="usage-patterns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

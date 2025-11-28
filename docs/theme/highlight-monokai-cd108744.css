@@ -1,0 +1,67 @@
+/* Highlight.js Monokai Sublime theme */
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+  background: #23241f;
+  color: #f8f8f2;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #75715e;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+  color: #66d9ef;
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag .hljs-attr {
+  color: #ae81ff;
+}
+.hljs-string,
+.hljs-doctag,
+.hljs-title,
+.hljs-section,
+.hljs-selector-id {
+  color: #e6db74;
+}
+.hljs-type,
+.hljs-class .hljs-title {
+  color: #a6e22e;
+}
+.hljs-tag,
+.hljs-name,
+.hljs-attribute {
+  color: #f92672;
+}
+.hljs-regexp,
+.hljs-link {
+  color: #bf79db;
+}
+.hljs-symbol,
+.hljs-bullet {
+  color: #66d9ef;
+}
+.hljs-built_in,
+.hljs-builtin-name {
+  color: #a6e22e;
+}
+.hljs-meta {
+  color: #75715e;
+}
+.hljs-deletion {
+  background: #f92672;
+}
+.hljs-addition {
+  background: #a6e22e;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: bold;
+}

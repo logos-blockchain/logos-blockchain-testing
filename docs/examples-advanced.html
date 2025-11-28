@@ -1,0 +1,503 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Advanced &amp; Artificial Examples - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html" class="active"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="advanced-examples"><a class="header" href="#advanced-examples">Advanced Examples</a></h1>
+<blockquote>
+<p><strong>When should I read this?</strong> Skim now to see what's possible, revisit later when you need load testing, chaos scenarios, or custom extensions. Start with <a href="examples.html">basic examples</a> first.</p>
+</blockquote>
+<p>Realistic advanced scenarios demonstrating framework capabilities for production testing.</p>
+<p><strong>Adapt from Complete Source:</strong></p>
+<ul>
+<li><a href="https://github.com/logos-blockchain/logos-blockchain-testing/blob/master/examples/src/bin/compose_runner.rs">compose_runner.rs</a> — Compose examples with workloads</li>
+<li><a href="https://github.com/logos-blockchain/logos-blockchain-testing/blob/master/examples/src/bin/k8s_runner.rs">k8s_runner.rs</a> — K8s production patterns</li>
+<li><a href="https://github.com/logos-blockchain/logos-blockchain-testing/blob/master/testing-framework/workflows/src/workloads/chaos.rs">Chaos testing patterns</a> — Node control implementation</li>
+</ul>
+<h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Example</th><th>Topology</th><th>Workloads</th><th>Deployer</th><th>Key Feature</th></tr></thead><tbody>
+<tr><td>Load Progression</td><td>3 validators + 2 executors</td><td>Increasing tx rate</td><td>Compose</td><td>Dynamic load testing</td></tr>
+<tr><td>Sustained Load</td><td>4 validators + 2 executors</td><td>High tx + DA rate</td><td>Compose</td><td>Stress testing</td></tr>
+<tr><td>Aggressive Chaos</td><td>4 validators + 2 executors</td><td>Frequent restarts + traffic</td><td>Compose</td><td>Resilience validation</td></tr>
+</tbody></table>
+</div>
+<h2 id="load-progression-test"><a class="header" href="#load-progression-test">Load Progression Test</a></h2>
+<p>Test consensus under progressively increasing transaction load:</p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_compose::ComposeDeployer;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub async fn load_progression_test() -&gt; Result&lt;()&gt; {
+    for rate in [5, 10, 20, 30] {
+        println!("Testing with rate: {}", rate);
+
+        let mut plan =
+            ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+                .wallets(50)
+                .transactions_with(|txs| txs.rate(rate).users(20))
+                .expect_consensus_liveness()
+                .with_run_duration(Duration::from_secs(60))
+                .build();
+
+        let deployer = ComposeDeployer::default();
+        let runner = deployer.deploy(&amp;plan).await?;
+        let _handle = runner.run(&amp;mut plan).await?;
+    }
+
+    Ok(())
+}</code></pre>
+<p><strong>When to use:</strong> Finding the maximum sustainable transaction rate for a given topology.</p>
+<h2 id="sustained-load-test"><a class="header" href="#sustained-load-test">Sustained Load Test</a></h2>
+<p>Run high transaction and DA load for extended duration:</p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_compose::ComposeDeployer;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub async fn sustained_load_test() -&gt; Result&lt;()&gt; {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+        .wallets(100)
+        .transactions_with(|txs| txs.rate(15).users(50))
+        .da_with(|da| da.channel_rate(2).blob_rate(3))
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(300))
+        .build();
+
+    let deployer = ComposeDeployer::default();
+    let runner = deployer.deploy(&amp;plan).await?;
+    let _handle = runner.run(&amp;mut plan).await?;
+
+    Ok(())
+}</code></pre>
+<p><strong>When to use:</strong> Validating stability under continuous high load over extended periods.</p>
+<h2 id="aggressive-chaos-test"><a class="header" href="#aggressive-chaos-test">Aggressive Chaos Test</a></h2>
+<p>Frequent node restarts with active traffic:</p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_compose::ComposeDeployer;
+use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
+
+pub async fn aggressive_chaos_test() -&gt; Result&lt;()&gt; {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+        .enable_node_control()
+        .wallets(50)
+        .transactions_with(|txs| txs.rate(10).users(20))
+        .chaos_with(|c| {
+            c.restart()
+                .min_delay(Duration::from_secs(10))
+                .max_delay(Duration::from_secs(20))
+                .target_cooldown(Duration::from_secs(15))
+                .apply()
+        })
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(180))
+        .build();
+
+    let deployer = ComposeDeployer::default();
+    let runner = deployer.deploy(&amp;plan).await?;
+    let _handle = runner.run(&amp;mut plan).await?;
+
+    Ok(())
+}</code></pre>
+<p><strong>When to use:</strong> Validating recovery and liveness under aggressive failure conditions.</p>
+<p><strong>Note:</strong> Requires <code>ComposeDeployer</code> for node control support.</p>
+<h2 id="extension-ideas"><a class="header" href="#extension-ideas">Extension Ideas</a></h2>
+<p>These scenarios require custom implementations but demonstrate framework extensibility:</p>
+<h3 id="mempool--transaction-handling"><a class="header" href="#mempool--transaction-handling">Mempool &amp; Transaction Handling</a></h3>
+<h4 id="transaction-propagation--inclusion-test"><a class="header" href="#transaction-propagation--inclusion-test">Transaction Propagation &amp; Inclusion Test</a></h4>
+<p><strong>Concept:</strong> Submit the same batch of independent transactions to different nodes in randomized order/offsets, then verify all transactions are included and final state matches across nodes.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li><strong>Custom workload:</strong> Generates a fixed batch of transactions and submits the same set to different nodes via <code>ctx.node_clients()</code>, with randomized submission order and timing offsets per node</li>
+<li><strong>Custom expectation:</strong> Verifies all transactions appear in blocks (order may vary), final state matches across all nodes (compare balances or state roots), and no transactions are dropped</li>
+</ul>
+<p><strong>Why useful:</strong> Exercises mempool propagation, proposer fairness, and transaction inclusion guarantees under realistic race conditions. Tests that the protocol maintains consistency regardless of which node receives transactions first.</p>
+<p><strong>Implementation notes:</strong> Requires both a custom <code>Workload</code> implementation (to submit same transactions to multiple nodes with jitter) and a custom <code>Expectation</code> implementation (to verify inclusion and state consistency).</p>
+<h4 id="cross-validator-mempool-divergence--convergence"><a class="header" href="#cross-validator-mempool-divergence--convergence">Cross-Validator Mempool Divergence &amp; Convergence</a></h4>
+<p><strong>Concept:</strong> Drive different transaction subsets into different validators (or differing arrival orders) to create temporary mempool divergence, then verify mempools/blocks converge to contain the union (no permanent divergence).</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li><strong>Custom workload:</strong> Targets specific nodes via <code>ctx.node_clients()</code> with disjoint or jittered transaction batches</li>
+<li><strong>Custom expectation:</strong> After a convergence window, verifies that all transactions appear in blocks (order may vary) or that mempool contents converge across nodes</li>
+<li>Run normal workloads during convergence period</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li>Temporary mempool divergence is acceptable (different nodes see different transactions initially)</li>
+<li>After convergence window, all transactions appear in blocks or mempools converge</li>
+<li>No transactions are permanently dropped despite initial divergence</li>
+<li>Mempool gossip/reconciliation mechanisms work correctly</li>
+</ul>
+<p><strong>Why useful:</strong> Exercises mempool gossip and reconciliation under uneven input or latency. Ensures no node "drops" transactions seen elsewhere, validating that mempool synchronization mechanisms correctly propagate transactions across the network even when they arrive at different nodes in different orders.</p>
+<p><strong>Implementation notes:</strong> Requires both a custom <code>Workload</code> implementation (to inject disjoint/jittered batches per node) and a custom <code>Expectation</code> implementation (to verify mempool convergence or block inclusion). Uses existing <code>ctx.node_clients()</code> capability—no new infrastructure needed.</p>
+<h4 id="adaptive-mempool-pressure-test"><a class="header" href="#adaptive-mempool-pressure-test">Adaptive Mempool Pressure Test</a></h4>
+<p><strong>Concept:</strong> Ramp transaction load over time to observe mempool growth, fee prioritization/eviction, and block saturation behavior, detecting performance regressions and ensuring backpressure/eviction work under increasing load.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li><strong>Custom workload:</strong> Steadily increases transaction rate over time (optional: use fee tiers)</li>
+<li><strong>Custom expectation:</strong> Monitors mempool size, evictions, and throughput (blocks/txs per slot), flagging runaway growth or stalls</li>
+<li>Run for extended duration to observe pressure buildup</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li>Mempool size grows predictably with load (not runaway growth)</li>
+<li>Fee prioritization/eviction mechanisms activate under pressure</li>
+<li>Block saturation behavior is acceptable (blocks fill appropriately)</li>
+<li>Throughput (blocks/txs per slot) remains stable or degrades gracefully</li>
+<li>No stalls or unbounded mempool growth</li>
+</ul>
+<p><strong>Why useful:</strong> Detects performance regressions in mempool management. Ensures backpressure and eviction mechanisms work correctly under increasing load, preventing memory exhaustion or unbounded growth. Validates that fee prioritization correctly selects high-value transactions when mempool is full.</p>
+<p><strong>Implementation notes:</strong> Can be built with current workload model (ramping rate). Requires custom <code>Expectation</code> implementation that reads mempool metrics (via node HTTP APIs or Prometheus) and monitors throughput to judge behavior. No new infrastructure needed—uses existing observability capabilities.</p>
+<h4 id="invalid-transaction-fuzzing"><a class="header" href="#invalid-transaction-fuzzing">Invalid Transaction Fuzzing</a></h4>
+<p><strong>Concept:</strong> Submit malformed transactions and verify they're rejected properly.</p>
+<p><strong>Implementation approach:</strong></p>
+<ul>
+<li>Custom workload that generates invalid transactions (bad signatures, insufficient funds, malformed structure)</li>
+<li>Expectation verifies mempool rejects them and they never appear in blocks</li>
+<li>Test mempool resilience and filtering</li>
+</ul>
+<p><strong>Why useful:</strong> Ensures mempool doesn't crash or include invalid transactions under fuzzing.</p>
+<h3 id="network--gossip"><a class="header" href="#network--gossip">Network &amp; Gossip</a></h3>
+<h4 id="gossip-latency-gradient-scenario"><a class="header" href="#gossip-latency-gradient-scenario">Gossip Latency Gradient Scenario</a></h4>
+<p><strong>Concept:</strong> Test consensus robustness under skewed gossip delays by partitioning nodes into latency tiers (tier A ≈10ms, tier B ≈100ms, tier C ≈300ms) and observing propagation lag, fork rate, and eventual convergence.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li>Partition nodes into three groups (tiers)</li>
+<li>Apply per-group network delay via chaos: <code>netem</code>/<code>iptables</code> in compose; NetworkPolicy + <code>netem</code> sidecar in k8s</li>
+<li>Run standard workload (transactions/block production)</li>
+<li>Optional: Remove delays at end to check recovery</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li><strong>Propagation:</strong> Messages reach all tiers within acceptable bounds</li>
+<li><strong>Safety:</strong> No divergent finalized heads; fork rate stays within tolerance</li>
+<li><strong>Liveness:</strong> Chain keeps advancing; convergence after delays relaxed (if healed)</li>
+</ul>
+<p><strong>Why useful:</strong> Real networks have heterogeneous latency. This stress-tests proposer selection and fork resolution when some peers are "far" (high latency), validating that consensus remains safe and live under realistic network conditions.</p>
+<p><strong>Current blocker:</strong> Runner support for per-group delay injection (network delay via <code>netem</code>/<code>iptables</code>) is not present today. Would require new chaos plumbing in compose/k8s deployers to inject network delays per node group.</p>
+<h4 id="byzantine-gossip-flooding-libp2p-peer"><a class="header" href="#byzantine-gossip-flooding-libp2p-peer">Byzantine Gossip Flooding (libp2p Peer)</a></h4>
+<p><strong>Concept:</strong> Spin up a custom workload/sidecar that runs a libp2p host, joins the cluster's gossip mesh, and publishes a high rate of syntactically valid but useless/stale messages to selected topics, testing gossip backpressure, scoring, and queue handling under a "malicious" peer.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li>Custom workload/sidecar that implements a libp2p host</li>
+<li>Join the cluster's gossip mesh as a peer</li>
+<li>Publish high-rate syntactically valid but useless/stale messages to selected gossip topics</li>
+<li>Run alongside normal workloads (transactions/block production)</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li>Gossip backpressure mechanisms prevent message flooding from overwhelming nodes</li>
+<li>Peer scoring correctly identifies and penalizes the malicious peer</li>
+<li>Queue handling remains stable under flood conditions</li>
+<li>Normal consensus operation continues despite malicious peer</li>
+</ul>
+<p><strong>Why useful:</strong> Tests Byzantine behavior (malicious peer) which is critical for consensus protocol robustness. More realistic than RPC spam since it uses the actual gossip protocol. Validates that gossip backpressure, peer scoring, and queue management correctly handle adversarial peers without disrupting consensus.</p>
+<p><strong>Current blocker:</strong> Requires adding gossip-capable helper (libp2p integration) to the framework. Would need a custom workload/sidecar implementation that can join the gossip mesh and inject messages. The rest of the scenario can use existing runners/workloads.</p>
+<h4 id="network-partition-recovery"><a class="header" href="#network-partition-recovery">Network Partition Recovery</a></h4>
+<p><strong>Concept:</strong> Test consensus recovery after network partitions.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li>Needs <code>block_peer()</code> / <code>unblock_peer()</code> methods in <code>NodeControlHandle</code></li>
+<li>Partition subsets of validators, wait, then restore connectivity</li>
+<li>Verify chain convergence after partition heals</li>
+</ul>
+<p><strong>Why useful:</strong> Tests the most realistic failure mode in distributed systems.</p>
+<p><strong>Current blocker:</strong> Node control doesn't yet support network-level actions (only process restarts).</p>
+<h3 id="time--timing"><a class="header" href="#time--timing">Time &amp; Timing</a></h3>
+<h4 id="time-shifted-blocks-clock-skew-test"><a class="header" href="#time-shifted-blocks-clock-skew-test">Time-Shifted Blocks (Clock Skew Test)</a></h4>
+<p><strong>Concept:</strong> Test consensus and timestamp handling when nodes run with skewed clocks (e.g., +1s, −1s, +200ms jitter) to surface timestamp validation issues, reorg sensitivity, and clock drift handling.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li>Assign per-node time offsets (e.g., +1s, −1s, +200ms jitter)</li>
+<li>Run normal workload (transactions/block production)</li>
+<li>Observe whether blocks are accepted/propagated and the chain stays consistent</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li>Blocks with skewed timestamps are handled correctly (accepted or rejected per protocol rules)</li>
+<li>Chain remains consistent across nodes despite clock differences</li>
+<li>No unexpected reorgs or chain splits due to timestamp validation issues</li>
+</ul>
+<p><strong>Why useful:</strong> Clock skew is a common real-world issue in distributed systems. This validates that consensus correctly handles timestamp validation and maintains safety/liveness when nodes have different clock offsets, preventing timestamp-based attacks or failures.</p>
+<p><strong>Current blocker:</strong> Runner ability to skew per-node clocks (e.g., privileged containers with <code>libfaketime</code>/<code>chrony</code> or time-offset netns) is not available today. Would require a new chaos/time-skew hook in deployers to inject clock offsets per node.</p>
+<h4 id="block-timing-consistency"><a class="header" href="#block-timing-consistency">Block Timing Consistency</a></h4>
+<p><strong>Concept:</strong> Verify block production intervals stay within expected bounds.</p>
+<p><strong>Implementation approach:</strong></p>
+<ul>
+<li>Custom expectation that consumes <code>BlockFeed</code></li>
+<li>Collect block timestamps during run</li>
+<li>Assert intervals are within <code>(slot_duration * active_slot_coeff) ± tolerance</code></li>
+</ul>
+<p><strong>Why useful:</strong> Validates consensus timing under various loads.</p>
+<h3 id="topology--membership"><a class="header" href="#topology--membership">Topology &amp; Membership</a></h3>
+<h4 id="dynamic-topology-churn-scenario"><a class="header" href="#dynamic-topology-churn-scenario">Dynamic Topology (Churn) Scenario</a></h4>
+<p><strong>Concept:</strong> Nodes join and leave mid-run (new identities/addresses added; some nodes permanently removed) to exercise peer discovery, bootstrapping, reputation, and load balancing under churn.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li>Runner must be able to spin up new nodes with fresh keys/addresses at runtime</li>
+<li>Update peer lists and bootstraps dynamically as nodes join/leave</li>
+<li>Optionally tear down nodes permanently (not just restart)</li>
+<li>Run normal workloads (transactions/block production) during churn</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li>New nodes successfully discover and join the network</li>
+<li>Peer discovery mechanisms correctly handle dynamic topology changes</li>
+<li>Reputation systems adapt to new/removed peers</li>
+<li>Load balancing adjusts to changing node set</li>
+<li>Consensus remains safe and live despite topology churn</li>
+</ul>
+<p><strong>Why useful:</strong> Real networks experience churn (nodes joining/leaving). Unlike restarts (which preserve topology), churn changes the actual topology size and peer set, testing how the protocol handles dynamic membership. This exercises peer discovery, bootstrapping, reputation systems, and load balancing under realistic conditions.</p>
+<p><strong>Current blocker:</strong> Runner support for dynamic node addition/removal at runtime is not available today. Chaos today only restarts existing nodes; churn would require the ability to spin up new nodes with fresh identities/addresses, update peer lists/bootstraps dynamically, and permanently remove nodes. Would need new topology management capabilities in deployers.</p>
+<h3 id="api--external-interfaces"><a class="header" href="#api--external-interfaces">API &amp; External Interfaces</a></h3>
+<h4 id="api-dosstress-test"><a class="header" href="#api-dosstress-test">API DoS/Stress Test</a></h4>
+<p><strong>Concept:</strong> Adversarial workload floods node HTTP/WS APIs with high QPS and malformed/bursty requests; expectation checks nodes remain responsive or rate-limit without harming consensus.</p>
+<p><strong>Requirements:</strong></p>
+<ul>
+<li><strong>Custom workload:</strong> Targets node HTTP/WS API endpoints with mixed valid/invalid requests at high rate</li>
+<li><strong>Custom expectation:</strong> Monitors error rates, latency, and confirms block production/liveness unaffected</li>
+<li>Run alongside normal workloads (transactions/block production)</li>
+</ul>
+<p><strong>Expectations:</strong></p>
+<ul>
+<li>Nodes remain responsive or correctly rate-limit under API flood</li>
+<li>Error rates/latency are acceptable (rate limiting works)</li>
+<li>Block production/liveness unaffected by API abuse</li>
+<li>Consensus continues normally despite API stress</li>
+</ul>
+<p><strong>Why useful:</strong> Validates API hardening under abuse and ensures control/telemetry endpoints don't destabilize the node. Tests that API abuse is properly isolated from consensus operations, preventing DoS attacks on API endpoints from affecting blockchain functionality.</p>
+<p><strong>Implementation notes:</strong> Requires custom <code>Workload</code> implementation that directs high-QPS traffic to node APIs (via <code>ctx.node_clients()</code> or direct HTTP clients) and custom <code>Expectation</code> implementation that monitors API responsiveness metrics and consensus liveness. Uses existing node API access—no new infrastructure needed.</p>
+<h3 id="state--correctness"><a class="header" href="#state--correctness">State &amp; Correctness</a></h3>
+<h4 id="wallet-balance-verification"><a class="header" href="#wallet-balance-verification">Wallet Balance Verification</a></h4>
+<p><strong>Concept:</strong> Track wallet balances and verify state consistency.</p>
+<p><strong>Description:</strong> After transaction workload completes, query all wallet balances via node API and verify total supply is conserved. Requires tracking initial state, submitted transactions, and final balances. Validates that the ledger maintains correctness under load (no funds lost or created). This is a <strong>state assertion</strong> expectation that checks correctness, not just liveness.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="examples.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="cucumber-bdd.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="examples.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="cucumber-bdd.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

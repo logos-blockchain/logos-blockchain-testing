@@ -1,0 +1,43 @@
+/* Adapted from highlight.js "Atom One Dark" */
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+  background: #282c34;
+  color: #abb2bf;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-symbol,
+.hljs-name {
+  color: #c678dd;
+}
+.hljs-built_in,
+.hljs-type {
+  color: #e5c07b;
+}
+.hljs-number,
+.hljs-attribute {
+  color: #d19a66;
+}
+.hljs-string,
+.hljs-title,
+.hljs-section {
+  color: #98c379;
+}
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #61afef;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: bold;
+}

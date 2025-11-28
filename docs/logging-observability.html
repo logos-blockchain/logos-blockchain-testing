@@ -1,0 +1,515 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Logging &amp; Observability - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html" class="active"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="logging--observability"><a class="header" href="#logging--observability">Logging &amp; Observability</a></h1>
+<p>Comprehensive guide to log collection, metrics, and debugging across all runners.</p>
+<h2 id="node-logging-vs-framework-logging"><a class="header" href="#node-logging-vs-framework-logging">Node Logging vs Framework Logging</a></h2>
+<p><strong>Critical distinction:</strong> Node logs and framework logs use different configuration mechanisms.</p>
+<div class="table-wrapper"><table><thead><tr><th>Component</th><th>Controlled By</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><strong>Framework binaries</strong> (<code>cargo run -p runner-examples --bin local_runner</code>)</td><td><code>RUST_LOG</code></td><td>Runner orchestration, deployment logs</td></tr>
+<tr><td><strong>Node processes</strong> (validators, executors spawned by runner)</td><td><code>NOMOS_LOG_LEVEL</code>, <code>NOMOS_LOG_FILTER</code> (+ <code>NOMOS_LOG_DIR</code> on host runner)</td><td>Consensus, DA, mempool, network logs</td></tr>
+</tbody></table>
+</div>
+<p><strong>Common mistake:</strong> Setting <code>RUST_LOG=debug</code> only increases verbosity of the runner binary itself. Node logs remain at their default level unless you also set <code>NOMOS_LOG_LEVEL=debug</code>.</p>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash"># This only makes the RUNNER verbose, not the nodes:
+RUST_LOG=debug cargo run -p runner-examples --bin local_runner
+
+# This makes the NODES verbose:
+NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_runner
+
+# Both verbose (typically not needed):
+RUST_LOG=debug NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_runner
+</code></pre>
+<h2 id="logging-environment-variables"><a class="header" href="#logging-environment-variables">Logging Environment Variables</a></h2>
+<p>See <a href="environment-variables.html">Environment Variables Reference</a> for complete details. Quick summary:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Default</th><th>Effect</th></tr></thead><tbody>
+<tr><td><code>NOMOS_LOG_DIR</code></td><td>None (console only)</td><td>Host runner: directory for per-node log files. Compose/k8s: use <code>cfgsync.yaml</code></td></tr>
+<tr><td><code>NOMOS_LOG_LEVEL</code></td><td><code>info</code></td><td>Global log level: <code>error</code>, <code>warn</code>, <code>info</code>, <code>debug</code>, <code>trace</code></td></tr>
+<tr><td><code>NOMOS_LOG_FILTER</code></td><td>None</td><td>Fine-grained target filtering (e.g., <code>cryptarchia=trace,nomos_da_sampling=debug</code>)</td></tr>
+<tr><td><code>NOMOS_TESTS_TRACING</code></td><td>false</td><td>Enable debug tracing preset</td></tr>
+<tr><td><code>NOMOS_OTLP_ENDPOINT</code></td><td>None</td><td>OTLP trace endpoint (optional)</td></tr>
+<tr><td><code>NOMOS_OTLP_METRICS_ENDPOINT</code></td><td>None</td><td>OTLP metrics endpoint (optional)</td></tr>
+</tbody></table>
+</div>
+<p><strong>Example:</strong> Full debug logging to files:</p>
+<pre><code class="language-bash">NOMOS_TESTS_TRACING=true \
+NOMOS_LOG_DIR=/tmp/test-logs \
+NOMOS_LOG_LEVEL=debug \
+NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug,nomos_da_dispersal=debug,nomos_da_verifier=debug" \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin local_runner
+</code></pre>
+<h2 id="per-node-log-files"><a class="header" href="#per-node-log-files">Per-Node Log Files</a></h2>
+<p>When <code>NOMOS_LOG_DIR</code> is set, each node writes logs to separate files:</p>
+<p><strong>File naming pattern:</strong></p>
+<ul>
+<li><strong>Validators</strong>: Prefix <code>nomos-node-0</code>, <code>nomos-node-1</code>, etc. (may include timestamp suffix)</li>
+<li><strong>Executors</strong>: Prefix <code>nomos-executor-0</code>, <code>nomos-executor-1</code>, etc. (may include timestamp suffix)</li>
+</ul>
+<p><strong>Example filenames:</strong></p>
+<ul>
+<li><code>nomos-node-0.2024-12-18T14-30-00.log</code></li>
+<li><code>nomos-node-1.2024-12-18T14-30-00.log</code></li>
+<li><code>nomos-executor-0.2024-12-18T14-30-00.log</code></li>
+</ul>
+<p><strong>Local runner note:</strong> The local runner uses per-run temporary directories under the current working directory and removes them after the run unless <code>NOMOS_TESTS_KEEP_LOGS=1</code>. Use <code>NOMOS_LOG_DIR=/path/to/logs</code> to write per-node log files to a stable location.</p>
+<h2 id="filter-target-names"><a class="header" href="#filter-target-names">Filter Target Names</a></h2>
+<p>Common target prefixes for <code>NOMOS_LOG_FILTER</code>:</p>
+<div class="table-wrapper"><table><thead><tr><th>Target Prefix</th><th>Subsystem</th></tr></thead><tbody>
+<tr><td><code>cryptarchia</code></td><td>Consensus (Cryptarchia)</td></tr>
+<tr><td><code>nomos_da_sampling</code></td><td>DA sampling service</td></tr>
+<tr><td><code>nomos_da_dispersal</code></td><td>DA dispersal service</td></tr>
+<tr><td><code>nomos_da_verifier</code></td><td>DA verification</td></tr>
+<tr><td><code>nomos_blend</code></td><td>Mix network/privacy layer</td></tr>
+<tr><td><code>chain_service</code></td><td>Chain service (node APIs/state)</td></tr>
+<tr><td><code>chain_network</code></td><td>P2P networking</td></tr>
+<tr><td><code>chain_leader</code></td><td>Leader election</td></tr>
+</tbody></table>
+</div>
+<p><strong>Example filter:</strong></p>
+<pre><code class="language-bash">NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug,chain_service=info,chain_network=info"
+</code></pre>
+<hr />
+<h2 id="accessing-logs-by-runner"><a class="header" href="#accessing-logs-by-runner">Accessing Logs by Runner</a></h2>
+<h3 id="local-runner-host-processes"><a class="header" href="#local-runner-host-processes">Local Runner (Host Processes)</a></h3>
+<p><strong>Default (temporary directories, auto-cleanup):</strong></p>
+<pre><code class="language-bash">POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+# Logs written to temporary directories in working directory
+# Automatically cleaned up after test completes
+</code></pre>
+<p><strong>Persistent file output:</strong></p>
+<pre><code class="language-bash">NOMOS_LOG_DIR=/tmp/local-logs \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin local_runner
+
+# After test completes:
+ls /tmp/local-logs/
+# Files with prefix: nomos-node-0*, nomos-node-1*, nomos-executor-0*
+# May include timestamps in filename
+</code></pre>
+<p><strong>Tip:</strong> Use <code>NOMOS_LOG_DIR</code> for persistent per-node log files, and <code>NOMOS_TESTS_KEEP_LOGS=1</code> if you want to keep the per-run temporary directories (configs/state) for post-mortem inspection.</p>
+<h3 id="compose-runner-docker-containers"><a class="header" href="#compose-runner-docker-containers">Compose Runner (Docker Containers)</a></h3>
+<p><strong>Via Docker logs (default, recommended):</strong></p>
+<pre><code class="language-bash"># List containers (note the UUID prefix in names)
+docker ps --filter "name=nomos-compose-"
+
+# Stream logs from specific container
+docker logs -f &lt;container-id-or-name&gt;
+
+# Or use name pattern matching:
+docker logs -f $(docker ps --filter "name=nomos-compose-.*-validator-0" -q | head -1)
+
+# Show last 100 lines
+docker logs --tail 100 &lt;container-id&gt;
+</code></pre>
+<p><strong>Via file collection (advanced):</strong></p>
+<p>To write per-node log files inside containers, set <code>tracing_settings.logger: !File</code> in <code>testing-framework/assets/stack/cfgsync.yaml</code> (and ensure the directory is writable). To access them, you must either:</p>
+<ol>
+<li><strong>Copy files out after the run:</strong></li>
+</ol>
+<pre><code class="language-bash"># Ensure cfgsync.yaml is configured to log to /logs
+NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin compose_runner
+
+# After test, copy files from containers:
+docker ps --filter "name=nomos-compose-"
+docker cp &lt;container-id&gt;:/logs/node* /tmp/
+</code></pre>
+<ol start="2">
+<li><strong>Mount a host volume</strong> (requires modifying compose template):</li>
+</ol>
+<pre><code class="language-yaml">volumes:
+  - /tmp/host-logs:/logs  # Add to docker-compose.yml.tera
+</code></pre>
+<p><strong>Recommendation:</strong> Use <code>docker logs</code> by default. File collection inside containers is complex and rarely needed.</p>
+<p><strong>Keep containers for debugging:</strong></p>
+<pre><code class="language-bash">COMPOSE_RUNNER_PRESERVE=1 \
+NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+cargo run -p runner-examples --bin compose_runner
+# Containers remain running after test—inspect with docker logs or docker exec
+</code></pre>
+<p><strong>Compose debugging variables:</strong></p>
+<ul>
+<li><code>COMPOSE_RUNNER_HOST=127.0.0.1</code> — host used for readiness probes</li>
+<li><code>COMPOSE_RUNNER_HOST_GATEWAY=host.docker.internal:host-gateway</code> — controls <code>extra_hosts</code> entry (set to <code>disable</code> to omit)</li>
+<li><code>TESTNET_RUNNER_PRESERVE=1</code> — alias for <code>COMPOSE_RUNNER_PRESERVE=1</code></li>
+<li><code>COMPOSE_RUNNER_HTTP_TIMEOUT_SECS=&lt;secs&gt;</code> — override HTTP readiness timeout</li>
+</ul>
+<p><strong>Note:</strong> Container names follow pattern <code>nomos-compose-{uuid}-validator-{index}-1</code> where <code>{uuid}</code> changes per run.</p>
+<h3 id="k8s-runner-kubernetes-pods"><a class="header" href="#k8s-runner-kubernetes-pods">K8s Runner (Kubernetes Pods)</a></h3>
+<p><strong>Via kubectl logs (use label selectors):</strong></p>
+<pre><code class="language-bash"># List pods
+kubectl get pods
+
+# Stream logs using label selectors (recommended)
+# Helm chart labels:
+# - nomos/logical-role=validator|executor
+# - nomos/validator-index / nomos/executor-index
+kubectl logs -l nomos/logical-role=validator -f
+kubectl logs -l nomos/logical-role=executor -f
+
+# Stream logs from specific pod
+kubectl logs -f nomos-validator-0
+
+# Previous logs from crashed pods
+kubectl logs --previous -l nomos/logical-role=validator
+</code></pre>
+<p><strong>Download logs for offline analysis:</strong></p>
+<pre><code class="language-bash"># Using label selectors
+kubectl logs -l nomos/logical-role=validator --tail=1000 &gt; all-validators.log
+kubectl logs -l nomos/logical-role=executor --tail=1000 &gt; all-executors.log
+
+# Specific pods
+kubectl logs nomos-validator-0 &gt; validator-0.log
+kubectl logs nomos-executor-1 &gt; executor-1.log
+</code></pre>
+<p><strong>K8s debugging variables:</strong></p>
+<ul>
+<li><code>K8S_RUNNER_DEBUG=1</code> — logs Helm stdout/stderr for install commands</li>
+<li><code>K8S_RUNNER_PRESERVE=1</code> — keep namespace/release after run</li>
+<li><code>K8S_RUNNER_NODE_HOST=&lt;ip|hostname&gt;</code> — override NodePort host resolution</li>
+<li><code>K8S_RUNNER_NAMESPACE=&lt;name&gt;</code> / <code>K8S_RUNNER_RELEASE=&lt;name&gt;</code> — pin namespace/release (useful for debugging)</li>
+</ul>
+<p><strong>Specify namespace (if not using default):</strong></p>
+<pre><code class="language-bash">kubectl logs -n my-namespace -l nomos/logical-role=validator -f
+</code></pre>
+<p><strong>Note:</strong> K8s runner is optimized for local clusters (Docker Desktop K8s, minikube, kind). Remote clusters require additional setup.</p>
+<hr />
+<h2 id="otlp-and-telemetry"><a class="header" href="#otlp-and-telemetry">OTLP and Telemetry</a></h2>
+<p><strong>OTLP exporters are optional.</strong> If you see errors about unreachable OTLP endpoints, it's safe to ignore them unless you're actively collecting traces/metrics.</p>
+<p><strong>To enable OTLP:</strong></p>
+<pre><code class="language-bash">NOMOS_OTLP_ENDPOINT=http://localhost:4317 \
+NOMOS_OTLP_METRICS_ENDPOINT=http://localhost:4318 \
+cargo run -p runner-examples --bin local_runner
+</code></pre>
+<p><strong>To silence OTLP errors:</strong> Simply leave these variables unset (the default).</p>
+<hr />
+<h2 id="observability-prometheus-and-node-apis"><a class="header" href="#observability-prometheus-and-node-apis">Observability: Prometheus and Node APIs</a></h2>
+<p>Runners expose metrics and node HTTP endpoints for expectation code and debugging.</p>
+<h3 id="prometheus-compatible-metrics-querying-optional"><a class="header" href="#prometheus-compatible-metrics-querying-optional">Prometheus-Compatible Metrics Querying (Optional)</a></h3>
+<ul>
+<li>Runners do <strong>not</strong> provision Prometheus automatically</li>
+<li>For a ready-to-run stack, use <code>scripts/setup/setup-observability.sh</code>:
+<ul>
+<li>Compose: <code>scripts/setup/setup-observability.sh compose up</code> then <code>scripts/setup/setup-observability.sh compose env</code></li>
+<li>K8s: <code>scripts/setup/setup-observability.sh k8s install</code> then <code>scripts/setup/setup-observability.sh k8s env</code></li>
+</ul>
+</li>
+<li>Provide <code>NOMOS_METRICS_QUERY_URL</code> (PromQL base URL) to enable <code>ctx.telemetry()</code> queries</li>
+<li>Access from expectations when configured: <code>ctx.telemetry().prometheus().map(|p| p.base_url())</code></li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash"># Start observability stack (Compose)
+scripts/setup/setup-observability.sh compose up
+
+# Get environment variables
+eval $(scripts/setup/setup-observability.sh compose env)
+
+# Run scenario with metrics
+POL_PROOF_DEV_MODE=true \
+scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+</code></pre>
+<h3 id="grafana-optional"><a class="header" href="#grafana-optional">Grafana (Optional)</a></h3>
+<ul>
+<li>Runners do <strong>not</strong> provision Grafana automatically (but <code>scripts/setup/setup-observability.sh</code> can)</li>
+<li>If you set <code>NOMOS_GRAFANA_URL</code>, the deployer prints it in <code>TESTNET_ENDPOINTS</code></li>
+<li>Dashboards live in <code>testing-framework/assets/stack/monitoring/grafana/dashboards/</code> (the bundled stack auto-provisions them)</li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash"># Bring up the bundled Prometheus+Grafana stack (optional)
+scripts/setup/setup-observability.sh compose up
+eval $(scripts/setup/setup-observability.sh compose env)
+
+export NOMOS_GRAFANA_URL=http://localhost:3000
+POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+</code></pre>
+<p><strong>Default bundled Grafana login:</strong> <code>admin</code> / <code>admin</code> (see <code>scripts/observability/compose/docker-compose.yml</code>).</p>
+<h3 id="node-apis"><a class="header" href="#node-apis">Node APIs</a></h3>
+<ul>
+<li>Access from expectations: <code>ctx.node_clients().validator_clients().get(0)</code></li>
+<li>Endpoints: consensus info, network info, DA membership, etc.</li>
+<li>See <code>testing-framework/core/src/nodes/api_client.rs</code> for available methods</li>
+</ul>
+<p><strong>Example usage in expectations:</strong></p>
+<pre><code class="language-rust ignore">use testing_framework_core::scenario::{DynError, RunContext};
+
+async fn evaluate(ctx: &amp;RunContext) -&gt; Result&lt;(), DynError&gt; {
+    let client = &amp;ctx.node_clients().validator_clients()[0];
+
+    let info = client.consensus_info().await?;
+    tracing::info!(height = info.height, "consensus info from validator 0");
+
+    Ok(())
+}</code></pre>
+<hr />
+<h2 id="observability-flow"><a class="header" href="#observability-flow">Observability Flow</a></h2>
+<pre><code class="language-mermaid">flowchart TD
+    Expose[Runner exposes endpoints/ports] --&gt; Collect[Runtime collects block/health signals]
+    Collect --&gt; Consume[Expectations consume signals&lt;br/&gt;decide pass/fail]
+    Consume --&gt; Inspect[Operators inspect logs/metrics&lt;br/&gt;when failures arise]
+</code></pre>
+<hr />
+<h2 id="quick-reference"><a class="header" href="#quick-reference">Quick Reference</a></h2>
+<h3 id="debug-logging-host"><a class="header" href="#debug-logging-host">Debug Logging (Host)</a></h3>
+<pre><code class="language-bash">NOMOS_LOG_DIR=/tmp/logs \
+NOMOS_LOG_LEVEL=debug \
+NOMOS_LOG_FILTER="cryptarchia=trace" \
+POL_PROOF_DEV_MODE=true \
+scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
+</code></pre>
+<h3 id="compose-with-observability"><a class="header" href="#compose-with-observability">Compose with Observability</a></h3>
+<pre><code class="language-bash"># Start observability stack
+scripts/setup/setup-observability.sh compose up
+eval $(scripts/setup/setup-observability.sh compose env)
+
+# Run with metrics
+POL_PROOF_DEV_MODE=true \
+scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+
+# Access Grafana at http://localhost:3000
+</code></pre>
+<h3 id="k8s-with-debug"><a class="header" href="#k8s-with-debug">K8s with Debug</a></h3>
+<pre><code class="language-bash">K8S_RUNNER_NAMESPACE=nomos-debug \
+K8S_RUNNER_DEBUG=1 \
+K8S_RUNNER_PRESERVE=1 \
+POL_PROOF_DEV_MODE=true \
+scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
+
+# Inspect logs
+kubectl logs -n nomos-debug -l nomos/logical-role=validator
+</code></pre>
+<hr />
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="environment-variables.html">Environment Variables</a> — Complete variable reference</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — Log-related debugging (see "Where to Find Logs")</li>
+<li><a href="running-examples.html">Running Examples</a> — Runner-specific logging details</li>
+<li><a href="prerequisites.html">Prerequisites &amp; Setup</a> — Setup before running</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="environment-variables.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="part-v.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="environment-variables.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="part-v.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

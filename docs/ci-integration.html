@@ -1,0 +1,592 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>CI Integration - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html" class="active"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="ci-integration"><a class="header" href="#ci-integration">CI Integration</a></h1>
+<p>Both <strong>LocalDeployer</strong> and <strong>ComposeDeployer</strong> work well in CI environments. Choose based on your tradeoffs.</p>
+<h2 id="runner-comparison-for-ci"><a class="header" href="#runner-comparison-for-ci">Runner Comparison for CI</a></h2>
+<p><strong>LocalDeployer (Host Runner):</strong></p>
+<ul>
+<li>Faster startup (no Docker overhead)</li>
+<li>Good for quick smoke tests</li>
+<li><strong>Trade-off:</strong> Less isolation (processes share host resources)</li>
+</ul>
+<p><strong>ComposeDeployer (Recommended for CI):</strong></p>
+<ul>
+<li>Better isolation (containerized)</li>
+<li>Reproducible environment</li>
+<li>Can integrate with external Prometheus/Grafana (optional)</li>
+<li><strong>Trade-offs:</strong> Slower startup (Docker image build), requires Docker daemon</li>
+</ul>
+<p><strong>K8sDeployer:</strong></p>
+<ul>
+<li>Production-like environment</li>
+<li>Full resource isolation</li>
+<li><strong>Trade-offs:</strong> Slowest (cluster setup + image loading), requires cluster access</li>
+<li>Best for nightly/weekly runs or production validation</li>
+</ul>
+<p><strong>Existing Examples:</strong></p>
+<p>See <code>.github/workflows/lint.yml</code> (jobs: <code>host_smoke</code>, <code>compose_smoke</code>) for CI examples running the demo scenarios in this repository.</p>
+<h2 id="complete-ci-workflow-example"><a class="header" href="#complete-ci-workflow-example">Complete CI Workflow Example</a></h2>
+<p>Here's a comprehensive GitHub Actions workflow demonstrating host and compose runners with caching, matrix testing, and log collection:</p>
+<pre><code class="language-yaml">name: Testing Framework CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  POL_PROOF_DEV_MODE: true
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Quick smoke test with host runner (no Docker)
+  host_smoke:
+    name: Host Runner Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-host-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-host-
+      
+      - name: Cache nomos-node build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ../nomos-node/target/release/nomos-node
+            ../nomos-node/target/release/nomos-executor
+          key: ${{ runner.os }}-nomos-${{ hashFiles('../nomos-node/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nomos-
+      
+      - name: Run host smoke test
+        run: |
+          # Use run-examples.sh which handles setup automatically
+          scripts/run/run-examples.sh -t 120 -v 3 -e 1 host
+      
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: host-runner-logs
+          path: |
+            .tmp/
+            *.log
+          retention-days: 7
+
+  # Compose runner matrix (with Docker)
+  compose_matrix:
+    name: Compose Runner (${{ matrix.topology }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        topology:
+          - "3v1e"
+          - "5v1e"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-compose-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-compose-
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile', 'scripts/build/build_test_image.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: Run compose test
+        env:
+          TOPOLOGY: ${{ matrix.topology }}
+        run: |
+          # Build and run with the specified topology
+          scripts/run/run-examples.sh -t 120 -v ${TOPOLOGY:0:1} -e ${TOPOLOGY:2:1} compose
+      
+      - name: Collect Docker logs on failure
+        if: failure()
+        run: |
+          mkdir -p logs
+          for container in $(docker ps -a --filter "name=nomos-compose-" -q); do
+            docker logs $container &gt; logs/$(docker inspect --format='{{.Name}}' $container).log 2&gt;&amp;1
+          done
+      
+      - name: Upload logs and artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: compose-${{ matrix.topology }}-logs
+          path: |
+            logs/
+            .tmp/
+          retention-days: 7
+      
+      - name: Clean up Docker resources
+        if: always()
+        run: |
+          docker compose down -v 2&gt;/dev/null || true
+          docker ps -a --filter "name=nomos-compose-" -q | xargs -r docker rm -f
+
+  # Cucumber/BDD integration tests (if enabled)
+  cucumber_tests:
+    name: Cucumber BDD Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-cucumber-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cucumber-
+      
+      - name: Run Cucumber tests
+        run: |
+          # Build prerequisites
+          scripts/build/build-bundle.sh --platform linux
+          export NOMOS_BINARIES_TAR=$(ls -t .tmp/nomos-binaries-linux-*.tar.gz | head -1)
+          
+          # Run Cucumber tests (host runner)
+          cargo test -p runner-examples --bin cucumber_host
+      
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cucumber-report
+          path: |
+            target/cucumber-reports/
+          retention-days: 14
+
+  # Summary job (requires all tests to pass)
+  ci_success:
+    name: CI Success
+    needs: [host_smoke, compose_matrix, cucumber_tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.host_smoke.result }}" != "success" ]] || \
+             [[ "${{ needs.compose_matrix.result }}" != "success" ]] || \
+             [[ "${{ needs.cucumber_tests.result }}" != "success" ]]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI jobs passed!"
+</code></pre>
+<h2 id="workflow-features"><a class="header" href="#workflow-features">Workflow Features</a></h2>
+<ol>
+<li><strong>Matrix Testing:</strong> Runs compose tests with different topologies (<code>3v1e</code>, <code>5v1e</code>)</li>
+<li><strong>Caching:</strong> Caches Rust dependencies, Docker layers, and nomos-node builds for faster runs</li>
+<li><strong>Log Collection:</strong> Automatically uploads logs and artifacts when tests fail</li>
+<li><strong>Timeout Protection:</strong> Reasonable timeouts prevent jobs from hanging indefinitely</li>
+<li><strong>Cucumber Integration:</strong> Shows how to integrate BDD tests into CI</li>
+<li><strong>Clean Teardown:</strong> Ensures Docker resources are cleaned up even on failure</li>
+</ol>
+<h2 id="customization-points"><a class="header" href="#customization-points">Customization Points</a></h2>
+<p><strong>Topology Matrix:</strong></p>
+<p>Add more topologies for comprehensive testing:</p>
+<pre><code class="language-yaml">matrix:
+  topology:
+    - "3v1e"
+    - "5v1e"
+    - "10v2e"  # Larger scale
+</code></pre>
+<p><strong>Timeout Adjustments:</strong></p>
+<p>Increase <code>timeout-minutes</code> for longer-running scenarios or slower environments:</p>
+<pre><code class="language-yaml">timeout-minutes: 30  # Instead of 15
+</code></pre>
+<p><strong>Artifact Retention:</strong></p>
+<p>Change <code>retention-days</code> based on your storage needs:</p>
+<pre><code class="language-yaml">retention-days: 14  # Keep logs for 2 weeks
+</code></pre>
+<p><strong>Conditional Execution:</strong></p>
+<p>Run expensive tests only on merge to main:</p>
+<pre><code class="language-yaml">if: github.event_name == 'push' &amp;&amp; github.ref == 'refs/heads/main'
+</code></pre>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="required-set-pol_proof_dev_mode"><a class="header" href="#required-set-pol_proof_dev_mode">Required: Set POL_PROOF_DEV_MODE</a></h3>
+<p><strong>Always set <code>POL_PROOF_DEV_MODE=true</code> globally</strong> in your workflow env:</p>
+<pre><code class="language-yaml">env:
+  POL_PROOF_DEV_MODE: true  # REQUIRED!
+</code></pre>
+<p>Without this, tests will hang due to expensive proof generation.</p>
+<h3 id="use-helper-scripts"><a class="header" href="#use-helper-scripts">Use Helper Scripts</a></h3>
+<p>Prefer <code>scripts/run/run-examples.sh</code> which handles all setup automatically:</p>
+<pre><code class="language-bash">scripts/run/run-examples.sh -t 120 -v 3 -e 1 host
+</code></pre>
+<p>This is more reliable than manual <code>cargo run</code> commands.</p>
+<h3 id="cache-aggressively"><a class="header" href="#cache-aggressively">Cache Aggressively</a></h3>
+<p>Cache Rust dependencies, nomos-node builds, and Docker layers to speed up CI:</p>
+<pre><code class="language-yaml">- name: Cache Rust dependencies
+  uses: actions/cache@v3
+  with:
+    path: |
+      ~/.cargo/bin/
+      ~/.cargo/registry/index/
+      ~/.cargo/registry/cache/
+      ~/.cargo/git/db/
+      target/
+    key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+</code></pre>
+<h3 id="collect-logs-on-failure"><a class="header" href="#collect-logs-on-failure">Collect Logs on Failure</a></h3>
+<p>Always upload logs when tests fail for easier debugging:</p>
+<pre><code class="language-yaml">- name: Upload logs on failure
+  if: failure()
+  uses: actions/upload-artifact@v3
+  with:
+    name: test-logs
+    path: |
+      .tmp/
+      *.log
+    retention-days: 7
+</code></pre>
+<h3 id="split-workflows-for-faster-iteration"><a class="header" href="#split-workflows-for-faster-iteration">Split Workflows for Faster Iteration</a></h3>
+<p>For large projects, split host/compose/k8s into separate workflow files:</p>
+<ul>
+<li><code>.github/workflows/test-host.yml</code> — Fast smoke tests</li>
+<li><code>.github/workflows/test-compose.yml</code> — Reproducible integration tests</li>
+<li><code>.github/workflows/test-k8s.yml</code> — Production-like validation (nightly)</li>
+</ul>
+<h3 id="run-k8s-tests-less-frequently"><a class="header" href="#run-k8s-tests-less-frequently">Run K8s Tests Less Frequently</a></h3>
+<p>K8s tests are slower. Consider running them only on main branch or scheduled:</p>
+<pre><code class="language-yaml">on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+</code></pre>
+<h2 id="platform-specific-notes"><a class="header" href="#platform-specific-notes">Platform-Specific Notes</a></h2>
+<h3 id="ubuntu-runners"><a class="header" href="#ubuntu-runners">Ubuntu Runners</a></h3>
+<ul>
+<li>Docker pre-installed and running</li>
+<li>Best for compose/k8s runners</li>
+<li>Most common choice</li>
+</ul>
+<h3 id="macos-runners"><a class="header" href="#macos-runners">macOS Runners</a></h3>
+<ul>
+<li>Docker Desktop not installed by default</li>
+<li>Slower and more expensive</li>
+<li>Use only if testing macOS-specific issues</li>
+</ul>
+<h3 id="self-hosted-runners"><a class="header" href="#self-hosted-runners">Self-Hosted Runners</a></h3>
+<ul>
+<li>Cache Docker images locally for faster builds</li>
+<li>Set resource limits (<code>SLOW_TEST_ENV=true</code> if needed)</li>
+<li>Ensure cleanup scripts run (<code>docker system prune</code>)</li>
+</ul>
+<h2 id="debugging-ci-failures"><a class="header" href="#debugging-ci-failures">Debugging CI Failures</a></h2>
+<h3 id="enable-debug-logging"><a class="header" href="#enable-debug-logging">Enable Debug Logging</a></h3>
+<p>Add debug environment variables temporarily:</p>
+<pre><code class="language-yaml">env:
+  RUST_LOG: debug
+  NOMOS_LOG_LEVEL: debug
+</code></pre>
+<h3 id="preserve-containers-compose"><a class="header" href="#preserve-containers-compose">Preserve Containers (Compose)</a></h3>
+<p>Set <code>COMPOSE_RUNNER_PRESERVE=1</code> to keep containers running for inspection:</p>
+<pre><code class="language-yaml">- name: Run compose test (preserve on failure)
+  env:
+    COMPOSE_RUNNER_PRESERVE: 1
+  run: scripts/run/run-examples.sh -t 120 -v 3 -e 1 compose
+</code></pre>
+<h3 id="access-artifacts"><a class="header" href="#access-artifacts">Access Artifacts</a></h3>
+<p>Download uploaded artifacts from the GitHub Actions UI to inspect logs locally.</p>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li><a href="running-examples.html">Running Examples</a> — Manual execution for local development</li>
+<li><a href="environment-variables.html">Environment Variables</a> — Full variable reference</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — Common CI-specific issues</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="running-examples.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="environment-variables.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="running-examples.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="environment-variables.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

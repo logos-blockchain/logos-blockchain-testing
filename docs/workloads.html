@@ -1,0 +1,664 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Core Content: Workloads &amp; Expectations - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html" class="active"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="core-content-workloads--expectations"><a class="header" href="#core-content-workloads--expectations">Core Content: Workloads &amp; Expectations</a></h1>
+<p>Workloads describe the activity a scenario generates; expectations describe the signals that must hold when that activity completes. This page is the <strong>canonical reference</strong> for all built-in workloads and expectations, including configuration knobs, defaults, prerequisites, and debugging guidance.</p>
+<hr />
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<pre><code class="language-mermaid">flowchart TD
+    I[Inputs&lt;br/&gt;topology + wallets + rates] --&gt; Init[Workload init]
+    Init --&gt; Drive[Drive traffic]
+    Drive --&gt; Collect[Collect signals]
+    Collect --&gt; Eval[Expectations evaluate]
+</code></pre>
+<p><strong>Key concepts:</strong></p>
+<ul>
+<li><strong>Workloads</strong> run during the <strong>execution phase</strong> (generate traffic)</li>
+<li><strong>Expectations</strong> run during the <strong>evaluation phase</strong> (check health signals)</li>
+<li>Each workload can attach its own expectations automatically</li>
+<li>Expectations can also be added explicitly</li>
+</ul>
+<hr />
+<h2 id="built-in-workloads"><a class="header" href="#built-in-workloads">Built-in Workloads</a></h2>
+<h3 id="1-transaction-workload"><a class="header" href="#1-transaction-workload">1. Transaction Workload</a></h3>
+<p>Submits user-level transactions at a configurable rate to exercise transaction processing and inclusion paths.</p>
+<p><strong>Import:</strong></p>
+<pre><code class="language-rust ignore">use testing_framework_workflows::workloads::transaction::Workload;</code></pre>
+<h4 id="configuration"><a class="header" href="#configuration">Configuration</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>rate</code></td><td><code>u64</code></td><td><strong>Required</strong></td><td>Transactions per block (not per second!)</td></tr>
+<tr><td><code>users</code></td><td><code>Option&lt;usize&gt;</code></td><td>All wallets</td><td>Number of distinct wallet accounts to use</td></tr>
+</tbody></table>
+</div>
+<h4 id="dsl-usage"><a class="header" href="#dsl-usage">DSL Usage</a></h4>
+<pre><code class="language-rust ignore">use testing_framework_workflows::ScenarioBuilderExt;
+
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .wallets(20)  // Seed 20 wallet accounts
+    .transactions_with(|tx| {
+        tx.rate(10)   // 10 transactions per block
+          .users(5)   // Use only 5 of the 20 wallets
+    })
+    .with_run_duration(Duration::from_secs(60))
+    .build();</code></pre>
+<h4 id="direct-instantiation"><a class="header" href="#direct-instantiation">Direct Instantiation</a></h4>
+<pre><code class="language-rust ignore">use testing_framework_workflows::workloads::transaction;
+
+let tx_workload = transaction::Workload::with_rate(10)
+    .expect("transaction rate must be non-zero");
+
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .wallets(20)
+    .with_workload(tx_workload)
+    .with_run_duration(Duration::from_secs(60))
+    .build();</code></pre>
+<h4 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h4>
+<ol>
+<li>
+<p><strong>Wallet accounts must be seeded:</strong></p>
+<pre><code class="language-rust ignore">.wallets(N)  // Before .transactions_with()</code></pre>
+<p>The workload will fail during <code>init()</code> if no wallets are configured.</p>
+</li>
+<li>
+<p><strong>Proof generation must be fast:</strong></p>
+<pre><code class="language-bash">export POL_PROOF_DEV_MODE=true
+</code></pre>
+<p>Without this, proof generation takes ~30-60 seconds per transaction, causing timeouts.</p>
+</li>
+<li>
+<p><strong>Circuit artifacts must be available:</strong></p>
+<ul>
+<li>Automatically staged by <code>scripts/run/run-examples.sh</code></li>
+<li>Or manually via <code>scripts/setup/setup-circuits-stack.sh</code> (recommended) / <code>scripts/setup/setup-nomos-circuits.sh</code></li>
+</ul>
+</li>
+</ol>
+<h4 id="attached-expectation"><a class="header" href="#attached-expectation">Attached Expectation</a></h4>
+<p><strong>TxInclusionExpectation</strong> — Verifies that submitted transactions were included in blocks.</p>
+<p><strong>What it checks:</strong></p>
+<ul>
+<li>At least <code>N</code> transactions were included on-chain (where N = rate × user count × expected block count)</li>
+<li>Uses BlockFeed to count transactions across all observed blocks</li>
+</ul>
+<p><strong>Failure modes:</strong></p>
+<ul>
+<li>"Expected &gt;= X transactions, observed Y" (Y &lt; X)</li>
+<li>Common causes: proof generation timeouts, node crashes, insufficient duration</li>
+</ul>
+<h4 id="what-failure-looks-like"><a class="header" href="#what-failure-looks-like">What Failure Looks Like</a></h4>
+<pre><code class="language-text">Error: Expectation failed: TxInclusionExpectation
+  Expected: &gt;= 600 transactions (10 tx/block × 60 blocks)
+  Observed: 127 transactions
+  
+  Possible causes:
+  - POL_PROOF_DEV_MODE not set (proof generation too slow)
+  - Duration too short (nodes still syncing)
+  - Node crashes (check logs for panics/OOM)
+  - Wallet accounts not seeded (check topology config)
+</code></pre>
+<p><strong>How to debug:</strong></p>
+<ol>
+<li>Check logs for proof generation timing:
+<pre><code class="language-bash">grep "proof generation" $NOMOS_LOG_DIR/executor-0/*.log
+</code></pre>
+</li>
+<li>Verify <code>POL_PROOF_DEV_MODE=true</code> was set</li>
+<li>Increase duration: <code>.with_run_duration(Duration::from_secs(120))</code></li>
+<li>Reduce rate: <code>.rate(5)</code> instead of <code>.rate(10)</code></li>
+</ol>
+<hr />
+<h3 id="2-data-availability-da-workload"><a class="header" href="#2-data-availability-da-workload">2. Data Availability (DA) Workload</a></h3>
+<p>Drives blob and channel activity to exercise data availability paths and storage.</p>
+<p><strong>Import:</strong></p>
+<pre><code class="language-rust ignore">use testing_framework_workflows::workloads::da::Workload;</code></pre>
+<h4 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>blob_rate_per_block</code></td><td><code>NonZeroU64</code></td><td><strong>Required</strong></td><td>Blobs to publish per block</td></tr>
+<tr><td><code>channel_rate_per_block</code></td><td><code>NonZeroU64</code></td><td><strong>Required</strong></td><td>Channels to create per block</td></tr>
+<tr><td><code>headroom_percent</code></td><td><code>u64</code></td><td><code>20</code></td><td>Extra capacity for channel planning (avoids saturation)</td></tr>
+</tbody></table>
+</div>
+<h4 id="dsl-usage-1"><a class="header" href="#dsl-usage-1">DSL Usage</a></h4>
+<pre><code class="language-rust ignore">use testing_framework_workflows::ScenarioBuilderExt;
+
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    .da_with(|da| {
+        da.channel_rate(2)  // 2 channels per block
+          .blob_rate(4)     // 4 blobs per block
+    })
+    .with_run_duration(Duration::from_secs(120))
+    .build();</code></pre>
+<h4 id="direct-instantiation-1"><a class="header" href="#direct-instantiation-1">Direct Instantiation</a></h4>
+<pre><code class="language-rust ignore">use std::num::NonZeroU64;
+use testing_framework_workflows::workloads::da;
+
+let da_workload = da::Workload::with_rate(
+    NonZeroU64::new(4).unwrap(),   // blob_rate_per_block
+    NonZeroU64::new(2).unwrap(),   // channel_rate_per_block
+    20,                            // headroom_percent
+);
+
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    .with_workload(da_workload)
+    .with_run_duration(Duration::from_secs(120))
+    .build();</code></pre>
+<h4 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h4>
+<ol>
+<li>
+<p><strong>Executors must be present:</strong></p>
+<pre><code class="language-rust ignore">.executors(N)  // At least 1 executor</code></pre>
+<p>DA workload requires executor nodes to handle blob publishing.</p>
+</li>
+<li>
+<p><strong>Sufficient duration:</strong>
+Channel creation and blob publishing are slower than transaction submission. Allow 120+ seconds.</p>
+</li>
+<li>
+<p><strong>Circuit artifacts:</strong>
+Same as transaction workload (POL_PROOF_DEV_MODE, circuits staged).</p>
+</li>
+</ol>
+<h4 id="attached-expectation-1"><a class="header" href="#attached-expectation-1">Attached Expectation</a></h4>
+<p><strong>DaWorkloadExpectation</strong> — Verifies blobs and channels were created and published.</p>
+<p><strong>What it checks:</strong></p>
+<ul>
+<li>At least <code>N</code> channels were created (where N = channel_rate × expected blocks)</li>
+<li>At least <code>M</code> blobs were published (where M = blob_rate × expected blocks × headroom)</li>
+<li>Uses BlockFeed and executor API to verify</li>
+</ul>
+<p><strong>Failure modes:</strong></p>
+<ul>
+<li>"Expected &gt;= X channels, observed Y" (Y &lt; X)</li>
+<li>"Expected &gt;= X blobs, observed Y" (Y &lt; X)</li>
+<li>Common causes: executor crashes, insufficient duration, DA saturation</li>
+</ul>
+<h4 id="what-failure-looks-like-1"><a class="header" href="#what-failure-looks-like-1">What Failure Looks Like</a></h4>
+<pre><code class="language-text">Error: Expectation failed: DaWorkloadExpectation
+  Expected: &gt;= 60 channels (2 channels/block × 30 blocks)
+  Observed: 23 channels
+  
+  Possible causes:
+  - Executors crashed or restarted (check executor logs)
+  - Duration too short (channels still being created)
+  - Blob publishing failed (check executor API errors)
+  - Network issues (check validator/executor connectivity)
+</code></pre>
+<p><strong>How to debug:</strong></p>
+<ol>
+<li>Check executor logs:
+<pre><code class="language-bash">grep "channel\|blob" $NOMOS_LOG_DIR/executor-0/*.log
+</code></pre>
+</li>
+<li>Verify executors stayed running:
+<pre><code class="language-bash">grep "panic\|killed" $NOMOS_LOG_DIR/executor-*/*.log
+</code></pre>
+</li>
+<li>Increase duration: <code>.with_run_duration(Duration::from_secs(180))</code></li>
+<li>Reduce rates: <code>.channel_rate(1).blob_rate(2)</code></li>
+</ol>
+<hr />
+<h3 id="3-chaos-workload-random-restart"><a class="header" href="#3-chaos-workload-random-restart">3. Chaos Workload (Random Restart)</a></h3>
+<p>Triggers controlled node restarts to test resilience and recovery behaviors.</p>
+<p><strong>Import:</strong></p>
+<pre><code class="language-rust ignore">use testing_framework_workflows::workloads::chaos::RandomRestartWorkload;</code></pre>
+<h4 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>min_delay</code></td><td><code>Duration</code></td><td><strong>Required</strong></td><td>Minimum time between restart attempts</td></tr>
+<tr><td><code>max_delay</code></td><td><code>Duration</code></td><td><strong>Required</strong></td><td>Maximum time between restart attempts</td></tr>
+<tr><td><code>target_cooldown</code></td><td><code>Duration</code></td><td><strong>Required</strong></td><td>Minimum time before restarting same node again</td></tr>
+<tr><td><code>include_validators</code></td><td><code>bool</code></td><td><strong>Required</strong></td><td>Whether to restart validators</td></tr>
+<tr><td><code>include_executors</code></td><td><code>bool</code></td><td><strong>Required</strong></td><td>Whether to restart executors</td></tr>
+</tbody></table>
+</div>
+<h4 id="usage"><a class="header" href="#usage">Usage</a></h4>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::{ScenarioBuilderExt, workloads::chaos::RandomRestartWorkload};
+
+let scenario = ScenarioBuilder::topology_with(|t| {
+    t.network_star().validators(3).executors(2)
+})
+.enable_node_control()  // REQUIRED for chaos
+.with_workload(RandomRestartWorkload::new(
+    Duration::from_secs(45),   // min_delay
+    Duration::from_secs(75),   // max_delay
+    Duration::from_secs(120),  // target_cooldown
+    true,                      // include_validators
+    true,                      // include_executors
+))
+.expect_consensus_liveness()
+.with_run_duration(Duration::from_secs(180))
+.build();</code></pre>
+<h4 id="prerequisites-2"><a class="header" href="#prerequisites-2">Prerequisites</a></h4>
+<ol>
+<li>
+<p><strong>Node control must be enabled:</strong></p>
+<pre><code class="language-rust ignore">.enable_node_control()</code></pre>
+<p>This adds <code>NodeControlCapability</code> to the scenario.</p>
+</li>
+<li>
+<p><strong>Runner must support node control:</strong></p>
+<ul>
+<li><strong>Compose runner:</strong> Supported</li>
+<li><strong>Local runner:</strong> Not supported</li>
+<li><strong>K8s runner:</strong> Not yet implemented</li>
+</ul>
+</li>
+<li>
+<p><strong>Sufficient topology:</strong></p>
+<ul>
+<li>For validators: Need &gt;1 validator (workload skips if only 1)</li>
+<li>For executors: Can restart all executors</li>
+</ul>
+</li>
+<li>
+<p><strong>Realistic timing:</strong></p>
+<ul>
+<li>Total duration should be 2-3× the max_delay + cooldown</li>
+<li>Example: max_delay=75s, cooldown=120s → duration &gt;= 180s</li>
+</ul>
+</li>
+</ol>
+<h4 id="attached-expectation-2"><a class="header" href="#attached-expectation-2">Attached Expectation</a></h4>
+<p>None. You must explicitly add expectations (typically <code>.expect_consensus_liveness()</code>).</p>
+<p><strong>Why?</strong> Chaos workloads are about testing recovery under disruption. The appropriate expectation depends on what you're testing:</p>
+<ul>
+<li>Consensus survives restarts → <code>.expect_consensus_liveness()</code></li>
+<li>Height converges after chaos → Custom expectation checking BlockFeed</li>
+</ul>
+<h4 id="what-failure-looks-like-2"><a class="header" href="#what-failure-looks-like-2">What Failure Looks Like</a></h4>
+<pre><code class="language-text">Error: Workload failed: chaos_restart
+  Cause: NodeControlHandle not available
+  
+  Possible causes:
+  - Forgot .enable_node_control() in scenario builder
+  - Using local runner (doesn't support node control)
+  - Using k8s runner (doesn't support node control)
+</code></pre>
+<p><strong>Or:</strong></p>
+<pre><code class="language-text">Error: Expectation failed: ConsensusLiveness
+  Expected: &gt;= 20 blocks
+  Observed: 8 blocks
+  
+  Possible causes:
+  - Restart frequency too high (nodes can't recover)
+  - Consensus timing too slow (increase duration)
+  - Too many validators restarted simultaneously
+  - Nodes crashed after restart (check logs)
+</code></pre>
+<p><strong>How to debug:</strong></p>
+<ol>
+<li>Check restart events in logs:
+<pre><code class="language-bash">grep "restarting\|restart complete" $NOMOS_LOG_DIR/*/*.log
+</code></pre>
+</li>
+<li>Verify node control is enabled:
+<pre><code class="language-bash">grep "NodeControlHandle" $NOMOS_LOG_DIR/*/*.log
+</code></pre>
+</li>
+<li>Increase cooldown: <code>Duration::from_secs(180)</code></li>
+<li>Reduce restart scope: <code>include_validators = false</code> (test executors only)</li>
+<li>Increase duration: <code>.with_run_duration(Duration::from_secs(300))</code></li>
+</ol>
+<hr />
+<h2 id="built-in-expectations"><a class="header" href="#built-in-expectations">Built-in Expectations</a></h2>
+<h3 id="1-consensus-liveness"><a class="header" href="#1-consensus-liveness">1. Consensus Liveness</a></h3>
+<p>Verifies the system continues to produce blocks during the execution window.</p>
+<p><strong>Import:</strong></p>
+<pre><code class="language-rust ignore">use testing_framework_workflows::ScenarioBuilderExt;</code></pre>
+<h4 id="dsl-usage-2"><a class="header" href="#dsl-usage-2">DSL Usage</a></h4>
+<pre><code class="language-rust ignore">ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(60))
+    .build();</code></pre>
+<h4 id="what-it-checks"><a class="header" href="#what-it-checks">What It Checks</a></h4>
+<ul>
+<li>At least <code>N</code> blocks were produced (where N = duration / expected_block_time)</li>
+<li>Uses BlockFeed to count observed blocks</li>
+<li>Compares against a minimum threshold (typically 50% of theoretical max)</li>
+</ul>
+<h4 id="failure-modes"><a class="header" href="#failure-modes">Failure Modes</a></h4>
+<pre><code class="language-text">Error: Expectation failed: ConsensusLiveness
+  Expected: &gt;= 30 blocks
+  Observed: 3 blocks
+  
+  Possible causes:
+  - Nodes crashed or never started (check logs)
+  - Consensus timing misconfigured (CONSENSUS_SLOT_TIME too high)
+  - Insufficient validators (need &gt;= 2 for BFT consensus)
+  - Duration too short (nodes still syncing)
+</code></pre>
+<h4 id="how-to-debug"><a class="header" href="#how-to-debug">How to Debug</a></h4>
+<ol>
+<li>Check if nodes started:
+<pre><code class="language-bash">grep "node started\|listening on" $NOMOS_LOG_DIR/*/*.log
+</code></pre>
+</li>
+<li>Check block production:
+<pre><code class="language-bash">grep "block.*height" $NOMOS_LOG_DIR/validator-*/*.log
+</code></pre>
+</li>
+<li>Check consensus participation:
+<pre><code class="language-bash">grep "consensus.*slot\|proposal" $NOMOS_LOG_DIR/validator-*/*.log
+</code></pre>
+</li>
+<li>Increase duration: <code>.with_run_duration(Duration::from_secs(120))</code></li>
+<li>Check env vars: <code>echo $CONSENSUS_SLOT_TIME $CONSENSUS_ACTIVE_SLOT_COEFF</code></li>
+</ol>
+<hr />
+<h3 id="2-workload-specific-expectations"><a class="header" href="#2-workload-specific-expectations">2. Workload-Specific Expectations</a></h3>
+<p>Each workload automatically attaches its own expectation:</p>
+<div class="table-wrapper"><table><thead><tr><th>Workload</th><th>Expectation</th><th>What It Checks</th></tr></thead><tbody>
+<tr><td>Transaction</td><td><code>TxInclusionExpectation</code></td><td>Transactions were included in blocks</td></tr>
+<tr><td>DA</td><td><code>DaWorkloadExpectation</code></td><td>Blobs and channels were created/published</td></tr>
+<tr><td>Chaos</td><td>(None)</td><td>Add <code>.expect_consensus_liveness()</code> explicitly</td></tr>
+</tbody></table>
+</div>
+<p>These expectations are added automatically when using the DSL (<code>.transactions_with()</code>, <code>.da_with()</code>).</p>
+<hr />
+<h2 id="configuration-quick-reference"><a class="header" href="#configuration-quick-reference">Configuration Quick Reference</a></h2>
+<h3 id="transaction-workload"><a class="header" href="#transaction-workload">Transaction Workload</a></h3>
+<pre><code class="language-rust ignore">.wallets(20)
+.transactions_with(|tx| tx.rate(10).users(5))</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>What</th><th>Value</th><th>Unit</th></tr></thead><tbody>
+<tr><td>Rate</td><td>10</td><td>tx/block</td></tr>
+<tr><td>Users</td><td>5</td><td>wallet accounts</td></tr>
+<tr><td>Wallets</td><td>20</td><td>total seeded</td></tr>
+</tbody></table>
+</div>
+<h3 id="da-workload"><a class="header" href="#da-workload">DA Workload</a></h3>
+<pre><code class="language-rust ignore">.da_with(|da| da.channel_rate(2).blob_rate(4))</code></pre>
+<div class="table-wrapper"><table><thead><tr><th>What</th><th>Value</th><th>Unit</th></tr></thead><tbody>
+<tr><td>Channel rate</td><td>2</td><td>channels/block</td></tr>
+<tr><td>Blob rate</td><td>4</td><td>blobs/block</td></tr>
+<tr><td>Headroom</td><td>20</td><td>percent</td></tr>
+</tbody></table>
+</div>
+<h3 id="chaos-workload"><a class="header" href="#chaos-workload">Chaos Workload</a></h3>
+<pre><code class="language-rust ignore">.enable_node_control()
+.with_workload(RandomRestartWorkload::new(
+    Duration::from_secs(45),   // min
+    Duration::from_secs(75),   // max
+    Duration::from_secs(120),  // cooldown
+    true,  // validators
+    true,  // executors
+))</code></pre>
+<hr />
+<h2 id="common-patterns"><a class="header" href="#common-patterns">Common Patterns</a></h2>
+<h3 id="pattern-1-multiple-workloads"><a class="header" href="#pattern-1-multiple-workloads">Pattern 1: Multiple Workloads</a></h3>
+<pre><code class="language-rust ignore">ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    .wallets(20)
+    .transactions_with(|tx| tx.rate(5).users(10))
+    .da_with(|da| da.channel_rate(2).blob_rate(2))
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(120))
+    .build();</code></pre>
+<p>All workloads run concurrently. Expectations for each workload run after the execution window ends.</p>
+<h3 id="pattern-2-custom-expectation"><a class="header" href="#pattern-2-custom-expectation">Pattern 2: Custom Expectation</a></h3>
+<pre><code class="language-rust ignore">use testing_framework_core::scenario::Expectation;
+
+struct MyCustomExpectation;
+
+#[async_trait]
+impl Expectation for MyCustomExpectation {
+    async fn evaluate(&amp;self, ctx: &amp;RunContext) -&gt; Result&lt;(), DynError&gt; {
+        // Access BlockFeed, metrics, topology, etc.
+        let block_count = ctx.block_feed()?.count();
+        if block_count &lt; 10 {
+            return Err("Not enough blocks".into());
+        }
+        Ok(())
+    }
+}
+
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .with_expectation(MyCustomExpectation)
+    .with_run_duration(Duration::from_secs(60))
+    .build();</code></pre>
+<hr />
+<h2 id="debugging-checklist"><a class="header" href="#debugging-checklist">Debugging Checklist</a></h2>
+<p>When a workload or expectation fails:</p>
+<ol>
+<li>Check logs: <code>$NOMOS_LOG_DIR/*/</code> or <code>docker compose logs</code> or <code>kubectl logs</code></li>
+<li>Verify environment variables: <code>POL_PROOF_DEV_MODE</code>, <code>NOMOS_NODE_BIN</code>, etc.</li>
+<li>Check prerequisites: wallets, executors, node control, circuits</li>
+<li>Increase duration: Double the run duration and retry</li>
+<li>Reduce rates: Half the traffic rates and retry</li>
+<li>Check metrics: Prometheus queries for block height, tx count, DA stats</li>
+<li>Reproduce locally: Use local runner for faster iteration</li>
+</ol>
+<hr />
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><strong><a href="authoring-scenarios.html">Authoring Scenarios</a></strong> — Step-by-step tutorial for building scenarios</li>
+<li><strong><a href="node-control.html">RunContext: BlockFeed &amp; Node Control</a></strong> — Learn how to use BlockFeed in expectations and access node control</li>
+<li><strong><a href="examples.html">Examples</a></strong> — Concrete scenario patterns combining workloads and expectations</li>
+<li><strong><a href="extending.html">Extending the Framework</a></strong> — Implement custom workloads and expectations</li>
+<li><strong><a href="troubleshooting.html">Troubleshooting</a></strong> — Common failure scenarios and fixes</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="authoring-scenarios.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="scenario-builder-ext-patterns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="authoring-scenarios.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="scenario-builder-ext-patterns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

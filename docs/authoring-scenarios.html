@@ -1,0 +1,563 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Authoring Scenarios - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html" class="active"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="authoring-scenarios"><a class="header" href="#authoring-scenarios">Authoring Scenarios</a></h1>
+<p>Creating a scenario is a declarative exercise. This page walks you through the core authoring loop with concrete examples, explains the units and timing model, and shows how to structure scenarios in Rust test suites.</p>
+<hr />
+<h2 id="the-core-authoring-loop"><a class="header" href="#the-core-authoring-loop">The Core Authoring Loop</a></h2>
+<p>Every scenario follows the same pattern:</p>
+<pre><code class="language-mermaid">flowchart LR
+    A[1. Topology] --&gt; B[2. Workloads]
+    B --&gt; C[3. Expectations]
+    C --&gt; D[4. Duration]
+    D --&gt; E[5. Deploy &amp; Run]
+</code></pre>
+<ol>
+<li><strong>Shape the topology</strong> — How many nodes, what roles, what network shape</li>
+<li><strong>Attach workloads</strong> — What traffic to generate (transactions, blobs, chaos)</li>
+<li><strong>Define expectations</strong> — What success looks like (liveness, inclusion, recovery)</li>
+<li><strong>Set duration</strong> — How long to run the experiment</li>
+<li><strong>Choose a runner</strong> — Where to execute (local, compose, k8s)</li>
+</ol>
+<hr />
+<h2 id="hello-scenario-your-first-test"><a class="header" href="#hello-scenario-your-first-test">Hello Scenario: Your First Test</a></h2>
+<p>Let's build a minimal consensus liveness test step-by-step.</p>
+<h3 id="step-1-shape-the-topology"><a class="header" href="#step-1-shape-the-topology">Step 1: Shape the Topology</a></h3>
+<pre><code class="language-rust ignore">use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+let scenario = ScenarioBuilder::topology_with(|t| {
+    t.network_star()      // Star network (one gateway + nodes)
+        .validators(3)     // 3 validator nodes
+        .executors(1)      // 1 executor node
+})</code></pre>
+<p><strong>What goes in topology?</strong></p>
+<ul>
+<li>Node counts (validators, executors)</li>
+<li>Network shape (<code>network_star()</code> is currently the only built-in layout)</li>
+<li>Role split (validators vs. executors)</li>
+</ul>
+<p><strong>What does NOT go in topology?</strong></p>
+<ul>
+<li>Traffic rates (that's workloads)</li>
+<li>Success criteria (that's expectations)</li>
+<li>Runtime configuration (that's duration/runner)</li>
+</ul>
+<h3 id="step-2-attach-workloads"><a class="header" href="#step-2-attach-workloads">Step 2: Attach Workloads</a></h3>
+<pre><code class="language-rust ignore">.wallets(20) // Seed funded wallet accounts for transaction workloads
+.transactions_with(|tx| {
+    tx.rate(10)    // 10 transactions per block
+      .users(5)    // distributed across 5 wallets
+})</code></pre>
+<p><strong>What goes in workloads?</strong></p>
+<ul>
+<li>Transaction traffic (rate, users)</li>
+<li>DA traffic (channels, blobs)</li>
+<li>Chaos injection (restarts, delays)</li>
+</ul>
+<p><strong>Units explained:</strong></p>
+<ul>
+<li><code>.rate(10)</code> = <strong>10 transactions per block</strong> (not per second!)</li>
+<li><code>.users(5)</code> = use 5 distinct wallet accounts</li>
+<li>The framework adapts to block time automatically</li>
+</ul>
+<h3 id="step-3-define-expectations"><a class="header" href="#step-3-define-expectations">Step 3: Define Expectations</a></h3>
+<pre><code class="language-rust ignore">.expect_consensus_liveness()</code></pre>
+<p><strong>What goes in expectations?</strong></p>
+<ul>
+<li>Health checks that run after the scenario completes</li>
+<li>Liveness (blocks produced)</li>
+<li>Inclusion (workload activity landed on-chain)</li>
+<li>Recovery (system survived chaos)</li>
+</ul>
+<p><strong>When do expectations run?</strong>
+After the duration window ends, during the <strong>evaluation phase</strong> of the scenario lifecycle.</p>
+<h3 id="step-4-set-duration"><a class="header" href="#step-4-set-duration">Step 4: Set Duration</a></h3>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+.with_run_duration(Duration::from_secs(60))</code></pre>
+<p><strong>How long is enough?</strong></p>
+<ul>
+<li>Minimum: 2× the expected block time × number of blocks you want</li>
+<li>For consensus liveness: 30-60 seconds</li>
+<li>For transaction inclusion: 60-120 seconds</li>
+<li>For chaos recovery: 2-5 minutes</li>
+</ul>
+<p><strong>What happens during this window?</strong></p>
+<ul>
+<li>Nodes are running</li>
+<li>Workloads generate traffic</li>
+<li>Metrics/logs are collected</li>
+<li>BlockFeed broadcasts observations in real-time</li>
+</ul>
+<h3 id="step-5-build-and-deploy"><a class="header" href="#step-5-build-and-deploy">Step 5: Build and Deploy</a></h3>
+<pre><code class="language-rust ignore">.build();
+
+// Choose a runner
+use testing_framework_core::scenario::Deployer;
+use testing_framework_runner_local::LocalDeployer;
+
+let deployer = LocalDeployer::default();
+let runner = deployer.deploy(&amp;scenario).await?;
+let _result = runner.run(&amp;mut scenario).await?;</code></pre>
+<hr />
+<h2 id="complete-hello-scenario"><a class="header" href="#complete-hello-scenario">Complete "Hello Scenario"</a></h2>
+<p>Putting it all together:</p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_local::LocalDeployer;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+#[tokio::test]
+async fn hello_consensus_liveness() -&gt; Result&lt;()&gt; {
+    let mut scenario = ScenarioBuilder::topology_with(|t| {
+        t.network_star()
+            .validators(3)
+            .executors(1)
+    })
+    .wallets(20)
+    .transactions_with(|tx| tx.rate(10).users(5))
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(60))
+    .build();
+
+    let deployer = LocalDeployer::default();
+    let runner = deployer.deploy(&amp;scenario).await?;
+    runner.run(&amp;mut scenario).await?;
+
+    Ok(())
+}</code></pre>
+<p><strong>Run it:</strong></p>
+<pre><code class="language-bash">POL_PROOF_DEV_MODE=true cargo test hello_consensus_liveness
+</code></pre>
+<hr />
+<h2 id="understanding-units--timing"><a class="header" href="#understanding-units--timing">Understanding Units &amp; Timing</a></h2>
+<h3 id="transaction-rate-per-block-not-per-second"><a class="header" href="#transaction-rate-per-block-not-per-second">Transaction Rate: Per-Block, Not Per-Second</a></h3>
+<p><strong>Wrong mental model:</strong> <code>.rate(10)</code> = 10 tx/second</p>
+<p><strong>Correct mental model:</strong> <code>.rate(10)</code> = 10 tx/block</p>
+<p><strong>Why?</strong> The blockchain produces blocks at variable rates depending on consensus timing. The framework submits the configured rate <strong>per block</strong> to ensure predictable load regardless of block time.</p>
+<p><strong>Example:</strong></p>
+<ul>
+<li>Block time = 2 seconds</li>
+<li><code>.rate(10)</code> → 10 tx/block → 5 tx/second average</li>
+<li>Block time = 5 seconds</li>
+<li><code>.rate(10)</code> → 10 tx/block → 2 tx/second average</li>
+</ul>
+<h3 id="duration-wall-clock-time"><a class="header" href="#duration-wall-clock-time">Duration: Wall-Clock Time</a></h3>
+<p><code>.with_run_duration(Duration::from_secs(60))</code> means the scenario runs for <strong>60 seconds of real time</strong>, not 60 blocks.</p>
+<p><strong>How many blocks will be produced?</strong>
+Depends on consensus timing (slot time, active slot coefficient). Typical: 1-2 seconds per block.</p>
+<p><strong>Rule of thumb:</strong></p>
+<ul>
+<li>60 seconds → ~30-60 blocks</li>
+<li>120 seconds → ~60-120 blocks</li>
+</ul>
+<hr />
+<h2 id="structuring-scenarios-in-a-test-suite"><a class="header" href="#structuring-scenarios-in-a-test-suite">Structuring Scenarios in a Test Suite</a></h2>
+<h3 id="pattern-1-integration-test-module"><a class="header" href="#pattern-1-integration-test-module">Pattern 1: Integration Test Module</a></h3>
+<pre><code class="language-rust ignore">// tests/integration_test.rs
+use std::time::Duration;
+
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_local::LocalDeployer;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+#[tokio::test]
+async fn test_consensus_liveness() -&gt; Result&lt;()&gt; {
+    let mut scenario = ScenarioBuilder::topology_with(|t| {
+        t.network_star().validators(3).executors(1)
+    })
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(30))
+    .build();
+
+    let deployer = LocalDeployer::default();
+    let runner = deployer.deploy(&amp;scenario).await?;
+    runner.run(&amp;mut scenario).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_transaction_inclusion() -&gt; Result&lt;()&gt; {
+    let mut scenario = ScenarioBuilder::topology_with(|t| {
+        t.network_star().validators(2).executors(1)
+    })
+    .wallets(10)
+    .transactions_with(|tx| tx.rate(5).users(5))
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(60))
+    .build();
+
+    let deployer = LocalDeployer::default();
+    let runner = deployer.deploy(&amp;scenario).await?;
+    runner.run(&amp;mut scenario).await?;
+    Ok(())
+}</code></pre>
+<h3 id="pattern-2-shared-scenario-builders"><a class="header" href="#pattern-2-shared-scenario-builders">Pattern 2: Shared Scenario Builders</a></h3>
+<p>Extract common topology patterns:</p>
+<pre><code class="language-rust ignore">// tests/helpers.rs
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub fn minimal_topology() -&gt; ScenarioBuilder {
+    ScenarioBuilder::topology_with(|t| {
+        t.network_star().validators(2).executors(1)
+    })
+}
+
+pub fn production_like_topology() -&gt; ScenarioBuilder {
+    ScenarioBuilder::topology_with(|t| {
+        t.network_star().validators(7).executors(3)
+    })
+}
+
+// tests/consensus_tests.rs
+use std::time::Duration;
+
+use helpers::*;
+
+#[tokio::test]
+async fn small_cluster_liveness() -&gt; anyhow::Result&lt;()&gt; {
+    let mut scenario = minimal_topology()
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(30))
+        .build();
+    // ... deploy and run
+    Ok(())
+}
+
+#[tokio::test]
+async fn large_cluster_liveness() -&gt; anyhow::Result&lt;()&gt; {
+    let mut scenario = production_like_topology()
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(60))
+        .build();
+    // ... deploy and run
+    Ok(())
+}</code></pre>
+<h3 id="pattern-3-parameterized-scenarios"><a class="header" href="#pattern-3-parameterized-scenarios">Pattern 3: Parameterized Scenarios</a></h3>
+<p>Test the same behavior across different scales:</p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_local::LocalDeployer;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+async fn test_liveness_with_topology(validators: usize, executors: usize) -&gt; Result&lt;()&gt; {
+    let mut scenario = ScenarioBuilder::topology_with(|t| {
+        t.network_star()
+            .validators(validators)
+            .executors(executors)
+    })
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(60))
+    .build();
+
+    let deployer = LocalDeployer::default();
+    let runner = deployer.deploy(&amp;scenario).await?;
+    runner.run(&amp;mut scenario).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn liveness_small() -&gt; Result&lt;()&gt; {
+    test_liveness_with_topology(2, 1).await
+}
+
+#[tokio::test]
+async fn liveness_medium() -&gt; Result&lt;()&gt; {
+    test_liveness_with_topology(5, 2).await
+}
+
+#[tokio::test]
+async fn liveness_large() -&gt; Result&lt;()&gt; {
+    test_liveness_with_topology(10, 3).await
+}</code></pre>
+<hr />
+<h2 id="what-belongs-where"><a class="header" href="#what-belongs-where">What Belongs Where?</a></h2>
+<h3 id="topology"><a class="header" href="#topology">Topology</a></h3>
+<p><strong>Do include:</strong></p>
+<ul>
+<li>Node counts (<code>.validators(3)</code>, <code>.executors(1)</code>)</li>
+<li>Network shape (<code>.network_star()</code>)</li>
+<li>Role split (validators vs. executors)</li>
+</ul>
+<p><strong>Don't include:</strong></p>
+<ul>
+<li>Traffic rates (workload concern)</li>
+<li>Expected outcomes (expectation concern)</li>
+<li>Runtime behavior (runner/duration concern)</li>
+</ul>
+<h3 id="workloads"><a class="header" href="#workloads">Workloads</a></h3>
+<p><strong>Do include:</strong></p>
+<ul>
+<li>Transaction traffic (<code>.transactions_with(|tx| ...)</code>)</li>
+<li>DA traffic (<code>.da_with(|da| ...)</code>)</li>
+<li>Chaos injection (<code>.with_workload(RandomRestartWorkload::new(...))</code>)</li>
+<li>Rates, users, timing</li>
+</ul>
+<p><strong>Don't include:</strong></p>
+<ul>
+<li>Node configuration (topology concern)</li>
+<li>Success criteria (expectation concern)</li>
+</ul>
+<h3 id="expectations"><a class="header" href="#expectations">Expectations</a></h3>
+<p><strong>Do include:</strong></p>
+<ul>
+<li>Health checks (<code>.expect_consensus_liveness()</code>)</li>
+<li>Inclusion verification (built-in to workloads)</li>
+<li>Custom assertions (<code>.with_expectation(MyExpectation::new())</code>)</li>
+</ul>
+<p><strong>Don't include:</strong></p>
+<ul>
+<li>Traffic generation (workload concern)</li>
+<li>Cluster shape (topology concern)</li>
+</ul>
+<hr />
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ol>
+<li><strong>Keep scenarios focused</strong>: One scenario = one behavior under test</li>
+<li><strong>Start small</strong>: 2-3 validators, 1 executor, 30-60 seconds</li>
+<li><strong>Use descriptive names</strong>: <code>test_consensus_survives_validator_restart</code> not <code>test_1</code></li>
+<li><strong>Extract common patterns</strong>: Shared topology builders, helper functions</li>
+<li><strong>Document intent</strong>: Add comments explaining what you're testing and why</li>
+<li><strong>Mind the units</strong>: <code>.rate(N)</code> is per-block, <code>.with_run_duration()</code> is wall-clock</li>
+<li><strong>Set realistic durations</strong>: Allow enough time for multiple blocks + workload effects</li>
+</ol>
+<hr />
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li><strong><a href="workloads.html">Core Content: Workloads &amp; Expectations</a></strong> — Comprehensive reference for built-in workloads and expectations</li>
+<li><strong><a href="examples.html">Examples</a></strong> — More scenario patterns (DA, chaos, advanced topologies)</li>
+<li><strong><a href="running-scenarios.html">Running Scenarios</a></strong> — How execution works, artifacts produced, per-runner details</li>
+<li><strong><a href="api-levels.html">API Levels</a></strong> — When to use builder DSL vs. direct instantiation</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="annotated-tree.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="workloads.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="annotated-tree.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="workloads.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

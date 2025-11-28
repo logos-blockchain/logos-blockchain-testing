@@ -1,0 +1,871 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Troubleshooting Scenarios - Logos Blockchain Testing Framework Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="project-context-primer.html"><strong aria-hidden="true">1.</strong> Project Context Primer</a></li><li class="chapter-item expanded "><a href="what-you-will-learn.html"><strong aria-hidden="true">2.</strong> What You Will Learn</a></li><li class="chapter-item expanded "><a href="quickstart.html"><strong aria-hidden="true">3.</strong> Quickstart</a></li><li class="chapter-item expanded "><a href="part-i.html"><strong aria-hidden="true">4.</strong> Part I — Foundations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="introduction.html"><strong aria-hidden="true">4.1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="architecture-overview.html"><strong aria-hidden="true">4.2.</strong> Architecture Overview</a></li><li class="chapter-item expanded "><a href="testing-philosophy.html"><strong aria-hidden="true">4.3.</strong> Testing Philosophy</a></li><li class="chapter-item expanded "><a href="scenario-lifecycle.html"><strong aria-hidden="true">4.4.</strong> Scenario Lifecycle</a></li><li class="chapter-item expanded "><a href="design-rationale.html"><strong aria-hidden="true">4.5.</strong> Design Rationale</a></li></ol></li><li class="chapter-item expanded "><a href="part-ii.html"><strong aria-hidden="true">5.</strong> Part II — User Guide</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="workspace-layout.html"><strong aria-hidden="true">5.1.</strong> Workspace Layout</a></li><li class="chapter-item expanded "><a href="annotated-tree.html"><strong aria-hidden="true">5.2.</strong> Annotated Tree</a></li><li class="chapter-item expanded "><a href="authoring-scenarios.html"><strong aria-hidden="true">5.3.</strong> Authoring Scenarios</a></li><li class="chapter-item expanded "><a href="workloads.html"><strong aria-hidden="true">5.4.</strong> Core Content: Workloads & Expectations</a></li><li class="chapter-item expanded "><a href="scenario-builder-ext-patterns.html"><strong aria-hidden="true">5.5.</strong> Core Content: ScenarioBuilderExt Patterns</a></li><li class="chapter-item expanded "><a href="best-practices.html"><strong aria-hidden="true">5.6.</strong> Best Practices</a></li><li class="chapter-item expanded "><a href="usage-patterns.html"><strong aria-hidden="true">5.7.</strong> Usage Patterns</a></li><li class="chapter-item expanded "><a href="examples.html"><strong aria-hidden="true">5.8.</strong> Examples</a></li><li class="chapter-item expanded "><a href="examples-advanced.html"><strong aria-hidden="true">5.9.</strong> Advanced & Artificial Examples</a></li><li class="chapter-item expanded "><a href="cucumber-bdd.html"><strong aria-hidden="true">5.10.</strong> Cucumber/BDD Interface</a></li><li class="chapter-item expanded "><a href="running-scenarios.html"><strong aria-hidden="true">5.11.</strong> Running Scenarios</a></li><li class="chapter-item expanded "><a href="runners.html"><strong aria-hidden="true">5.12.</strong> Runners</a></li><li class="chapter-item expanded "><a href="node-control.html"><strong aria-hidden="true">5.13.</strong> RunContext: BlockFeed & Node Control</a></li><li class="chapter-item expanded "><a href="chaos.html"><strong aria-hidden="true">5.14.</strong> Chaos Workloads</a></li><li class="chapter-item expanded "><a href="topology-chaos.html"><strong aria-hidden="true">5.15.</strong> Topology & Chaos Patterns</a></li></ol></li><li class="chapter-item expanded "><a href="part-iii.html"><strong aria-hidden="true">6.</strong> Part III — Developer Reference</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="scenario-model.html"><strong aria-hidden="true">6.1.</strong> Scenario Model (Developer Level)</a></li><li class="chapter-item expanded "><a href="api-levels.html"><strong aria-hidden="true">6.2.</strong> API Levels: Builder DSL vs. Direct</a></li><li class="chapter-item expanded "><a href="extending.html"><strong aria-hidden="true">6.3.</strong> Extending the Framework</a></li><li class="chapter-item expanded "><a href="custom-workload-example.html"><strong aria-hidden="true">6.4.</strong> Example: New Workload & Expectation (Rust)</a></li><li class="chapter-item expanded "><a href="internal-crate-reference.html"><strong aria-hidden="true">6.5.</strong> Internal Crate Reference</a></li></ol></li><li class="chapter-item expanded "><a href="part-iv.html"><strong aria-hidden="true">7.</strong> Part IV — Operations & Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="operations-overview.html"><strong aria-hidden="true">7.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="prerequisites.html"><strong aria-hidden="true">7.2.</strong> Prerequisites & Setup</a></li><li class="chapter-item expanded "><a href="running-examples.html"><strong aria-hidden="true">7.3.</strong> Running Examples</a></li><li class="chapter-item expanded "><a href="ci-integration.html"><strong aria-hidden="true">7.4.</strong> CI Integration</a></li><li class="chapter-item expanded "><a href="environment-variables.html"><strong aria-hidden="true">7.5.</strong> Environment Variables</a></li><li class="chapter-item expanded "><a href="logging-observability.html"><strong aria-hidden="true">7.6.</strong> Logging & Observability</a></li></ol></li><li class="chapter-item expanded "><a href="part-v.html"><strong aria-hidden="true">8.</strong> Part V — Appendix</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="dsl-cheat-sheet.html"><strong aria-hidden="true">8.1.</strong> Builder API Quick Reference</a></li><li class="chapter-item expanded "><a href="troubleshooting.html" class="active"><strong aria-hidden="true">8.2.</strong> Troubleshooting Scenarios</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">8.3.</strong> FAQ</a></li><li class="chapter-item expanded "><a href="glossary.html"><strong aria-hidden="true">8.4.</strong> Glossary</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Logos Blockchain Testing Framework Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="troubleshooting-scenarios"><a class="header" href="#troubleshooting-scenarios">Troubleshooting Scenarios</a></h1>
+<p><strong>Prerequisites for All Runners:</strong></p>
+<ul>
+<li><strong><code>versions.env</code> file</strong> at repository root (required by helper scripts)</li>
+<li><strong><code>POL_PROOF_DEV_MODE=true</code></strong> MUST be set for all runners (host, compose, k8s) to avoid expensive Groth16 proof generation that causes timeouts</li>
+<li><strong>KZG circuit assets</strong> must be present at <code>testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params</code> (note the repeated filename) for DA workloads</li>
+</ul>
+<p><strong>Platform/Environment Notes:</strong></p>
+<ul>
+<li><strong>macOS + Docker Desktop (Apple silicon):</strong> prefer <code>NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64</code> for local compose/k8s runs to avoid slow/fragile amd64 emulation builds.</li>
+<li><strong>Disk space:</strong> bundle/image builds are storage-heavy. If you see I/O errors or Docker build failures, check free space and prune old artifacts (<code>.tmp/</code>, <code>target/</code>, and Docker build cache) before retrying.</li>
+<li><strong>K8s runner scope:</strong> the default Helm chart mounts KZG params via <code>hostPath</code> and uses a local image tag (<code>logos-blockchain-testing:local</code>). This is intended for local clusters (Docker Desktop / minikube / kind), not remote managed clusters without additional setup.
+<ul>
+<li>Quick cleanup: <code>scripts/ops/clean.sh</code> (and <code>scripts/ops/clean.sh --docker</code> if needed).</li>
+<li>Destructive cleanup (last resort): <code>scripts/ops/clean.sh --docker-system --dangerous</code> (add <code>--volumes</code> if you also want to prune Docker volumes).</li>
+</ul>
+</li>
+</ul>
+<p><strong>Recommended:</strong> Use <code>scripts/run/run-examples.sh</code> which handles all setup automatically.</p>
+<h2 id="quick-symptom-guide"><a class="header" href="#quick-symptom-guide">Quick Symptom Guide</a></h2>
+<p>Common symptoms and likely causes:</p>
+<ul>
+<li><strong>No or slow block progression</strong>: missing <code>POL_PROOF_DEV_MODE=true</code>, missing KZG circuit assets (<code>/kzgrs_test_params/kzgrs_test_params</code> file) for DA workloads, too-short run window, port conflicts, or resource exhaustion—set required env vars, verify assets exist, extend duration, check node logs for startup errors.</li>
+<li><strong>Transactions not included</strong>: unfunded or misconfigured wallets (check <code>.wallets(N)</code> vs <code>.users(M)</code>), transaction rate exceeding block capacity, or rates exceeding block production speed—reduce rate, increase wallet count, verify wallet setup in logs.</li>
+<li><strong>Chaos stalls the run</strong>: chaos (node control) only works with ComposeDeployer; host runner (LocalDeployer) and K8sDeployer don't support it (won't "stall", just can't execute chaos workloads). With compose, aggressive restart cadence can prevent consensus recovery—widen restart intervals.</li>
+<li><strong>Observability gaps</strong>: metrics or logs unreachable because ports clash or services are not exposed—adjust observability ports and confirm runner wiring.</li>
+<li><strong>Flaky behavior across runs</strong>: mixing chaos with functional smoke tests or inconsistent topology between environments—separate deterministic and chaos scenarios and standardize topology presets.</li>
+</ul>
+<h2 id="what-failure-looks-like"><a class="header" href="#what-failure-looks-like">What Failure Looks Like</a></h2>
+<p>This section shows what you'll actually see when common issues occur. Each example includes realistic console output and the fix.</p>
+<h3 id="1-missing-pol_proof_dev_modetrue-most-common"><a class="header" href="#1-missing-pol_proof_dev_modetrue-most-common">1. Missing <code>POL_PROOF_DEV_MODE=true</code> (Most Common!)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Test "hangs" with no visible progress</li>
+<li>CPU usage spikes to 100%</li>
+<li>Eventually hits timeout after several minutes</li>
+<li>Nodes appear to start but blocks aren't produced</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ cargo run -p runner-examples --bin local_runner
+    Finished dev [unoptimized + debuginfo] target(s) in 0.48s
+     Running `target/debug/local_runner`
+[INFO  runner_examples::local_runner] Starting local runner scenario
+[INFO  testing_framework_runner_local] Launching 3 validators
+[INFO  testing_framework_runner_local] Waiting for node readiness...
+(hangs here for 5+ minutes, CPU at 100%)
+thread 'main' panicked at 'readiness timeout expired'
+</code></pre>
+<p><strong>Root Cause:</strong> Groth16 proof generation is extremely slow without dev mode. The system tries to compute real cryptographic proofs, which can take minutes per block.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash">POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+</code></pre>
+<p><strong>Prevention:</strong> Set this in your shell profile or <code>.env</code> file so you never forget it.</p>
+<hr />
+<h3 id="2-missing-versionsenv-file"><a class="header" href="#2-missing-versionsenv-file">2. Missing <code>versions.env</code> File</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Helper scripts fail immediately</li>
+<li>Error about missing file at repo root</li>
+<li>Scripts can't determine which circuit/node versions to use</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+ERROR: versions.env not found at repository root
+This file is required and should define:
+  VERSION=&lt;circuit release tag&gt;
+  NOMOS_NODE_REV=&lt;nomos-node git revision&gt;
+  NOMOS_BUNDLE_VERSION=&lt;bundle schema version&gt;
+</code></pre>
+<p><strong>Root Cause:</strong> Helper scripts need <code>versions.env</code> to know which versions to build/fetch.</p>
+<p><strong>Fix:</strong> Ensure you're in the repository root directory. The <code>versions.env</code> file should already exist—verify it's present:</p>
+<pre><code class="language-bash">cat versions.env
+# Should show:
+# VERSION=v0.3.1
+# NOMOS_NODE_REV=abc123def456
+# NOMOS_BUNDLE_VERSION=v1
+</code></pre>
+<hr />
+<h3 id="3-missing-kzg-circuit-assets-da-workloads"><a class="header" href="#3-missing-kzg-circuit-assets-da-workloads">3. Missing KZG Circuit Assets (DA Workloads)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>DA workload tests fail</li>
+<li>Error messages about missing circuit files</li>
+<li>Nodes crash during DA operations</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+[INFO  testing_framework_runner_local] Starting DA workload
+[ERROR nomos_da_dispersal] Failed to load KZG parameters
+Error: Custom { kind: NotFound, error: "Circuit file not found at: testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params" }
+thread 'main' panicked at 'workload init failed'
+</code></pre>
+<p><strong>Root Cause:</strong> DA (Data Availability) workloads require KZG cryptographic parameters. The file must exist at: <code>testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params</code> (note the repeated filename).</p>
+<p><strong>Fix (recommended):</strong></p>
+<pre><code class="language-bash"># Use run-examples.sh which handles setup automatically
+scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+</code></pre>
+<p><strong>Fix (manual):</strong></p>
+<pre><code class="language-bash"># Fetch circuits
+scripts/setup/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
+
+# Copy to expected location
+mkdir -p testing-framework/assets/stack/kzgrs_test_params
+cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
+
+# Verify (should be ~120MB)
+ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
+</code></pre>
+<hr />
+<h3 id="4-node-binaries-not-found"><a class="header" href="#4-node-binaries-not-found">4. Node Binaries Not Found</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Error about missing <code>nomos-node</code> or <code>nomos-executor</code> binary</li>
+<li>"file not found" or "no such file or directory"</li>
+<li>Environment variables <code>NOMOS_NODE_BIN</code> / <code>NOMOS_EXECUTOR_BIN</code> not set</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+[INFO  testing_framework_runner_local] Spawning validator 0
+Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+thread 'main' panicked at 'failed to spawn nomos-node process'
+</code></pre>
+<p><strong>Root Cause:</strong> The local runner needs compiled <code>nomos-node</code> and <code>nomos-executor</code> binaries, but doesn't know where they are.</p>
+<p><strong>Fix (recommended):</strong></p>
+<pre><code class="language-bash"># Use run-examples.sh which builds binaries automatically
+scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+</code></pre>
+<p><strong>Fix (manual - set paths explicitly):</strong></p>
+<pre><code class="language-bash"># Build binaries first
+cd ../nomos-node  # or wherever your nomos-node checkout is
+cargo build --release --bin nomos-node --bin nomos-executor
+
+# Set environment variables
+export NOMOS_NODE_BIN=$PWD/target/release/nomos-node
+export NOMOS_EXECUTOR_BIN=$PWD/target/release/nomos-executor
+
+# Return to testing framework
+cd ../nomos-testing
+POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+</code></pre>
+<hr />
+<h3 id="5-docker-daemon-not-running-compose"><a class="header" href="#5-docker-daemon-not-running-compose">5. Docker Daemon Not Running (Compose)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Compose tests fail immediately</li>
+<li>"Cannot connect to Docker daemon"</li>
+<li>Docker commands don't work</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+[INFO  runner_examples::compose_runner] Starting compose deployment
+Error: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+thread 'main' panicked at 'compose deployment failed'
+</code></pre>
+<p><strong>Root Cause:</strong> Docker Desktop isn't running, or your user doesn't have permission to access Docker.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash"># macOS: Start Docker Desktop application
+open -a Docker
+
+# Linux: Start Docker daemon
+sudo systemctl start docker
+
+# Verify Docker is working
+docker ps
+
+# If permission denied, add your user to docker group (Linux)
+sudo usermod -aG docker $USER
+# Then log out and log back in
+</code></pre>
+<hr />
+<h3 id="6-image-not-found-composek8s"><a class="header" href="#6-image-not-found-composek8s">6. Image Not Found (Compose/K8s)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Compose/K8s tests fail during deployment</li>
+<li>"Image not found: logos-blockchain-testing:local"</li>
+<li>Containers fail to start</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin compose_runner
+[INFO  testing_framework_runner_compose] Starting compose deployment
+Error: Failed to pull image 'logos-blockchain-testing:local': No such image
+thread 'main' panicked at 'compose deployment failed'
+</code></pre>
+<p><strong>Root Cause:</strong> The Docker image hasn't been built yet, or was pruned.</p>
+<p><strong>Fix (recommended):</strong></p>
+<pre><code class="language-bash"># Use run-examples.sh which builds the image automatically
+scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+</code></pre>
+<p><strong>Fix (manual):</strong></p>
+<pre><code class="language-bash"># 1. Build Linux bundle
+scripts/build/build-bundle.sh --platform linux
+
+# 2. Set bundle path
+export NOMOS_BINARIES_TAR=$(ls -t .tmp/nomos-binaries-linux-*.tar.gz | head -1)
+
+# 3. Build Docker image
+scripts/build/build_test_image.sh
+
+# 4. Verify image exists
+docker images | grep logos-blockchain-testing
+
+# 5. For kind/minikube: load image into cluster
+kind load docker-image logos-blockchain-testing:local
+# OR: minikube image load logos-blockchain-testing:local
+</code></pre>
+<hr />
+<h3 id="7-port-conflicts"><a class="header" href="#7-port-conflicts">7. Port Conflicts</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>"Address already in use" errors</li>
+<li>Tests fail during node startup</li>
+<li>Observability stack (Prometheus/Grafana) won't start</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+[INFO  testing_framework_runner_local] Launching validator 0 on port 18080
+Error: Os { code: 48, kind: AddrInUse, message: "Address already in use" }
+thread 'main' panicked at 'failed to bind port 18080'
+</code></pre>
+<p><strong>Root Cause:</strong> Previous test didn't clean up properly, or another service is using the port.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash"># Find processes using the port
+lsof -i :18080   # macOS/Linux
+netstat -ano | findstr :18080  # Windows
+
+# Kill orphaned nomos processes
+pkill nomos-node
+pkill nomos-executor
+
+# For compose: ensure containers are stopped
+docker compose down
+docker ps -a --filter "name=nomos-compose-" -q | xargs docker rm -f
+
+# Check if port is now free
+lsof -i :18080  # Should return nothing
+</code></pre>
+<p><strong>For Observability Stack Port Conflicts:</strong></p>
+<pre><code class="language-bash"># Edit ports in observability compose file
+vim scripts/observability/compose/docker-compose.yml
+
+# Change conflicting port mappings:
+# ports:
+#   - "9090:9090"  # Prometheus - change to "19090:9090" if needed
+#   - "3000:3000"  # Grafana - change to "13000:3000" if needed
+</code></pre>
+<hr />
+<h3 id="8-wallet-seeding-failed-insufficient-funds"><a class="header" href="#8-wallet-seeding-failed-insufficient-funds">8. Wallet Seeding Failed (Insufficient Funds)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Transaction workload reports wallet issues</li>
+<li>"Insufficient funds" errors</li>
+<li>Transactions aren't being submitted</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+[INFO  testing_framework_workflows] Starting transaction workload with 10 users
+[ERROR testing_framework_workflows] Wallet seeding failed: requested 10 users but only 3 wallets available
+thread 'main' panicked at 'workload init failed: insufficient wallets'
+</code></pre>
+<p><strong>Root Cause:</strong> Topology configured fewer wallets than the workload needs. Transaction workload has <code>.users(M)</code> but topology only has <code>.wallets(N)</code> where N &lt; M.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-rust ignore">use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .wallets(20) // ← Increase wallet count
+    .transactions_with(|tx| {
+        tx.users(10) // ← Must be ≤ wallets(20)
+            .rate(5)
+    })
+    .build();</code></pre>
+<hr />
+<h3 id="9-resource-exhaustion-oom--cpu"><a class="header" href="#9-resource-exhaustion-oom--cpu">9. Resource Exhaustion (OOM / CPU)</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Nodes crash randomly</li>
+<li>"OOM Killed" messages</li>
+<li>Test becomes flaky under load</li>
+<li>Docker containers restart repeatedly</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ docker ps --filter "name=nomos-compose-"
+CONTAINER ID   STATUS
+abc123def456   Restarting (137) 30 seconds ago  # 137 = OOM killed
+
+$ docker logs abc123def456
+[INFO  nomos_node] Starting validator
+[INFO  consensus] Processing block
+Killed  # ← OOM killer terminated the process
+</code></pre>
+<p><strong>Root Cause:</strong> Too many nodes, too much workload traffic, or insufficient Docker resources.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash"># 1. Reduce topology size
+# In your scenario:
+#   .topology(Topology::preset_3v1e())  # Instead of preset_10v2e()
+
+# 2. Reduce workload rates
+#   .workload(TransactionWorkload::new().rate(5.0))  # Instead of rate(100.0)
+
+# 3. Increase Docker resources (Docker Desktop)
+# Settings → Resources → Memory: 8GB minimum (12GB+ recommended for large topologies)
+# Settings → Resources → CPUs: 4+ cores recommended
+
+# 4. Increase file descriptor limits (Linux/macOS)
+ulimit -n 4096
+
+# 5. Close other heavy applications (browsers, IDEs, etc.)
+</code></pre>
+<hr />
+<h3 id="10-logs-disappear-after-run"><a class="header" href="#10-logs-disappear-after-run">10. Logs Disappear After Run</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>Test completes but no logs on disk</li>
+<li>Can't debug failures because logs are gone</li>
+<li>Temporary directories cleaned up automatically</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+[INFO  runner_examples] Test complete, cleaning up
+[INFO  testing_framework_runner_local] Removing temporary directories
+$ ls .tmp/
+# Empty or missing
+</code></pre>
+<p><strong>Root Cause:</strong> Framework cleans up temporary directories by default to avoid disk bloat.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-bash"># Persist logs to a specific directory
+NOMOS_LOG_DIR=/tmp/test-logs \
+NOMOS_TESTS_KEEP_LOGS=1 \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin local_runner
+
+# Logs persist after run
+ls /tmp/test-logs/
+# nomos-node-0.2024-12-18T14-30-00.log
+# nomos-node-1.2024-12-18T14-30-00.log
+# ...
+</code></pre>
+<hr />
+<h3 id="11-consensus-timing-too-tight--run-duration-too-short"><a class="header" href="#11-consensus-timing-too-tight--run-duration-too-short">11. Consensus Timing Too Tight / Run Duration Too Short</a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul>
+<li>"Consensus liveness expectation failed"</li>
+<li>Only 1-2 blocks produced (or zero)</li>
+<li>Nodes appear healthy but not making progress</li>
+</ul>
+<p><strong>What you'll see:</strong></p>
+<pre><code class="language-text">$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+[INFO  testing_framework_core] Starting workloads
+[INFO  testing_framework_core] Run window: 10 seconds
+[INFO  testing_framework_core] Evaluating expectations
+[ERROR testing_framework_core] Consensus liveness expectation failed: expected min 5 blocks, got 1
+thread 'main' panicked at 'expectations failed'
+</code></pre>
+<p><strong>Root Cause:</strong> Run duration too short for consensus parameters. If <code>CONSENSUS_SLOT_TIME=20s</code> but run duration is only <code>10s</code>, you can't produce many blocks.</p>
+<p><strong>Fix:</strong></p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+// Increase run duration to allow more blocks.
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(120)) // ← Give more time
+    .build();</code></pre>
+<p><strong>Or adjust consensus timing (if you control node config):</strong></p>
+<pre><code class="language-bash"># Faster block production (shorter slot time)
+CONSENSUS_SLOT_TIME=5 \
+CONSENSUS_ACTIVE_SLOT_COEFF=0.9 \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin local_runner
+</code></pre>
+<hr />
+<h2 id="summary-quick-checklist-for-failed-runs"><a class="header" href="#summary-quick-checklist-for-failed-runs">Summary: Quick Checklist for Failed Runs</a></h2>
+<p>When a test fails, check these in order:</p>
+<ol>
+<li><strong><code>POL_PROOF_DEV_MODE=true</code> is set</strong> (REQUIRED for all runners)</li>
+<li><strong><code>versions.env</code> exists at repo root</strong></li>
+<li><strong>KZG circuit assets present</strong> (for DA workloads): <code>testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params</code></li>
+<li><strong>Node binaries available</strong> (<code>NOMOS_NODE_BIN</code> / <code>NOMOS_EXECUTOR_BIN</code> set, or using <code>run-examples.sh</code>)</li>
+<li><strong>Docker daemon running</strong> (for compose/k8s)</li>
+<li><strong>Docker image built</strong> (<code>logos-blockchain-testing:local</code> exists for compose/k8s)</li>
+<li><strong>No port conflicts</strong> (<code>lsof -i :18080</code>, kill orphaned processes)</li>
+<li><strong>Sufficient wallets</strong> (<code>.wallets(N)</code> ≥ <code>.users(M)</code>)</li>
+<li><strong>Enough resources</strong> (Docker memory 8GB+, ulimit -n 4096)</li>
+<li><strong>Run duration appropriate</strong> (long enough for consensus timing)</li>
+<li><strong>Logs persisted</strong> (<code>NOMOS_LOG_DIR</code> + <code>NOMOS_TESTS_KEEP_LOGS=1</code> if needed)</li>
+</ol>
+<p><strong>Still stuck?</strong> Check node logs (see <a href="#where-to-find-logs">Where to Find Logs</a>) for the actual error.</p>
+<h2 id="where-to-find-logs"><a class="header" href="#where-to-find-logs">Where to Find Logs</a></h2>
+<h3 id="log-location-quick-reference"><a class="header" href="#log-location-quick-reference">Log Location Quick Reference</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Runner</th><th>Default Output</th><th>With <code>NOMOS_LOG_DIR</code> + Flags</th><th>Access Command</th></tr></thead><tbody>
+<tr><td><strong>Host</strong> (local)</td><td>Per-run temporary directories under the current working directory (removed unless <code>NOMOS_TESTS_KEEP_LOGS=1</code>)</td><td>Per-node files with prefix <code>nomos-node-{index}</code> (set <code>NOMOS_LOG_DIR</code>)</td><td><code>cat $NOMOS_LOG_DIR/nomos-node-0*</code></td></tr>
+<tr><td><strong>Compose</strong></td><td>Docker container stdout/stderr</td><td>Set <code>tracing_settings.logger: !File</code> in <code>testing-framework/assets/stack/cfgsync.yaml</code> (and mount a writable directory)</td><td><code>docker ps</code> then <code>docker logs &lt;container-id&gt;</code></td></tr>
+<tr><td><strong>K8s</strong></td><td>Pod stdout/stderr</td><td>Set <code>tracing_settings.logger: !File</code> in <code>testing-framework/assets/stack/cfgsync.yaml</code> (and mount a writable directory)</td><td><code>kubectl logs -l nomos/logical-role=validator</code></td></tr>
+</tbody></table>
+</div>
+<p><strong>Important Notes:</strong></p>
+<ul>
+<li><strong>Host runner</strong> (local processes): Per-run temporary directories are created under the current working directory and removed after the run unless <code>NOMOS_TESTS_KEEP_LOGS=1</code>. To write per-node log files to a stable location, set <code>NOMOS_LOG_DIR=/path/to/logs</code>.</li>
+<li><strong>Compose/K8s</strong>: Node log destination is controlled by <code>testing-framework/assets/stack/cfgsync.yaml</code> (<code>tracing_settings.logger</code>). By default, rely on <code>docker logs</code> or <code>kubectl logs</code>.</li>
+<li><strong>File naming</strong>: Log files use prefix <code>nomos-node-{index}*</code> or <code>nomos-executor-{index}*</code> with timestamps, e.g., <code>nomos-node-0.2024-12-01T10-30-45.log</code> (NOT just <code>.log</code> suffix).</li>
+<li><strong>Container names</strong>: Compose containers include project UUID, e.g., <code>nomos-compose-&lt;uuid&gt;-validator-0-1</code> where <code>&lt;uuid&gt;</code> is randomly generated per run</li>
+</ul>
+<h3 id="accessing-node-logs-by-runner"><a class="header" href="#accessing-node-logs-by-runner">Accessing Node Logs by Runner</a></h3>
+<h4 id="local-runner"><a class="header" href="#local-runner">Local Runner</a></h4>
+<p><strong>Console output (default):</strong></p>
+<pre><code class="language-bash">POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner 2&gt;&amp;1 | tee test.log
+</code></pre>
+<p><strong>Persistent file output:</strong></p>
+<pre><code class="language-bash">NOMOS_LOG_DIR=/tmp/debug-logs \
+NOMOS_LOG_LEVEL=debug \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin local_runner
+
+# Inspect logs (note: filenames include timestamps):
+ls /tmp/debug-logs/
+# Example: nomos-node-0.2024-12-01T10-30-45.log
+tail -f /tmp/debug-logs/nomos-node-0*  # Use wildcard to match timestamp
+</code></pre>
+<h4 id="compose-runner"><a class="header" href="#compose-runner">Compose Runner</a></h4>
+<p><strong>Stream live logs:</strong></p>
+<pre><code class="language-bash"># List running containers (note the UUID prefix in names)
+docker ps --filter "name=nomos-compose-"
+
+# Find your container ID or name from the list, then:
+docker logs -f &lt;container-id&gt;
+
+# Or filter by name pattern:
+docker logs -f $(docker ps --filter "name=nomos-compose-.*-validator-0" -q | head -1)
+
+# Show last 100 lines
+docker logs --tail 100 &lt;container-id&gt;
+</code></pre>
+<p><strong>Keep containers for post-mortem debugging:</strong></p>
+<pre><code class="language-bash">COMPOSE_RUNNER_PRESERVE=1 \
+NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin compose_runner
+
+# OR: Use run-examples.sh (handles setup automatically)
+COMPOSE_RUNNER_PRESERVE=1 scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+
+# After test failure, containers remain running:
+docker ps --filter "name=nomos-compose-"
+docker exec -it &lt;container-id&gt; /bin/sh
+docker logs &lt;container-id&gt; &gt; debug.log
+</code></pre>
+<p><strong>Note:</strong> Container names follow the pattern <code>nomos-compose-{uuid}-validator-{index}-1</code> or <code>nomos-compose-{uuid}-executor-{index}-1</code>, where <code>{uuid}</code> is randomly generated per run.</p>
+<h4 id="k8s-runner"><a class="header" href="#k8s-runner">K8s Runner</a></h4>
+<p><strong>Important:</strong> Always verify your namespace and use label selectors instead of assuming pod names.</p>
+<p><strong>Stream pod logs (use label selectors):</strong></p>
+<pre><code class="language-bash"># Check your namespace first
+kubectl config view --minify | grep namespace
+
+# All validator pods (add -n &lt;namespace&gt; if not using default)
+kubectl logs -l nomos/logical-role=validator -f
+
+# All executor pods
+kubectl logs -l nomos/logical-role=executor -f
+
+# Specific pod by name (find exact name first)
+kubectl get pods -l nomos/logical-role=validator  # Find the exact pod name
+kubectl logs -f &lt;actual-pod-name&gt;        # Then use it
+
+# With explicit namespace
+kubectl logs -n my-namespace -l nomos/logical-role=validator -f
+</code></pre>
+<p><strong>Download logs from crashed pods:</strong></p>
+<pre><code class="language-bash"># Previous logs from crashed pod
+kubectl get pods -l nomos/logical-role=validator  # Find crashed pod name first
+kubectl logs --previous &lt;actual-pod-name&gt; &gt; crashed-validator.log
+
+# Or use label selector for all crashed validators
+for pod in $(kubectl get pods -l nomos/logical-role=validator -o name); do
+  kubectl logs --previous $pod &gt; $(basename $pod)-previous.log 2&gt;&amp;1
+done
+</code></pre>
+<p><strong>Access logs from all pods:</strong></p>
+<pre><code class="language-bash"># All pods in current namespace
+for pod in $(kubectl get pods -o name); do
+  echo "=== $pod ==="
+  kubectl logs $pod
+done &gt; all-logs.txt
+
+# Or use label selectors (recommended)
+kubectl logs -l nomos/logical-role=validator --tail=500 &gt; validators.log
+kubectl logs -l nomos/logical-role=executor --tail=500 &gt; executors.log
+
+# With explicit namespace
+kubectl logs -n my-namespace -l nomos/logical-role=validator --tail=500 &gt; validators.log
+</code></pre>
+<h2 id="debugging-workflow"><a class="header" href="#debugging-workflow">Debugging Workflow</a></h2>
+<p>When a test fails, follow this sequence:</p>
+<h3 id="1-check-framework-output"><a class="header" href="#1-check-framework-output">1. Check Framework Output</a></h3>
+<p>Start with the test harness output—did expectations fail? Was there a deployment error?</p>
+<p><strong>Look for:</strong></p>
+<ul>
+<li>Expectation failure messages</li>
+<li>Timeout errors</li>
+<li>Deployment/readiness failures</li>
+</ul>
+<h3 id="2-verify-node-readiness"><a class="header" href="#2-verify-node-readiness">2. Verify Node Readiness</a></h3>
+<p>Ensure all nodes started successfully and became ready before workloads began.</p>
+<p><strong>Commands:</strong></p>
+<pre><code class="language-bash"># Local: check process list
+ps aux | grep nomos
+
+# Compose: check container status (note UUID in names)
+docker ps -a --filter "name=nomos-compose-"
+
+# K8s: check pod status (use label selectors, add -n &lt;namespace&gt; if needed)
+kubectl get pods -l nomos/logical-role=validator
+kubectl get pods -l nomos/logical-role=executor
+kubectl describe pod &lt;actual-pod-name&gt;  # Get name from above first
+</code></pre>
+<h3 id="3-inspect-node-logs"><a class="header" href="#3-inspect-node-logs">3. Inspect Node Logs</a></h3>
+<p>Focus on the first node that exhibited problems or the node with the highest index (often the last to start).</p>
+<p><strong>Common error patterns:</strong></p>
+<ul>
+<li>"ERROR: versions.env missing" → missing required <code>versions.env</code> file at repository root</li>
+<li>"Failed to bind address" → port conflict</li>
+<li>"Connection refused" → peer not ready or network issue</li>
+<li>"Proof verification failed" or "Proof generation timeout" → missing <code>POL_PROOF_DEV_MODE=true</code> (REQUIRED for all runners)</li>
+<li>"Failed to load KZG parameters" or "Circuit file not found" → missing KZG circuit assets at <code>testing-framework/assets/stack/kzgrs_test_params/</code></li>
+<li>"Insufficient funds" → wallet seeding issue (increase <code>.wallets(N)</code> or reduce <code>.users(M)</code>)</li>
+</ul>
+<h3 id="4-check-log-levels"><a class="header" href="#4-check-log-levels">4. Check Log Levels</a></h3>
+<p>If logs are too sparse, increase verbosity:</p>
+<pre><code class="language-bash">NOMOS_LOG_LEVEL=debug \
+NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug" \
+cargo run -p runner-examples --bin local_runner
+</code></pre>
+<p>If metric updates are polluting your logs (fields like <code>counter.*</code> / <code>gauge.*</code>), move those events to a dedicated <code>tracing</code> target (e.g. <code>target: "nomos_metrics"</code>) and set <code>NOMOS_LOG_FILTER="nomos_metrics=off,..."</code> so they don’t get formatted into log output.</p>
+<h3 id="5-verify-observability-endpoints"><a class="header" href="#5-verify-observability-endpoints">5. Verify Observability Endpoints</a></h3>
+<p>If expectations report observability issues:</p>
+<p><strong>Prometheus (Compose):</strong></p>
+<pre><code class="language-bash">curl http://localhost:9090/-/healthy
+</code></pre>
+<p><strong>Node HTTP APIs:</strong></p>
+<pre><code class="language-bash">curl http://localhost:18080/consensus/info  # Adjust port per node
+</code></pre>
+<h3 id="6-compare-with-known-good-scenario"><a class="header" href="#6-compare-with-known-good-scenario">6. Compare with Known-Good Scenario</a></h3>
+<p>Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it passes, the issue is in your workload or topology configuration.</p>
+<h2 id="common-error-messages"><a class="header" href="#common-error-messages">Common Error Messages</a></h2>
+<h3 id="consensus-liveness-expectation-failed"><a class="header" href="#consensus-liveness-expectation-failed">"Consensus liveness expectation failed"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Not enough blocks produced during the run window, missing
+<code>POL_PROOF_DEV_MODE=true</code> (causes slow proof generation), or missing KZG
+assets for DA workloads.</li>
+<li><strong>Fix</strong>:
+<ol>
+<li>Verify <code>POL_PROOF_DEV_MODE=true</code> is set (REQUIRED for all runners).</li>
+<li>Verify KZG assets exist at
+<code>testing-framework/assets/stack/kzgrs_test_params/</code> (for DA workloads).</li>
+<li>Extend <code>with_run_duration()</code> to allow more blocks.</li>
+<li>Check node logs for proof generation or DA errors.</li>
+<li>Reduce transaction/DA rate if nodes are overwhelmed.</li>
+</ol>
+</li>
+</ul>
+<h3 id="wallet-seeding-failed"><a class="header" href="#wallet-seeding-failed">"Wallet seeding failed"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Topology doesn't have enough funded wallets for the workload.</li>
+<li><strong>Fix</strong>: Increase <code>.wallets(N)</code> count or reduce <code>.users(M)</code> in the transaction
+workload (ensure N ≥ M).</li>
+</ul>
+<h3 id="node-control-not-available"><a class="header" href="#node-control-not-available">"Node control not available"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Runner doesn't support node control (only ComposeDeployer does), or
+<code>enable_node_control()</code> wasn't called.</li>
+<li><strong>Fix</strong>:
+<ol>
+<li>Use ComposeDeployer for chaos tests (LocalDeployer and K8sDeployer don't
+support node control).</li>
+<li>Ensure <code>.enable_node_control()</code> is called in the scenario before <code>.chaos()</code>.</li>
+</ol>
+</li>
+</ul>
+<h3 id="readiness-timeout"><a class="header" href="#readiness-timeout">"Readiness timeout"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Nodes didn't become responsive within expected time (often due to
+missing prerequisites).</li>
+<li><strong>Fix</strong>:
+<ol>
+<li><strong>Verify <code>POL_PROOF_DEV_MODE=true</code> is set</strong> (REQUIRED for all runners—without
+it, proof generation is too slow).</li>
+<li>Check node logs for startup errors (port conflicts, missing assets).</li>
+<li>Verify network connectivity between nodes.</li>
+<li>For DA workloads, ensure KZG circuit assets are present.</li>
+</ol>
+</li>
+</ul>
+<h3 id="error-versionsenv-missing"><a class="header" href="#error-versionsenv-missing">"ERROR: versions.env missing"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Helper scripts (<code>run-examples.sh</code>, <code>build-bundle.sh</code>, <code>setup-circuits-stack.sh</code>) require <code>versions.env</code> file at repository root.</li>
+<li><strong>Fix</strong>: Ensure you're running from the repository root directory. The <code>versions.env</code> file should already exist and contains:</li>
+</ul>
+<pre><code class="language-text">  VERSION=&lt;circuit release tag&gt;
+  NOMOS_NODE_REV=&lt;nomos-node git revision&gt;
+  NOMOS_BUNDLE_VERSION=&lt;bundle schema version&gt;
+</code></pre>
+<p>Use the checked-in <code>versions.env</code> at the repository root as the source of truth.</p>
+<h3 id="port-already-in-use"><a class="header" href="#port-already-in-use">"Port already in use"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Previous test didn't clean up, or another process holds the port.</li>
+<li><strong>Fix</strong>: Kill orphaned processes (<code>pkill nomos-node</code>), wait for Docker cleanup
+(<code>docker compose down</code>), or restart Docker.</li>
+</ul>
+<h3 id="image-not-found-logos-blockchain-testinglocal"><a class="header" href="#image-not-found-logos-blockchain-testinglocal">"Image not found: logos-blockchain-testing:local"</a></h3>
+<ul>
+<li><strong>Cause</strong>: Docker image not built for Compose/K8s runners, or KZG assets not
+baked into the image.</li>
+<li><strong>Fix (recommended)</strong>: Use run-examples.sh which handles everything:
+<pre><code class="language-bash">scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+</code></pre>
+</li>
+<li><strong>Fix (manual)</strong>:
+<ol>
+<li>Build bundle: <code>scripts/build/build-bundle.sh --platform linux</code></li>
+<li>Set bundle path: <code>export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz</code></li>
+<li>Build image: <code>scripts/build/build_test_image.sh</code></li>
+<li><strong>kind/minikube:</strong> load the image into the cluster nodes (e.g. <code>kind load docker-image logos-blockchain-testing:local</code>, or <code>minikube image load ...</code>), or push to a registry and set <code>NOMOS_TESTNET_IMAGE</code> accordingly.</li>
+</ol>
+</li>
+</ul>
+<h3 id="failed-to-load-kzg-parameters-or-circuit-file-not-found"><a class="header" href="#failed-to-load-kzg-parameters-or-circuit-file-not-found">"Failed to load KZG parameters" or "Circuit file not found"</a></h3>
+<ul>
+<li><strong>Cause</strong>: DA workload requires KZG circuit assets. The file <code>testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params</code> (note repeated filename) must exist. Inside containers, it's at <code>/kzgrs_test_params/kzgrs_test_params</code>.</li>
+<li><strong>Fix (recommended)</strong>: Use run-examples.sh which handles setup:
+<pre><code class="language-bash">scripts/run/run-examples.sh -t 60 -v 1 -e 1 &lt;mode&gt;
+</code></pre>
+</li>
+<li><strong>Fix (manual)</strong>:
+<ol>
+<li>Fetch assets: <code>scripts/setup/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits</code></li>
+<li>Copy to expected path: <code>cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/</code></li>
+<li>Verify file exists: <code>ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params</code></li>
+<li>For Compose/K8s: rebuild image with assets baked in</li>
+</ol>
+</li>
+</ul>
+<p>For detailed logging configuration and observability setup, see <a href="logging-observability.html">Logging &amp; Observability</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="dsl-cheat-sheet.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="faq.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="dsl-cheat-sheet.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="faq.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>

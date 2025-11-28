@@ -1,0 +1,38 @@
+.mermaid {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mermaid svg {
+  width: 100% !important;
+  height: auto !important;
+}
+
+.mermaid-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: zoom-out;
+}
+
+.mermaid-overlay__content {
+  background: #fff;
+  padding: 16px;
+  max-width: 95vw;
+  max-height: 95vh;
+  overflow: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.mermaid-overlay__content svg {
+  width: 95vw !important;
+  max-width: 1400px;
+  height: auto !important;
+  display: block;
+  margin: 0 auto;
+}
