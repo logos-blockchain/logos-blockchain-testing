@@ -74,7 +74,8 @@ RUN mkdir -p /opt/circuits && \
     fi
 
 ENV NOMOS_CIRCUITS=/opt/circuits
-ENV CARGO_TARGET_DIR=/workspace/target
+ENV CARGO_TARGET_DIR=/tmp/target
+ENV CARGO_INCREMENTAL=0
 
 # Fetch the nomos-node sources pinned in Cargo.lock and build the runtime binaries.
 RUN if [ ! -d /workspace/nomos-node ]; then \
@@ -85,10 +86,19 @@ RUN if [ ! -d /workspace/nomos-node ]; then \
     git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd && \
     git reset --hard && git clean -fdx && \
     cargo build --all-features --bins && \
-    rm -rf /workspace/nomos-node/target/debug/incremental
+    rm -rf ${CARGO_TARGET_DIR}/debug/incremental
 
 # Build cfgsync binaries from this workspace.
 RUN cargo build --all-features --manifest-path /workspace/testing-framework/tools/cfgsync/Cargo.toml --bins
+
+# Collect only the binaries and drop the build directory to keep layers small.
+RUN mkdir -p /workspace/artifacts && \
+    cp ${CARGO_TARGET_DIR}/debug/nomos-node /workspace/artifacts/ && \
+    cp ${CARGO_TARGET_DIR}/debug/nomos-executor /workspace/artifacts/ && \
+    cp ${CARGO_TARGET_DIR}/debug/nomos-cli /workspace/artifacts/ && \
+    cp ${CARGO_TARGET_DIR}/debug/cfgsync-server /workspace/artifacts/ && \
+    cp ${CARGO_TARGET_DIR}/debug/cfgsync-client /workspace/artifacts/ && \
+    rm -rf ${CARGO_TARGET_DIR}
 
 # ===========================
 # NODE IMAGE
@@ -112,11 +122,11 @@ RUN apt-get update && apt-get install -yq \
 
 COPY --from=builder /opt/circuits /opt/circuits
 
-COPY --from=builder /workspace/target/debug/nomos-node /usr/bin/nomos-node
-COPY --from=builder /workspace/target/debug/nomos-executor /usr/bin/nomos-executor
-COPY --from=builder /workspace/target/debug/nomos-cli /usr/bin/nomos-cli
-COPY --from=builder /workspace/target/debug/cfgsync-server /usr/bin/cfgsync-server
-COPY --from=builder /workspace/target/debug/cfgsync-client /usr/bin/cfgsync-client
+COPY --from=builder /workspace/artifacts/nomos-node /usr/bin/nomos-node
+COPY --from=builder /workspace/artifacts/nomos-executor /usr/bin/nomos-executor
+COPY --from=builder /workspace/artifacts/nomos-cli /usr/bin/nomos-cli
+COPY --from=builder /workspace/artifacts/cfgsync-server /usr/bin/cfgsync-server
+COPY --from=builder /workspace/artifacts/cfgsync-client /usr/bin/cfgsync-client
 
 ENV NOMOS_CIRCUITS=/opt/circuits
 

@@ -235,15 +235,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Cache target directory
-        if: env.ACT != 'true'
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-target-compose-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-target-compose-
-
       - name: Install circuits for host build
         env:
           NOMOS_CIRCUITS_PLATFORM: linux-x86_64
