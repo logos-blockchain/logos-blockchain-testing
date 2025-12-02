@@ -222,24 +222,30 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Build nomos binaries (act fallback)
-        if: env.ACT == 'true'
+        if: env.ACT == 'true' && ! (startsWith(github.event_name, 'workflow_dispatch') && hashFiles('nomos-binaries.tar.gz') != '')
         run: |
-          SRC_DIR="${RUNNER_TEMP}/nomos-node-src"
-          mkdir -p "$SRC_DIR"
-          if [ ! -d "$SRC_DIR/.git" ]; then
-            git clone https://github.com/logos-co/nomos-node.git "$SRC_DIR"
+          if [ -f "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" ]; then
+            mkdir -p "${RUNNER_TEMP}/nomos-binaries"
+            cp "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" "${RUNNER_TEMP}/"
+            tar -xzf "${RUNNER_TEMP}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries"
+          else
+            SRC_DIR="${RUNNER_TEMP}/nomos-node-src"
+            mkdir -p "$SRC_DIR"
+            if [ ! -d "$SRC_DIR/.git" ]; then
+              git clone https://github.com/logos-co/nomos-node.git "$SRC_DIR"
+            fi
+            cd "$SRC_DIR"
+            git fetch --depth 1 origin 2f60a0372c228968c3526c341ebc7e58bbd178dd
+            git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd
+            git reset --hard
+            git clean -fdx
+            cargo +nightly-2025-09-14 build --all-features -p nomos-node -p nomos-executor -p nomos-cli
+            mkdir -p "${RUNNER_TEMP}/nomos-binaries"
+            cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-node" "${RUNNER_TEMP}/nomos-binaries/"
+            cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-executor" "${RUNNER_TEMP}/nomos-binaries/"
+            cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-cli" "${RUNNER_TEMP}/nomos-binaries/"
+            tar -czf "${RUNNER_TEMP}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries" .
           fi
-          cd "$SRC_DIR"
-          git fetch --depth 1 origin 2f60a0372c228968c3526c341ebc7e58bbd178dd
-          git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd
-          git reset --hard
-          git clean -fdx
-          cargo +nightly-2025-09-14 build --all-features -p nomos-node -p nomos-executor -p nomos-cli
-          mkdir -p "${RUNNER_TEMP}/nomos-binaries"
-          cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-node" "${RUNNER_TEMP}/nomos-binaries/"
-          cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-executor" "${RUNNER_TEMP}/nomos-binaries/"
-          cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-cli" "${RUNNER_TEMP}/nomos-binaries/"
-          tar -czf "${RUNNER_TEMP}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries" .
       - name: Download prebuilt nomos binaries
         if: env.ACT != 'true'
         uses: actions/download-artifact@v4
