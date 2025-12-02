@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{env, path::Path, process::Command};
 
 // Manually run the local runner binary as a smoke test.
 // This spins up real nodes and should be invoked explicitly:
@@ -18,6 +18,19 @@ fn local_runner_bin_smoke() {
             "--nocapture",
         ])
         .env("POL_PROOF_DEV_MODE", "true")
+        .env(
+            "NOMOS_CIRCUITS",
+            env::var("NOMOS_CIRCUITS")
+                .or_else(|_| {
+                    let default = ".tmp/nomos-circuits";
+                    if Path::new(default).exists() {
+                        Ok(default.to_string())
+                    } else {
+                        Err(env::VarError::NotPresent)
+                    }
+                })
+                .expect("NOMOS_CIRCUITS must be set or .tmp/nomos-circuits must exist"),
+        )
         .env("LOCAL_DEMO_RUN_SECS", "120")
         .env("LOCAL_DEMO_VALIDATORS", "1")
         .env("LOCAL_DEMO_EXECUTORS", "1")
