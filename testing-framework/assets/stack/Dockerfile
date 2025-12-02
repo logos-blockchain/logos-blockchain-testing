@@ -84,11 +84,11 @@ RUN if [ ! -d /workspace/nomos-node ]; then \
     git fetch --depth 1 origin 2f60a0372c228968c3526c341ebc7e58bbd178dd && \
     git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd && \
     git reset --hard && git clean -fdx && \
-    cargo build --locked --all-features --bins && \
+    cargo build --all-features --bins && \
     rm -rf /workspace/nomos-node/target/debug/incremental
 
 # Build cfgsync binaries from this workspace.
-RUN cargo build --locked --all-features --manifest-path /workspace/testing-framework/tools/cfgsync/Cargo.toml --bins
+RUN cargo build --all-features --manifest-path /workspace/testing-framework/tools/cfgsync/Cargo.toml --bins
 
 # ===========================
 # NODE IMAGE

@@ -179,7 +179,7 @@ jobs:
           git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd
           git reset --hard
           git clean -fdx
-          cargo +nightly-2025-09-14 build --locked --all-features -p nomos-node -p nomos-executor
+          cargo +nightly-2025-09-14 build --all-features -p nomos-node -p nomos-executor
       - name: Run local runner smoke (ignored test)
         run: |
           cargo +nightly-2025-09-14 test -p runner-examples --test local_runner_bin_smoke -- --ignored --nocapture
