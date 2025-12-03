@@ -382,11 +382,15 @@ jobs:
           mkdir -p ci-artifacts/compose
           if [ -d "${TMPDIR}/compose-logs" ]; then
             tar -czf ci-artifacts/compose/node-logs.tgz -C "${TMPDIR}/compose-logs" .
+            echo "Node logs tar: $(realpath ci-artifacts/compose/node-logs.tgz)"
+            find "${TMPDIR}/compose-logs" -type f -print
           fi
           mkdir -p ci-artifacts/compose
           docker ps -a --filter "name=nomos-compose-" --format '{{.ID}} {{.Names}} {{.Status}}' > ci-artifacts/compose/containers.txt || true
+          echo "Containers list: $(realpath ci-artifacts/compose/containers.txt)"
           for id in $(docker ps -a --filter "name=nomos-compose-" -q); do
             docker logs "$id" > "ci-artifacts/compose/${id}.log" 2>&1 || true
+            echo "Container log: $(realpath ci-artifacts/compose/${id}.log)"
           done
 
       - name: Upload compose artifacts
