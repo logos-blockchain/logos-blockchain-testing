@@ -162,10 +162,6 @@ jobs:
             apt-get update
             apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm
           fi
-      - name: Install nomos circuits
-        run: |
-          ./scripts/setup-nomos-circuits.sh v0.3.1 "$NOMOS_CIRCUITS"
-          echo "NOMOS_CIRCUITS=$NOMOS_CIRCUITS" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -219,6 +215,13 @@ jobs:
             sudo chmod +x /usr/local/bin/nomos-node /usr/local/bin/nomos-executor /usr/local/bin/nomos-cli
             echo "NOMOS_NODE_BIN=/usr/local/bin/nomos-node" >> "$GITHUB_ENV"
             echo "NOMOS_EXECUTOR_BIN=/usr/local/bin/nomos-executor" >> "$GITHUB_ENV"
+          fi
+          if [ -d "${BIN_DIR}/circuits" ]; then
+            echo "NOMOS_CIRCUITS=${BIN_DIR}/circuits" >> "$GITHUB_ENV"
+            echo "NOMOS_KZGRS_PARAMS_PATH=${BIN_DIR}/circuits/pol/proving_key.zkey" >> "$GITHUB_ENV"
+          else
+            echo "Circuits bundle missing in nomos-binaries tarball" >&2
+            exit 1
           fi
       - name: Stage KZG params for local run
         run: |
@@ -285,7 +288,14 @@ jobs:
           cp "${BIN_DIR}/nomos-cli" testing-framework/assets/stack/bin/
           rm -rf testing-framework/assets/stack/kzgrs_test_params
           mkdir -p testing-framework/assets/stack/kzgrs_test_params
-          rsync -a --delete "$NOMOS_CIRCUITS"/ testing-framework/assets/stack/kzgrs_test_params/ || true
+          if [ -d "${BIN_DIR}/circuits" ]; then
+            rsync -a --delete "${BIN_DIR}/circuits"/ testing-framework/assets/stack/kzgrs_test_params/ || true
+            echo "NOMOS_CIRCUITS=${BIN_DIR}/circuits" >> "$GITHUB_ENV"
+            echo "CIRCUITS_OVERRIDE=testing-framework/assets/stack/kzgrs_test_params" >> "$GITHUB_ENV"
+          else
+            echo "Circuits bundle missing in nomos-binaries tarball" >&2
+            exit 1
+          fi
 
       - name: Prune docker to free space
         run: |

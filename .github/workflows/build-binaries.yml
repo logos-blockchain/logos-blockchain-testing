@@ -64,6 +64,8 @@ jobs:
           cp "${CARGO_TARGET_DIR}/debug/nomos-node" artifacts/
           cp "${CARGO_TARGET_DIR}/debug/nomos-executor" artifacts/
           cp "${CARGO_TARGET_DIR}/debug/nomos-cli" artifacts/
+          mkdir -p artifacts/circuits
+          rsync -a "$NOMOS_CIRCUITS"/ artifacts/circuits/
           tar -czf nomos-binaries.tar.gz -C artifacts .
       - name: Save nomos binaries cache
         uses: actions/cache@v4
