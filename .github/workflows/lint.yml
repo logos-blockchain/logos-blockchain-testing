@@ -44,10 +44,6 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
       - name: Build nomos binaries
         run: |
-          if [ "${ACT:-}" = "true" ] && [ -f "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" ]; then
-            # Reuse previously built tar without rebuilding.
-            exit 0
-          fi
           SRC_DIR="${GITHUB_WORKSPACE}/.tmp/nomos-node-src"
           mkdir -p "$SRC_DIR"
           if [ ! -d "$SRC_DIR/.git" ]; then
@@ -70,13 +66,6 @@ jobs:
         with:
           name: nomos-binaries-linux-amd64
           path: nomos-binaries.tar.gz
-        continue-on-error: ${{ env.ACT == 'true' }}
-      - name: Persist binaries for act
-        if: env.ACT == 'true'
-        run: |
-          if [ ! -f "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" ]; then
-            cp nomos-binaries.tar.gz "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz"
-          fi
 
   fmt:
     runs-on: ubuntu-latest
@@ -232,45 +221,11 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-      - name: Build nomos binaries (act fallback)
-        if: env.ACT == 'true' && hashFiles(format('{0}/nomos-binaries/nomos-binaries.tar.gz', runner.temp)) == ''
-        run: |
-          SRC_DIR="${RUNNER_TEMP}/nomos-node-src"
-          mkdir -p "$SRC_DIR"
-          if [ ! -d "$SRC_DIR/.git" ]; then
-            git clone https://github.com/logos-co/nomos-node.git "$SRC_DIR"
-          fi
-          cd "$SRC_DIR"
-          git fetch --depth 1 origin 2f60a0372c228968c3526c341ebc7e58bbd178dd
-          git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd
-          git reset --hard
-          git clean -fdx
-          cargo +nightly-2025-09-14 build --all-features -p nomos-node -p nomos-executor -p nomos-cli
-          mkdir -p "${RUNNER_TEMP}/nomos-binaries"
-          cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-node" "${RUNNER_TEMP}/nomos-binaries/"
-          cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-executor" "${RUNNER_TEMP}/nomos-binaries/"
-          cp "${CARGO_TARGET_DIR:-${RUNNER_TEMP}/target-local}/debug/nomos-cli" "${RUNNER_TEMP}/nomos-binaries/"
-          tar -czf "${RUNNER_TEMP}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries" .
       - name: Download prebuilt nomos binaries
-        if: env.ACT != 'true'
         uses: actions/download-artifact@v4
         with:
           name: nomos-binaries-linux-amd64
           path: ${{ runner.temp }}/nomos-binaries
-      - name: Use local nomos binaries (act)
-        if: env.ACT == 'true'
-        run: |
-          mkdir -p "${RUNNER_TEMP}/nomos-binaries"
-          if [ -f "${RUNNER_TEMP}/nomos-binaries.tar.gz" ]; then
-            cp "${RUNNER_TEMP}/nomos-binaries.tar.gz" "${RUNNER_TEMP}/nomos-binaries/nomos-binaries.tar.gz"
-            tar -xzf "${RUNNER_TEMP}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries"
-          elif [ -f "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" ]; then
-            cp "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" "${RUNNER_TEMP}/nomos-binaries/"
-            tar -xzf "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries"
-          else
-            echo "nomos-binaries.tar.gz not found" >&2
-            exit 1
-          fi
       - name: Install nomos binaries
         run: |
           BIN_DIR="${RUNNER_TEMP}/nomos-binaries"
@@ -289,8 +244,6 @@ jobs:
           mkdir -p testing-framework/assets/stack/kzgrs_test_params
           rsync -a --delete "$NOMOS_CIRCUITS"/ testing-framework/assets/stack/kzgrs_test_params/ || true
       - name: Run local runner smoke (ignored test)
-        env:
-          LOCAL_DEMO_RUN_SECS: ${{ env.ACT == 'true' && '20' || env.LOCAL_DEMO_RUN_SECS }}
         run: |
           cargo +nightly-2025-09-14 test -p runner-examples --test local_runner_bin_smoke -- --ignored --nocapture
       - name: Upload local smoke logs
@@ -378,24 +331,10 @@ jobs:
         run: mkdir -p "$TMPDIR"
 
       - name: Download prebuilt nomos binaries
-        if: env.ACT != 'true'
         uses: actions/download-artifact@v4
         with:
           name: nomos-binaries-linux-amd64
           path: ${{ runner.temp }}/nomos-binaries
-      - name: Use local nomos binaries (act)
-        if: env.ACT == 'true'
-        run: |
-          mkdir -p "${RUNNER_TEMP}/nomos-binaries"
-          if [ -f "${RUNNER_TEMP}/nomos-binaries.tar.gz" ]; then
-            tar -xzf "${RUNNER_TEMP}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries"
-          elif [ -f "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" ]; then
-            cp "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" "${RUNNER_TEMP}/nomos-binaries/"
-            tar -xzf "${GITHUB_WORKSPACE}/nomos-binaries.tar.gz" -C "${RUNNER_TEMP}/nomos-binaries"
-          else
-            echo "nomos-binaries.tar.gz not found" >&2
-            exit 1
-          fi
       - name: Stage nomos binaries into build context
         run: |
           BIN_DIR="${RUNNER_TEMP}/nomos-binaries"
@@ -439,7 +378,6 @@ jobs:
           fi
 
       - name: Cache cargo registry
-        if: env.ACT != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -486,16 +424,13 @@ jobs:
           POL_PROOF_DEV_MODE: "true"
           COMPOSE_NODE_PAIRS: "1x1"
           NOMOS_TESTNET_IMAGE: ${{ env.NOMOS_TESTNET_IMAGE }}
-          COMPOSE_RUNNER_HOST: ${{ env.ACT == 'true' && 'host.docker.internal' || '127.0.0.1' }}
+          COMPOSE_RUNNER_HOST: "127.0.0.1"
           RUST_BACKTRACE: "1"
           NOMOS_TESTS_TRACING: "true"
           NOMOS_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
           NOMOS_LOG_LEVEL: "info"
         run: |
           mkdir -p "$TMPDIR"
-          if [ "${{ env.ACT }}" = "true" ]; then
-            export COMPOSE_RUNNER_PRESERVE=1
-          fi
           cargo run -p runner-examples --bin compose_runner -- --nocapture
 
       - name: Collect compose logs
@@ -512,14 +447,14 @@ jobs:
           done
 
       - name: Upload compose artifacts
-        if: failure() && env.ACT != 'true'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: compose-mixed-workload-logs
           path: ci-artifacts
 
       - name: Cleanup compose containers
-        if: always() && env.ACT != 'true'
+        if: always()
         run: |
           ids=$(docker ps -a --filter "name=nomos-compose-" -q)
           if [ -n "$ids" ]; then
