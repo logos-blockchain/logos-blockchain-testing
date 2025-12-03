@@ -237,7 +237,10 @@ jobs:
           if-no-files-found: ignore
 
   compose_smoke:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - macOS
+      - X64
     env:
       TMPDIR: ${{ github.workspace }}/.tmp
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
@@ -329,8 +332,8 @@ jobs:
       - name: Install circuits for host build
         env:
           NOMOS_CIRCUITS_PLATFORM: linux-x86_64
-          NOMOS_CIRCUITS_REBUILD_RAPIDSNARK: "1"
-          RAPIDSNARK_FORCE_REBUILD: "1"
+          NOMOS_CIRCUITS_REBUILD_RAPIDSNARK: "0"
+          RAPIDSNARK_FORCE_REBUILD: "0"
           RAPIDSNARK_BUILD_GMP: "0"
           RAPIDSNARK_USE_ASM: "OFF"
         run: |
