@@ -131,10 +131,7 @@ jobs:
       - run: cargo machete
 
   local_smoke:
-    runs-on:
-      - self-hosted
-      - macOS
-      - X64
+    runs-on: ubuntu-latest
     env:
       POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
@@ -199,22 +196,12 @@ jobs:
         run: |
           BIN_DIR="${RUNNER_TEMP}/nomos-binaries"
           tar -xzf "${BIN_DIR}/nomos-binaries.tar.gz" -C "${BIN_DIR}"
-          INSTALL_BIN="${RUNNER_TEMP}/nomos-bin"
-          mkdir -p "$INSTALL_BIN"
-          if [ "${RUNNER_OS}" = "macOS" ]; then
-            cp "${BIN_DIR}/nomos-node" "${BIN_DIR}/nomos-executor" "${BIN_DIR}/nomos-cli" "$INSTALL_BIN/"
-            chmod +x "${INSTALL_BIN}/nomos-node" "${INSTALL_BIN}/nomos-executor" "${INSTALL_BIN}/nomos-cli"
-            echo "$INSTALL_BIN" >> "$GITHUB_PATH"
-            echo "NOMOS_NODE_BIN=${INSTALL_BIN}/nomos-node" >> "$GITHUB_ENV"
-            echo "NOMOS_EXECUTOR_BIN=${INSTALL_BIN}/nomos-executor" >> "$GITHUB_ENV"
-          else
-            sudo cp "${BIN_DIR}/nomos-node" /usr/local/bin/
-            sudo cp "${BIN_DIR}/nomos-executor" /usr/local/bin/
-            sudo cp "${BIN_DIR}/nomos-cli" /usr/local/bin/
-            sudo chmod +x /usr/local/bin/nomos-node /usr/local/bin/nomos-executor /usr/local/bin/nomos-cli
-            echo "NOMOS_NODE_BIN=/usr/local/bin/nomos-node" >> "$GITHUB_ENV"
-            echo "NOMOS_EXECUTOR_BIN=/usr/local/bin/nomos-executor" >> "$GITHUB_ENV"
-          fi
+          sudo cp "${BIN_DIR}/nomos-node" /usr/local/bin/
+          sudo cp "${BIN_DIR}/nomos-executor" /usr/local/bin/
+          sudo cp "${BIN_DIR}/nomos-cli" /usr/local/bin/
+          sudo chmod +x /usr/local/bin/nomos-node /usr/local/bin/nomos-executor /usr/local/bin/nomos-cli
+          echo "NOMOS_NODE_BIN=/usr/local/bin/nomos-node" >> "$GITHUB_ENV"
+          echo "NOMOS_EXECUTOR_BIN=/usr/local/bin/nomos-executor" >> "$GITHUB_ENV"
           if [ -d "${BIN_DIR}/circuits" ]; then
             echo "NOMOS_CIRCUITS=${BIN_DIR}/circuits" >> "$GITHUB_ENV"
             echo "NOMOS_KZGRS_PARAMS_PATH=${BIN_DIR}/circuits/pol/proving_key.zkey" >> "$GITHUB_ENV"
