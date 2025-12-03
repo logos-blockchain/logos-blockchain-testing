@@ -6,6 +6,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   NOMOS_NODE_REV: 2f60a0372c228968c3526c341ebc7e58bbd178dd
+  NOMOS_BUNDLE_VERSION: v2
 
 jobs:
   build_nomos_binaries:
@@ -71,8 +72,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
       - uses: actions/upload-artifact@v4
         with:
-          name: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}
+          name: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
           path: nomos-binaries.tar.gz

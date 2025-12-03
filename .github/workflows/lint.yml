@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   NOMOS_NODE_REV: 2f60a0372c228968c3526c341ebc7e58bbd178dd
+  NOMOS_BUNDLE_VERSION: v2
 permissions:
   actions: read
   contents: read
@@ -177,12 +178,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/nomos-binaries/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
       - name: Download nomos binaries artifact (fallback)
         if: steps.restore-nomos-bins.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}
+          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/nomos-binaries"
@@ -261,12 +262,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/nomos-binaries/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
       - name: Download nomos binaries artifact (fallback)
         if: steps.restore-nomos-bins-compose.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}
+          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/nomos-binaries"
