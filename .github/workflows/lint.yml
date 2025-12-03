@@ -301,6 +301,67 @@ jobs:
           path: ${{ env.NOMOS_LOG_DIR }}
           if-no-files-found: ignore
 
+  local_smoke_mac:
+    runs-on:
+      - self-hosted
+      - macOS
+      - X64
+      - MacBook-Pro-6
+    env:
+      POL_PROOF_DEV_MODE: true
+      LOCAL_DEMO_RUN_SECS: 120
+      LOCAL_DEMO_VALIDATORS: 1
+      LOCAL_DEMO_EXECUTORS: 1
+      NOMOS_CIRCUITS: ${{ runner.temp }}/nomos-circuits
+      NOMOS_KZGRS_PARAMS_PATH: ${{ runner.temp }}/nomos-circuits
+      NOMOS_LOG_DIR: ${{ runner.temp }}/local-logs
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      RUSTFLAGS: -C debuginfo=0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set temp dir
+        run: |
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_DIR=${{ runner.temp }}/target-local" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-09-14
+      - name: Install nomos circuits
+        run: |
+          ./scripts/setup-nomos-circuits.sh v0.3.1 "$NOMOS_CIRCUITS"
+          echo "NOMOS_CIRCUITS=$NOMOS_CIRCUITS" >> "$GITHUB_ENV"
+      - name: Build nomos binaries (mac self-hosted)
+        run: |
+          SRC_DIR="${TMPDIR}/nomos-node-src"
+          mkdir -p "$SRC_DIR"
+          if [ ! -d "$SRC_DIR/.git" ]; then
+            git clone https://github.com/logos-co/nomos-node.git "$SRC_DIR"
+          fi
+          cd "$SRC_DIR"
+          git fetch --depth 1 origin 2f60a0372c228968c3526c341ebc7e58bbd178dd
+          git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd
+          git reset --hard
+          git clean -fdx
+          cargo +nightly-2025-09-14 build --all-features -p nomos-node -p nomos-executor -p nomos-cli
+          echo "NOMOS_NODE_BIN=${CARGO_TARGET_DIR}/debug/nomos-node" >> "$GITHUB_ENV"
+          echo "NOMOS_EXECUTOR_BIN=${CARGO_TARGET_DIR}/debug/nomos-executor" >> "$GITHUB_ENV"
+      - name: Stage KZG params for local run
+        run: |
+          rm -rf testing-framework/assets/stack/kzgrs_test_params
+          mkdir -p testing-framework/assets/stack/kzgrs_test_params
+          rsync -a --delete "$NOMOS_CIRCUITS"/ testing-framework/assets/stack/kzgrs_test_params/ || true
+      - name: Run local runner smoke (mac self-hosted)
+        run: |
+          cargo +nightly-2025-09-14 test -p runner-examples --test local_runner_bin_smoke -- --ignored --nocapture
+      - name: Upload local smoke logs (mac)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-smoke-logs-mac
+          path: ${{ env.NOMOS_LOG_DIR }}
+          if-no-files-found: ignore
+
   compose_smoke:
     needs: nomos_binaries
     runs-on: ubuntu-latest
