@@ -198,6 +198,7 @@ jobs:
       LOCAL_DEMO_EXECUTORS: 1
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
       NOMOS_KZGRS_PARAMS_PATH: ${{ github.workspace }}/.tmp/nomos-circuits
+      NOMOS_LOG_DIR: ${{ runner.temp }}/local-logs
       CARGO_INCREMENTAL: 0
       CARGO_PROFILE_DEV_DEBUG: 0
       RUSTFLAGS: -C debuginfo=0
@@ -292,6 +293,13 @@ jobs:
           LOCAL_DEMO_RUN_SECS: ${{ env.ACT == 'true' && '20' || env.LOCAL_DEMO_RUN_SECS }}
         run: |
           cargo +nightly-2025-09-14 test -p runner-examples --test local_runner_bin_smoke -- --ignored --nocapture
+      - name: Upload local smoke logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-smoke-logs
+          path: ${{ env.NOMOS_LOG_DIR }}
+          if-no-files-found: ignore
 
   compose_smoke:
     needs: nomos_binaries
