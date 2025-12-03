@@ -8,6 +8,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
   NOMOS_NODE_REV: 2f60a0372c228968c3526c341ebc7e58bbd178dd
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: lint-${{ github.ref }}
@@ -431,3 +435,23 @@ jobs:
         run: mdbook build book
       - name: Check links
         run: mdbook-linkcheck book
+      - name: Upload book artifact for Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: book/book
+
+  deploy_book:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: book
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

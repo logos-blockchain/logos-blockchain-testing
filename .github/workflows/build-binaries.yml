@@ -9,10 +9,14 @@ env:
 
 jobs:
   build_nomos_binaries:
-    runs-on:
-      - self-hosted
-      - macOS
-      - X64
+    strategy:
+      matrix:
+        include:
+          - name: macos
+            runs-on: [self-hosted, macOS, X64]
+          - name: linux
+            runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runs-on }}
     env:
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
       CARGO_INCREMENTAL: 0
@@ -21,6 +25,12 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/.tmp/nomos-target
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm
       - name: Install nomos circuits
         run: |
           ./scripts/setup-nomos-circuits.sh v0.3.1 "$NOMOS_CIRCUITS"
