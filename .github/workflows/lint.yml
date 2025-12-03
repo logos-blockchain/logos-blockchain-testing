@@ -440,7 +440,7 @@ jobs:
           cargo +nightly-2025-09-14 install --locked mdbook --version ${MDBOOK_VERSION}
           cargo +nightly-2025-09-14 install mdbook-linkcheck --version ${LINKCHECK_VERSION}
           cargo +nightly-2025-09-14 install --locked mdbook-mermaid --version ${MERMAID_VERSION}
-          cargo +nightly-2025-09-14 install --locked typos-cli --version 1.20.11
+          cargo +nightly-2025-09-14 install --locked typos-cli --version 1.23.6
       - name: Spell check (typos)
         run: typos --format brief book/src
       - name: Markdown lint
