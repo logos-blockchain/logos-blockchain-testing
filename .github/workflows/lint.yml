@@ -26,7 +26,8 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/.tmp/nomos-target
     steps:
       - uses: actions/checkout@v4
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -200,7 +201,8 @@ jobs:
           echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_DIR=${{ runner.temp }}/target-local" >> "$GITHUB_ENV"
           echo "NOMOS_LOG_DIR=${{ runner.temp }}/local-logs" >> "$GITHUB_ENV"
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           if command -v sudo >/dev/null 2>&1; then
@@ -360,7 +362,8 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           if command -v sudo >/dev/null 2>&1; then
@@ -371,7 +374,8 @@ jobs:
             apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm
           fi
 
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           if command -v sudo >/dev/null 2>&1; then
