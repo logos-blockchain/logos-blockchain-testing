@@ -237,10 +237,7 @@ jobs:
           if-no-files-found: ignore
 
   compose_smoke:
-    runs-on:
-      - self-hosted
-      - macOS
-      - X64
+    runs-on: ubuntu-latest
     env:
       TMPDIR: ${{ github.workspace }}/.tmp
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
