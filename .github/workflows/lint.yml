@@ -275,6 +275,7 @@ jobs:
           if-no-files-found: ignore
 
   local_smoke_mac:
+    needs: nomos_binaries
     runs-on:
       - self-hosted
       - macOS
@@ -303,21 +304,21 @@ jobs:
         run: |
           ./scripts/setup-nomos-circuits.sh v0.3.1 "$NOMOS_CIRCUITS"
           echo "NOMOS_CIRCUITS=$NOMOS_CIRCUITS" >> "$GITHUB_ENV"
-      - name: Build nomos binaries (mac self-hosted)
+      - name: Download nomos binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: nomos-binaries-linux-amd64
+          path: ${{ runner.temp }}/nomos-binaries
+      - name: Install nomos binaries
         run: |
-          SRC_DIR="${TMPDIR}/nomos-node-src"
-          mkdir -p "$SRC_DIR"
-          if [ ! -d "$SRC_DIR/.git" ]; then
-            git clone https://github.com/logos-co/nomos-node.git "$SRC_DIR"
-          fi
-          cd "$SRC_DIR"
-          git fetch --depth 1 origin 2f60a0372c228968c3526c341ebc7e58bbd178dd
-          git checkout 2f60a0372c228968c3526c341ebc7e58bbd178dd
-          git reset --hard
-          git clean -fdx
-          cargo +nightly-2025-09-14 build --all-features -p nomos-node -p nomos-executor -p nomos-cli
-          echo "NOMOS_NODE_BIN=${CARGO_TARGET_DIR}/debug/nomos-node" >> "$GITHUB_ENV"
-          echo "NOMOS_EXECUTOR_BIN=${CARGO_TARGET_DIR}/debug/nomos-executor" >> "$GITHUB_ENV"
+          BIN_DIR="${RUNNER_TEMP}/nomos-binaries"
+          tar -xzf "${BIN_DIR}/nomos-binaries.tar.gz" -C "${BIN_DIR}"
+          sudo cp "${BIN_DIR}/nomos-node" /usr/local/bin/
+          sudo cp "${BIN_DIR}/nomos-executor" /usr/local/bin/
+          sudo cp "${BIN_DIR}/nomos-cli" /usr/local/bin/
+          sudo chmod +x /usr/local/bin/nomos-node /usr/local/bin/nomos-executor /usr/local/bin/nomos-cli
+          echo "NOMOS_NODE_BIN=/usr/local/bin/nomos-node" >> "$GITHUB_ENV"
+          echo "NOMOS_EXECUTOR_BIN=/usr/local/bin/nomos-executor" >> "$GITHUB_ENV"
       - name: Stage KZG params for local run
         run: |
           rm -rf testing-framework/assets/stack/kzgrs_test_params
