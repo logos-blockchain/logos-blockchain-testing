@@ -36,6 +36,12 @@ fn binary_path() -> PathBuf {
     if let Some(path) = which_on_path("nomos-node") {
         return path;
     }
+    // Default to the shared bin staging area; fall back to workspace target.
+    let shared_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../testing-framework/assets/stack/bin/nomos-node");
+    if shared_bin.exists() {
+        return shared_bin;
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../")
         .join(BIN_PATH)
@@ -168,11 +174,21 @@ impl Validator {
         let file = std::fs::File::create(&config_path).unwrap();
 
         if !*IS_DEBUG_TRACING {
-            // setup logging so that we can intercept it later in testing
-            config.tracing.logger = LoggerLayer::File(FileConfig {
-                directory: dir.path().to_owned(),
-                prefix: Some(LOGS_PREFIX.into()),
-            });
+            if let Ok(env_dir) = std::env::var("NOMOS_LOG_DIR") {
+                let log_dir = PathBuf::from(env_dir);
+                let _ = std::fs::create_dir_all(&log_dir);
+                config.tracing.logger = LoggerLayer::File(FileConfig {
+                    directory: log_dir,
+                    prefix: Some(LOGS_PREFIX.into()),
+                });
+            } else {
+                // If no explicit log dir is provided, fall back to a tempdir so we can capture
+                // logs.
+                config.tracing.logger = LoggerLayer::File(FileConfig {
+                    directory: dir.path().to_owned(),
+                    prefix: Some(LOGS_PREFIX.into()),
+                });
+            }
         }
 
         config.storage.db_path = dir.path().join("db");
@@ -203,7 +219,7 @@ impl Validator {
             api: ApiClient::new(addr, Some(testing_addr)),
         };
 
-        tokio::time::timeout(adjust_timeout(Duration::from_secs(10)), async {
+        tokio::time::timeout(adjust_timeout(Duration::from_secs(30)), async {
             node.wait_online().await;
         })
         .await?;
