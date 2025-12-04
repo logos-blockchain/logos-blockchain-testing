@@ -150,8 +150,8 @@ jobs:
           echo "CARGO_TARGET_DIR=${{ runner.temp }}/target-local" >> "$GITHUB_ENV"
           echo "NOMOS_LOG_DIR=${{ runner.temp }}/local-logs" >> "$GITHUB_ENV"
           echo "NOMOS_STATE_DIR=${{ runner.temp }}/nomos-state" >> "$GITHUB_ENV"
-          mkdir -p "${{ runner.temp }}/local-logs"
-          mkdir -p "${{ runner.temp }}/nomos-state"
+          rm -rf "${{ runner.temp }}/local-logs" "${{ runner.temp }}/nomos-state"
+          mkdir -p "${{ runner.temp }}/local-logs" "${{ runner.temp }}/nomos-state"
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
