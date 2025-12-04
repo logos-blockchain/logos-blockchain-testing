@@ -89,6 +89,7 @@ docker logs <container-id> > debug.log
 **Important:** Always verify your namespace and use label selectors instead of assuming pod names.
 
 **Stream pod logs (use label selectors):**
+
 ```bash
 # Check your namespace first
 kubectl config view --minify | grep namespace
@@ -108,6 +109,7 @@ kubectl logs -n my-namespace -l app=nomos-validator -f
 ```
 
 **Download logs from crashed pods:**
+
 ```bash
 # Previous logs from crashed pod
 kubectl get pods -l app=nomos-validator  # Find crashed pod name first
@@ -120,6 +122,7 @@ done
 ```
 
 **Access logs from all pods:**
+
 ```bash
 # All pods in current namespace
 for pod in $(kubectl get pods -o name); do
@@ -140,17 +143,21 @@ kubectl logs -n my-namespace -l app=nomos-validator --tail=500 > validators.log
 When a test fails, follow this sequence:
 
 ### 1. Check Framework Output
+
 Start with the test harness output—did expectations fail? Was there a deployment error?
 
 **Look for:**
+
 - Expectation failure messages
 - Timeout errors
 - Deployment/readiness failures
 
 ### 2. Verify Node Readiness
+
 Ensure all nodes started successfully and became ready before workloads began.
 
 **Commands:**
+
 ```bash
 # Local: check process list
 ps aux | grep nomos
@@ -165,9 +172,11 @@ kubectl describe pod <actual-pod-name>  # Get name from above first
 ```
 
 ### 3. Inspect Node Logs
+
 Focus on the first node that exhibited problems or the node with the highest index (often the last to start).
 
 **Common error patterns:**
+
 - "Failed to bind address" → port conflict
 - "Connection refused" → peer not ready or network issue
 - "Proof verification failed" or "Proof generation timeout" → missing `POL_PROOF_DEV_MODE=true` (REQUIRED for all runners)
@@ -175,6 +184,7 @@ Focus on the first node that exhibited problems or the node with the highest ind
 - "Insufficient funds" → wallet seeding issue (increase `.wallets(N)` or reduce `.users(M)`)
 
 ### 4. Check Log Levels
+
 If logs are too sparse, increase verbosity:
 
 ```bash
@@ -184,6 +194,7 @@ cargo run -p runner-examples --bin local_runner
 ```
 
 ### 5. Verify Observability Endpoints
+
 If expectations report observability issues:
 
 **Prometheus (Compose):**
@@ -197,6 +208,7 @@ curl http://localhost:18080/consensus/info  # Adjust port per node
 ```
 
 ### 6. Compare with Known-Good Scenario
+
 Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it passes, the issue is in your workload or topology configuration.
 
 ## Common Error Messages
