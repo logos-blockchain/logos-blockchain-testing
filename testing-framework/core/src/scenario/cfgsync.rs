@@ -90,7 +90,7 @@ pub fn apply_topology_overrides(
     cfg.old_blobs_check_interval = da.old_blobs_check_interval;
     cfg.blobs_validity_duration = da.blobs_validity_duration;
     cfg.global_params_path = if use_kzg_mount {
-        "/kzgrs_test_params/pol/proving_key.zkey".into()
+        "/kzgrs_test_params/kzgrs_test_params".into()
     } else {
         da.global_params_path.clone()
     };
