@@ -5,6 +5,7 @@ signals that must hold when that activity completes. Both are pluggable so
 scenarios stay readable and purpose-driven.
 
 ## Workloads
+
 - **Transaction workload**: submits user-level transactions at a configurable
   rate and can limit how many distinct actors participate.
 - **Data-availability workload**: drives blob and channel activity to exercise
@@ -13,6 +14,7 @@ scenarios stay readable and purpose-driven.
   recovery behaviors (requires a runner that can control nodes).
 
 ## Expectations
+
 - **Consensus liveness**: verifies the system continues to produce blocks in
   line with the planned workload and timing window.
 - **Workload-specific checks**: each workload can attach its own success

@@ -202,48 +202,67 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
 ## Common Error Messages
 
 ### "Consensus liveness expectation failed"
-- **Cause**: Not enough blocks produced during run window, missing `POL_PROOF_DEV_MODE=true` (causes slow proof generation), or missing KZG assets for DA workloads
-- **Fix**: 
-  1. Verify `POL_PROOF_DEV_MODE=true` is set (REQUIRED for all runners)
-  2. Verify KZG assets exist at `testing-framework/assets/stack/kzgrs_test_params/` (for DA workloads)
-  3. Extend `with_run_duration()` to allow more blocks
-  4. Check node logs for proof generation or DA errors
-  5. Reduce transaction/DA rate if nodes are overwhelmed
+
+- **Cause**: Not enough blocks produced during the run window, missing
+  `POL_PROOF_DEV_MODE=true` (causes slow proof generation), or missing KZG
+  assets for DA workloads.
+- **Fix**:
+  1. Verify `POL_PROOF_DEV_MODE=true` is set (REQUIRED for all runners).
+  2. Verify KZG assets exist at
+     `testing-framework/assets/stack/kzgrs_test_params/` (for DA workloads).
+  3. Extend `with_run_duration()` to allow more blocks.
+  4. Check node logs for proof generation or DA errors.
+  5. Reduce transaction/DA rate if nodes are overwhelmed.
 
 ### "Wallet seeding failed"
-- **Cause**: Topology doesn't have enough funded wallets for the workload
-- **Fix**: Increase `.wallets(N)` count or reduce `.users(M)` in transaction workload (ensure N ≥ M)
+
+- **Cause**: Topology doesn't have enough funded wallets for the workload.
+- **Fix**: Increase `.wallets(N)` count or reduce `.users(M)` in the transaction
+  workload (ensure N ≥ M).
 
 ### "Node control not available"
-- **Cause**: Runner doesn't support node control (only ComposeDeployer does), or `enable_node_control()` wasn't called
-- **Fix**: 
-  1. Use ComposeDeployer for chaos tests (LocalDeployer and K8sDeployer don't support node control)
-  2. Ensure `.enable_node_control()` is called in scenario before `.chaos()`
+
+- **Cause**: Runner doesn't support node control (only ComposeDeployer does), or
+  `enable_node_control()` wasn't called.
+- **Fix**:
+  1. Use ComposeDeployer for chaos tests (LocalDeployer and K8sDeployer don't
+     support node control).
+  2. Ensure `.enable_node_control()` is called in the scenario before `.chaos()`.
 
 ### "Readiness timeout"
-- **Cause**: Nodes didn't become responsive within expected time (often due to missing prerequisites)
-- **Fix**: 
-  1. **Verify `POL_PROOF_DEV_MODE=true` is set** (REQUIRED for all runners—without it, proof generation is too slow)
-  2. Check node logs for startup errors (port conflicts, missing assets)
-  3. Verify network connectivity between nodes
-  4. For DA workloads, ensure KZG circuit assets are present
+
+- **Cause**: Nodes didn't become responsive within expected time (often due to
+  missing prerequisites).
+- **Fix**:
+  1. **Verify `POL_PROOF_DEV_MODE=true` is set** (REQUIRED for all runners—without
+     it, proof generation is too slow).
+  2. Check node logs for startup errors (port conflicts, missing assets).
+  3. Verify network connectivity between nodes.
+  4. For DA workloads, ensure KZG circuit assets are present.
 
 ### "Port already in use"
-- **Cause**: Previous test didn't clean up, or another process holds the port
-- **Fix**: Kill orphaned processes (`pkill nomos-node`), wait for Docker cleanup (`docker compose down`), or restart Docker
+
+- **Cause**: Previous test didn't clean up, or another process holds the port.
+- **Fix**: Kill orphaned processes (`pkill nomos-node`), wait for Docker cleanup
+  (`docker compose down`), or restart Docker.
 
 ### "Image not found: nomos-testnet:local"
-- **Cause**: Docker image not built for Compose/K8s runners, or KZG assets not baked into image
-- **Fix**: 
-  1. Fetch KZG assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`
-  2. Copy to assets: `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`
-  3. Build image: `testing-framework/assets/stack/scripts/build_test_image.sh`
+
+- **Cause**: Docker image not built for Compose/K8s runners, or KZG assets not
+  baked into the image.
+- **Fix**:
+  1. Fetch KZG assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`.
+  2. Copy to assets:
+     `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`.
+  3. Build image: `testing-framework/assets/stack/scripts/build_test_image.sh`.
 
 ### "Failed to load KZG parameters" or "Circuit file not found"
-- **Cause**: DA workload requires KZG circuit assets that aren't present
-- **Fix**: 
-  1. Fetch assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`
-  2. Copy to expected path: `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`
-  3. For Compose/K8s: rebuild image with assets baked in
+
+- **Cause**: DA workload requires KZG circuit assets that aren't present.
+- **Fix**:
+  1. Fetch assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`.
+  2. Copy to expected path:
+     `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`.
+  3. For Compose/K8s: rebuild image with assets baked in.
 
 For detailed logging configuration and observability setup, see [Operations](operations.md).
