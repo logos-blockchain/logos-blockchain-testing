@@ -212,6 +212,18 @@ jobs:
             echo "Circuits bundle missing in nomos-binaries tarball" >&2
             exit 1
           fi
+      - name: Install circuits bundle matching node
+        env:
+          NOMOS_CIRCUITS_PLATFORM: linux-x86_64
+          NOMOS_CIRCUITS_REBUILD_RAPIDSNARK: "0"
+          RAPIDSNARK_FORCE_REBUILD: "0"
+          RAPIDSNARK_BUILD_GMP: "0"
+          RAPIDSNARK_USE_ASM: "OFF"
+        run: |
+          chmod +x scripts/setup-nomos-circuits.sh
+          CIRCUITS_DIR="${RUNNER_TEMP}/nomos-circuits"
+          scripts/setup-nomos-circuits.sh v0.3.1 "$CIRCUITS_DIR"
+          echo "NOMOS_CIRCUITS=${CIRCUITS_DIR}" >> "$GITHUB_ENV"
       - name: Download KZG params for DA (raw)
         run: |
           mkdir -p "$(dirname "${NOMOS_KZGRS_PARAMS_PATH}")"
