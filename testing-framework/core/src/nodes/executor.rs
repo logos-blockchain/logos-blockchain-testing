@@ -146,8 +146,21 @@ impl Executor {
         let config_path = dir.path().join("executor.yaml");
         let file = std::fs::File::create(&config_path).unwrap();
 
-        // Ensure recovery directory exists so services that persist state do not fail.
-        let _ = std::fs::create_dir_all(dir.path().join("recovery"));
+        // Ensure recovery files/dirs exist so services that persist state do not fail
+        // on startup.
+        let recovery_dir = dir.path().join("recovery");
+        let _ = std::fs::create_dir_all(&recovery_dir);
+        let mempool_path = recovery_dir.join("mempool.json");
+        if !mempool_path.exists() {
+            let _ = std::fs::write(&mempool_path, "{}");
+        }
+        let blend_core_path = recovery_dir.join("blend").join("core.json");
+        if let Some(parent) = blend_core_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if !blend_core_path.exists() {
+            let _ = std::fs::write(&blend_core_path, "{}");
+        }
 
         if !*IS_DEBUG_TRACING {
             if let Ok(env_dir) = std::env::var("NOMOS_LOG_DIR") {
