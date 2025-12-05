@@ -28,6 +28,7 @@ pub static GLOBAL_PARAMS_PATH: LazyLock<String> = LazyLock::new(resolve_global_p
 fn canonicalize_params_path(mut path: PathBuf) -> PathBuf {
     if path.is_dir() {
         let candidates = [
+            path.join("kzgrs_test_params"),
             path.join("pol/proving_key.zkey"),
             path.join("proving_key.zkey"),
         ];
@@ -161,6 +162,17 @@ pub fn create_da_configs(
     da_params: &DaParams,
     ports: &[u16],
 ) -> Vec<GeneralDaConfig> {
+    // For tiny topologies (e.g. 1 validator + 1 executor) keep everyone in a single
+    // subnet so balancer readiness can be reached. For larger setups, honor the
+    // configured defaults.
+    let (effective_subnetwork_size, num_subnets) = if ids.len() <= 2 {
+        (1_usize, 1_u16)
+    } else {
+        (
+            da_params.subnetwork_size.max(ids.len().max(1)),
+            da_params.num_subnets,
+        )
+    };
     let mut node_keys = vec![];
     let mut peer_ids = vec![];
     let mut listening_addresses = vec![];
@@ -183,12 +195,12 @@ pub fn create_da_configs(
     let membership = {
         let template = NomosDaMembership::new(
             SessionNumber::default(),
-            da_params.subnetwork_size,
+            effective_subnetwork_size,
             da_params.dispersal_factor,
         );
         let mut assignations: HashMap<u16, HashSet<PeerId>> = HashMap::new();
         if peer_ids.is_empty() {
-            for id in 0..da_params.subnetwork_size {
+            for id in 0..effective_subnetwork_size {
                 assignations.insert(u16::try_from(id).unwrap_or_default(), HashSet::new());
             }
         } else {
@@ -196,7 +208,7 @@ pub fn create_da_configs(
             sorted_peers.sort_unstable();
             let dispersal = da_params.dispersal_factor.max(1);
             let mut peer_cycle = sorted_peers.iter().cycle();
-            for id in 0..da_params.subnetwork_size {
+            for id in 0..effective_subnetwork_size {
                 let mut members = HashSet::new();
                 for _ in 0..dispersal {
                     // cycle() only yields None when the iterator is empty, which we guard against.
@@ -245,7 +257,7 @@ pub fn create_da_configs(
                 verifier_sk: hex::encode(verifier_sk_bytes),
                 verifier_index: subnetwork_ids,
                 num_samples: da_params.num_samples,
-                num_subnets: da_params.num_subnets,
+                num_subnets,
                 old_blobs_check_interval: da_params.old_blobs_check_interval,
                 blobs_validity_duration: da_params.blobs_validity_duration,
                 policy_settings: da_params.policy_settings.clone(),
