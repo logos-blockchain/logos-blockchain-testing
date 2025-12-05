@@ -162,17 +162,9 @@ pub fn create_da_configs(
     da_params: &DaParams,
     ports: &[u16],
 ) -> Vec<GeneralDaConfig> {
-    // For tiny topologies (e.g. 1 validator + 1 executor) keep everyone in a single
-    // subnet so balancer readiness can be reached. For larger setups, honor the
-    // configured defaults.
-    let (effective_subnetwork_size, num_subnets) = if ids.len() <= 2 {
-        (1_usize, 1_u16)
-    } else {
-        (
-            da_params.subnetwork_size.max(ids.len().max(1)),
-            da_params.num_subnets,
-        )
-    };
+    // Let the subnetwork size track the participant count so tiny local topologies
+    // can form a membership.
+    let effective_subnetwork_size = da_params.subnetwork_size.max(ids.len().max(1));
     let mut node_keys = vec![];
     let mut peer_ids = vec![];
     let mut listening_addresses = vec![];
@@ -257,7 +249,7 @@ pub fn create_da_configs(
                 verifier_sk: hex::encode(verifier_sk_bytes),
                 verifier_index: subnetwork_ids,
                 num_samples: da_params.num_samples,
-                num_subnets,
+                num_subnets: da_params.num_subnets,
                 old_blobs_check_interval: da_params.old_blobs_check_interval,
                 blobs_validity_duration: da_params.blobs_validity_duration,
                 policy_settings: da_params.policy_settings.clone(),
