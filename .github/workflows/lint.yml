@@ -295,56 +295,6 @@ jobs:
       - name: Set compose target dir
         run: echo "CARGO_TARGET_DIR=${RUNNER_TEMP}/target-compose" >> "$GITHUB_ENV"
 
-      - name: Restore cached nomos binaries
-        id: restore-nomos-bins-compose
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
-      - name: Download nomos binaries artifact (fallback)
-        if: steps.restore-nomos-bins-compose.outputs.cache-hit != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.NOMOS_NODE_REV }}-${{ env.NOMOS_BUNDLE_VERSION }}
-        run: |
-          set -euo pipefail
-          artifact_id=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts" --paginate -F per_page=100 \
-            --jq '.artifacts[] | select(.name=="'"${ARTIFACT_NAME}"'") | .id' | head -n1)
-          if [ -z "$artifact_id" ]; then
-            echo "Nomos binaries cache missing and artifact not found. Run manual build-binaries workflow." >&2
-            exit 1
-          fi
-          gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${GITHUB_WORKSPACE}/artifact.zip"
-          unzip -o "${GITHUB_WORKSPACE}/artifact.zip" -d "${GITHUB_WORKSPACE}"
-      - name: Stage nomos binaries into build context
-        run: |
-          BIN_TAR="${GITHUB_WORKSPACE}/nomos-binaries.tar.gz"
-          BIN_DIR="${RUNNER_TEMP}/nomos-binaries"
-          mkdir -p "${BIN_DIR}"
-          tar -xzf "${BIN_TAR}" -C "${BIN_DIR}"
-          mkdir -p testing-framework/assets/stack/bin
-          cp "${BIN_DIR}/nomos-node" testing-framework/assets/stack/bin/
-          cp "${BIN_DIR}/nomos-executor" testing-framework/assets/stack/bin/
-          cp "${BIN_DIR}/nomos-cli" testing-framework/assets/stack/bin/
-          rm -rf testing-framework/assets/stack/kzgrs_test_params
-          mkdir -p testing-framework/assets/stack/kzgrs_test_params
-          if [ -d "${BIN_DIR}/circuits" ]; then
-            rsync -a --delete "${BIN_DIR}/circuits"/ testing-framework/assets/stack/kzgrs_test_params/ || true
-            echo "NOMOS_CIRCUITS=${BIN_DIR}/circuits" >> "$GITHUB_ENV"
-            echo "CIRCUITS_OVERRIDE=testing-framework/assets/stack/kzgrs_test_params" >> "$GITHUB_ENV"
-          else
-            echo "Circuits bundle missing in nomos-binaries tarball" >&2
-            exit 1
-          fi
-      - name: Add top-level KZG params file for compose mount
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/logos-co/nomos-node/${NOMOS_NODE_REV}/tests/kzgrs/kzgrs_test_params" \
-            -o testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
-
-      - name: Prune docker to free space
-        run: |
-          docker system prune -af --volumes || true
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
@@ -399,6 +349,8 @@ jobs:
           fi
           echo "NOMOS_CIRCUITS=$CIRCUITS_DIR" >> "$GITHUB_ENV"
           echo "CIRCUITS_OVERRIDE=testing-framework/assets/stack/kzgrs_test_params" >> "$GITHUB_ENV"
+          # Ensure we do not pick up incompatible host-built binaries
+          rm -rf testing-framework/assets/stack/bin
 
       - name: Build compose test image
         env:
