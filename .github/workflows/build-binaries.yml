@@ -60,6 +60,10 @@ jobs:
           git checkout "${NOMOS_NODE_REV}"
           git reset --hard
           git clean -fdx
+          # Align CI with the host build path: refresh dependency lock to latest compatible
+          # crates (we still pin flate2 below). This mirrors the local script that drops
+          # Cargo.lock before building.
+          cargo +nightly-2025-09-14 update
           # Work around flate2 1.1.6 ambiguity issues by pinning to a fixed release.
           cargo +nightly-2025-09-14 update -p flate2 --precise 1.1.5
           cargo +nightly-2025-09-14 build --all-features --bins
