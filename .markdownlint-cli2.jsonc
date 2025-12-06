@@ -5,6 +5,9 @@
     "MD060": false, // Table column style: relax spacing requirements.
     "MD031": false, // Blank lines around fenced code blocks: allow compact fences.
     "MD032": false, // Blank lines around lists: allow tight lists when desired.
-    "MD022": false  // Blank lines around headings: allow headings adjacent to text.
+    "MD022": false, // Blank lines around headings: allow headings adjacent to text.
+    "MD024": false, // Duplicate headings: allow repeated section titles.
+    "MD029": false, // Ordered list prefix consistency: allow mixed numbering.
+    "MD009": false  // Trailing spaces: allow intentional spacing.
   }
 }
