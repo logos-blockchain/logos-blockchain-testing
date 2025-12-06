@@ -138,7 +138,7 @@ RUN cp /workspace/target/debug/cfgsync-server /workspace/artifacts/cfgsync-serve
 # NODE IMAGE
 # ===========================
 
-FROM debian:bookworm-slim
+FROM ubuntu:24.04
 
 ARG VERSION
 
