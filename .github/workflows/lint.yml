@@ -374,6 +374,12 @@ jobs:
           NOMOS_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
         run: |
           mkdir -p "$TMPDIR"
+          # Pre-flight: ensure KZG params exist where compose will mount them.
+          if [ ! -f testing-framework/assets/stack/kzgrs_test_params/proving_key.zkey ]; then
+            echo "KZG params missing at testing-framework/assets/stack/kzgrs_test_params/proving_key.zkey" >&2
+            ls -l testing-framework/assets/stack/kzgrs_test_params || true
+            exit 1
+          fi
           cargo run -p runner-examples --bin compose_runner -- --nocapture
 
       - name: Collect compose logs
