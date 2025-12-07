@@ -525,12 +525,14 @@ fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
     let pol_mode = std::env::var("POL_PROOF_DEV_MODE").unwrap_or_else(|_| "true".to_string());
     let rust_log = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let nomos_log_level = std::env::var("NOMOS_LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+    let time_backend = std::env::var("NOMOS_TIME_BACKEND").unwrap_or_else(|_| "monotonic".into());
     let kzg_path = std::env::var("NOMOS_KZGRS_PARAMS_PATH")
         .unwrap_or_else(|_| String::from("/kzgrs_test_params/pol/proving_key.zkey"));
     vec![
         EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),
         EnvEntry::new("NOMOS_LOG_LEVEL", nomos_log_level),
+        EnvEntry::new("NOMOS_TIME_BACKEND", time_backend),
         EnvEntry::new("NOMOS_KZGRS_PARAMS_PATH", kzg_path),
         EnvEntry::new(
             "CFG_SERVER_ADDR",
