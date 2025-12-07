@@ -317,13 +317,6 @@ impl NodeDescriptor {
         cfgsync_port: u16,
     ) -> Self {
         let mut environment = base_environment(cfgsync_port);
-        if use_kzg_mount {
-            // Point DA verifier to the mounted KZG params inside the container.
-            environment.push(EnvEntry::new(
-                "NOMOS_KZGRS_PARAMS_PATH",
-                "/kzgrs_test_params",
-            ));
-        }
         let identifier = kind.instance_name(index);
         environment.extend([
             EnvEntry::new(
