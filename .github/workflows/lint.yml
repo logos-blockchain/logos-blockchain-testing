@@ -347,6 +347,11 @@ jobs:
             rm -rf testing-framework/assets/stack/kzgrs_test_params/*
             cp -a "$CIRCUITS_DIR"/. testing-framework/assets/stack/kzgrs_test_params/
           fi
+          # Backward compatibility: some images/tools still look for a top-level proving key.
+          if [ -f testing-framework/assets/stack/kzgrs_test_params/pol/proving_key.zkey ]; then
+            cp testing-framework/assets/stack/kzgrs_test_params/pol/proving_key.zkey \
+               testing-framework/assets/stack/kzgrs_test_params/proving_key.zkey
+          fi
           echo "NOMOS_CIRCUITS=$CIRCUITS_DIR" >> "$GITHUB_ENV"
           echo "CIRCUITS_OVERRIDE=testing-framework/assets/stack/kzgrs_test_params" >> "$GITHUB_ENV"
           # Ensure we do not pick up incompatible host-built binaries
