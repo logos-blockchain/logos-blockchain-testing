@@ -92,6 +92,11 @@ if [ ! -x "${HOST_BUNDLE_PATH}/zksign/witness_generator" ]; then
   echo "Host circuits missing zksign/witness_generator; repairing..."
   "${ROOT_DIR}/scripts/setup-circuits-stack.sh" "${VERSION}"
 fi
+KZG_HOST_PATH="${HOST_BUNDLE_PATH}/kzgrs_test_params"
+if [ ! -f "${KZG_HOST_PATH}" ]; then
+  echo "KZG params missing at ${KZG_HOST_PATH}; rebuilding circuits bundle"
+  "${ROOT_DIR}/scripts/setup-circuits-stack.sh" "${VERSION}"
+fi
 
 if [ "$MODE" != "local" ]; then
   if [ "${NOMOS_SKIP_IMAGE_BUILD:-0}" = "1" ]; then
@@ -108,10 +113,15 @@ fi
 
 echo "==> Running ${BIN} for ${RUN_SECS}s"
 cd "${ROOT_DIR}"
+if [ "$MODE" = "compose" ] || [ "$MODE" = "k8s" ]; then
+  KZG_PATH="/kzgrs_test_params/kzgrs_test_params"
+else
+  KZG_PATH="${KZG_HOST_PATH}"
+fi
 POL_PROOF_DEV_MODE=true \
 NOMOS_TESTNET_IMAGE="${IMAGE}" \
 NOMOS_CIRCUITS="${HOST_BUNDLE_PATH}" \
-NOMOS_KZGRS_PARAMS_PATH="${HOST_BUNDLE_PATH}/kzgrs_test_params" \
+NOMOS_KZGRS_PARAMS_PATH="${KZG_PATH}" \
 COMPOSE_DEMO_RUN_SECS="${RUN_SECS}" \
 LOCAL_DEMO_RUN_SECS="${RUN_SECS}" \
 K8S_DEMO_RUN_SECS="${RUN_SECS}" \

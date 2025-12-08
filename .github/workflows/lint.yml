@@ -263,45 +263,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install circuits for host build
-        env:
-          NOMOS_CIRCUITS_PLATFORM: linux-x86_64
-          NOMOS_CIRCUITS_REBUILD_RAPIDSNARK: "0"
-          RAPIDSNARK_FORCE_REBUILD: "0"
-          RAPIDSNARK_BUILD_GMP: "0"
-          RAPIDSNARK_USE_ASM: "OFF"
-        run: |
-          CIRCUITS_DIR="${NOMOS_CIRCUITS}"
-          chmod +x scripts/setup-nomos-circuits.sh
-          scripts/setup-nomos-circuits.sh v0.3.1 "$CIRCUITS_DIR"
-          # Copy into build context so Docker doesn't need network
-          rm -rf testing-framework/assets/stack/kzgrs_test_params
-          mkdir -p testing-framework/assets/stack/kzgrs_test_params
-          if command -v rsync >/dev/null 2>&1; then
-            rsync -a --delete "$CIRCUITS_DIR"/ testing-framework/assets/stack/kzgrs_test_params/
-          else
-            rm -rf testing-framework/assets/stack/kzgrs_test_params/*
-            cp -a "$CIRCUITS_DIR"/. testing-framework/assets/stack/kzgrs_test_params/
-          fi
-          # Backward compatibility: some images/tools still look for a top-level proving key.
-          if [ -f testing-framework/assets/stack/kzgrs_test_params/pol/proving_key.zkey ]; then
-            cp testing-framework/assets/stack/kzgrs_test_params/pol/proving_key.zkey \
-               testing-framework/assets/stack/kzgrs_test_params/proving_key.zkey
-          fi
-          echo "NOMOS_CIRCUITS=$CIRCUITS_DIR" >> "$GITHUB_ENV"
-          echo "CIRCUITS_OVERRIDE=testing-framework/assets/stack/kzgrs_test_params" >> "$GITHUB_ENV"
-          # Ensure we do not pick up incompatible host-built binaries
-          rm -rf testing-framework/assets/stack/bin
-
-      - name: Build compose test image
-        env:
-          DOCKER_CLI_HINTS: "false"
-          IMAGE_TAG: ${{ env.NOMOS_TESTNET_IMAGE }}
-          CIRCUITS_OVERRIDE: ${{ env.CIRCUITS_OVERRIDE }}
-        run: |
-          chmod +x testing-framework/assets/stack/scripts/build_test_image.sh
-          testing-framework/assets/stack/scripts/build_test_image.sh
-
       - name: Run compose mixed workload binary
         env:
           POL_PROOF_DEV_MODE: "true"
@@ -317,13 +278,6 @@ jobs:
           NOMOS_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
         run: |
           mkdir -p "$TMPDIR"
-          # Pre-flight: ensure KZG params exist where compose will mount them.
-          KZG_FILE=testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
-          if [ ! -f "$KZG_FILE" ]; then
-            echo "KZG params missing at $KZG_FILE" >&2
-            ls -l testing-framework/assets/stack/kzgrs_test_params || true
-            exit 1
-          fi
           scripts/run-demo.sh compose 60
 
       - name: Collect compose logs
