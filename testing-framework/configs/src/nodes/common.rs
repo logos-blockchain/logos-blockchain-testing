@@ -33,7 +33,7 @@ use nomos_node::{
 use nomos_utils::math::NonNegativeF64;
 use nomos_wallet::WalletServiceSettings;
 
-use crate::topology::configs::GeneralConfig;
+use crate::{timeouts, topology::configs::GeneralConfig};
 
 pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeploymentSettings {
     CryptarchiaDeploymentSettings {
@@ -77,7 +77,7 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
                 prolonged_bootstrap_period: config.bootstrapping_config.prolonged_bootstrap_period,
                 force_bootstrap: false,
                 offline_grace_period: chain_service::OfflineGracePeriodConfig {
-                    grace_period: Duration::from_secs(20 * 60),
+                    grace_period: timeouts::grace_period(),
                     state_recording_interval: Duration::from_secs(60),
                 },
             },
@@ -128,9 +128,9 @@ pub(crate) fn da_verifier_config(
         },
         mempool_trigger_settings: MempoolPublishTriggerConfig {
             publish_threshold: NonNegativeF64::try_from(0.8).unwrap(),
-            share_duration: Duration::from_secs(5),
-            prune_duration: Duration::from_secs(30),
-            prune_interval: Duration::from_secs(5),
+            share_duration: timeouts::share_duration(),
+            prune_duration: timeouts::prune_duration(),
+            prune_interval: timeouts::prune_interval(),
         },
     }
 }
@@ -149,8 +149,8 @@ pub(crate) fn da_sampling_config(
             global_params_path: kzg_params_path(&config.da_config.global_params_path),
             domain_size: config.da_config.num_subnets as usize,
         },
-        commitments_wait_duration: Duration::from_secs(1),
-        sdp_blob_trigger_sampling_delay: crate::adjust_timeout(Duration::from_secs(5)),
+        commitments_wait_duration: timeouts::commitments_wait(),
+        sdp_blob_trigger_sampling_delay: crate::adjust_timeout(timeouts::sdp_trigger_delay()),
     }
 }
 

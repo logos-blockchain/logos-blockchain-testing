@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use nomos_da_dispersal::{
     DispersalServiceSettings,
     backend::kzgrs::{DispersalKZGRSBackendSettings, EncoderSettings},
@@ -25,6 +23,7 @@ use crate::{
             time_deployment, tracing_settings, wallet_settings,
         },
     },
+    timeouts,
     topology::configs::GeneralConfig,
 };
 
@@ -90,8 +89,8 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
                     with_cache: false,
                     global_params_path: config.da_config.global_params_path.clone(),
                 },
-                dispersal_timeout: Duration::from_secs(20),
-                retry_cooldown: Duration::from_secs(3),
+                dispersal_timeout: timeouts::dispersal_timeout(),
+                retry_cooldown: timeouts::retry_cooldown(),
                 retry_limit: 2,
             },
         },

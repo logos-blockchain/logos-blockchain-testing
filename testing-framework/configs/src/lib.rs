@@ -4,6 +4,7 @@ use nomos_core::sdp::ProviderId;
 use nomos_libp2p::{Multiaddr, PeerId, multiaddr};
 
 pub mod nodes;
+pub mod timeouts;
 pub mod topology;
 
 static IS_SLOW_TEST_ENV: LazyLock<bool> =

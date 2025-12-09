@@ -1,6 +1,7 @@
 # Troubleshooting Scenarios
 
 **Prerequisites for All Runners:**
+- **`versions.env` file** at repository root (required by helper scripts)
 - **`POL_PROOF_DEV_MODE=true`** MUST be set for all runners (host, compose, k8s) to avoid expensive Groth16 proof generation that causes timeouts
 - **KZG circuit assets** must be present at `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note the repeated filename) for DA workloads
 
@@ -183,6 +184,7 @@ Focus on the first node that exhibited problems or the node with the highest ind
 
 **Common error patterns:**
 
+- "ERROR: versions.env missing" → missing required `versions.env` file at repository root
 - "Failed to bind address" → port conflict
 - "Connection refused" → peer not ready or network issue
 - "Proof verification failed" or "Proof generation timeout" → missing `POL_PROOF_DEV_MODE=true` (REQUIRED for all runners)
@@ -257,6 +259,17 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
   2. Check node logs for startup errors (port conflicts, missing assets).
   3. Verify network connectivity between nodes.
   4. For DA workloads, ensure KZG circuit assets are present.
+
+### "ERROR: versions.env missing"
+
+- **Cause**: Helper scripts (`run-examples.sh`, `build-bundle.sh`, `setup-circuits-stack.sh`) require `versions.env` file at repository root.
+- **Fix**: Ensure you're running from the repository root directory. The `versions.env` file should already exist and contains:
+  ```
+  VERSION=v0.3.1
+  NOMOS_NODE_REV=d2dd5a5084e1daef4032562c77d41de5e4d495f8
+  NOMOS_BUNDLE_VERSION=v4
+  ```
+  If the file is missing, restore it from version control or create it with the above content.
 
 ### "Port already in use"
 

@@ -3,9 +3,11 @@
 Operational readiness focuses on prerequisites, environment fit, and clear
 signals:
 
-- **Prerequisites**: keep a sibling `nomos-node` checkout available; ensure the
-  chosen runner’s platform needs are met (local binaries for host runs, Docker
-  for compose, cluster access for k8s).
+- **Prerequisites**: 
+  - **`versions.env` file** at repository root (required by helper scripts; defines VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION)
+  - Keep a sibling `nomos-node` checkout available, or use `scripts/run-examples.sh` which clones/builds on demand
+  - Ensure the chosen runner's platform needs are met (Docker for compose, cluster access for k8s)
+  - CI uses prebuilt binary artifacts from the `build-binaries` workflow
 - **Artifacts**: DA scenarios require KZG parameters (circuit assets) located at
   `testing-framework/assets/stack/kzgrs_test_params`. Fetch them via
   `scripts/setup-nomos-circuits.sh` or override the path with `NOMOS_KZGRS_PARAMS_PATH`.

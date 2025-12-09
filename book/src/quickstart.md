@@ -8,8 +8,11 @@ Get a working example running quickly.
 - This repository cloned
 - Unix-like system (tested on Linux and macOS)
 - For Docker Compose examples: Docker daemon running
+- **`versions.env` file** at repository root (defines VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION)
 
 **Note:** `nomos-node` binaries are built automatically on demand or can be provided via prebuilt bundles.
+
+**Important:** The `versions.env` file is required by helper scripts. If missing, the scripts will fail with an error. The file should already exist in the repository root.
 
 ## Your First Test
 
