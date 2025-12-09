@@ -10,10 +10,15 @@ if [ -f "${ROOT_DIR}/versions.env" ]; then
   # shellcheck disable=SC1091
   . "${ROOT_DIR}/versions.env"
 fi
+if [ -f "${ROOT_DIR}/paths.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/paths.env"
+fi
 DOCKERFILE_PATH="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile"
 IMAGE_TAG="${IMAGE_TAG:-nomos-testnet:local}"
 VERSION="${VERSION:-v0.3.1}"
-CIRCUITS_OVERRIDE="${CIRCUITS_OVERRIDE:-testing-framework/assets/stack/kzgrs_test_params}"
+KZG_DIR_REL="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
+CIRCUITS_OVERRIDE="${CIRCUITS_OVERRIDE:-${KZG_DIR_REL}}"
 NOMOS_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
 
 echo "Workspace root: ${ROOT_DIR}"

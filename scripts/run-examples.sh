@@ -58,8 +58,19 @@ if [ -f "${ROOT_DIR}/versions.env" ]; then
   # shellcheck disable=SC1091
   . "${ROOT_DIR}/versions.env"
 fi
+if [ -f "${ROOT_DIR}/paths.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/paths.env"
+fi
 readonly DEFAULT_VERSION="${VERSION:-v0.3.1}"
 readonly DEFAULT_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
+readonly KZG_DIR_REL="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
+readonly KZG_FILE="${NOMOS_KZG_FILE:-kzgrs_test_params}"
+readonly KZG_CONTAINER_PATH="${NOMOS_KZG_CONTAINER_PATH:-/kzgrs_test_params/kzgrs_test_params}"
+readonly HOST_KZG_DIR="${ROOT_DIR}/${KZG_DIR_REL}"
+readonly HOST_KZG_FILE="${HOST_KZG_DIR}/${KZG_FILE}"
+readonly HOST_CIRCUITS_DIR="${ROOT_DIR}/${NOMOS_CIRCUITS_HOST_DIR_REL:-.tmp/nomos-circuits-host}"
+readonly LINUX_CIRCUITS_DIR="${ROOT_DIR}/${NOMOS_CIRCUITS_LINUX_DIR_REL:-.tmp/nomos-circuits-linux}"
 MODE="compose"
 RUN_SECS_RAW=""
 VERSION="${VERSION:-${DEFAULT_VERSION}}"
@@ -147,7 +158,7 @@ restore_binaries_from_tar() {
   local src="${extract_dir}/artifacts"
   local bin_dst="${ROOT_DIR}/testing-framework/assets/stack/bin"
   local circuits_src="${src}/circuits"
-  local circuits_dst="${ROOT_DIR}/testing-framework/assets/stack/kzgrs_test_params"
+  local circuits_dst="${HOST_KZG_DIR}"
   if [ -f "${src}/nomos-node" ] && [ -f "${src}/nomos-executor" ] && [ -f "${src}/nomos-cli" ]; then
     mkdir -p "${bin_dst}"
     cp "${src}/nomos-node" "${src}/nomos-executor" "${src}/nomos-cli" "${bin_dst}/"
@@ -155,7 +166,7 @@ restore_binaries_from_tar() {
     echo "Binaries missing in ${tar_path}; fallback to build-from-source path (run build-binaries workflow to populate)" >&2
     return 1
   fi
-  if [ -d "${circuits_src}" ] && [ -f "${circuits_src}/kzgrs_test_params" ]; then
+  if [ -d "${circuits_src}" ] && [ -f "${circuits_src}/${KZG_FILE}" ]; then
     rm -rf "${circuits_dst}"
     mkdir -p "${circuits_dst}"
     if command -v rsync >/dev/null 2>&1; then
@@ -268,12 +279,12 @@ fi
 
 # Prefer host-native bundle for host tooling when available; otherwise fall back
 # to the restored circuits location.
-if [ "$(uname -s)" != "Linux" ] && [ -d "${ROOT_DIR}/.tmp/nomos-circuits-host" ]; then
-  HOST_BUNDLE_PATH="${ROOT_DIR}/.tmp/nomos-circuits-host"
+if [ "$(uname -s)" != "Linux" ] && [ -d "${HOST_CIRCUITS_DIR}" ]; then
+  HOST_BUNDLE_PATH="${HOST_CIRCUITS_DIR}"
 elif [ "${RESTORED_BINARIES}" -eq 1 ]; then
-  HOST_BUNDLE_PATH="${ROOT_DIR}/testing-framework/assets/stack/kzgrs_test_params"
+  HOST_BUNDLE_PATH="${HOST_KZG_DIR}"
 else
-  HOST_BUNDLE_PATH="${ROOT_DIR}/testing-framework/assets/stack/kzgrs_test_params"
+  HOST_BUNDLE_PATH="${HOST_KZG_DIR}"
 fi
 
 # If the host bundle was somehow pruned, repair it once more.
@@ -281,7 +292,7 @@ if [ ! -x "${HOST_BUNDLE_PATH}/zksign/witness_generator" ]; then
   echo "Host circuits missing zksign/witness_generator; repairing..."
   "${ROOT_DIR}/scripts/setup-circuits-stack.sh" "${VERSION}"
 fi
-KZG_HOST_PATH="${HOST_BUNDLE_PATH}/kzgrs_test_params"
+KZG_HOST_PATH="${HOST_BUNDLE_PATH}/${KZG_FILE}"
 if [ ! -f "${KZG_HOST_PATH}" ]; then
   echo "KZG params missing at ${KZG_HOST_PATH}; rebuilding circuits bundle"
   "${ROOT_DIR}/scripts/setup-circuits-stack.sh" "${VERSION}"
@@ -320,7 +331,7 @@ fi
 echo "==> Running ${BIN} for ${RUN_SECS}s"
 cd "${ROOT_DIR}"
 if [ "$MODE" = "compose" ] || [ "$MODE" = "k8s" ]; then
-  KZG_PATH="/kzgrs_test_params/kzgrs_test_params"
+  KZG_PATH="${KZG_CONTAINER_PATH}"
 else
   KZG_PATH="${KZG_HOST_PATH}"
 fi

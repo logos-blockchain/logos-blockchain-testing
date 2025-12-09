@@ -21,9 +21,16 @@ if [ -f "${ROOT_DIR}/versions.env" ]; then
   # shellcheck disable=SC1091
   . "${ROOT_DIR}/versions.env"
 fi
+if [ -f "${ROOT_DIR}/paths.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/paths.env"
+fi
+KZG_DIR_REL="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
+KZG_FILE="${NOMOS_KZG_FILE:-kzgrs_test_params}"
+HOST_DIR_REL_DEFAULT="${NOMOS_CIRCUITS_HOST_DIR_REL:-.tmp/nomos-circuits-host}"
 VERSION="${1:-${VERSION:-v0.3.1}}"
-STACK_DIR="${STACK_DIR:-${ROOT_DIR}/testing-framework/assets/stack/kzgrs_test_params}"
-HOST_DIR="${HOST_DIR:-${ROOT_DIR}/.tmp/nomos-circuits-host}"
+STACK_DIR="${STACK_DIR:-${ROOT_DIR}/${KZG_DIR_REL}}"
+HOST_DIR="${HOST_DIR:-${ROOT_DIR}/${HOST_DIR_REL_DEFAULT}}"
 NOMOS_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
 
 detect_platform() {
@@ -59,7 +66,7 @@ fetch_bundle() {
 
 fetch_kzg_params() {
   local dest_dir="$1"
-  local dest_file="${dest_dir}/kzgrs_test_params"
+  local dest_file="${dest_dir}/${KZG_FILE}"
   local url="https://raw.githubusercontent.com/logos-co/nomos-node/${NOMOS_NODE_REV}/tests/kzgrs/kzgrs_test_params"
 
   echo "Fetching KZG parameters from ${url}"

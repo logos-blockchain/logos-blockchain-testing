@@ -5,6 +5,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -f "${ROOT_DIR}/paths.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/paths.env"
+fi
 NOMOS_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
 NOMOS_CIRCUITS_VERSION="${NOMOS_CIRCUITS_VERSION:-v0.3.1}"
 NOMOS_BIN_PLATFORM="${NOMOS_BIN_PLATFORM:-linux/amd64}"
@@ -20,7 +24,8 @@ echo "Nomos node rev: ${NOMOS_NODE_REV}"
 echo "Circuits version: ${NOMOS_CIRCUITS_VERSION}"
 
 BIN_OUT="${ROOT_DIR}/testing-framework/assets/stack/bin"
-CIRCUITS_OUT="${ROOT_DIR}/testing-framework/assets/stack/kzgrs_test_params"
+KZG_DIR_REL="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
+CIRCUITS_OUT="${ROOT_DIR}/${KZG_DIR_REL}"
 SRC_DIR="${ROOT_DIR}/.tmp/nomos-node-src"
 CIRCUITS_DIR="${ROOT_DIR}/.tmp/nomos-circuits"
 
