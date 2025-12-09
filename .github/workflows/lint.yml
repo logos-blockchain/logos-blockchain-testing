@@ -130,7 +130,7 @@ jobs:
         run: cargo +nightly-2025-09-14 install --git https://github.com/bnjbvr/cargo-machete --locked cargo-machete
       - run: cargo machete
 
-  local_smoke:
+  host_smoke:
     runs-on: ubuntu-latest
     env:
       VERSION: v0.3.1
@@ -223,7 +223,7 @@ jobs:
           NOMOS_LOG_DIR: "${{ runner.temp }}/local-logs"
         run: |
           scripts/run-examples.sh -t 60 -v 1 -e 1 host
-      - name: Collect local demo logs (on failure)
+      - name: Collect host demo logs (on failure)
         if: failure()
         run: |
           if [ -d "${NOMOS_LOG_DIR}" ]; then
@@ -233,21 +233,21 @@ jobs:
           else
             echo "No local logs directory at ${NOMOS_LOG_DIR}"
           fi
-      - name: Upload local smoke logs
+      - name: Upload host smoke logs
         if: failure()
         id: upload-local-logs
         uses: actions/upload-artifact@v4
         with:
-          name: local-smoke-logs
+          name: host-smoke-logs
           path: ${{ runner.temp }}/local-logs.tgz
           if-no-files-found: error
-      - name: Print local smoke logs download URL
+      - name: Print host smoke logs download URL
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
-            --jq '.artifacts[] | select(.name=="local-smoke-logs") | "local-smoke-logs: \(.archive_download_url)"' || true
+            --jq '.artifacts[] | select(.name=="host-smoke-logs") | "host-smoke-logs: \(.archive_download_url)"' || true
 
   compose_smoke:
     runs-on: ubuntu-latest
@@ -434,7 +434,7 @@ jobs:
       - name: Markdown lint
         run: npx -y markdownlint-cli2 "book/src/**/*.md"
       - name: Build book
-        run: mdbook build book
+        run: mdbook build book -d target/book
       - name: Add .nojekyll
         run: touch target/book/.nojekyll
       - name: Check links

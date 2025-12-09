@@ -320,6 +320,17 @@ if [ "$MODE" = "compose" ] || [ "$MODE" = "k8s" ]; then
 else
   KZG_PATH="${KZG_HOST_PATH}"
 fi
+
+# Ensure compose image pulls circuits for the host architecture by default.
+if [ "$MODE" = "compose" ] && [ -z "${COMPOSE_CIRCUITS_PLATFORM:-}" ]; then
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64) COMPOSE_CIRCUITS_PLATFORM="linux-x86_64" ;;
+    arm64|aarch64) COMPOSE_CIRCUITS_PLATFORM="linux-aarch64" ;;
+    *) COMPOSE_CIRCUITS_PLATFORM="linux-x86_64" ;;
+  esac
+fi
+
 if [ -n "${DEMO_VALIDATORS}" ]; then
   export NOMOS_DEMO_VALIDATORS="${DEMO_VALIDATORS}"
 fi
@@ -335,4 +346,5 @@ LOCAL_DEMO_RUN_SECS="${RUN_SECS}" \
 K8S_DEMO_RUN_SECS="${RUN_SECS}" \
 NOMOS_NODE_BIN="${NOMOS_NODE_BIN:-}" \
 NOMOS_EXECUTOR_BIN="${NOMOS_EXECUTOR_BIN:-}" \
+COMPOSE_CIRCUITS_PLATFORM="${COMPOSE_CIRCUITS_PLATFORM:-}" \
   cargo run -p runner-examples --bin "${BIN}"
