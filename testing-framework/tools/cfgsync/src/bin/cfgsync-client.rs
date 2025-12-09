@@ -15,6 +15,7 @@ use nomos_libp2p::PeerId;
 use nomos_node::Config as ValidatorConfig;
 use serde::{Serialize, de::DeserializeOwned};
 use subnetworks_assignations::{MembershipCreator, MembershipHandler, SubnetworkId};
+use testing_framework_core::constants::cfgsync_port as default_cfgsync_port;
 
 fn parse_ip(ip_str: &str) -> Ipv4Addr {
     ip_str.parse().unwrap_or_else(|_| {
@@ -83,8 +84,8 @@ where
 #[tokio::main]
 async fn main() {
     let config_file_path = env::var("CFG_FILE_PATH").unwrap_or_else(|_| "config.yaml".to_owned());
-    let server_addr =
-        env::var("CFG_SERVER_ADDR").unwrap_or_else(|_| "http://127.0.0.1:4400".to_owned());
+    let server_addr = env::var("CFG_SERVER_ADDR")
+        .unwrap_or_else(|_| format!("http://127.0.0.1:{}", default_cfgsync_port()));
     let ip = parse_ip(&env::var("CFG_HOST_IP").unwrap_or_else(|_| "127.0.0.1".to_owned()));
     let identifier =
         env::var("CFG_HOST_IDENTIFIER").unwrap_or_else(|_| "unidentified-node".to_owned());

@@ -7,7 +7,10 @@ use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::topology::{GeneratedTopology, configs::wallet::WalletConfig};
+use crate::{
+    constants::kzg_container_path,
+    topology::{GeneratedTopology, configs::wallet::WalletConfig},
+};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +95,7 @@ pub fn apply_topology_overrides(
     cfg.global_params_path = if use_kzg_mount {
         // Compose mounts the bundle at /kzgrs_test_params; the proving key lives under
         // pol/.
-        "/kzgrs_test_params/kzgrs_test_params".into()
+        kzg_container_path()
     } else {
         da.global_params_path.clone()
     };

@@ -34,5 +34,6 @@ serde_with                    = { workspace = true }
 serde_yaml                    = "0.9"
 subnetworks-assignations      = { workspace = true }
 testing-framework-config      = { workspace = true }
+testing-framework-core        = { path = "../../core" }
 tokio                         = { default-features = false, features = ["macros", "net", "rt-multi-thread"], version = "1" }
 tracing                       = { workspace = true }

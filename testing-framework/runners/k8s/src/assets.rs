@@ -8,6 +8,7 @@ use anyhow::{Context as _, Result as AnyResult};
 use serde::Serialize;
 use tempfile::TempDir;
 use testing_framework_core::{
+    constants::cfgsync_port,
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, render_cfgsync_yaml},
     topology::GeneratedTopology,
 };
@@ -27,7 +28,9 @@ pub struct RunnerAssets {
     _tempdir: TempDir,
 }
 
-pub const CFGSYNC_PORT: u16 = 4400;
+pub fn cfgsync_port_value() -> u16 {
+    cfgsync_port()
+}
 
 #[derive(Debug, Error)]
 /// Failures preparing Helm assets and rendered cfgsync configuration.

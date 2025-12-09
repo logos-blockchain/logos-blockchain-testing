@@ -3,7 +3,7 @@ use std::{io, process::Stdio};
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::assets::{CFGSYNC_PORT, RunnerAssets, workspace_root};
+use crate::assets::{RunnerAssets, cfgsync_port_value, workspace_root};
 
 /// Errors returned from Helm invocations.
 #[derive(Debug, Error)]
@@ -54,7 +54,7 @@ pub async fn install_release(
         .arg("--set")
         .arg(format!("executors.count={executors}"))
         .arg("--set")
-        .arg(format!("cfgsync.port={CFGSYNC_PORT}"))
+        .arg(format!("cfgsync.port={}", cfgsync_port_value()))
         .arg("--set")
         .arg(format!("kzg.hostPath={}", assets.kzg_path.display()))
         .arg("--set")

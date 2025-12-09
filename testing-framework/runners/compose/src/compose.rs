@@ -10,6 +10,7 @@ use serde::Serialize;
 use tera::Context as TeraContext;
 use testing_framework_core::{
     adjust_timeout,
+    constants::{DEFAULT_CFGSYNC_PORT, kzg_container_path},
     topology::{GeneratedNodeConfig, GeneratedTopology},
 };
 use tokio::{process::Command, time::timeout};
@@ -115,8 +116,6 @@ pub enum TemplateError {
 /// Errors building a compose descriptor from the topology.
 #[derive(Debug, thiserror::Error)]
 pub enum DescriptorBuildError {
-    #[error("cfgsync port is not configured for compose descriptor")]
-    MissingCfgsyncPort,
     #[error("prometheus port is not configured for compose descriptor")]
     MissingPrometheusPort,
 }
@@ -189,9 +188,7 @@ impl<'a> ComposeDescriptorBuilder<'a> {
 
     /// Finish building the descriptor, erroring if required fields are missing.
     pub fn build(self) -> Result<ComposeDescriptor, DescriptorBuildError> {
-        let cfgsync_port = self
-            .cfgsync_port
-            .ok_or(DescriptorBuildError::MissingCfgsyncPort)?;
+        let cfgsync_port = self.cfgsync_port.unwrap_or(DEFAULT_CFGSYNC_PORT);
         let prometheus_host_port = self
             .prometheus_port
             .ok_or(DescriptorBuildError::MissingPrometheusPort)?;
@@ -526,8 +523,8 @@ fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
     let rust_log = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     let nomos_log_level = std::env::var("NOMOS_LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
     let time_backend = std::env::var("NOMOS_TIME_BACKEND").unwrap_or_else(|_| "monotonic".into());
-    let kzg_path = std::env::var("NOMOS_KZGRS_PARAMS_PATH")
-        .unwrap_or_else(|_| String::from("/kzgrs_test_params/kzgrs_test_params"));
+    let kzg_path =
+        std::env::var("NOMOS_KZGRS_PARAMS_PATH").unwrap_or_else(|_| kzg_container_path());
     vec![
         EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),
@@ -622,7 +619,7 @@ mod tests {
     fn descriptor_matches_topology_counts() {
         let topology = TopologyBuilder::new(TopologyConfig::with_node_numbers(2, 1)).build();
         let descriptor = ComposeDescriptor::builder(&topology)
-            .with_cfgsync_port(4400)
+            .with_cfgsync_port(DEFAULT_CFGSYNC_PORT)
             .with_prometheus_port(9090)
             .build()
             .expect("descriptor");
