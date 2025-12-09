@@ -66,6 +66,8 @@ if [ "$PLATFORM" = "linux" ] && [ "$(uname -s)" != "Linux" ] && [ -z "${BUNDLE_I
     -e VERSION="$VERSION" \
     -e NOMOS_NODE_REV="$NOMOS_NODE_REV" \
     -e NOMOS_CIRCUITS="/workspace/.tmp/nomos-circuits-linux" \
+    -e STACK_DIR="/workspace/.tmp/nomos-circuits-linux" \
+    -e HOST_DIR="/workspace/.tmp/nomos-circuits-linux" \
     -e BUNDLE_IN_CONTAINER=1 \
     -e CARGO_HOME=/workspace/.tmp/cargo-linux \
     -e CARGO_TARGET_DIR=/workspace/.tmp/nomos-node-linux-target \
@@ -90,7 +92,8 @@ else
 fi
 export NOMOS_CIRCUITS="${CIRCUITS_DIR}"
 mkdir -p "${ROOT_DIR}/.tmp" "${CIRCUITS_DIR}"
-"${ROOT_DIR}/scripts/setup-circuits-stack.sh" "${VERSION}" </dev/null
+STACK_DIR="${CIRCUITS_DIR}" HOST_DIR="${CIRCUITS_DIR}" \
+  "${ROOT_DIR}/scripts/setup-circuits-stack.sh" "${VERSION}" </dev/null
 
 NODE_BIN="${NODE_TARGET}/debug/nomos-node"
 EXEC_BIN="${NODE_TARGET}/debug/nomos-executor"
