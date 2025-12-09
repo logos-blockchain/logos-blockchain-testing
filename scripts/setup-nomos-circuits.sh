@@ -21,6 +21,7 @@ DEFAULT_INSTALL_DIR="$HOME/.nomos-circuits"
 INSTALL_DIR="${2:-$DEFAULT_INSTALL_DIR}"
 REPO="logos-co/nomos-circuits"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NONINTERACTIVE="${NOMOS_CIRCUITS_NONINTERACTIVE:-0}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -81,7 +82,7 @@ check_existing_installation() {
         fi
 
         # In non-interactive environments (CI), automatically overwrite
-        if [ ! -t 0 ]; then
+        if [ "$NONINTERACTIVE" = "1" ] || [ ! -t 0 ]; then
             print_info "Non-interactive environment detected, automatically overwriting..."
         else
             # Interactive environment - ask for confirmation

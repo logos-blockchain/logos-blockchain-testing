@@ -28,10 +28,16 @@ fi
 KZG_DIR_REL="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
 KZG_FILE="${NOMOS_KZG_FILE:-kzgrs_test_params}"
 HOST_DIR_REL_DEFAULT="${NOMOS_CIRCUITS_HOST_DIR_REL:-.tmp/nomos-circuits-host}"
+LINUX_DIR_REL_DEFAULT="${NOMOS_CIRCUITS_LINUX_DIR_REL:-.tmp/nomos-circuits-linux}"
+LINUX_STAGE_DIR="${LINUX_STAGE_DIR:-${ROOT_DIR}/${LINUX_DIR_REL_DEFAULT}}"
+HOST_DIR_REL_DEFAULT="${NOMOS_CIRCUITS_HOST_DIR_REL:-.tmp/nomos-circuits-host}"
 VERSION="${1:-${VERSION:-v0.3.1}}"
 STACK_DIR="${STACK_DIR:-${ROOT_DIR}/${KZG_DIR_REL}}"
 HOST_DIR="${HOST_DIR:-${ROOT_DIR}/${HOST_DIR_REL_DEFAULT}}"
 NOMOS_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
+
+# Force non-interactive installs so repeated runs do not prompt.
+export NOMOS_CIRCUITS_NONINTERACTIVE=1
 
 detect_platform() {
   local os arch
@@ -79,12 +85,12 @@ echo "Workspace: ${ROOT_DIR}"
 LINUX_PLATFORM="linux-x86_64"
 
 echo "Installing Linux bundle for Docker image into ${STACK_DIR}"
-tmp_linux="$(mktemp -d)"
-fetch_bundle "$LINUX_PLATFORM" "$tmp_linux" 0
+rm -rf "${LINUX_STAGE_DIR}"
+mkdir -p "${LINUX_STAGE_DIR}"
+fetch_bundle "$LINUX_PLATFORM" "${LINUX_STAGE_DIR}" 0
 rm -rf "$STACK_DIR"
 mkdir -p "$STACK_DIR"
-cp -R "${tmp_linux}/." "$STACK_DIR/"
-rm -rf "$tmp_linux"
+cp -R "${LINUX_STAGE_DIR}/." "$STACK_DIR/"
 fetch_kzg_params "$STACK_DIR"
 echo "Linux bundle ready at ${STACK_DIR}"
 
