@@ -116,8 +116,22 @@ if [ -z "${DEMO_VALIDATORS}" ] || [ -z "${DEMO_EXECUTORS}" ]; then
   fail_with_usage "validators and executors must be provided via -v/--validators and -e/--executors"
 fi
 
+default_tar_path() {
+  # Pick a sensible default tarball based on mode and version.
+  if [ -n "${NOMOS_BINARIES_TAR:-}" ]; then
+    echo "${NOMOS_BINARIES_TAR}"
+    return
+  fi
+  case "$MODE" in
+    host) echo "${ROOT_DIR}/.tmp/nomos-binaries-host-${VERSION}.tar.gz" ;;
+    compose|k8s) echo "${ROOT_DIR}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz" ;;
+    *) echo "${ROOT_DIR}/.tmp/nomos-binaries-${VERSION}.tar.gz" ;;
+  esac
+}
+
 restore_binaries_from_tar() {
-  local tar_path="${NOMOS_BINARIES_TAR:-${ROOT_DIR}/.tmp/nomos-binaries.tar.gz}"
+  local tar_path
+  tar_path="$(default_tar_path)"
   local extract_dir="${ROOT_DIR}/.tmp/nomos-binaries"
   if [ ! -f "$tar_path" ]; then
     return 1
