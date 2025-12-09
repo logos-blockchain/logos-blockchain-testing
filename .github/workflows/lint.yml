@@ -133,6 +133,7 @@ jobs:
   local_smoke:
     runs-on: ubuntu-latest
     env:
+      VERSION: v0.3.1
       POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
       LOCAL_DEMO_VALIDATORS: 1
@@ -202,12 +203,24 @@ jobs:
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${TMPDIR}/nomos-binaries.zip"
           unzip -o "${TMPDIR}/nomos-binaries.zip" -d "${TMPDIR}"
           mv "${TMPDIR}/nomos-binaries.tar.gz" "${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
+      - name: Normalize host bundle path
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp
+          SRC="${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
+          DEST="${GITHUB_WORKSPACE}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
+          if [ -f "${SRC}" ]; then
+            mv "${SRC}" "${DEST}"
+            echo "NOMOS_BINARIES_TAR=${DEST}" >> "$GITHUB_ENV"
+          else
+            echo "Expected ${SRC} not found" >&2
+            exit 1
+          fi
       - name: Run host demo (scripted)
         env:
           NOMOS_TESTS_KEEP_LOGS: "true"
           RUST_LOG: "info"
           NOMOS_LOG_DIR: "${{ runner.temp }}/local-logs"
-          NOMOS_BINARIES_TAR: "${{ github.workspace }}/.tmp/nomos-binaries.tar.gz"
         run: |
           scripts/run-examples.sh -t 60 -v 1 -e 1 host
       - name: Collect local demo logs (on failure)
@@ -239,6 +252,7 @@ jobs:
   compose_smoke:
     runs-on: ubuntu-latest
     env:
+      VERSION: v0.3.1
       TMPDIR: ${{ github.workspace }}/.tmp
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
       NOMOS_TESTNET_IMAGE: nomos-testnet:${{ github.run_id }}
@@ -279,6 +293,20 @@ jobs:
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${download_dir}/nomos-binaries.zip"
           unzip -o "${download_dir}/nomos-binaries.zip" -d "${download_dir}"
           mv "${download_dir}/nomos-binaries.tar.gz" "${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
+
+      - name: Normalize linux bundle path
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp
+          SRC="${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
+          DEST="${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
+          if [ -f "${SRC}" ]; then
+            mv "${SRC}" "${DEST}"
+            echo "NOMOS_BINARIES_TAR=${DEST}" >> "$GITHUB_ENV"
+          else
+            echo "Expected ${SRC} not found" >&2
+            exit 1
+          fi
 
       - name: Set compose target dir
         run: echo "CARGO_TARGET_DIR=${RUNNER_TEMP}/target-compose" >> "$GITHUB_ENV"
@@ -328,7 +356,6 @@ jobs:
           RUST_LOG: "info"
           NOMOS_LOG_LEVEL: "info"
           NOMOS_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
-          NOMOS_BINARIES_TAR: "${{ github.workspace }}/.tmp/nomos-binaries.tar.gz"
         run: |
           mkdir -p "$TMPDIR"
           scripts/run-examples.sh -t 60 -v 1 -e 1 compose
