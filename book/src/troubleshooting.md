@@ -1,16 +1,18 @@
 # Troubleshooting Scenarios
 
 **Prerequisites for All Runners:**
-- **`POL_PROOF_DEV_MODE=true`** MUST be set for all runners (local, compose, k8s) to avoid expensive Groth16 proof generation that causes timeouts
-- **KZG circuit assets** must be present at `testing-framework/assets/stack/kzgrs_test_params/` for DA workloads (fetch via `scripts/setup-nomos-circuits.sh`)
+- **`POL_PROOF_DEV_MODE=true`** MUST be set for all runners (host, compose, k8s) to avoid expensive Groth16 proof generation that causes timeouts
+- **KZG circuit assets** must be present at `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note the repeated filename) for DA workloads
+
+**Recommended:** Use `scripts/run-examples.sh` which handles all setup automatically.
 
 ## Quick Symptom Guide
 
 Common symptoms and likely causes:
 
-- **No or slow block progression**: missing `POL_PROOF_DEV_MODE=true`, missing KZG circuit assets for DA workloads, too-short run window, port conflicts, or resource exhaustion—set required env vars, verify assets, extend duration, check node logs for startup errors.
+- **No or slow block progression**: missing `POL_PROOF_DEV_MODE=true`, missing KZG circuit assets (`/kzgrs_test_params/kzgrs_test_params` file) for DA workloads, too-short run window, port conflicts, or resource exhaustion—set required env vars, verify assets exist, extend duration, check node logs for startup errors.
 - **Transactions not included**: unfunded or misconfigured wallets (check `.wallets(N)` vs `.users(M)`), transaction rate exceeding block capacity, or rates exceeding block production speed—reduce rate, increase wallet count, verify wallet setup in logs.
-- **Chaos stalls the run**: chaos (node control) only works with ComposeDeployer; LocalDeployer and K8sDeployer don't support it (won't "stall", just can't execute chaos workloads). With compose, aggressive restart cadence can prevent consensus recovery—widen restart intervals.
+- **Chaos stalls the run**: chaos (node control) only works with ComposeDeployer; host runner (LocalDeployer) and K8sDeployer don't support it (won't "stall", just can't execute chaos workloads). With compose, aggressive restart cadence can prevent consensus recovery—widen restart intervals.
 - **Observability gaps**: metrics or logs unreachable because ports clash or services are not exposed—adjust observability ports and confirm runner wiring.
 - **Flaky behavior across runs**: mixing chaos with functional smoke tests or inconsistent topology between environments—separate deterministic and chaos scenarios and standardize topology presets.
 
@@ -20,12 +22,12 @@ Common symptoms and likely causes:
 
 | Runner | Default Output | With `NOMOS_LOG_DIR` + Flags | Access Command |
 |--------|---------------|------------------------------|----------------|
-| **Local** | Temporary directories (cleaned up) | Per-node files with prefix `nomos-node-{index}` (requires `NOMOS_TESTS_TRACING=true`) | `cat $NOMOS_LOG_DIR/nomos-node-0*` |
+| **Host** (local) | Temporary directories (cleaned up) | Per-node files with prefix `nomos-node-{index}` (requires `NOMOS_TESTS_TRACING=true`) | `cat $NOMOS_LOG_DIR/nomos-node-0*` |
 | **Compose** | Docker container stdout/stderr | Per-node files inside containers (if path is mounted) | `docker ps` then `docker logs <container-id>` |
 | **K8s** | Pod stdout/stderr | Per-node files inside pods (if path is mounted) | `kubectl logs -l app=nomos-validator` |
 
 **Important Notes:**
-- **Local runner**: Logs go to system temporary directories (NOT in working directory) by default and are automatically cleaned up after tests. To persist logs, you MUST set both `NOMOS_TESTS_TRACING=true` AND `NOMOS_LOG_DIR=/path/to/logs`.
+- **Host runner** (local processes): Logs go to system temporary directories (NOT in working directory) by default and are automatically cleaned up after tests. To persist logs, you MUST set both `NOMOS_TESTS_TRACING=true` AND `NOMOS_LOG_DIR=/path/to/logs`.
 - **Compose/K8s**: Per-node log files only exist inside containers/pods if `NOMOS_LOG_DIR` is set AND the path is writable inside the container/pod. By default, rely on `docker logs` or `kubectl logs`.
 - **File naming**: Log files use prefix `nomos-node-{index}*` or `nomos-executor-{index}*` with timestamps, e.g., `nomos-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
 - **Container names**: Compose containers include project UUID, e.g., `nomos-compose-<uuid>-validator-0-1` where `<uuid>` is randomly generated per run
@@ -74,7 +76,11 @@ docker logs --tail 100 <container-id>
 ```bash
 COMPOSE_RUNNER_PRESERVE=1 \
 NOMOS_TESTNET_IMAGE=nomos-testnet:local \
+POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
+
+# OR: Use run-examples.sh (handles setup automatically)
+COMPOSE_RUNNER_PRESERVE=1 scripts/run-examples.sh -t 60 -v 1 -e 1 compose
 
 # After test failure, containers remain running:
 docker ps --filter "name=nomos-compose-"
@@ -262,19 +268,26 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
 
 - **Cause**: Docker image not built for Compose/K8s runners, or KZG assets not
   baked into the image.
-- **Fix**:
-  1. Fetch KZG assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`.
-  2. Copy to assets:
-     `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`.
-  3. Build image: `testing-framework/assets/stack/scripts/build_test_image.sh`.
+- **Fix (recommended)**: Use run-examples.sh which handles everything:
+  ```bash
+  scripts/run-examples.sh -t 60 -v 1 -e 1 compose
+  ```
+- **Fix (manual)**:
+  1. Build bundle: `scripts/build-bundle.sh --platform linux`
+  2. Set bundle path: `export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz`
+  3. Build image: `testing-framework/assets/stack/scripts/build_test_image.sh`
 
 ### "Failed to load KZG parameters" or "Circuit file not found"
 
-- **Cause**: DA workload requires KZG circuit assets that aren't present.
-- **Fix**:
-  1. Fetch assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`.
-  2. Copy to expected path:
-     `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`.
-  3. For Compose/K8s: rebuild image with assets baked in.
+- **Cause**: DA workload requires KZG circuit assets. The file `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note repeated filename) must exist. Inside containers, it's at `/kzgrs_test_params/kzgrs_test_params`.
+- **Fix (recommended)**: Use run-examples.sh which handles setup:
+  ```bash
+  scripts/run-examples.sh -t 60 -v 1 -e 1 <mode>
+  ```
+- **Fix (manual)**:
+  1. Fetch assets: `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`
+  2. Copy to expected path: `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`
+  3. Verify file exists: `ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
+  4. For Compose/K8s: rebuild image with assets baked in
 
 For detailed logging configuration and observability setup, see [Operations](operations.md).

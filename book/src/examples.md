@@ -4,11 +4,13 @@ Concrete scenario shapes that illustrate how to combine topologies, workloads,
 and expectations.
 
 **Runnable examples:** The repo includes complete binaries in `examples/src/bin/`:
-- `local_runner.rs` — Local processes
-- `compose_runner.rs` — Docker Compose (requires `NOMOS_TESTNET_IMAGE` built)
+- `local_runner.rs` — Host processes (local)
+- `compose_runner.rs` — Docker Compose (requires image built)
 - `k8s_runner.rs` — Kubernetes (requires cluster access and image loaded)
 
-Run with: `POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>`
+**Recommended:** Use `scripts/run-examples.sh -t <duration> -v <validators> -e <executors> <mode>` where mode is `host`, `compose`, or `k8s`.
+
+**Alternative:** Direct cargo run: `POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>`
 
 **All runners require `POL_PROOF_DEV_MODE=true`** to avoid expensive proof generation.
 

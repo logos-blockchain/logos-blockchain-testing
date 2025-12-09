@@ -333,6 +333,17 @@ jobs:
           mkdir -p "$TMPDIR"
           scripts/run-examples.sh -t 60 -v 1 -e 1 compose
 
+      - name: Show compose runner log
+        env:
+          LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
+        run: |
+          if [ -f "${LOG_DIR}/runner.log" ]; then
+            echo "=== runner.log (tail) ==="
+            tail -n 200 "${LOG_DIR}/runner.log"
+          else
+            echo "runner.log not found under ${LOG_DIR}"
+          fi
+
       - name: Collect compose logs
         if: failure()
         run: |

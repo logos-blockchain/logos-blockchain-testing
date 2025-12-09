@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use nomos_da_dispersal::{
     DispersalServiceSettings,
@@ -12,40 +12,23 @@ use nomos_da_network_service::{
         common::DaNetworkBackendSettings, executor::DaNetworkExecutorBackendSettings,
     },
 };
-use nomos_da_sampling::{
-    DaSamplingServiceSettings, backend::kzgrs::KzgrsSamplingBackendSettings,
-    verifier::kzgrs::KzgrsDaVerifierSettings as SamplingVerifierSettings,
-};
-use nomos_da_verifier::{
-    DaVerifierServiceSettings,
-    backend::{kzgrs::KzgrsDaVerifierSettings, trigger::MempoolPublishTriggerConfig},
-    storage::adapters::rocksdb::RocksAdapterSettings as VerifierStorageAdapterSettings,
-};
 use nomos_executor::config::Config as ExecutorConfig;
-use nomos_node::{
-    RocksBackendSettings,
-    api::backend::AxumBackendSettings as NodeAxumBackendSettings,
-    config::{
-        deployment::DeploymentSettings, mempool::serde::Config as MempoolConfig,
-        time::serde::Config as TimeConfig,
-    },
-};
+use nomos_node::{RocksBackendSettings, config::deployment::DeploymentSettings};
 use nomos_sdp::SdpSettings;
-use nomos_time::backends::{NtpTimeBackendSettings, ntp::async_client::NTPClientSettings};
-use nomos_utils::math::NonNegativeF64;
-use nomos_wallet::WalletServiceSettings;
 
 use crate::{
-    adjust_timeout,
     nodes::{
         blend::build_blend_service_config,
-        common::{cryptarchia_config, cryptarchia_deployment, mempool_deployment, time_deployment},
+        common::{
+            cryptarchia_config, cryptarchia_deployment, da_sampling_config, da_verifier_config,
+            http_config, mempool_config, mempool_deployment, testing_http_config, time_config,
+            time_deployment, tracing_settings, wallet_settings,
+        },
     },
-    topology::configs::{GeneralConfig, wallet::WalletAccount},
+    topology::configs::GeneralConfig,
 };
 
 #[must_use]
-#[expect(clippy::too_many_lines, reason = "TODO: Address this at some point.")]
 pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
     let network_config = config.network_config.clone();
     let (blend_user_config, blend_deployment, network_deployment) =
@@ -67,10 +50,10 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
         da_network: DaNetworkConfig {
             backend: DaNetworkExecutorBackendSettings {
                 validator_settings: DaNetworkBackendSettings {
-                    node_key: config.da_config.node_key,
-                    listening_address: config.da_config.listening_address,
-                    policy_settings: config.da_config.policy_settings,
-                    monitor_settings: config.da_config.monitor_settings,
+                    node_key: config.da_config.node_key.clone(),
+                    listening_address: config.da_config.listening_address.clone(),
+                    policy_settings: config.da_config.policy_settings.clone(),
+                    monitor_settings: config.da_config.monitor_settings.clone(),
                     balancer_interval: config.da_config.balancer_interval,
                     redial_cooldown: config.da_config.redial_cooldown,
                     replication_settings: config.da_config.replication_settings,
@@ -91,47 +74,10 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
             subnet_threshold: config.da_config.num_samples as usize,
             min_session_members: config.da_config.num_samples as usize,
         },
-        da_verifier: DaVerifierServiceSettings {
-            share_verifier_settings: KzgrsDaVerifierSettings {
-                global_params_path: config.da_config.global_params_path.clone(),
-                domain_size: config.da_config.num_subnets as usize,
-            },
-            tx_verifier_settings: (),
-            network_adapter_settings: (),
-            storage_adapter_settings: VerifierStorageAdapterSettings {
-                blob_storage_directory: "./".into(),
-            },
-            mempool_trigger_settings: MempoolPublishTriggerConfig {
-                publish_threshold: NonNegativeF64::try_from(0.8).unwrap(),
-                share_duration: Duration::from_secs(5),
-                prune_duration: Duration::from_secs(30),
-                prune_interval: Duration::from_secs(5),
-            },
-        },
-        tracing: config.tracing_config.tracing_settings,
-        http: nomos_api::ApiServiceSettings {
-            backend_settings: NodeAxumBackendSettings {
-                address: config.api_config.address,
-                rate_limit_per_second: 10000,
-                rate_limit_burst: 10000,
-                max_concurrent_requests: 1000,
-                ..Default::default()
-            },
-        },
-        da_sampling: DaSamplingServiceSettings {
-            sampling_settings: KzgrsSamplingBackendSettings {
-                num_samples: config.da_config.num_samples,
-                num_subnets: config.da_config.num_subnets,
-                old_blobs_check_interval: config.da_config.old_blobs_check_interval,
-                blobs_validity_duration: config.da_config.blobs_validity_duration,
-            },
-            share_verifier_settings: SamplingVerifierSettings {
-                global_params_path: config.da_config.global_params_path.clone(),
-                domain_size: config.da_config.num_subnets as usize,
-            },
-            commitments_wait_duration: Duration::from_secs(1),
-            sdp_blob_trigger_sampling_delay: adjust_timeout(Duration::from_secs(5)),
-        },
+        da_verifier: da_verifier_config(&config),
+        tracing: tracing_settings(&config),
+        http: http_config(&config),
+        da_sampling: da_sampling_config(&config),
         storage: RocksBackendSettings {
             db_path: "./db".into(),
             read_only: false,
@@ -142,52 +88,18 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
                 encoder_settings: EncoderSettings {
                     num_columns: config.da_config.num_subnets as usize,
                     with_cache: false,
-                    global_params_path: config.da_config.global_params_path,
+                    global_params_path: config.da_config.global_params_path.clone(),
                 },
                 dispersal_timeout: Duration::from_secs(20),
                 retry_cooldown: Duration::from_secs(3),
                 retry_limit: 2,
             },
         },
-        time: TimeConfig {
-            backend: NtpTimeBackendSettings {
-                ntp_server: config.time_config.ntp_server,
-                ntp_client_settings: NTPClientSettings {
-                    timeout: config.time_config.timeout,
-                    listening_interface: config.time_config.interface,
-                },
-                update_interval: config.time_config.update_interval,
-            },
-            chain_start_time: config.time_config.chain_start_time,
-        },
-        mempool: MempoolConfig {
-            // Disable mempool recovery for hermetic tests.
-            recovery_path: PathBuf::new(),
-        },
+        time: time_config(&config),
+        mempool: mempool_config(),
         sdp: SdpSettings { declaration: None },
-        wallet: WalletServiceSettings {
-            known_keys: {
-                let mut keys = HashSet::from_iter([config.consensus_config.leader_config.pk]);
-                keys.extend(
-                    config
-                        .consensus_config
-                        .wallet_accounts
-                        .iter()
-                        .map(WalletAccount::public_key),
-                );
-                keys
-            },
-        },
+        wallet: wallet_settings(&config),
+        testing_http: testing_http_config(&config),
         key_management: config.kms_config,
-
-        testing_http: nomos_api::ApiServiceSettings {
-            backend_settings: NodeAxumBackendSettings {
-                address: config.api_config.testing_http_address,
-                rate_limit_per_second: 10000,
-                rate_limit_burst: 10000,
-                max_concurrent_requests: 1000,
-                ..Default::default()
-            },
-        },
     }
 }

@@ -43,89 +43,128 @@ See `.github/workflows/compose-mixed.yml` for a complete CI example using Compos
 
 ## Running Examples
 
-### Local Runner
+The framework provides three runner modes: **host** (local processes), **compose** (Docker Compose), and **k8s** (Kubernetes).
+
+**Recommended:** Use `scripts/run-examples.sh` for all modes:
 
 ```bash
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+# Host mode (local processes)
+scripts/run-examples.sh -t 60 -v 1 -e 1 host
+
+# Compose mode (Docker Compose)
+scripts/run-examples.sh -t 60 -v 1 -e 1 compose
+
+# K8s mode (Kubernetes)
+scripts/run-examples.sh -t 60 -v 1 -e 1 k8s
 ```
 
-**Optional environment variables:**
-- `LOCAL_DEMO_VALIDATORS=3` — Number of validators (default: 1)
-- `LOCAL_DEMO_EXECUTORS=2` — Number of executors (default: 1)
-- `LOCAL_DEMO_RUN_SECS=120` — Run duration in seconds (default: 60)
-- `NOMOS_TESTS_TRACING=true` — Enable persistent file logging (required with `NOMOS_LOG_DIR`)
-- `NOMOS_LOG_DIR=/tmp/logs` — Directory for per-node log files (only with `NOMOS_TESTS_TRACING=true`)
+This script handles circuit setup, binary building/bundling, image building, and execution.
+
+**Environment overrides:**
+- `VERSION=v0.3.1` — Circuit version
+- `NOMOS_NODE_REV=<commit>` — nomos-node git revision
+- `NOMOS_BINARIES_TAR=path/to/bundle.tar.gz` — Use prebuilt bundle
+- `NOMOS_SKIP_IMAGE_BUILD=1` — Skip image rebuild (compose/k8s)
+
+### Host Runner (Direct Cargo Run)
+
+For manual control, you can run the `local_runner` binary directly:
+
+```bash
+POL_PROOF_DEV_MODE=true \
+NOMOS_NODE_BIN=/path/to/nomos-node \
+NOMOS_EXECUTOR_BIN=/path/to/nomos-executor \
+cargo run -p runner-examples --bin local_runner
+```
+
+**Environment variables:**
+- `NOMOS_DEMO_VALIDATORS=3` — Number of validators (default: 1, or use legacy `LOCAL_DEMO_VALIDATORS`)
+- `NOMOS_DEMO_EXECUTORS=2` — Number of executors (default: 1, or use legacy `LOCAL_DEMO_EXECUTORS`)
+- `NOMOS_DEMO_RUN_SECS=120` — Run duration in seconds (default: 60, or use legacy `LOCAL_DEMO_RUN_SECS`)
+- `NOMOS_NODE_BIN` / `NOMOS_EXECUTOR_BIN` — Paths to binaries (required for direct run)
+- `NOMOS_TESTS_TRACING=true` — Enable persistent file logging
+- `NOMOS_LOG_DIR=/tmp/logs` — Directory for per-node log files
 - `NOMOS_LOG_LEVEL=debug` — Set log level (default: info)
-- `NOMOS_LOG_FILTER=consensus=trace,da=debug` — Fine-grained module filtering (rate is per-block, not per-second)
+- `NOMOS_LOG_FILTER=consensus=trace,da=debug` — Fine-grained module filtering
 
-**Note:** The default `local_runner` example includes DA workload, so circuit assets in `testing-framework/assets/stack/kzgrs_test_params/` are required (fetch via `scripts/setup-nomos-circuits.sh`).
+**Note:** Requires circuit assets and host binaries. Use `scripts/run-examples.sh host` to handle setup automatically.
 
-### Compose Runner
+### Compose Runner (Direct Cargo Run)
 
-**Prerequisites:**
-1. **Docker daemon running**
-2. **Circuit assets** in `testing-framework/assets/stack/kzgrs_test_params` (fetched via `scripts/setup-nomos-circuits.sh`)
-3. **Test image built** (see below)
+For manual control, you can run the `compose_runner` binary directly. Compose requires a Docker image with embedded assets.
 
-**Build the test image:**
+**Recommended setup:** Use a prebuilt bundle:
+
 ```bash
-# Fetch circuit assets first
-chmod +x scripts/setup-nomos-circuits.sh
-scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
-cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
+# Build a Linux bundle (includes binaries + circuits)
+scripts/build-bundle.sh --platform linux
+# Creates .tmp/nomos-binaries-linux-v0.3.1.tar.gz
 
-# Build image (embeds assets)
-chmod +x testing-framework/assets/stack/scripts/build_test_image.sh
+# Build image (embeds bundle assets)
+export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
 testing-framework/assets/stack/scripts/build_test_image.sh
-```
 
-**Run the example:**
-```bash
+# Run
 NOMOS_TESTNET_IMAGE=nomos-testnet:local \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 ```
 
-**Required environment variables:**
-- `NOMOS_TESTNET_IMAGE=nomos-testnet:local` — Image tag (must match built image)
-- `POL_PROOF_DEV_MODE=true` — **Critical:** Without this, proof generation is CPU-intensive and tests will timeout
+**Alternative:** Manual circuit/image setup (rebuilds during image build):
 
-**Optional environment variables:**
-- `COMPOSE_NODE_PAIRS=1x1` — Topology: "validators×executors" (default varies by example)
+```bash
+# Fetch and copy circuits
+scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
+cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
+
+# Build image
+testing-framework/assets/stack/scripts/build_test_image.sh
+
+# Run
+NOMOS_TESTNET_IMAGE=nomos-testnet:local \
+POL_PROOF_DEV_MODE=true \
+cargo run -p runner-examples --bin compose_runner
+```
+
+**Environment variables:**
+- `NOMOS_TESTNET_IMAGE=nomos-testnet:local` — Image tag (required, must match built image)
+- `POL_PROOF_DEV_MODE=true` — **Required** for all runners
+- `NOMOS_DEMO_VALIDATORS=3` / `NOMOS_DEMO_EXECUTORS=2` / `NOMOS_DEMO_RUN_SECS=120` — Topology overrides
+- `COMPOSE_NODE_PAIRS=1x1` — Alternative topology format: "validators×executors"
 - `TEST_FRAMEWORK_PROMETHEUS_PORT=9091` — Override Prometheus port (default: 9090)
-- `COMPOSE_RUNNER_HOST=127.0.0.1` — Host address for port mappings (default: 127.0.0.1)
-- `COMPOSE_RUNNER_PRESERVE=1` — Keep containers running after test (for debugging)
-- `NOMOS_LOG_DIR=/tmp/compose-logs` — Write logs to files inside containers (requires copy-out or volume mount)
-- `NOMOS_LOG_LEVEL=debug` — Set log level
+- `COMPOSE_RUNNER_HOST=127.0.0.1` — Host address for port mappings
+- `COMPOSE_RUNNER_PRESERVE=1` — Keep containers running after test
+- `NOMOS_LOG_DIR=/tmp/compose-logs` — Write logs to files inside containers
 
 **Compose-specific features:**
-- **Node control support**: Only runner that supports chaos testing (`.enable_node_control()` + `.chaos()` workloads)
+- **Node control support**: Only runner that supports chaos testing (`.enable_node_control()` + chaos workloads)
 - **Prometheus observability**: Metrics at `http://localhost:9090`
 
-**Important:** Chaos workloads (random restarts) **only work with ComposeDeployer**. LocalDeployer and K8sDeployer do not support node control.
+**Important:** 
+- Containers expect KZG parameters at `/kzgrs_test_params/kzgrs_test_params` (note the repeated filename)
+- Use `scripts/run-examples.sh compose` to handle all setup automatically
 
-### K8s Runner
+### K8s Runner (Direct Cargo Run)
+
+For manual control, you can run the `k8s_runner` binary directly. K8s requires the same image setup as Compose.
 
 **Prerequisites:**
-1. **Kubernetes cluster** with `kubectl` configured and working
-2. **Circuit assets** in `testing-framework/assets/stack/kzgrs_test_params`
-3. **Test image built** (same as Compose: `testing-framework/assets/stack/scripts/build_test_image.sh`)
-4. **Image available in cluster** (loaded via `kind`, `minikube`, or pushed to registry)
-5. **POL_PROOF_DEV_MODE=true** environment variable set
+1. **Kubernetes cluster** with `kubectl` configured
+2. **Test image built** (same as Compose, preferably with prebuilt bundle)
+3. **Image available in cluster** (loaded or pushed to registry)
 
-**Load image into cluster:**
+**Build and load image:**
 ```bash
-# For kind clusters
+# Build image with bundle (recommended)
+scripts/build-bundle.sh --platform linux
+export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
+testing-framework/assets/stack/scripts/build_test_image.sh
+
+# Load into cluster
 export NOMOS_TESTNET_IMAGE=nomos-testnet:local
-kind load docker-image nomos-testnet:local
-
-# For minikube
-minikube image load nomos-testnet:local
-
-# For remote clusters (push to registry)
-docker tag nomos-testnet:local your-registry/nomos-testnet:local
-docker push your-registry/nomos-testnet:local
-export NOMOS_TESTNET_IMAGE=your-registry/nomos-testnet:local
+kind load docker-image nomos-testnet:local  # For kind
+# OR: minikube image load nomos-testnet:local  # For minikube
+# OR: docker push your-registry/nomos-testnet:local  # For remote
 ```
 
 **Run the example:**
@@ -135,9 +174,15 @@ export POL_PROOF_DEV_MODE=true
 cargo run -p runner-examples --bin k8s_runner
 ```
 
+**Environment variables:**
+- `NOMOS_TESTNET_IMAGE` — Image tag (required)
+- `POL_PROOF_DEV_MODE=true` — **Required** for all runners
+- `NOMOS_DEMO_VALIDATORS` / `NOMOS_DEMO_EXECUTORS` / `NOMOS_DEMO_RUN_SECS` — Topology overrides
+
 **Important:** 
-- K8s runner mounts `testing-framework/assets/stack/kzgrs_test_params` as a hostPath volume. Ensure this directory exists and contains circuit assets on the node where pods will be scheduled.
-- **No node control support yet**: Chaos workloads (`.enable_node_control()`) will fail. Use ComposeDeployer for chaos testing.
+- K8s runner mounts `testing-framework/assets/stack/kzgrs_test_params` as a hostPath volume with file `/kzgrs_test_params/kzgrs_test_params` inside pods
+- **No node control support yet**: Chaos workloads (`.enable_node_control()`) will fail
+- Use `scripts/run-examples.sh k8s` to handle all setup automatically
 
 ## Circuit Assets (KZG Parameters)
 
@@ -145,9 +190,13 @@ DA workloads require KZG cryptographic parameters for polynomial commitment sche
 
 ### Asset Location
 
-**Default path:** `testing-framework/assets/stack/kzgrs_test_params`
+**Default path:** `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
 
-**Override:** Set `NOMOS_KZGRS_PARAMS_PATH` to use a custom location:
+Note the repeated filename: the directory `kzgrs_test_params/` contains a file named `kzgrs_test_params`. This is the actual proving key file.
+
+**Container path** (compose/k8s): `/kzgrs_test_params/kzgrs_test_params`
+
+**Override:** Set `NOMOS_KZGRS_PARAMS_PATH` to use a custom location (must point to the file):
 ```bash
 NOMOS_KZGRS_PARAMS_PATH=/path/to/custom/params cargo run -p runner-examples --bin local_runner
 ```
@@ -190,8 +239,10 @@ The CI automatically fetches and places assets:
 
 **Error without assets:**
 ```
-Error: missing KZG parameters at testing-framework/assets/stack/kzgrs_test_params
+Error: missing KZG parameters at testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
 ```
+
+If you see this error, the file `kzgrs_test_params` is missing from the directory. Use `scripts/run-examples.sh` or `scripts/setup-nomos-circuits.sh` to fetch it.
 
 ## Logging and Observability
 

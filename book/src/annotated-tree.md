@@ -14,19 +14,23 @@ nomos-testing/
 │  │  └─ k8s/                   # K8sDeployer (Kubernetes Helm)
 │  └─ assets/                   # Docker/K8s stack assets
 │     └─ stack/
-│        ├─ kzgrs_test_params/  # KZG circuit parameters (fetch via setup-nomos-circuits.sh)
+│        ├─ kzgrs_test_params/  # KZG circuit parameters directory
+│        │  └─ kzgrs_test_params  # Actual proving key file (note repeated name)
 │        ├─ monitoring/         # Prometheus config
 │        ├─ scripts/            # Container entrypoints, image builder
 │        └─ cfgsync.yaml        # Config sync server template
 │
 ├─ examples/                    # PRIMARY ENTRY POINT: runnable binaries
 │  └─ src/bin/
-│     ├─ local_runner.rs        # Local processes demo (POL_PROOF_DEV_MODE=true)
-│     ├─ compose_runner.rs      # Docker Compose demo (requires image)
-│     └─ k8s_runner.rs          # Kubernetes demo (requires cluster + image)
+│     ├─ local_runner.rs        # Host processes demo (LocalDeployer)
+│     ├─ compose_runner.rs      # Docker Compose demo (ComposeDeployer)
+│     └─ k8s_runner.rs          # Kubernetes demo (K8sDeployer)
 │
 ├─ scripts/                     # Helper utilities
-│  └─ setup-nomos-circuits.sh   # Fetch KZG circuit parameters
+│  ├─ run-examples.sh           # Convenience script (handles setup + runs examples)
+│  ├─ build-bundle.sh           # Build prebuilt binaries+circuits bundle
+│  ├─ setup-circuits-stack.sh  # Fetch KZG parameters (Linux + host)
+│  └─ setup-nomos-circuits.sh  # Legacy circuit fetcher
 │
 └─ book/                        # This documentation (mdBook)
 ```
@@ -47,9 +51,15 @@ Core library crates providing the testing API.
 
 ### `testing-framework/assets/stack/`
 Docker/K8s deployment assets:
-- **`kzgrs_test_params/`**: Circuit parameters (override via `NOMOS_KZGRS_PARAMS_PATH`)
+- **`kzgrs_test_params/kzgrs_test_params`**: Circuit parameters file (note repeated name; override via `NOMOS_KZGRS_PARAMS_PATH`)
 - **`monitoring/`**: Prometheus config
 - **`scripts/`**: Container entrypoints and image builder
+
+### `scripts/`
+Convenience utilities:
+- **`run-examples.sh`**: All-in-one script for host/compose/k8s modes (recommended)
+- **`build-bundle.sh`**: Create prebuilt binaries+circuits bundle for compose/k8s
+- **`setup-circuits-stack.sh`**: Fetch KZG parameters for both Linux and host
 - **`cfgsync.yaml`**: Configuration sync server template
 
 ### `examples/` (Start Here!)

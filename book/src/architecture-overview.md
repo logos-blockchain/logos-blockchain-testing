@@ -30,11 +30,24 @@ together predictably.
 
 The framework is consumed via **runnable example binaries** in `examples/src/bin/`:
 
-- `local_runner.rs` — Spawns nodes as local processes
+- `local_runner.rs` — Spawns nodes as host processes
 - `compose_runner.rs` — Deploys via Docker Compose (requires `NOMOS_TESTNET_IMAGE` built)
 - `k8s_runner.rs` — Deploys via Kubernetes Helm (requires cluster + image)
 
-**Run with:** `POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>`
+**Recommended:** Use the convenience script:
+
+```bash
+scripts/run-examples.sh -t <duration> -v <validators> -e <executors> <mode>
+# mode: host, compose, or k8s
+```
+
+This handles circuit setup, binary building/bundling, image building, and execution.
+
+**Alternative:** Direct cargo run (requires manual setup):
+
+```bash
+POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>
+```
 
 **Important:** All runners require `POL_PROOF_DEV_MODE=true` to avoid expensive Groth16 proof generation that causes timeouts.
 
@@ -75,8 +88,8 @@ Three deployer implementations:
 
 | Deployer | Backend | Prerequisites | Node Control |
 |----------|---------|---------------|--------------|
-| `LocalDeployer` | Local processes | Binaries in sibling checkout | No |
-| `ComposeDeployer` | Docker Compose | `NOMOS_TESTNET_IMAGE` built | Yes |
+| `LocalDeployer` | Host processes | Binaries (built on demand or via bundle) | No |
+| `ComposeDeployer` | Docker Compose | Image with embedded assets/binaries | Yes |
 | `K8sDeployer` | Kubernetes Helm | Cluster + image loaded | Not yet |
 
 **Compose-specific features:**
@@ -88,15 +101,17 @@ Three deployer implementations:
 
 ### Docker Image
 Built via `testing-framework/assets/stack/scripts/build_test_image.sh`:
-- Embeds KZG circuit parameters from `testing-framework/assets/stack/kzgrs_test_params/`
+- Embeds KZG circuit parameters and binaries from `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
 - Includes runner scripts: `run_nomos_node.sh`, `run_nomos_executor.sh`
 - Tagged as `NOMOS_TESTNET_IMAGE` (default: `nomos-testnet:local`)
+- **Recommended:** Use prebuilt bundle via `scripts/build-bundle.sh --platform linux` and set `NOMOS_BINARIES_TAR` before building image
 
 ### Circuit Assets
 KZG parameters required for DA workloads:
-- **Default path:** `testing-framework/assets/stack/kzgrs_test_params/`
-- **Override:** `NOMOS_KZGRS_PARAMS_PATH=/custom/path`
-- **Fetch via:** `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/circuits`
+- **Host path:** `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note repeated filename—directory contains file `kzgrs_test_params`)
+- **Container path:** `/kzgrs_test_params/kzgrs_test_params` (for compose/k8s)
+- **Override:** `NOMOS_KZGRS_PARAMS_PATH=/custom/path/to/file` (must point to file)
+- **Fetch via:** `scripts/setup-nomos-circuits.sh v0.3.1 /tmp/circuits` or use `scripts/run-examples.sh`
 
 ### Compose Stack
 Templates and configs in `testing-framework/runners/compose/assets/`:

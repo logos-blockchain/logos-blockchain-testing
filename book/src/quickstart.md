@@ -5,20 +5,31 @@ Get a working example running quickly.
 ## Prerequisites
 
 - Rust toolchain (nightly)
-- Sibling `nomos-node` checkout built and available
 - This repository cloned
 - Unix-like system (tested on Linux and macOS)
+- For Docker Compose examples: Docker daemon running
+
+**Note:** `nomos-node` binaries are built automatically on demand or can be provided via prebuilt bundles.
 
 ## Your First Test
 
-The framework ships with runnable example binaries in `examples/src/bin/`. Let's start with the local runner:
+The framework ships with runnable example binaries in `examples/src/bin/`.
+
+**Recommended:** Use the convenience script:
 
 ```bash
 # From the nomos-testing directory
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+scripts/run-examples.sh -t 60 -v 1 -e 1 host
 ```
 
-This runs a complete scenario with **defaults**: 1 validator + 1 executor, mixed transaction + DA workload (5 tx/block + 1 channel + 1 blob), 60s duration.
+This handles circuit setup, binary building, and runs a complete scenario: 1 validator + 1 executor, mixed transaction + DA workload (5 tx/block + 1 channel + 1 blob), 60s duration.
+
+**Alternative:** Direct cargo run (requires manual setup):
+
+```bash
+# Requires circuits in place and NOMOS_NODE_BIN/NOMOS_EXECUTOR_BIN set
+POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+```
 
 **Core API Pattern** (simplified example):
 
@@ -131,28 +142,50 @@ let _handle = runner.run(&mut plan).await?;  // Execute workloads & expectations
 
 ## Adjust the Topology
 
-The binary accepts environment variables to adjust defaults:
+**With run-examples.sh** (recommended):
 
 ```bash
 # Scale up to 3 validators + 2 executors, run for 2 minutes
-LOCAL_DEMO_VALIDATORS=3 \
-LOCAL_DEMO_EXECUTORS=2 \
-LOCAL_DEMO_RUN_SECS=120 \
+scripts/run-examples.sh -t 120 -v 3 -e 2 host
+```
+
+**With direct cargo run:**
+
+```bash
+# Uses NOMOS_DEMO_* env vars (or legacy *_DEMO_* vars)
+NOMOS_DEMO_VALIDATORS=3 \
+NOMOS_DEMO_EXECUTORS=2 \
+NOMOS_DEMO_RUN_SECS=120 \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
 
 ## Try Docker Compose
 
-Use the same API with a different deployer for reproducible containerized environment:
+Use the same API with a different deployer for reproducible containerized environment.
+
+**Recommended:** Use the convenience script (handles everything):
 
 ```bash
-# Build the test image first (includes circuit assets)
-chmod +x scripts/setup-nomos-circuits.sh
+scripts/run-examples.sh -t 60 -v 1 -e 1 compose
+```
+
+This automatically:
+- Fetches circuit assets (to `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`)
+- Builds/uses prebuilt binaries (via `NOMOS_BINARIES_TAR` if available)
+- Builds the Docker image
+- Runs the compose scenario
+
+**Alternative:** Direct cargo run with manual setup:
+
+```bash
+# Option 1: Use prebuilt bundle (recommended for compose/k8s)
+scripts/build-bundle.sh --platform linux  # Creates .tmp/nomos-binaries-linux-v0.3.1.tar.gz
+export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
+
+# Option 2: Manual circuit/image setup (rebuilds during image build)
 scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
 cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
-
-chmod +x testing-framework/assets/stack/scripts/build_test_image.sh
 testing-framework/assets/stack/scripts/build_test_image.sh
 
 # Run with Compose
@@ -162,6 +195,8 @@ cargo run -p runner-examples --bin compose_runner
 ```
 
 **Benefit:** Reproducible containerized environment with Prometheus at `http://localhost:9090`.
+
+**Note:** Compose expects KZG parameters at `/kzgrs_test_params/kzgrs_test_params` inside containers (the directory name is repeated as the filename).
 
 **In code:** Just swap the deployer:
 
