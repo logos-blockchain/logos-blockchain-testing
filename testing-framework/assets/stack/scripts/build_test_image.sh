@@ -6,6 +6,10 @@ set -euo pipefail
 # from logos-co/nomos-circuits.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+if [ -f "${ROOT_DIR}/versions.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/versions.env"
+fi
 DOCKERFILE_PATH="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile"
 IMAGE_TAG="${IMAGE_TAG:-nomos-testnet:local}"
 VERSION="${VERSION:-v0.3.1}"

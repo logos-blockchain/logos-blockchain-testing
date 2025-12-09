@@ -24,6 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - name: Install nomos circuits
         run: |
           ./scripts/setup-nomos-circuits.sh v0.3.1 "$HOME/.nomos-circuits"
@@ -50,6 +55,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - name: Install nomos circuits
         run: |
           ./scripts/setup-nomos-circuits.sh v0.3.1 "$HOME/.nomos-circuits"
@@ -76,6 +86,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - name: Install nomos circuits
         run: |
           ./scripts/setup-nomos-circuits.sh v0.3.1 "$HOME/.nomos-circuits"
@@ -98,6 +113,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -112,6 +132,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - name: Install nomos circuits
         run: |
           ./scripts/setup-nomos-circuits.sh v0.3.1 "$HOME/.nomos-circuits"
@@ -133,7 +158,7 @@ jobs:
   host_smoke:
     runs-on: ubuntu-latest
     env:
-      VERSION: v0.3.1
+      VERSION: ${{ env.VERSION }}
       POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
       LOCAL_DEMO_VALIDATORS: 1
@@ -146,6 +171,11 @@ jobs:
       RUST_LOG: info,libp2p_swarm=debug,libp2p_quic=debug
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - name: Set temp dir
         run: |
           echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
@@ -252,7 +282,7 @@ jobs:
   compose_smoke:
     runs-on: ubuntu-latest
     env:
-      VERSION: v0.3.1
+      VERSION: ${{ env.VERSION }}
       TMPDIR: ${{ github.workspace }}/.tmp
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
       NOMOS_TESTNET_IMAGE: nomos-testnet:${{ github.run_id }}
@@ -263,6 +293,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
 
       - name: Prepare workspace tmpdir
         run: mkdir -p "$TMPDIR"
@@ -410,6 +445,11 @@ jobs:
       RUSTUP_TOOLCHAIN: nightly-2025-09-14
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14

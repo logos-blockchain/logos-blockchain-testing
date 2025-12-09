@@ -2,6 +2,31 @@
 
 set -e
 
+check_binary_arch() {
+  if ! command -v file >/dev/null 2>&1; then
+    echo "Warning: 'file' command not available; skipping nomos-node arch check" >&2
+    return
+  fi
+  bin_info="$(file -b /usr/bin/nomos-node 2>/dev/null || true)"
+  host_arch="$(uname -m)"
+  case "$bin_info" in
+    *"Mach-O"*) echo "nomos-node binary is Mach-O (host bundle) but container requires Linux ELF for ${host_arch}" >&2; exit 126 ;;
+    *"ELF"*) : ;;
+    *) echo "nomos-node binary missing or unreadable; info='${bin_info}'" >&2; exit 126 ;;
+  esac
+  case "$host_arch" in
+    x86_64) expected="x86-64|x86_64" ;;
+    aarch64|arm64) expected="arm64|aarch64" ;;
+    *) expected="" ;;
+  esac
+  if [ -n "$expected" ] && ! echo "$bin_info" | grep -Eqi "$expected"; then
+    echo "nomos-node binary architecture mismatch: host=${host_arch}, file='${bin_info}'" >&2
+    exit 126
+  fi
+}
+
+check_binary_arch
+
 export CFG_FILE_PATH="/config.yaml" \
        CFG_SERVER_ADDR="${CFG_SERVER_ADDR:-http://cfgsync:4400}" \
        CFG_HOST_IP=$(hostname -i) \

@@ -24,6 +24,11 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/.tmp/nomos-target
     steps:
       - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          if [ -f versions.env ]; then
+            cat versions.env >> "$GITHUB_ENV"
+          fi
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |

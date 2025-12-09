@@ -29,8 +29,12 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_VERSION="v0.3.1"
-DEFAULT_NODE_REV="d2dd5a5084e1daef4032562c77d41de5e4d495f8"
+if [ -f "${ROOT_DIR}/versions.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/versions.env"
+fi
+DEFAULT_VERSION="${VERSION:-v0.3.1}"
+DEFAULT_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
 PLATFORM="host"
 OUTPUT=""
 
@@ -51,8 +55,12 @@ esac
 
 VERSION="${VERSION:-${DEFAULT_VERSION}}"
 NOMOS_NODE_REV="${NOMOS_NODE_REV:-${DEFAULT_NODE_REV}}"
+
+# Normalize OUTPUT to an absolute path under the workspace.
 if [ -z "${OUTPUT}" ]; then
   OUTPUT="${ROOT_DIR}/.tmp/nomos-binaries-${PLATFORM}-${VERSION}.tar.gz"
+elif [[ "${OUTPUT}" != /* ]]; then
+  OUTPUT="${ROOT_DIR}/${OUTPUT#./}"
 fi
 
 if [ "$PLATFORM" = "linux" ] && [ "$(uname -s)" != "Linux" ] && [ -z "${BUNDLE_IN_CONTAINER:-}" ]; then
@@ -61,6 +69,8 @@ if [ "$PLATFORM" = "linux" ] && [ "$(uname -s)" != "Linux" ] && [ -z "${BUNDLE_I
     fail "Docker is required to build a Linux bundle from non-Linux host"
   fi
   echo "==> Building Linux bundle inside Docker"
+  # Map host OUTPUT path into container.
+  container_output="/workspace${OUTPUT#"${ROOT_DIR}"}"
   mkdir -p "${ROOT_DIR}/.tmp/cargo-linux" "${ROOT_DIR}/.tmp/nomos-node-linux-target"
   docker run --rm \
     -e VERSION="$VERSION" \
@@ -76,7 +86,7 @@ if [ "$PLATFORM" = "linux" ] && [ "$(uname -s)" != "Linux" ] && [ -z "${BUNDLE_I
     -v "$ROOT_DIR":/workspace \
     -w /workspace \
     rust:1.80-bullseye \
-    bash -c "apt-get update && apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm && ./scripts/build-bundle.sh --platform linux --output /workspace/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
+    bash -c "apt-get update && apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm && ./scripts/build-bundle.sh --platform linux --output \"${container_output}\""
   exit 0
 fi
 

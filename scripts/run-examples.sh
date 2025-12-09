@@ -54,8 +54,12 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
 fi
 
 readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly DEFAULT_VERSION="v0.3.1"
-readonly DEFAULT_NODE_REV="d2dd5a5084e1daef4032562c77d41de5e4d495f8"
+if [ -f "${ROOT_DIR}/versions.env" ]; then
+  # shellcheck disable=SC1091
+  . "${ROOT_DIR}/versions.env"
+fi
+readonly DEFAULT_VERSION="${VERSION:-v0.3.1}"
+readonly DEFAULT_NODE_REV="${NOMOS_NODE_REV:-d2dd5a5084e1daef4032562c77d41de5e4d495f8}"
 MODE="compose"
 RUN_SECS_RAW=""
 VERSION="${VERSION:-${DEFAULT_VERSION}}"

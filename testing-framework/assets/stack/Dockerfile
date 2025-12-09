@@ -96,6 +96,10 @@ RUN set -eu; \
     }; \
     bin_matches_arch() { \
       BIN_INFO="$(file -b testing-framework/assets/stack/bin/nomos-node 2>/dev/null || true)"; \
+      case "$BIN_INFO" in \
+        *ELF*);; \
+        *) return 1 ;; \
+      esac; \
       case "$TARGET_ARCH" in \
         x86_64) PATTERN="x86-64|x86_64" ;; \
         aarch64|arm64) PATTERN="arm64|aarch64" ;; \
