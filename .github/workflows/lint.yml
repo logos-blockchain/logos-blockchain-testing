@@ -328,8 +328,9 @@ jobs:
           artifact_id=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts" --paginate -F per_page=100 \
             --jq '.artifacts[] | select(.name=="'"${ARTIFACT_NAME}"'") | .id' | head -n1)
           if [ -z "$artifact_id" ]; then
-            echo "Nomos binaries artifact ${ARTIFACT_NAME} not found. Run build-binaries workflow." >&2
-            exit 1
+            echo "Nomos binaries artifact ${ARTIFACT_NAME} not found; building linux bundle locally."
+            ./scripts/build-bundle.sh --platform linux --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
+            exit 0
           fi
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${download_dir}/nomos-binaries.zip"
           unzip -o "${download_dir}/nomos-binaries.zip" -d "${download_dir}"
