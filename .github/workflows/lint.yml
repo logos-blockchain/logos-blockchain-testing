@@ -137,7 +137,7 @@ jobs:
           fi
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh v0.3.1 "$HOME/.nomos-circuits"
+          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
