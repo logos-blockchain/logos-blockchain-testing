@@ -9,7 +9,7 @@ use tokio::{
 };
 use tracing::warn;
 
-use crate::helm::uninstall_release;
+use crate::infrastructure::helm::uninstall_release;
 
 /// Tears down Helm release and namespace after a run unless preservation is
 /// set.

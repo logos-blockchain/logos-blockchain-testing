@@ -12,10 +12,9 @@ use url::ParseError;
 use uuid::Uuid;
 
 use crate::{
-    assets::RunnerAssets,
-    cleanup::RunnerCleanup,
     host::node_host,
-    logs::dump_namespace_logs,
+    infrastructure::assets::RunnerAssets,
+    lifecycle::{cleanup::RunnerCleanup, logs::dump_namespace_logs},
     wait::{ClusterPorts, ClusterReady, NodeConfigPorts, wait_for_cluster_ready},
 };
 
@@ -72,7 +71,7 @@ impl ClusterEnvironment {
         dump_namespace_logs(&self.client, &self.namespace).await;
         kill_port_forwards(&mut self.port_forwards);
         if let Some(guard) = self.cleanup.take() {
-            Box::new(guard).cleanup();
+            CleanupGuard::cleanup(Box::new(guard));
         }
     }
 
@@ -228,7 +227,8 @@ pub async fn install_stack(
         namespace = %namespace,
         "installing helm release"
     );
-    crate::helm::install_release(assets, release, namespace, validators, executors).await?;
+    crate::infrastructure::helm::install_release(assets, release, namespace, validators, executors)
+        .await?;
     tracing::info!(release = %release, "helm install succeeded");
 
     let preserve = env::var("K8S_RUNNER_PRESERVE").is_ok();
@@ -288,9 +288,9 @@ pub fn kill_port_forwards(handles: &mut Vec<std::process::Child>) {
 }
 
 async fn cleanup_pending(client: &Client, namespace: &str, guard: &mut Option<RunnerCleanup>) {
-    crate::logs::dump_namespace_logs(client, namespace).await;
+    crate::lifecycle::logs::dump_namespace_logs(client, namespace).await;
     if let Some(guard) = guard.take() {
-        Box::new(guard).cleanup();
+        CleanupGuard::cleanup(Box::new(guard));
     }
 }
 

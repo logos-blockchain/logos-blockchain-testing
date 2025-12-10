@@ -3,7 +3,7 @@ use std::{io, process::Stdio};
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::assets::{RunnerAssets, cfgsync_port_value, workspace_root};
+use crate::infrastructure::assets::{RunnerAssets, cfgsync_port_value, workspace_root};
 
 /// Errors returned from Helm invocations.
 #[derive(Debug, Error)]

@@ -1,11 +1,9 @@
-mod assets;
-mod block_feed;
-mod cleanup;
-mod cluster;
 mod deployer;
-mod helm;
 mod host;
-mod logs;
-mod wait;
+mod infrastructure;
+mod lifecycle;
+pub mod wait {
+    pub use crate::lifecycle::wait::*;
+}
 
 pub use deployer::{K8sDeployer, K8sRunnerError};

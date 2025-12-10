@@ -5,7 +5,7 @@ use super::{
     ClusterPorts, ClusterReady, ClusterWaitError, NodeConfigPorts, PROMETHEUS_HTTP_PORT,
     PROMETHEUS_HTTP_PROBE_TIMEOUT, PROMETHEUS_SERVICE_NAME,
 };
-use crate::wait::{
+use crate::lifecycle::wait::{
     deployment::wait_for_deployment_ready,
     forwarding::{kill_port_forwards, port_forward_group, port_forward_service},
     http_probe::{wait_for_node_http_nodeport, wait_for_node_http_port_forward},

@@ -8,15 +8,16 @@ use testing_framework_core::{
 use tracing::{error, info};
 
 use crate::{
-    assets::{AssetsError, prepare_assets},
-    block_feed::spawn_block_feed_with,
-    cleanup::RunnerCleanup,
-    cluster::{
-        ClusterEnvironment, NodeClientError, PortSpecs, RemoteReadinessError, build_node_clients,
-        cluster_identifiers, collect_port_specs, ensure_cluster_readiness, install_stack,
-        kill_port_forwards, metrics_handle_from_port, wait_for_ports_or_cleanup,
+    infrastructure::{
+        assets::{AssetsError, prepare_assets},
+        cluster::{
+            ClusterEnvironment, NodeClientError, PortSpecs, RemoteReadinessError,
+            build_node_clients, cluster_identifiers, collect_port_specs, ensure_cluster_readiness,
+            install_stack, kill_port_forwards, metrics_handle_from_port, wait_for_ports_or_cleanup,
+        },
+        helm::HelmError,
     },
-    helm::HelmError,
+    lifecycle::{block_feed::spawn_block_feed_with, cleanup::RunnerCleanup},
     wait::ClusterWaitError,
 };
 
