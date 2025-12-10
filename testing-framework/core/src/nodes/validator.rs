@@ -18,7 +18,6 @@ use nomos_node::{Config, HeaderId, api::testing::handlers::HistoricSamplingReque
 use nomos_tracing::logging::local::FileConfig;
 use nomos_tracing_service::LoggerLayer;
 use reqwest::Url;
-use serde_yaml::{Mapping, Number as YamlNumber, Value};
 pub use testing_framework_config::nodes::validator::create_validator_config;
 use tokio::time::error::Elapsed;
 use tx_service::MempoolMetrics;
@@ -28,7 +27,10 @@ use crate::{
     IS_DEBUG_TRACING, adjust_timeout,
     nodes::{
         LOGS_PREFIX,
-        common::binary::{BinaryConfig, BinaryResolver},
+        common::{
+            binary::{BinaryConfig, BinaryResolver},
+            config::injection::inject_ibd_into_cryptarchia,
+        },
     },
 };
 
@@ -54,70 +56,6 @@ pub struct Validator {
     child: Child,
     config: Config,
     api: ApiClient,
-}
-
-fn inject_ibd_into_cryptarchia(yaml_value: &mut Value) {
-    let Some(cryptarchia) = cryptarchia_section(yaml_value) else {
-        return;
-    };
-    ensure_network_adapter(cryptarchia);
-    ensure_sync_defaults(cryptarchia);
-    ensure_ibd_bootstrap(cryptarchia);
-}
-
-fn cryptarchia_section(yaml_value: &mut Value) -> Option<&mut Mapping> {
-    yaml_value
-        .as_mapping_mut()
-        .and_then(|root| root.get_mut(&Value::String("cryptarchia".into())))
-        .and_then(Value::as_mapping_mut)
-}
-
-fn ensure_network_adapter(cryptarchia: &mut Mapping) {
-    if cryptarchia.contains_key(&Value::String("network_adapter_settings".into())) {
-        return;
-    }
-    let mut network = Mapping::new();
-    network.insert(
-        Value::String("topic".into()),
-        Value::String("/cryptarchia/proto".into()),
-    );
-    cryptarchia.insert(
-        Value::String("network_adapter_settings".into()),
-        Value::Mapping(network),
-    );
-}
-
-fn ensure_sync_defaults(cryptarchia: &mut Mapping) {
-    if cryptarchia.contains_key(&Value::String("sync".into())) {
-        return;
-    }
-    let mut orphan = Mapping::new();
-    orphan.insert(
-        Value::String("max_orphan_cache_size".into()),
-        Value::Number(YamlNumber::from(5)),
-    );
-    let mut sync = Mapping::new();
-    sync.insert(Value::String("orphan".into()), Value::Mapping(orphan));
-    cryptarchia.insert(Value::String("sync".into()), Value::Mapping(sync));
-}
-
-fn ensure_ibd_bootstrap(cryptarchia: &mut Mapping) {
-    let Some(bootstrap) = cryptarchia
-        .get_mut(&Value::String("bootstrap".into()))
-        .and_then(Value::as_mapping_mut)
-    else {
-        return;
-    };
-
-    let ibd_key = Value::String("ibd".into());
-    if bootstrap.contains_key(&ibd_key) {
-        return;
-    }
-
-    let mut ibd = Mapping::new();
-    ibd.insert(Value::String("peers".into()), Value::Sequence(vec![]));
-
-    bootstrap.insert(ibd_key, Value::Mapping(ibd));
 }
 
 impl Drop for Validator {
