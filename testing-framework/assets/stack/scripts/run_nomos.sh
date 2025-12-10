@@ -44,7 +44,7 @@ KZG_CONTAINER_PATH="${NOMOS_KZG_CONTAINER_PATH:-/kzgrs_test_params/kzgrs_test_pa
 host_identifier_default="${role}-$(hostname -i)"
 
 export CFG_FILE_PATH="/config.yaml" \
-       CFG_SERVER_ADDR="${CFG_SERVER_ADDR:-http://cfgsync:4400}" \
+      CFG_SERVER_ADDR="${CFG_SERVER_ADDR:-http://cfgsync:${NOMOS_CFGSYNC_PORT:-4400}}" \
        CFG_HOST_IP=$(hostname -i) \
        CFG_HOST_KIND="${CFG_HOST_KIND:-$role}" \
        CFG_HOST_IDENTIFIER="${CFG_HOST_IDENTIFIER:-$host_identifier_default}" \
