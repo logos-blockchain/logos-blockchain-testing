@@ -1,11 +1,5 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr as _};
 
-use groth16::fr_to_bytes;
-use hex;
-use key_management_system_service::{
-    backend::preload::PreloadKMSBackendSettings,
-    keys::{Ed25519Key, Key, ZkKey},
-};
 use nomos_core::mantle::GenesisTx as _;
 use nomos_libp2p::{Multiaddr, PeerId, ed25519};
 use nomos_tracing_service::{LoggerLayer, MetricsLayer, TracingLayer, TracingSettings};
@@ -14,10 +8,10 @@ use rand::{Rng as _, thread_rng};
 use testing_framework_config::topology::configs::{
     GeneralConfig,
     api::GeneralApiConfig,
-    blend::{GeneralBlendConfig, create_blend_configs},
+    blend::create_blend_configs,
     bootstrap::{SHORT_PROLONGED_BOOTSTRAP_PERIOD, create_bootstrap_configs},
     consensus::{ConsensusParams, create_consensus_configs, create_genesis_tx_with_declarations},
-    da::{DaParams, GeneralDaConfig, create_da_configs},
+    da::{DaParams, create_da_configs},
     network::{NetworkParams, create_network_configs},
     time::default_time_config,
     tracing::GeneralTracingConfig,
@@ -26,10 +20,11 @@ use testing_framework_config::topology::configs::{
 
 pub use crate::host::{Host, HostKind, PortOverrides};
 use crate::{
-    config::{providers::create_providers, validation::validate_inputs},
+    config::{kms::create_kms_configs, providers::create_providers, validation::validate_inputs},
     host::sort_hosts,
     network::rewrite_initial_peers,
 };
+mod kms;
 mod providers;
 mod validation;
 
@@ -219,41 +214,6 @@ fn update_tracing_identifier(
             level: settings.level,
         },
     }
-}
-
-fn create_kms_configs(
-    blend_configs: &[GeneralBlendConfig],
-    da_configs: &[GeneralDaConfig],
-) -> Vec<PreloadKMSBackendSettings> {
-    da_configs
-        .iter()
-        .zip(blend_configs.iter())
-        .map(|(da_conf, blend_conf)| PreloadKMSBackendSettings {
-            keys: [
-                (
-                    hex::encode(blend_conf.signer.verifying_key().as_bytes()),
-                    Key::Ed25519(Ed25519Key::new(blend_conf.signer.clone())),
-                ),
-                (
-                    hex::encode(fr_to_bytes(
-                        &blend_conf.secret_zk_key.to_public_key().into_inner(),
-                    )),
-                    Key::Zk(ZkKey::new(blend_conf.secret_zk_key.clone())),
-                ),
-                (
-                    hex::encode(da_conf.signer.verifying_key().as_bytes()),
-                    Key::Ed25519(Ed25519Key::new(da_conf.signer.clone())),
-                ),
-                (
-                    hex::encode(fr_to_bytes(
-                        &da_conf.secret_zk_key.to_public_key().into_inner(),
-                    )),
-                    Key::Zk(ZkKey::new(da_conf.secret_zk_key.clone())),
-                ),
-            ]
-            .into(),
-        })
-        .collect()
 }
 
 #[cfg(test)]
