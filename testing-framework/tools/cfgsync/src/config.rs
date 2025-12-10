@@ -26,9 +26,12 @@ use testing_framework_config::topology::configs::{
 
 pub use crate::host::{Host, HostKind, PortOverrides};
 use crate::{
-    config::providers::create_providers, host::sort_hosts, network::rewrite_initial_peers,
+    config::{providers::create_providers, validation::validate_inputs},
+    host::sort_hosts,
+    network::rewrite_initial_peers,
 };
 mod providers;
+mod validation;
 
 #[must_use]
 pub fn create_node_configs(
@@ -43,11 +46,14 @@ pub fn create_node_configs(
 ) -> HashMap<Host, GeneralConfig> {
     let hosts = sort_hosts(hosts);
 
-    assert_eq!(
-        hosts.len(),
-        consensus_params.n_participants,
-        "host count must match consensus participants"
-    );
+    validate_inputs(
+        &hosts,
+        consensus_params,
+        ids.as_ref(),
+        da_ports.as_ref(),
+        blend_ports.as_ref(),
+    )
+    .expect("invalid cfgsync inputs");
 
     let ids = ids.unwrap_or_else(|| {
         let mut generated = vec![[0; 32]; consensus_params.n_participants];
@@ -56,29 +62,14 @@ pub fn create_node_configs(
         }
         generated
     });
-    assert_eq!(
-        ids.len(),
-        consensus_params.n_participants,
-        "pre-generated ids must match participant count"
-    );
 
     let ports = da_ports.unwrap_or_else(|| {
         (0..consensus_params.n_participants)
             .map(|_| get_available_udp_port().unwrap())
             .collect()
     });
-    assert_eq!(
-        ports.len(),
-        consensus_params.n_participants,
-        "da port list must match participant count"
-    );
 
     let blend_ports = blend_ports.unwrap_or_else(|| hosts.iter().map(|h| h.blend_port).collect());
-    assert_eq!(
-        blend_ports.len(),
-        consensus_params.n_participants,
-        "blend port list must match participant count"
-    );
 
     let mut consensus_configs = create_consensus_configs(&ids, consensus_params, wallet_config);
     let bootstrap_configs = create_bootstrap_configs(&ids, SHORT_PROLONGED_BOOTSTRAP_PERIOD);

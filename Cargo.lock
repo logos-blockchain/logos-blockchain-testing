@@ -1008,6 +1008,7 @@ dependencies = [
  "subnetworks-assignations",
  "testing-framework-config",
  "testing-framework-core",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
