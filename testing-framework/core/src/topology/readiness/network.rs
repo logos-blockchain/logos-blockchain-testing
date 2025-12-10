@@ -3,7 +3,7 @@ use reqwest::{Client, Url};
 use tracing::warn;
 
 use super::ReadinessCheck;
-use crate::topology::Topology;
+use crate::topology::deployment::Topology;
 
 pub struct NetworkReadiness<'a> {
     pub(crate) topology: &'a Topology,

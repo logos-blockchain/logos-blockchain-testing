@@ -20,9 +20,9 @@ use testing_framework_config::topology::configs::{
 };
 
 use crate::topology::{
-    GeneratedNodeConfig, GeneratedTopology, NodeRole,
     configs::{GeneralConfig, time::default_time_config},
-    create_kms_configs, resolve_ids, resolve_ports,
+    generation::{GeneratedNodeConfig, GeneratedTopology, NodeRole},
+    utils::{create_kms_configs, resolve_ids, resolve_ports},
 };
 
 /// High-level topology settings used to generate node configs for a scenario.

@@ -2,7 +2,7 @@ use std::{path::Path, process::Command as StdCommand};
 
 use testing_framework_core::{
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, write_cfgsync_template},
-    topology::GeneratedTopology,
+    topology::generation::GeneratedTopology,
 };
 
 /// Handle that tracks a cfgsync server started for compose runs.

@@ -9,7 +9,7 @@ use serde_with::serde_as;
 
 use crate::{
     constants::kzg_container_path,
-    topology::{GeneratedTopology, configs::wallet::WalletConfig},
+    topology::{configs::wallet::WalletConfig, generation::GeneratedTopology},
 };
 
 #[serde_as]

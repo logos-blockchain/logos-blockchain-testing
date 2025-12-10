@@ -5,7 +5,7 @@ use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
     scenario::{CleanupGuard, Metrics, MetricsError, NodeClients, http_probe::NodeRole},
-    topology::{GeneratedTopology, ReadinessError},
+    topology::{generation::GeneratedTopology, readiness::ReadinessError},
 };
 use tracing::info;
 use url::ParseError;

@@ -5,7 +5,7 @@ use testing_framework_core::{
         MetricsError,
         http_probe::{HttpReadinessError, NodeRole},
     },
-    topology::ReadinessError,
+    topology::readiness::ReadinessError,
 };
 use url::ParseError;
 

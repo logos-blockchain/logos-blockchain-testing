@@ -4,7 +4,9 @@ use super::{block_feed::BlockFeed, metrics::Metrics, node_clients::ClusterClient
 use crate::{
     nodes::ApiClient,
     scenario::{NodeClients, NodeControlHandle},
-    topology::{GeneratedTopology, Topology, configs::wallet::WalletAccount},
+    topology::{
+        configs::wallet::WalletAccount, deployment::Topology, generation::GeneratedTopology,
+    },
 };
 
 /// Shared runtime context available to workloads and expectations.

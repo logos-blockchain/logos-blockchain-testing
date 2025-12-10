@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use testing_framework_core::{
     constants::cfgsync_port,
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, render_cfgsync_yaml},
-    topology::GeneratedTopology,
+    topology::generation::GeneratedTopology,
 };
 use thiserror::Error;
 

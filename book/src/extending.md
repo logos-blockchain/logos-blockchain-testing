@@ -25,7 +25,7 @@
    workloads can rely on consistent signals.
 
 ## Adding topology helpers
-- Extend `testing_framework_core::topology::TopologyBuilder` with new layouts or
+- Extend `testing_framework_core::topology::config::TopologyBuilder` with new layouts or
   configuration presets (e.g., specialized DA parameters). Keep defaults safe:
   ensure at least one participant and clamp dispersal factors as the current
   helpers do.

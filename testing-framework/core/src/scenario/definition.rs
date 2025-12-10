@@ -5,8 +5,9 @@ use super::{
     workload::Workload,
 };
 use crate::topology::{
-    GeneratedTopology, TopologyBuilder, TopologyConfig,
+    config::{TopologyBuilder, TopologyConfig},
     configs::{network::Libp2pNetworkLayout, wallet::WalletConfig},
+    generation::GeneratedTopology,
 };
 
 const DEFAULT_FUNDS_PER_WALLET: u64 = 100;

@@ -12,7 +12,7 @@ use nomos_core::mantle::{
 use testing_framework_config::topology::configs::wallet::WalletAccount;
 use testing_framework_core::{
     scenario::{DynError, Expectation, RunContext, RunMetrics, Workload as ScenarioWorkload},
-    topology::{GeneratedNodeConfig, GeneratedTopology},
+    topology::generation::{GeneratedNodeConfig, GeneratedTopology},
 };
 use tokio::time::sleep;
 use zksign::{PublicKey, SecretKey};

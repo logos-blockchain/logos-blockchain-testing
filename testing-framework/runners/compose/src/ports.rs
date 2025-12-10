@@ -5,7 +5,7 @@ use reqwest::Url;
 use testing_framework_core::{
     adjust_timeout,
     scenario::http_probe::NodeRole as HttpNodeRole,
-    topology::{GeneratedTopology, NodeRole as TopologyNodeRole},
+    topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
 };
 use tokio::{process::Command, time::timeout};
 use url::ParseError;

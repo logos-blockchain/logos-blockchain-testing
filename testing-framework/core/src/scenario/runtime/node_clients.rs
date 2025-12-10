@@ -5,7 +5,7 @@ use rand::{Rng as _, seq::SliceRandom as _, thread_rng};
 use crate::{
     nodes::ApiClient,
     scenario::DynError,
-    topology::{GeneratedTopology, Topology},
+    topology::{deployment::Topology, generation::GeneratedTopology},
 };
 
 /// Collection of API clients for the validator and executor set.

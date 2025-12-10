@@ -1,7 +1,7 @@
 use nomos_da_network_core::swarm::BalancerStats;
 
 use super::ReadinessCheck;
-use crate::topology::Topology;
+use crate::topology::deployment::Topology;
 
 pub struct DaBalancerReadiness<'a> {
     pub(crate) topology: &'a Topology,

@@ -4,7 +4,7 @@ use testing_framework_core::{
         BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, RunContext, Runner,
         Scenario, ScenarioError, spawn_block_feed,
     },
-    topology::{ReadinessError, Topology},
+    topology::{deployment::Topology, readiness::ReadinessError},
 };
 use thiserror::Error;
 use tracing::info;

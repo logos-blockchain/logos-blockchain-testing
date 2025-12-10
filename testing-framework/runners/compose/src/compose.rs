@@ -11,7 +11,7 @@ use tera::Context as TeraContext;
 use testing_framework_core::{
     adjust_timeout,
     constants::{DEFAULT_CFGSYNC_PORT, kzg_container_path},
-    topology::{GeneratedNodeConfig, GeneratedTopology},
+    topology::generation::{GeneratedNodeConfig, GeneratedTopology},
 };
 use tokio::{process::Command, time::timeout};
 
@@ -611,7 +611,7 @@ fn handle_compose_status(
 
 #[cfg(test)]
 mod tests {
-    use testing_framework_core::topology::{TopologyBuilder, TopologyConfig};
+    use testing_framework_core::topology::config::{TopologyBuilder, TopologyConfig};
 
     use super::*;
 

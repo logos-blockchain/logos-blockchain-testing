@@ -3,8 +3,9 @@ use std::{collections::HashSet, time::Duration};
 use reqwest::{Client, Url};
 
 use crate::topology::{
-    Topology, TopologyConfig,
+    config::TopologyConfig,
     configs::{GeneralConfig, wallet::WalletAccount},
+    deployment::Topology,
     readiness::{HttpMembershipReadiness, HttpNetworkReadiness, ReadinessCheck, ReadinessError},
 };
 

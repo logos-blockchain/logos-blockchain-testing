@@ -4,7 +4,7 @@ use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
     scenario::{Metrics, MetricsError, NodeClients, http_probe::NodeRole as HttpNodeRole},
-    topology::{GeneratedTopology, NodeRole as TopologyNodeRole},
+    topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
 };
 use tokio::time::sleep;
 

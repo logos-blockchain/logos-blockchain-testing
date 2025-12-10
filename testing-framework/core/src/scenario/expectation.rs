@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use super::{DynError, RunContext, runtime::context::RunMetrics};
-use crate::topology::GeneratedTopology;
+use crate::topology::generation::GeneratedTopology;
 
 #[async_trait]
 /// Defines a check evaluated during or after a scenario run.

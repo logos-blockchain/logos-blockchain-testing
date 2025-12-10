@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use testing_framework_core::scenario::{
     DynError, Expectation, RunContext, RunMetrics, Workload,
 };
-use testing_framework_core::topology::GeneratedTopology;
+use testing_framework_core::topology::generation::GeneratedTopology;
 
 pub struct ReachabilityWorkload {
     target_idx: usize,

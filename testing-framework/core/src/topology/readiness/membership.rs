@@ -3,7 +3,7 @@ use nomos_da_network_service::MembershipResponse;
 use reqwest::{Client, Url};
 
 use super::ReadinessCheck;
-use crate::topology::Topology;
+use crate::topology::deployment::Topology;
 
 pub struct MembershipReadiness<'a> {
     pub(crate) topology: &'a Topology,

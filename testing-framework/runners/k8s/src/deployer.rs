@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use kube::Client;
 use testing_framework_core::{
     scenario::{BlockFeedTask, CleanupGuard, Deployer, MetricsError, RunContext, Runner, Scenario},
-    topology::GeneratedTopology,
+    topology::generation::GeneratedTopology,
 };
 use tracing::{error, info};
 

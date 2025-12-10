@@ -8,7 +8,7 @@ use crate::{
         validator::{Validator, create_validator_config},
     },
     topology::{
-        TopologyBuilder, TopologyConfig,
+        config::{TopologyBuilder, TopologyConfig},
         configs::GeneralConfig,
         generation::find_expected_peer_counts,
         readiness::{

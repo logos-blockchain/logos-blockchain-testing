@@ -10,7 +10,7 @@ use testing_framework_core::{
         BlockFeed, BlockFeedTask, CleanupGuard, Deployer, NodeClients, NodeControlHandle,
         RequiresNodeControl, RunContext, Runner, Scenario,
     },
-    topology::GeneratedTopology,
+    topology::generation::GeneratedTopology,
 };
 use tracing::{debug, info};
 
@@ -296,7 +296,9 @@ mod tests {
     use nomos_tracing_service::TracingSettings;
     use testing_framework_core::{
         scenario::ScenarioBuilder,
-        topology::{GeneratedNodeConfig, GeneratedTopology, NodeRole as TopologyNodeRole},
+        topology::generation::{
+            GeneratedNodeConfig, GeneratedTopology, NodeRole as TopologyNodeRole,
+        },
     };
     use zksign::PublicKey;
 

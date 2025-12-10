@@ -5,7 +5,9 @@ use std::{
 };
 
 use anyhow::anyhow;
-use testing_framework_core::{adjust_timeout, scenario::CleanupGuard, topology::GeneratedTopology};
+use testing_framework_core::{
+    adjust_timeout, scenario::CleanupGuard, topology::generation::GeneratedTopology,
+};
 use tokio::process::Command;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
