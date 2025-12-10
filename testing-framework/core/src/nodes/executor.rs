@@ -31,6 +31,7 @@ use crate::{
         common::{
             binary::{BinaryConfig, BinaryResolver},
             config::{injection::inject_ibd_into_cryptarchia, paths::ensure_recovery_paths},
+            lifecycle::kill::kill_child,
         },
     },
 };
@@ -62,9 +63,7 @@ impl Drop for Executor {
             println!("failed to persist tempdir: {e}");
         }
 
-        if let Err(e) = self.child.kill() {
-            println!("failed to kill the child process: {e}");
-        }
+        kill_child(&mut self.child);
     }
 }
 

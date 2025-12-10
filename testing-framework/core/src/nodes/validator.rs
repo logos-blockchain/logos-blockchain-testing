@@ -30,6 +30,7 @@ use crate::{
         common::{
             binary::{BinaryConfig, BinaryResolver},
             config::{injection::inject_ibd_into_cryptarchia, paths::ensure_recovery_paths},
+            lifecycle::kill::kill_child,
         },
     },
 };
@@ -66,19 +67,14 @@ impl Drop for Validator {
             println!("failed to persist tempdir: {e}");
         }
 
-        if let Err(e) = self.child.kill() {
-            println!("failed to kill the child process: {e}");
-        }
+        kill_child(&mut self.child);
     }
 }
 
 impl Validator {
     /// Check if the validator process is still running
     pub fn is_running(&mut self) -> bool {
-        match self.child.try_wait() {
-            Ok(None) => true,
-            Ok(Some(_)) | Err(_) => false,
-        }
+        crate::nodes::common::lifecycle::monitor::is_running(&mut self.child)
     }
 
     /// Wait for the validator process to exit, with a timeout
