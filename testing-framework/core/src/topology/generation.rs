@@ -6,7 +6,6 @@ use crate::topology::{
     Topology, TopologyConfig,
     configs::{GeneralConfig, wallet::WalletAccount},
     readiness::{HttpMembershipReadiness, HttpNetworkReadiness, ReadinessCheck, ReadinessError},
-    utils::multiaddr_port,
 };
 
 /// Node role within the generated topology.
@@ -159,8 +158,10 @@ impl GeneratedTopology {
         if endpoints.len() > 1 {
             let listen_ports = self.listen_ports();
             let initial_peer_ports = self.initial_peer_ports();
-            let expected_peer_counts =
-                find_expected_peer_counts(&listen_ports, &initial_peer_ports);
+            let expected_peer_counts = crate::topology::generation::find_expected_peer_counts(
+                &listen_ports,
+                &initial_peer_ports,
+            );
             let network_check = HttpNetworkReadiness {
                 client: &client,
                 endpoints: &endpoints,
@@ -234,7 +235,7 @@ impl GeneratedTopology {
                     .backend
                     .initial_peers
                     .iter()
-                    .filter_map(multiaddr_port)
+                    .filter_map(crate::topology::utils::multiaddr_port)
                     .collect::<HashSet<u16>>()
             })
             .chain(self.executors.iter().map(|node| {
@@ -243,7 +244,7 @@ impl GeneratedTopology {
                     .backend
                     .initial_peers
                     .iter()
-                    .filter_map(multiaddr_port)
+                    .filter_map(crate::topology::utils::multiaddr_port)
                     .collect::<HashSet<u16>>()
             }))
             .collect()
