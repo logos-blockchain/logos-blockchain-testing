@@ -39,3 +39,12 @@ app.kubernetes.io/name: {{ include "nomos-runner.chart" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 nomos/logical-role: prometheus
 {{- end -}}
+
+{{- define "nomos-runner.cfgsyncPort" -}}
+{{- $env := env "NOMOS_CFGSYNC_PORT" -}}
+{{- if $env -}}
+{{ $env | int }}
+{{- else -}}
+{{ .Values.cfgsync.port | int }}
+{{- end -}}
+{{- end -}}

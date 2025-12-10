@@ -23,7 +23,7 @@ spec:
           command: ["/etc/nomos/scripts/run_cfgsync.sh"]
           ports:
             - name: http
-              containerPort: {{ .Values.cfgsync.port }}
+              containerPort: {{ include "nomos-runner.cfgsyncPort" . }}
           env:
             - name: RUST_LOG
               value: debug

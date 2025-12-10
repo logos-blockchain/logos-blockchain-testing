@@ -2,7 +2,7 @@ image: "nomos-testnet:local"
 imagePullPolicy: IfNotPresent
 
 cfgsync:
-  port: {{ default 4400 (env "NOMOS_CFGSYNC_PORT") | int }}
+  port: 4400
   config: ""
 
 scripts:

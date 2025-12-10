@@ -11,5 +11,5 @@ spec:
     nomos/component: cfgsync
   ports:
     - name: http
-      port: {{ .Values.cfgsync.port }}
+      port: {{ include "nomos-runner.cfgsyncPort" . }}
       targetPort: http
