@@ -30,7 +30,7 @@ use crate::{
         LOGS_PREFIX,
         common::{
             binary::{BinaryConfig, BinaryResolver},
-            config::injection::inject_ibd_into_cryptarchia,
+            config::{injection::inject_ibd_into_cryptarchia, paths::ensure_recovery_paths},
         },
     },
 };
@@ -76,19 +76,7 @@ impl Executor {
 
         // Ensure recovery files/dirs exist so services that persist state do not fail
         // on startup.
-        let recovery_dir = dir.path().join("recovery");
-        let _ = std::fs::create_dir_all(&recovery_dir);
-        let mempool_path = recovery_dir.join("mempool.json");
-        if !mempool_path.exists() {
-            let _ = std::fs::write(&mempool_path, "{}");
-        }
-        let blend_core_path = recovery_dir.join("blend").join("core.json");
-        if let Some(parent) = blend_core_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if !blend_core_path.exists() {
-            let _ = std::fs::write(&blend_core_path, "{}");
-        }
+        let _ = ensure_recovery_paths(dir.path());
 
         if !*IS_DEBUG_TRACING {
             if let Ok(env_dir) = std::env::var("NOMOS_LOG_DIR") {
