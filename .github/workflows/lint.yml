@@ -334,7 +334,12 @@ jobs:
           fi
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${download_dir}/nomos-binaries.zip"
           unzip -o "${download_dir}/nomos-binaries.zip" -d "${download_dir}"
-          mv "${download_dir}/nomos-binaries.tar.gz" "${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
+          found_tar="$(find "${download_dir}" -name 'nomos-binaries-*.tar.gz' -maxdepth 2 | head -n1)"
+          if [ -z "$found_tar" ]; then
+            echo "Expected a nomos-binaries tar.gz in downloaded artifact" >&2
+            exit 1
+          fi
+          mv "${found_tar}" "${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
 
       - name: Normalize linux bundle path
         run: |
