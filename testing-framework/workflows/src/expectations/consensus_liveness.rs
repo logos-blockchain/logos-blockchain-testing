@@ -39,6 +39,7 @@ impl Expectation for ConsensusLiveness {
     async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
         Self::ensure_participants(ctx)?;
         let target_hint = Self::target_blocks(ctx);
+        tracing::info!(target_hint, "consensus liveness: collecting samples");
         let check = Self::collect_results(ctx).await;
         (*self).report(target_hint, check)
     }
@@ -105,14 +106,13 @@ impl ConsensusLiveness {
             for attempt in 0..REQUEST_RETRIES {
                 match Self::fetch_cluster_info(client).await {
                     Ok((height, tip)) => {
-                        samples.push(NodeSample {
-                            label: format!("node-{idx}"),
-                            height,
-                            tip,
-                        });
+                        let label = format!("node-{idx}");
+                        tracing::debug!(node = %label, height, tip = ?tip, attempt, "consensus_info collected");
+                        samples.push(NodeSample { label, height, tip });
                         break;
                     }
                     Err(err) if attempt + 1 == REQUEST_RETRIES => {
+                        tracing::warn!(node = %format!("node-{idx}"), %err, "consensus_info failed after retries");
                         issues.push(ConsensusLivenessIssue::RequestFailed {
                             node: format!("node-{idx}"),
                             source: err,
@@ -188,12 +188,16 @@ impl ConsensusLiveness {
         if check.issues.is_empty() {
             tracing::info!(
                 target,
+                samples = check.samples.len(),
                 heights = ?check.samples.iter().map(|s| s.height).collect::<Vec<_>>(),
                 tips = ?check.samples.iter().map(|s| s.tip).collect::<Vec<_>>(),
                 "consensus liveness expectation satisfied"
             );
             Ok(())
         } else {
+            for issue in &check.issues {
+                tracing::warn!(?issue, "consensus liveness issue");
+            }
             Err(Box::new(ConsensusLivenessError::Violations {
                 target,
                 details: check.issues.into(),

@@ -179,7 +179,10 @@ async fn publish_blob(
                 .await
             {
                 Ok(blob_id) => return Ok(blob_id),
-                Err(err) => last_err = Some(err.into()),
+                Err(err) => {
+                    tracing::debug!(attempt, executor = %executor.base_url(), %err, "DA: publish_blob failed");
+                    last_err = Some(err.into())
+                }
             }
         }
 

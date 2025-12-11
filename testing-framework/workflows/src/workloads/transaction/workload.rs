@@ -162,6 +162,13 @@ impl<'a> Submission<'a> {
             .cloned()
             .collect::<VecDeque<_>>();
 
+        tracing::info!(
+            planned,
+            interval_ms = interval.as_millis(),
+            accounts_available = workload.accounts.len(),
+            "transaction workload submission plan"
+        );
+
         Ok(Self {
             plan,
             ctx,

@@ -82,6 +82,13 @@ impl Expectation for TxInclusionExpectation {
             return Err(TxExpectationError::NoPlannedTransactions.into());
         }
 
+        tracing::info!(
+            planned_txs = planned,
+            txs_per_block = self.txs_per_block.get(),
+            user_limit = self.user_limit.map(|u| u.get()),
+            "tx inclusion expectation starting capture"
+        );
+
         let wallet_pks = wallet_accounts
             .into_iter()
             .take(planned)
@@ -137,8 +144,20 @@ impl Expectation for TxInclusionExpectation {
         let required = ((state.expected as f64) * MIN_INCLUSION_RATIO).ceil() as u64;
 
         if observed >= required {
+            tracing::info!(
+                observed,
+                required,
+                expected = state.expected,
+                "tx inclusion expectation satisfied"
+            );
             Ok(())
         } else {
+            tracing::warn!(
+                observed,
+                required,
+                expected = state.expected,
+                "tx inclusion expectation failed"
+            );
             Err(TxExpectationError::InsufficientInclusions { observed, required }.into())
         }
     }

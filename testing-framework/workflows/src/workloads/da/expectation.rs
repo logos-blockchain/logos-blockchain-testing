@@ -58,6 +58,11 @@ impl Expectation for DaWorkloadExpectation {
             return Ok(());
         }
 
+        tracing::info!(
+            planned_channels = self.planned_channels.len(),
+            "DA inclusion expectation starting capture"
+        );
+
         let planned = Arc::new(
             self.planned_channels
                 .iter()
@@ -113,6 +118,12 @@ impl Expectation for DaWorkloadExpectation {
         };
         let required_inscriptions = minimum_required(planned_total, MIN_INCLUSION_RATIO);
         if planned_total.saturating_sub(missing_inscriptions.len()) < required_inscriptions {
+            tracing::warn!(
+                planned = planned_total,
+                missing = missing_inscriptions.len(),
+                required = required_inscriptions,
+                "DA expectation missing inscriptions"
+            );
             return Err(DaExpectationError::MissingInscriptions {
                 missing: missing_inscriptions,
             }
@@ -125,11 +136,24 @@ impl Expectation for DaWorkloadExpectation {
         };
         let required_blobs = minimum_required(planned_total, MIN_INCLUSION_RATIO);
         if planned_total.saturating_sub(missing_blobs.len()) < required_blobs {
+            tracing::warn!(
+                planned = planned_total,
+                missing = missing_blobs.len(),
+                required = required_blobs,
+                "DA expectation missing blobs"
+            );
             return Err(DaExpectationError::MissingBlobs {
                 missing: missing_blobs,
             }
             .into());
         }
+
+        tracing::info!(
+            planned = planned_total,
+            inscriptions = planned_total - missing_inscriptions.len(),
+            blobs = planned_total - missing_blobs.len(),
+            "DA inclusion expectation satisfied"
+        );
 
         Ok(())
     }
