@@ -51,6 +51,7 @@ impl ScenarioWorkload for Workload {
         descriptors: &GeneratedTopology,
         _run_metrics: &RunMetrics,
     ) -> Result<(), DynError> {
+        tracing::info!("initializing transaction workload");
         let wallet_accounts = descriptors.config().wallet().accounts.clone();
         if wallet_accounts.is_empty() {
             return Err("transaction workload requires seeded accounts".into());
@@ -81,11 +82,22 @@ impl ScenarioWorkload for Workload {
             );
         }
 
+        tracing::info!(
+            available_accounts = accounts.len(),
+            user_limit = self.user_limit.map(|u| u.get()),
+            "transaction workload accounts prepared"
+        );
+
         self.accounts = accounts;
         Ok(())
     }
 
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
+        tracing::info!(
+            txs_per_block = self.txs_per_block.get(),
+            users = self.user_limit.map(|u| u.get()),
+            "starting transaction workload submission"
+        );
         Submission::new(self, ctx)?.execute().await
     }
 }
@@ -158,6 +170,12 @@ impl<'a> Submission<'a> {
     }
 
     async fn execute(mut self) -> Result<(), DynError> {
+        let total = self.plan.len();
+        tracing::info!(
+            total,
+            interval_ms = self.interval.as_millis(),
+            "begin transaction submissions"
+        );
         while let Some(input) = self.plan.pop_front() {
             submit_wallet_transaction(self.ctx, &input).await?;
 
@@ -165,6 +183,7 @@ impl<'a> Submission<'a> {
                 sleep(self.interval).await;
             }
         }
+        tracing::info!("transaction submissions finished");
 
         Ok(())
     }

@@ -72,9 +72,11 @@ impl ScenarioWorkload for Workload {
         let mut receiver = ctx.block_feed().subscribe();
 
         for channel_id in self.plan().iter().copied() {
+            tracing::info!(channel_id = ?channel_id, "DA workload starting channel flow");
             run_channel_flow(ctx, &mut receiver, channel_id).await?;
         }
 
+        tracing::info!("DA workload completed all channel flows");
         Ok(())
     }
 }
@@ -84,11 +86,14 @@ async fn run_channel_flow(
     receiver: &mut broadcast::Receiver<Arc<BlockRecord>>,
     channel_id: ChannelId,
 ) -> Result<(), DynError> {
+    tracing::debug!(channel_id = ?channel_id, "DA: submitting inscription tx");
     let tx = Arc::new(tx::create_inscription_transaction_with_id(channel_id));
     submit_transaction_via_cluster(ctx, Arc::clone(&tx)).await?;
 
     let inscription_id = wait_for_inscription(receiver, channel_id).await?;
+    tracing::debug!(channel_id = ?channel_id, inscription_id = ?inscription_id, "DA: inscription observed");
     let blob_id = publish_blob(ctx, channel_id, inscription_id).await?;
+    tracing::debug!(channel_id = ?channel_id, blob_id = ?blob_id, "DA: blob published");
     wait_for_blob(receiver, channel_id, blob_id).await?;
     Ok(())
 }

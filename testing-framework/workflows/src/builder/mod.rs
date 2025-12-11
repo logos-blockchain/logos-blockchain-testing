@@ -143,6 +143,11 @@ impl<Caps> TransactionFlowBuilder<Caps> {
         let workload = transaction::Workload::with_rate(self.rate.get())
             .expect("transaction rate must be non-zero")
             .with_user_limit(self.users);
+        tracing::info!(
+            rate = self.rate.get(),
+            users = self.users.map(|u| u.get()),
+            "attaching transaction workload"
+        );
         self.builder = self.builder.with_workload(workload);
         self.builder
     }
@@ -204,6 +209,12 @@ impl<Caps> DataAvailabilityFlowBuilder<Caps> {
     pub fn apply(mut self) -> CoreScenarioBuilder<Caps> {
         let count = (self.channel_rate.get() * self.blob_rate.get()) as usize;
         let workload = da::Workload::with_channel_count(count.max(1));
+        tracing::info!(
+            channel_rate = self.channel_rate.get(),
+            blob_rate = self.blob_rate.get(),
+            channels = count.max(1),
+            "attaching data-availability workload"
+        );
         self.builder = self.builder.with_workload(workload);
         self.builder
     }
