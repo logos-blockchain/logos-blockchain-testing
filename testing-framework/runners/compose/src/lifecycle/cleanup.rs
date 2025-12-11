@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf, thread};
 
 use testing_framework_core::scenario::CleanupGuard;
+use tracing::{debug, info, warn};
 
 use crate::{
     docker::{
@@ -45,7 +46,7 @@ impl RunnerCleanup {
         if let Err(err) =
             run_compose_down_blocking(&self.compose_file, &self.project_name, &self.root)
         {
-            eprintln!("[compose-runner] docker compose down failed: {err}");
+            warn!(error = ?err, "docker compose down failed");
         }
     }
 }
@@ -80,6 +81,13 @@ fn run_compose_down_blocking(
 }
 impl CleanupGuard for RunnerCleanup {
     fn cleanup(mut self: Box<Self>) {
+        debug!(
+            compose_file = %self.compose_file.display(),
+            project = %self.project_name,
+            root = %self.root.display(),
+            preserve = self.should_preserve(),
+            "compose cleanup started"
+        );
         if self.should_preserve() {
             self.persist_workspace();
             return;
@@ -101,12 +109,9 @@ impl RunnerCleanup {
     fn persist_workspace(&mut self) {
         if let Some(workspace) = self.workspace.take() {
             let keep = workspace.into_inner().keep();
-            eprintln!(
-                "[compose-runner] preserving docker state at {}",
-                keep.display()
-            );
+            info!(path = %keep.display(), "preserving docker state");
         }
 
-        eprintln!("[compose-runner] compose preserve flag set; skipping docker compose down");
+        info!("compose preserve flag set; skipping docker compose down");
     }
 }

@@ -7,7 +7,7 @@ use testing_framework_core::{
     scenario::{CleanupGuard, Metrics, MetricsError, NodeClients, http_probe::NodeRole},
     topology::{generation::GeneratedTopology, readiness::ReadinessError},
 };
-use tracing::info;
+use tracing::{debug, info};
 use url::ParseError;
 use uuid::Uuid;
 
@@ -149,10 +149,18 @@ pub fn collect_port_specs(descriptors: &GeneratedTopology) -> PortSpecs {
         })
         .collect();
 
-    PortSpecs {
+    let specs = PortSpecs {
         validators,
         executors,
-    }
+    };
+
+    debug!(
+        validators = specs.validators.len(),
+        executors = specs.executors.len(),
+        "collected k8s port specs"
+    );
+
+    specs
 }
 
 pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, NodeClientError> {
@@ -174,6 +182,12 @@ pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, N
             api_client_from_ports(NodeRole::Executor, api_port, testing_port)
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    debug!(
+        validators = validators.len(),
+        executors = executors.len(),
+        "built k8s node clients"
+    );
 
     Ok(NodeClients::new(validators, executors))
 }
@@ -205,7 +219,15 @@ pub async fn ensure_cluster_readiness(
             Some(&executor_membership_urls),
         )
         .await
-        .map_err(|source| RemoteReadinessError::Remote { source })
+        .map_err(|source| RemoteReadinessError::Remote { source })?;
+
+    info!(
+        validator_api_ports = ?validator_api,
+        executor_api_ports = ?executor_api,
+        "k8s remote readiness confirmed"
+    );
+
+    Ok(())
 }
 
 pub fn cluster_identifiers() -> (String, String) {

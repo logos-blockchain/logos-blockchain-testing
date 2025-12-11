@@ -4,7 +4,7 @@ use std::{
 };
 
 use testing_framework_core::topology::generation::GeneratedTopology;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     docker::ensure_docker_available,
@@ -57,6 +57,10 @@ impl DeploymentSetup {
             .and_then(|port| reserve_port(port))
             .or_else(|| allocate_prometheus_port())
             .unwrap_or_else(|| PortReservation::new(DEFAULT_PROMETHEUS_PORT, None));
+        debug!(
+            prometheus_port = prometheus_port.port(),
+            "selected prometheus port"
+        );
         let environment =
             prepare_environment(&self.descriptors, prometheus_port, prometheus_env.is_some())
                 .await?;

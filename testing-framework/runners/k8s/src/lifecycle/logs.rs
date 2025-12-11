@@ -9,7 +9,7 @@ pub async fn dump_namespace_logs(client: &Client, namespace: &str) {
     let pod_names = match list_pod_names(client, namespace).await {
         Ok(names) => names,
         Err(err) => {
-            warn!("[k8s-runner] failed to list pods in namespace {namespace}: {err}");
+            warn!(%namespace, error = ?err, "failed to list pods for log dump");
             return;
         }
     };
@@ -38,7 +38,7 @@ async fn stream_pod_logs(client: &Client, namespace: &str, pod_name: &str) {
     };
 
     match pods.logs(pod_name, &params).await {
-        Ok(log) => info!("[k8s-runner] pod {pod_name} logs:\n{log}"),
-        Err(err) => warn!("[k8s-runner] failed to fetch logs for pod {pod_name}: {err}"),
+        Ok(log) => info!(pod = pod_name, "pod logs:\n{log}"),
+        Err(err) => warn!(pod = pod_name, error = ?err, "failed to fetch pod logs"),
     }
 }

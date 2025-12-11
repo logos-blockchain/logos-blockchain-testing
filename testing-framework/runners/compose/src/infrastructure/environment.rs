@@ -172,12 +172,21 @@ pub fn prepare_workspace_state() -> Result<WorkspaceState, WorkspaceError> {
     let cfgsync_path = workspace.stack_dir().join("cfgsync.yaml");
     let use_kzg = workspace.root_path().join("kzgrs_test_params").exists();
 
-    Ok(WorkspaceState {
+    let state = WorkspaceState {
         workspace,
         root,
         cfgsync_path,
         use_kzg,
-    })
+    };
+
+    debug!(
+        root = %state.root.display(),
+        cfgsync = %state.cfgsync_path.display(),
+        use_kzg = state.use_kzg,
+        "prepared compose workspace state"
+    );
+
+    Ok(state)
 }
 
 /// Log wrapper for `prepare_workspace_state`.
@@ -204,6 +213,7 @@ pub async fn start_cfgsync_stage(
 ) -> Result<CfgsyncServerHandle, ComposeRunnerError> {
     info!(cfgsync_port = cfgsync_port, "launching cfgsync server");
     let handle = launch_cfgsync(&workspace.cfgsync_path, cfgsync_port).await?;
+    debug!(container = ?handle, "cfgsync server launched");
     Ok(handle)
 }
 
@@ -238,6 +248,7 @@ pub fn allocate_cfgsync_port() -> Result<u16, ConfigError> {
             source: source.into(),
         })?
         .port();
+    debug!(port, "allocated cfgsync port");
     Ok(port)
 }
 
@@ -254,6 +265,13 @@ pub async fn launch_cfgsync(
         })?;
     let (image, _) = resolve_image();
     let container_name = format!("nomos-cfgsync-{}", Uuid::new_v4());
+    debug!(
+        container = %container_name,
+        image,
+        cfgsync = %cfgsync_path.display(),
+        port,
+        "starting cfgsync container"
+    );
 
     let mut command = Command::new("docker");
     command
@@ -287,6 +305,8 @@ pub async fn launch_cfgsync(
         source: anyhow!(source),
     })?;
 
+    info!(container = %container_name, port, "cfgsync container started");
+
     Ok(CfgsyncServerHandle::Container {
         name: container_name,
         stopped: false,
@@ -300,6 +320,12 @@ pub fn write_compose_artifacts(
     cfgsync_port: u16,
     prometheus_port: u16,
 ) -> Result<PathBuf, ConfigError> {
+    debug!(
+        cfgsync_port,
+        prometheus_port,
+        workspace_root = %workspace.root.display(),
+        "building compose descriptor"
+    );
     let descriptor = ComposeDescriptor::builder(descriptors)
         .with_kzg_mount(workspace.use_kzg)
         .with_cfgsync_port(cfgsync_port)
@@ -310,6 +336,7 @@ pub fn write_compose_artifacts(
     let compose_path = workspace.root.join("compose.generated.yml");
     write_compose_file(&descriptor, &compose_path)
         .map_err(|source| ConfigError::Template { source })?;
+    debug!(compose_file = %compose_path.display(), "rendered compose file");
     Ok(compose_path)
 }
 
@@ -339,6 +366,7 @@ pub async fn bring_up_stack(
         cfgsync_handle.shutdown();
         return Err(ComposeRunnerError::Compose(err));
     }
+    debug!(project = %project_name, "docker compose up completed");
     Ok(())
 }
 

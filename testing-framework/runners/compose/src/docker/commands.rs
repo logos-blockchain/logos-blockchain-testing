@@ -2,6 +2,7 @@ use std::{io, path::Path, process, time::Duration};
 
 use testing_framework_core::adjust_timeout;
 use tokio::{process::Command, time::timeout};
+use tracing::{debug, info, warn};
 
 const COMPOSE_UP_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -29,6 +30,7 @@ pub async fn run_docker_command(
     timeout_duration: Duration,
     description: &str,
 ) -> Result<(), ComposeCommandError> {
+    debug!(description, ?command, "running docker command");
     let result = timeout(timeout_duration, command.status()).await;
     match result {
         Ok(status) => handle_compose_status(status, description),
@@ -55,6 +57,13 @@ pub async fn compose_up(
         .arg("-d")
         .current_dir(root);
 
+    info!(
+        compose_file = %compose_path.display(),
+        project = project_name,
+        root = %root.display(),
+        "running docker compose up"
+    );
+
     run_compose_command(cmd, adjust_timeout(COMPOSE_UP_TIMEOUT), "docker compose up").await
 }
 
@@ -73,6 +82,13 @@ pub async fn compose_down(
         .arg("down")
         .arg("--volumes")
         .current_dir(root);
+
+    info!(
+        compose_file = %compose_path.display(),
+        project = project_name,
+        root = %root.display(),
+        "running docker compose down"
+    );
 
     run_compose_command(
         cmd,
@@ -96,21 +112,21 @@ pub async fn dump_compose_logs(compose_file: &Path, project: &str, root: &Path) 
 
     match cmd.output().await {
         Ok(output) => print_logs(&output.stdout, &output.stderr),
-        Err(err) => eprintln!("[compose-runner] failed to collect docker compose logs: {err}"),
+        Err(err) => warn!(error = ?err, "failed to collect docker compose logs"),
     }
 }
 
 fn print_logs(stdout: &[u8], stderr: &[u8]) {
     if !stdout.is_empty() {
-        eprintln!(
-            "[compose-runner] docker compose logs:\n{}",
-            String::from_utf8_lossy(stdout)
+        warn!(
+            logs = %String::from_utf8_lossy(stdout),
+            "docker compose stdout"
         );
     }
     if !stderr.is_empty() {
-        eprintln!(
-            "[compose-runner] docker compose errors:\n{}",
-            String::from_utf8_lossy(stderr)
+        warn!(
+            logs = %String::from_utf8_lossy(stderr),
+            "docker compose stderr"
         );
     }
 }
@@ -135,14 +151,23 @@ fn handle_compose_status(
     description: &str,
 ) -> Result<(), ComposeCommandError> {
     match status {
-        Ok(code) if code.success() => Ok(()),
-        Ok(code) => Err(ComposeCommandError::Failed {
-            command: description.to_owned(),
-            status: code,
-        }),
-        Err(err) => Err(ComposeCommandError::Spawn {
-            command: description.to_owned(),
-            source: err,
-        }),
+        Ok(code) if code.success() => {
+            debug!(description, "docker command succeeded");
+            Ok(())
+        }
+        Ok(code) => {
+            warn!(description, status = ?code, "docker command failed");
+            Err(ComposeCommandError::Failed {
+                command: description.to_owned(),
+                status: code,
+            })
+        }
+        Err(err) => {
+            warn!(description, error = ?err, "failed to spawn docker command");
+            Err(ComposeCommandError::Spawn {
+                command: description.to_owned(),
+                source: err,
+            })
+        }
     }
 }

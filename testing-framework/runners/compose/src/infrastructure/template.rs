@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Context as _;
 use tera::Context as TeraContext;
+use tracing::{debug, info};
 
 use crate::descriptor::ComposeDescriptor;
 
@@ -49,6 +50,7 @@ pub fn write_compose_file(
     descriptor: &ComposeDescriptor,
     compose_path: &Path,
 ) -> Result<(), TemplateError> {
+    info!(file = %compose_path.display(), "writing compose file");
     TemplateSource::load()?.write(descriptor, compose_path)
 }
 
@@ -71,6 +73,7 @@ impl TemplateSource {
     }
 
     fn render(&self, descriptor: &ComposeDescriptor) -> Result<String, TemplateError> {
+        debug!(template = %self.path.display(), "rendering compose template");
         let context = TeraContext::from_serialize(descriptor)
             .map_err(|source| TemplateError::Serialize { source })?;
 

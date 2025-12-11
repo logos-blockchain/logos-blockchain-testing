@@ -5,6 +5,7 @@ use nomos_http_api_common::paths;
 use reqwest::Client as ReqwestClient;
 use thiserror::Error;
 use tokio::time::{sleep, timeout};
+use tracing::{debug, info};
 
 /// Role used for labelling readiness probes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,6 +81,15 @@ pub async fn wait_for_http_ports_with_host(
         return Ok(());
     }
 
+    info!(
+        role = role.label(),
+        ?ports,
+        host,
+        timeout_secs = timeout_duration.as_secs_f32(),
+        poll_ms = poll_interval.as_millis(),
+        "waiting for HTTP readiness"
+    );
+
     let client = ReqwestClient::new();
     let probes = ports.iter().copied().map(|port| {
         wait_for_single_port(
@@ -104,6 +114,7 @@ async fn wait_for_single_port(
     poll_interval: Duration,
 ) -> Result<(), HttpReadinessError> {
     let url = format!("http://{host}:{port}{}", paths::CRYPTARCHIA_INFO);
+    debug!(role = role.label(), %url, "probing HTTP endpoint");
     let probe = async {
         loop {
             let is_ready = client

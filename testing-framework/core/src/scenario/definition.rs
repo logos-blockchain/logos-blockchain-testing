@@ -1,5 +1,7 @@
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
+use tracing::{debug, info};
+
 use super::{
     NodeControlCapability, expectation::Expectation, runtime::context::RunMetrics,
     workload::Workload,
@@ -227,6 +229,15 @@ impl<Caps> Builder<Caps> {
         let run_metrics = RunMetrics::from_topology(&generated, duration);
         initialize_components(&generated, &run_metrics, &mut workloads, &mut expectations);
 
+        info!(
+            validators = generated.validators().len(),
+            executors = generated.executors().len(),
+            duration_secs = duration.as_secs(),
+            workloads = workloads.len(),
+            expectations = expectations.len(),
+            "scenario built"
+        );
+
         Scenario::new(generated, workloads, expectations, duration, capabilities)
     }
 }
@@ -307,6 +318,8 @@ fn initialize_workloads(
     for workload in workloads {
         let inner =
             Arc::get_mut(workload).expect("workload unexpectedly cloned before initialization");
+
+        debug!(workload = inner.name(), "initializing workload");
         if let Err(err) = inner.init(descriptors, run_metrics) {
             panic!("workload '{}' failed to initialize: {err}", inner.name());
         }
@@ -319,6 +332,7 @@ fn initialize_expectations(
     expectations: &mut [Box<dyn Expectation>],
 ) {
     for expectation in expectations {
+        debug!(expectation = expectation.name(), "initializing expectation");
         if let Err(err) = expectation.init(descriptors, run_metrics) {
             panic!(
                 "expectation '{}' failed to initialize: {err}",

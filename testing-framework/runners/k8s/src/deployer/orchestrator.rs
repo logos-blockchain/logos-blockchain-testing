@@ -89,14 +89,16 @@ impl Deployer for K8sDeployer {
 
     async fn deploy(&self, scenario: &Scenario) -> Result<Runner, Self::Error> {
         let descriptors = scenario.topology().clone();
+        let validator_count = descriptors.validators().len();
+        let executor_count = descriptors.executors().len();
         ensure_supported_topology(&descriptors)?;
 
         let client = Client::try_default()
             .await
             .map_err(|source| K8sRunnerError::ClientInit { source })?;
         info!(
-            validators = descriptors.validators().len(),
-            executors = descriptors.executors().len(),
+            validators = validator_count,
+            executors = executor_count,
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.readiness_checks,
             "starting k8s deployment"
@@ -117,6 +119,7 @@ impl Deployer for K8sDeployer {
                 if let Some(env) = cluster.as_mut() {
                     env.fail("failed to construct node api clients").await;
                 }
+                error!(error = ?err, "failed to build k8s node clients");
                 return Err(err.into());
             }
         };
@@ -133,6 +136,7 @@ impl Deployer for K8sDeployer {
                     env.fail("failed to configure prometheus metrics handle")
                         .await;
                 }
+                error!(error = ?err, "failed to configure prometheus metrics handle");
                 return Err(err.into());
             }
         };
@@ -142,6 +146,7 @@ impl Deployer for K8sDeployer {
                 if let Some(env) = cluster.as_mut() {
                     env.fail("failed to initialize block feed").await;
                 }
+                error!(error = ?err, "failed to initialize block feed");
                 return Err(err);
             }
         };
@@ -162,6 +167,12 @@ impl Deployer for K8sDeployer {
             telemetry,
             block_feed,
             None,
+        );
+        info!(
+            validators = validator_count,
+            executors = executor_count,
+            duration_secs = scenario.duration().as_secs(),
+            "k8s deployment ready; handing control to scenario runner"
         );
         Ok(Runner::new(context, Some(cleanup_guard)))
     }

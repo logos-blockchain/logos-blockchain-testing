@@ -3,6 +3,7 @@ use std::{ops::Deref, path::PathBuf};
 use nomos_executor::config::Config;
 use nomos_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::executor::create_executor_config;
+use tracing::{debug, info};
 
 use super::{persist_tempdir, should_persist_tempdir};
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
         LOGS_PREFIX,
         common::{
             binary::{BinaryConfig, BinaryResolver},
-            lifecycle::kill::kill_child,
+            lifecycle::{kill::kill_child, monitor::is_running},
             node::{NodeConfigCommon, NodeHandle, spawn_node},
         },
     },
@@ -46,9 +47,10 @@ impl Drop for Executor {
         if should_persist_tempdir()
             && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "nomos-executor")
         {
-            println!("failed to persist tempdir: {e}");
+            debug!(error = ?e, "failed to persist executor tempdir");
         }
 
+        debug!("stopping executor process");
         kill_child(&mut self.handle.child);
     }
 }
@@ -65,7 +67,19 @@ impl Executor {
         .await
         .expect("executor did not become ready");
 
+        info!("executor spawned and ready");
+
         Self { handle }
+    }
+
+    /// Check if the executor process is still running
+    pub fn is_running(&mut self) -> bool {
+        is_running(&mut self.handle.child)
+    }
+
+    /// Wait for the executor process to exit, with a timeout.
+    pub async fn wait_for_exit(&mut self, timeout: std::time::Duration) -> bool {
+        self.handle.wait_for_exit(timeout).await
     }
 }
 

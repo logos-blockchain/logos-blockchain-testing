@@ -10,6 +10,7 @@ use reqwest::Url;
 use serde::Serialize;
 use tempfile::TempDir;
 use tokio::time;
+use tracing::{debug, info};
 
 use super::lifecycle::monitor::is_running;
 use crate::nodes::{
@@ -87,6 +88,8 @@ pub fn prepare_node_config<T: NodeConfigCommon>(
 ) -> (TempDir, T, SocketAddr, Option<SocketAddr>) {
     let dir = create_tempdir().expect("tempdir");
 
+    debug!(dir = %dir.path().display(), log_prefix, enable_logging, "preparing node config");
+
     // Ensure recovery files/dirs exist so services that persist state do not fail
     // on startup.
     let _ = ensure_recovery_paths(dir.path());
@@ -99,6 +102,8 @@ pub fn prepare_node_config<T: NodeConfigCommon>(
 
     config.set_paths(dir.path());
     let (addr, testing_addr) = config.addresses();
+
+    debug!(addr = %addr, testing_addr = ?testing_addr, "configured node addresses");
 
     (dir, config, addr, testing_addr)
 }
@@ -120,6 +125,8 @@ where
         crate::nodes::common::config::injection::inject_ibd_into_cryptarchia(yaml)
     })
     .expect("failed to write node config");
+
+    debug!(config_file = %config_path.display(), binary = %binary_path.display(), "spawning node process");
 
     let child = Command::new(binary_path)
         .arg(&config_path)
@@ -143,5 +150,6 @@ where
     })
     .await?;
 
+    info!("node readiness confirmed via consensus_info");
     Ok(handle)
 }

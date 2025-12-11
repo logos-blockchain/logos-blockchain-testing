@@ -26,6 +26,7 @@ impl ReadinessChecker {
             ensure_validators_ready_with_ports(&host_ports.validator_api_ports()).await
         {
             environment.fail("validator readiness failed").await;
+            tracing::warn!(error = ?err, "validator readiness failed");
             return Err(err.into());
         }
 
@@ -36,12 +37,14 @@ impl ReadinessChecker {
         if let Err(err) = ensure_executors_ready_with_ports(&host_ports.executor_api_ports()).await
         {
             environment.fail("executor readiness failed").await;
+            tracing::warn!(error = ?err, "executor readiness failed");
             return Err(err.into());
         }
 
         info!("waiting for remote service readiness");
         if let Err(err) = ensure_remote_readiness_with_ports(descriptors, host_ports).await {
             environment.fail("remote readiness probe failed").await;
+            tracing::warn!(error = ?err, "remote readiness probe failed");
             return Err(err.into());
         }
 

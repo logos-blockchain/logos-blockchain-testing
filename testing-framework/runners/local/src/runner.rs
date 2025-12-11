@@ -7,7 +7,7 @@ use testing_framework_core::{
     topology::{deployment::Topology, readiness::ReadinessError},
 };
 use thiserror::Error;
-use tracing::info;
+use tracing::{debug, info};
 
 /// Spawns validators and executors as local processes, reusing the existing
 /// integration harness.
@@ -96,11 +96,16 @@ impl LocalDeployer {
         membership_check: bool,
     ) -> Result<Topology, LocalDeployerError> {
         let descriptors = scenario.topology();
-        info!("spawning local validators/executors");
+        info!(
+            validators = descriptors.validators().len(),
+            executors = descriptors.executors().len(),
+            "spawning local validators/executors"
+        );
         let topology = descriptors.clone().spawn_local().await;
 
         let skip_membership = !membership_check;
         if let Err(source) = wait_for_readiness(&topology, skip_membership).await {
+            debug!(error = ?source, "local readiness failed");
             return Err(LocalDeployerError::ReadinessFailed { source });
         }
 
@@ -136,6 +141,12 @@ async fn wait_for_readiness(
 async fn spawn_block_feed_with(
     node_clients: &NodeClients,
 ) -> Result<(BlockFeed, BlockFeedTask), LocalDeployerError> {
+    debug!(
+        validators = node_clients.validator_clients().len(),
+        executors = node_clients.executor_clients().len(),
+        "selecting validator client for local block feed"
+    );
+
     let block_source_client = node_clients.random_validator().cloned().ok_or_else(|| {
         LocalDeployerError::WorkloadFailed {
             source: "block feed requires at least one validator".into(),

@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{Context as _, Result};
 use tempfile::TempDir;
+use tracing::{debug, info};
 
 /// Copy the repository stack assets into a scenario-specific temp dir.
 #[derive(Debug)]
@@ -37,6 +38,11 @@ impl ComposeWorkspace {
                 stack_source.display()
             );
         }
+        debug!(
+            repo_root = %repo_root.display(),
+            stack_source = %stack_source.display(),
+            "copying stack assets into temporary workspace"
+        );
         copy_dir_recursive(&stack_source, &temp.path().join("stack"))?;
         let scripts_source = stack_scripts_root(&repo_root);
         if scripts_source.exists() {
@@ -86,6 +92,7 @@ impl ComposeWorkspace {
             );
         }
 
+        info!(root = %temp.path().display(), "compose workspace created");
         Ok(Self { root: temp })
     }
 

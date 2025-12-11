@@ -52,6 +52,8 @@ impl DeploymentOrchestrator {
             "compose deployment starting"
         );
 
+        let validator_count = descriptors.validators().len();
+        let executor_count = descriptors.executors().len();
         let host_ports = PortManager::prepare(&mut environment, &descriptors).await?;
 
         if self.deployer.readiness_checks {
@@ -82,6 +84,15 @@ impl DeploymentOrchestrator {
             telemetry,
             block_feed,
             node_control,
+        );
+
+        info!(
+            validators = validator_count,
+            executors = executor_count,
+            duration_secs = scenario.duration().as_secs(),
+            readiness_checks = self.deployer.readiness_checks,
+            host,
+            "compose deployment ready; handing control to scenario runner"
         );
 
         Ok(Runner::new(context, Some(cleanup_guard)))

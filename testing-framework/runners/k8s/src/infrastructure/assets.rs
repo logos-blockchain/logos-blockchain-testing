@@ -13,6 +13,7 @@ use testing_framework_core::{
     topology::generation::GeneratedTopology,
 };
 use thiserror::Error;
+use tracing::{debug, info};
 
 /// Paths and image metadata required to deploy the Helm chart.
 pub struct RunnerAssets {
@@ -72,6 +73,12 @@ pub enum AssetsError {
 /// Render cfgsync config, Helm values, and locate scripts/KZG assets for a
 /// topology.
 pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, AssetsError> {
+    info!(
+        validators = topology.validators().len(),
+        executors = topology.executors().len(),
+        "preparing k8s runner assets"
+    );
+
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
     let cfgsync_yaml = render_cfgsync_config(&root, topology)?;
 
@@ -88,6 +95,15 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
     let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
     let image = env::var("NOMOS_TESTNET_IMAGE")
         .unwrap_or_else(|_| String::from("logos-blockchain-testing:local"));
+
+    debug!(
+        cfgsync = %cfgsync_file.display(),
+        values = %values_file.display(),
+        image,
+        kzg = %kzg_path.display(),
+        chart = %chart_path.display(),
+        "k8s runner assets prepared"
+    );
 
     Ok(RunnerAssets {
         image,
@@ -107,6 +123,7 @@ const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
 
 fn render_cfgsync_config(root: &Path, topology: &GeneratedTopology) -> Result<String, AssetsError> {
     let cfgsync_template_path = stack_assets_root(root).join("cfgsync.yaml");
+    debug!(path = %cfgsync_template_path.display(), "loading cfgsync template");
     let mut cfg = load_cfgsync_template(&cfgsync_template_path)
         .map_err(|source| AssetsError::Cfgsync { source })?;
     apply_topology_overrides(&mut cfg, topology, true);
@@ -133,6 +150,14 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
             return Err(AssetsError::MissingScript { path: path.clone() });
         }
     }
+
+    debug!(
+        run_cfgsync = %run_cfgsync.display(),
+        run_shared = %run_shared.display(),
+        run_node = %run_node.display(),
+        run_executor = %run_executor.display(),
+        "validated runner scripts exist"
+    );
 
     Ok(ScriptPaths {
         run_cfgsync,
@@ -245,6 +270,7 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
         port: cfgsync_port(),
     };
     let pol_mode = pol_proof_mode();
+    debug!(pol_mode, "rendering Helm values for k8s stack");
     let validators = topology
         .validators()
         .iter()

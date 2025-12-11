@@ -2,6 +2,7 @@ use std::{io, process::Stdio};
 
 use thiserror::Error;
 use tokio::process::Command;
+use tracing::{debug, info};
 
 use crate::infrastructure::assets::{RunnerAssets, cfgsync_port_value, workspace_root};
 
@@ -36,6 +37,17 @@ pub async fn install_release(
     } else {
         "File"
     };
+    info!(
+        release,
+        namespace,
+        validators,
+        executors,
+        image = %assets.image,
+        cfgsync_port = cfgsync_port_value(),
+        kzg = %assets.kzg_path.display(),
+        values = %assets.values_file.display(),
+        "installing helm release"
+    );
 
     let mut cmd = Command::new("helm");
     cmd.arg("install")
@@ -94,16 +106,11 @@ pub async fn install_release(
     let output = run_helm_command(cmd, &command).await?;
 
     if std::env::var("K8S_RUNNER_DEBUG").is_ok() {
-        println!(
-            "[k8s-runner] {command} stdout:\n{}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        println!(
-            "[k8s-runner] {command} stderr:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        debug!(command, stdout = %String::from_utf8_lossy(&output.stdout), "helm install stdout");
+        debug!(command, stderr = %String::from_utf8_lossy(&output.stderr), "helm install stderr");
     }
 
+    info!(release, namespace, "helm install completed");
     Ok(())
 }
 
@@ -117,12 +124,9 @@ pub async fn uninstall_release(release: &str, namespace: &str) -> Result<(), Hel
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    println!("[k8s-runner] issuing `helm uninstall {release}` in namespace `{namespace}`");
-
+    info!(release, namespace, "issuing helm uninstall");
     run_helm_command(cmd, &format!("helm uninstall {release}")).await?;
-    println!(
-        "[k8s-runner] helm uninstall {release} completed successfully (namespace `{namespace}`)"
-    );
+    info!(release, namespace, "helm uninstall completed successfully");
     Ok(())
 }
 

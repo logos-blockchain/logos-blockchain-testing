@@ -8,6 +8,7 @@ use testing_framework_core::{
     topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
 };
 use tokio::{process::Command, time::timeout};
+use tracing::{debug, info};
 use url::ParseError;
 
 use crate::{
@@ -46,6 +47,13 @@ pub async fn discover_host_ports(
     environment: &StackEnvironment,
     descriptors: &GeneratedTopology,
 ) -> Result<HostPortMapping, ComposeRunnerError> {
+    debug!(
+        compose_file = %environment.compose_path().display(),
+        project = environment.project_name(),
+        validators = descriptors.validators().len(),
+        executors = descriptors.executors().len(),
+        "resolving compose host ports"
+    );
     let mut validators = Vec::new();
     for node in descriptors.validators() {
         let service = node_identifier(TopologyNodeRole::Validator, node.index());
@@ -62,10 +70,18 @@ pub async fn discover_host_ports(
         executors.push(NodeHostPorts { api, testing });
     }
 
-    Ok(HostPortMapping {
+    let mapping = HostPortMapping {
         validators,
         executors,
-    })
+    };
+
+    info!(
+        validator_ports = ?mapping.validators,
+        executor_ports = ?mapping.executors,
+        "compose host ports resolved"
+    );
+
+    Ok(mapping)
 }
 
 async fn resolve_service_port(
@@ -180,5 +196,7 @@ fn node_identifier(role: TopologyNodeRole, index: usize) -> String {
 }
 
 pub(crate) fn compose_runner_host() -> String {
-    std::env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+    let host = std::env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    debug!(host, "compose runner host resolved for readiness URLs");
+    host
 }

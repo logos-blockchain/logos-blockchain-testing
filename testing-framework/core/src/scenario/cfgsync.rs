@@ -6,6 +6,7 @@ use nomos_tracing_service::TracingSettings;
 use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use tracing::debug;
 
 use crate::{
     constants::kzg_container_path,
@@ -50,12 +51,14 @@ pub struct CfgSyncConfig {
 }
 
 pub fn load_cfgsync_template(path: &Path) -> Result<CfgSyncConfig> {
+    debug!(path = %path.display(), "loading cfgsync template");
     let file = File::open(path)
         .with_context(|| format!("opening cfgsync template at {}", path.display()))?;
     serde_yaml::from_reader(file).context("parsing cfgsync template")
 }
 
 pub fn write_cfgsync_template(path: &Path, cfg: &CfgSyncConfig) -> Result<()> {
+    debug!(path = %path.display(), "writing cfgsync template");
     let file = File::create(path)
         .with_context(|| format!("writing cfgsync template to {}", path.display()))?;
     let serializable = SerializableCfgSyncConfig::from(cfg);
@@ -63,6 +66,7 @@ pub fn write_cfgsync_template(path: &Path, cfg: &CfgSyncConfig) -> Result<()> {
 }
 
 pub fn render_cfgsync_yaml(cfg: &CfgSyncConfig) -> Result<String> {
+    debug!("rendering cfgsync yaml");
     let serializable = SerializableCfgSyncConfig::from(cfg);
     serde_yaml::to_string(&serializable).context("rendering cfgsync yaml")
 }
@@ -72,6 +76,12 @@ pub fn apply_topology_overrides(
     topology: &GeneratedTopology,
     use_kzg_mount: bool,
 ) {
+    debug!(
+        validators = topology.validators().len(),
+        executors = topology.executors().len(),
+        use_kzg_mount,
+        "applying topology overrides to cfgsync config"
+    );
     let hosts = topology.validators().len() + topology.executors().len();
     cfg.n_hosts = hosts;
 

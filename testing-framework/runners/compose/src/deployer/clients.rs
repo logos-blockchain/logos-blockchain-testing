@@ -33,6 +33,7 @@ impl ClientBuilder {
                 environment
                     .fail("failed to construct node api clients")
                     .await;
+                tracing::warn!(error = ?err, host, "failed to build node clients");
                 Err(err.into())
             }
         }
@@ -50,6 +51,7 @@ impl ClientBuilder {
             }
             Err(err) => {
                 environment.fail("failed to initialize block feed").await;
+                tracing::warn!(error = ?err, "block feed initialization failed");
                 Err(err)
             }
         }

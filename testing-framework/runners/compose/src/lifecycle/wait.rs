@@ -4,6 +4,7 @@ use testing_framework_core::{
     adjust_timeout,
     scenario::http_probe::{self, HttpReadinessError, NodeRole},
 };
+use tracing::{debug, info};
 
 const DEFAULT_WAIT: Duration = Duration::from_secs(180);
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -18,6 +19,7 @@ pub async fn wait_for_executors(ports: &[u16]) -> Result<(), HttpReadinessError>
 
 async fn wait_for_ports(ports: &[u16], role: NodeRole) -> Result<(), HttpReadinessError> {
     let host = compose_runner_host();
+    info!(role = ?role, ports = ?ports, host, "waiting for compose HTTP readiness");
     http_probe::wait_for_http_ports_with_host(
         ports,
         role,
@@ -29,5 +31,7 @@ async fn wait_for_ports(ports: &[u16], role: NodeRole) -> Result<(), HttpReadine
 }
 
 fn compose_runner_host() -> String {
-    env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+    let host = env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    debug!(host, "compose runner host resolved");
+    host
 }

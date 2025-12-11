@@ -7,7 +7,7 @@ use tokio::{
     process::Command,
     time::{Duration, sleep},
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::infrastructure::helm::uninstall_release;
 
@@ -37,7 +37,11 @@ impl RunnerCleanup {
 
     async fn cleanup_async(&self) {
         if self.preserve {
-            print_preserve_notice(&self.release, &self.namespace);
+            info!(
+                release = %self.release,
+                namespace = %self.namespace,
+                "preserving k8s release and namespace"
+            );
             return;
         }
 
@@ -51,16 +55,12 @@ impl RunnerCleanup {
             }) {
                 Ok(()) => true,
                 Err(err) => {
-                    warn!(
-                        "[k8s-runner] cleanup timed out after 120s: {err}; falling back to background thread"
-                    );
+                    warn!(error = ?err, "cleanup timed out after 120s; falling back to background thread");
                     false
                 }
             },
             Err(err) => {
-                warn!(
-                    "[k8s-runner] unable to create cleanup runtime: {err}; falling back to background thread"
-                );
+                warn!(error = ?err, "unable to create cleanup runtime; falling back to background thread");
                 false
             }
         }
@@ -73,26 +73,22 @@ impl RunnerCleanup {
         {
             Ok(handle) => {
                 if let Err(err) = handle.join() {
-                    warn!("[k8s-runner] cleanup thread panicked: {err:?}");
+                    warn!(error = ?err, "cleanup thread panicked");
                 }
             }
-            Err(err) => warn!("[k8s-runner] failed to spawn cleanup thread: {err}"),
+            Err(err) => warn!(error = ?err, "failed to spawn cleanup thread"),
         }
     }
 }
 
-fn print_preserve_notice(release: &str, namespace: &str) {
-    println!("[k8s-runner] preserving Helm release `{release}` in namespace `{namespace}`");
-}
-
 async fn uninstall_release_and_namespace(client: &Client, release: &str, namespace: &str) {
     if let Err(err) = uninstall_release(release, namespace).await {
-        println!("[k8s-runner] helm uninstall {release} failed: {err}");
+        warn!(release, namespace, error = ?err, "helm uninstall failed during cleanup");
     }
 
-    println!("[k8s-runner] deleting namespace `{namespace}` via k8s API",);
+    info!(namespace, "deleting namespace via k8s API");
     delete_namespace(client, namespace).await;
-    println!("[k8s-runner] delete request for namespace `{namespace}` finished",);
+    info!(namespace, "namespace delete request finished");
 }
 
 fn run_background_cleanup(cleanup: Box<RunnerCleanup>) {
@@ -119,12 +115,15 @@ async fn delete_namespace(client: &Client, namespace: &str) {
     if delete_namespace_via_cli(namespace).await {
         wait_for_namespace_termination(&namespaces, namespace).await;
     } else {
-        warn!("[k8s-runner] unable to delete namespace `{namespace}` using kubectl fallback");
+        warn!(
+            namespace,
+            "unable to delete namespace using kubectl fallback"
+        );
     }
 }
 
 async fn delete_namespace_via_api(namespaces: &Api<Namespace>, namespace: &str) -> bool {
-    println!("[k8s-runner] invoking kubernetes API to delete namespace `{namespace}`");
+    info!(namespace, "invoking kubernetes API to delete namespace");
     match tokio::time::timeout(
         Duration::from_secs(10),
         namespaces.delete(namespace, &DeleteParams::default()),
@@ -132,19 +131,20 @@ async fn delete_namespace_via_api(namespaces: &Api<Namespace>, namespace: &str) 
     .await
     {
         Ok(Ok(_)) => {
-            println!(
-                "[k8s-runner] delete request accepted for namespace `{namespace}`; waiting for termination"
+            info!(
+                namespace,
+                "delete request accepted; waiting for termination"
             );
             true
         }
         Ok(Err(err)) => {
-            println!("[k8s-runner] failed to delete namespace `{namespace}` via API: {err}");
-            warn!("[k8s-runner] api delete failed for namespace {namespace}: {err}");
+            warn!(namespace, error = ?err, "failed to delete namespace via API");
             false
         }
         Err(_) => {
-            println!(
-                "[k8s-runner] kubernetes API timed out deleting namespace `{namespace}`; falling back to kubectl"
+            warn!(
+                namespace,
+                "kubernetes API timed out deleting namespace; falling back to kubectl"
             );
             false
         }
@@ -152,7 +152,7 @@ async fn delete_namespace_via_api(namespaces: &Api<Namespace>, namespace: &str) 
 }
 
 async fn delete_namespace_via_cli(namespace: &str) -> bool {
-    println!("[k8s-runner] invoking `kubectl delete namespace {namespace}` fallback");
+    info!(namespace, "invoking kubectl delete namespace fallback");
     let output = Command::new("kubectl")
         .arg("delete")
         .arg("namespace")
@@ -163,19 +163,20 @@ async fn delete_namespace_via_cli(namespace: &str) -> bool {
 
     match output {
         Ok(result) if result.status.success() => {
-            println!("[k8s-runner] `kubectl delete namespace {namespace}` completed successfully");
+            info!(namespace, "kubectl delete namespace completed successfully");
             true
         }
         Ok(result) => {
-            println!(
-                "[k8s-runner] `kubectl delete namespace {namespace}` failed: {}\n{}",
-                String::from_utf8_lossy(&result.stderr),
-                String::from_utf8_lossy(&result.stdout)
+            warn!(
+                namespace,
+                stderr = %String::from_utf8_lossy(&result.stderr),
+                stdout = %String::from_utf8_lossy(&result.stdout),
+                "kubectl delete namespace failed"
             );
             false
         }
         Err(err) => {
-            println!("[k8s-runner] failed to spawn kubectl for namespace `{namespace}`: {err}");
+            warn!(namespace, error = ?err, "failed to spawn kubectl delete namespace");
             false
         }
     }
@@ -204,19 +205,16 @@ async fn namespace_deleted(namespaces: &Api<Namespace>, namespace: &str, attempt
                     .as_ref()
                     .and_then(|status| status.phase.clone())
                     .unwrap_or_else(|| "Unknown".into());
-                println!(
-                    "[k8s-runner] waiting for namespace `{}` to terminate (phase={phase:?})",
-                    namespace
-                );
+                info!(namespace, ?phase, "waiting for namespace to terminate");
             }
             false
         }
         Ok(None) => {
-            println!("[k8s-runner] namespace `{namespace}` deleted");
+            info!(namespace, "namespace deleted");
             true
         }
         Err(err) => {
-            warn!("[k8s-runner] namespace `{namespace}` poll failed: {err}");
+            warn!(namespace, error = ?err, "namespace poll failed");
             true
         }
     }

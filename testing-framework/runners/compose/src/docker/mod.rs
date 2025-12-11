@@ -6,6 +6,7 @@ pub mod workspace;
 use std::{env, process::Stdio, time::Duration};
 
 use tokio::{process::Command, time::timeout};
+use tracing::{debug, info, warn};
 
 use crate::{
     docker::commands::ComposeCommandError, errors::ComposeRunnerError,
@@ -35,8 +36,10 @@ pub async fn ensure_docker_available() -> Result<(), ComposeRunnerError> {
     .unwrap_or(false);
 
     if available {
+        debug!("docker info succeeded");
         Ok(())
     } else {
+        warn!("docker info failed or timed out; compose runner unavailable");
         Err(ComposeRunnerError::DockerUnavailable)
     }
 }
@@ -44,6 +47,7 @@ pub async fn ensure_docker_available() -> Result<(), ComposeRunnerError> {
 /// Ensure the configured compose image exists, building a local one if needed.
 pub async fn ensure_compose_image() -> Result<(), ComposeRunnerError> {
     let (image, platform) = crate::docker::platform::resolve_image();
+    info!(image, platform = ?platform, "ensuring compose image is present");
     ensure_image_present(&image, platform.as_deref()).await
 }
 
@@ -53,6 +57,7 @@ pub async fn ensure_image_present(
     platform: Option<&str>,
 ) -> Result<(), ComposeRunnerError> {
     if docker_image_exists(image).await? {
+        debug!(image, "docker image already present");
         return Ok(());
     }
 
@@ -157,6 +162,7 @@ pub async fn build_local_image(
     )
     .await
     .map_err(|_| {
+        warn!(image, timeout = ?IMAGE_BUILD_TIMEOUT, "docker build timed out");
         ComposeRunnerError::Compose(ComposeCommandError::Timeout {
             command: String::from("docker build"),
             timeout: testing_framework_core::adjust_timeout(IMAGE_BUILD_TIMEOUT),
@@ -164,12 +170,21 @@ pub async fn build_local_image(
     })?;
 
     match status {
-        Ok(code) if code.success() => Ok(()),
-        Ok(code) => Err(ComposeRunnerError::Compose(ComposeCommandError::Failed {
-            command: String::from("docker build"),
-            status: code,
-        })),
-        Err(err) => Err(ComposeRunnerError::ImageBuild { source: err.into() }),
+        Ok(code) if code.success() => {
+            info!(image, platform = ?platform, "docker build completed");
+            Ok(())
+        }
+        Ok(code) => {
+            warn!(image, status = ?code, "docker build failed");
+            Err(ComposeRunnerError::Compose(ComposeCommandError::Failed {
+                command: String::from("docker build"),
+                status: code,
+            }))
+        }
+        Err(err) => {
+            warn!(image, error = ?err, "docker build spawn failed");
+            Err(ComposeRunnerError::ImageBuild { source: err.into() })
+        }
     }
 }
 

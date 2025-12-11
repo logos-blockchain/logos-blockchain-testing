@@ -4,6 +4,7 @@ use nomos_node::Config;
 use nomos_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::validator::create_validator_config;
 use tokio::time::error::Elapsed;
+use tracing::{debug, info};
 
 use super::{persist_tempdir, should_persist_tempdir};
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
         LOGS_PREFIX,
         common::{
             binary::{BinaryConfig, BinaryResolver},
-            lifecycle::kill::kill_child,
+            lifecycle::{kill::kill_child, monitor::is_running},
             node::{NodeConfigCommon, NodeHandle, spawn_node},
         },
     },
@@ -52,9 +53,10 @@ impl Drop for Validator {
         if should_persist_tempdir()
             && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "nomos-node")
         {
-            println!("failed to persist tempdir: {e}");
+            debug!(error = ?e, "failed to persist validator tempdir");
         }
 
+        debug!("stopping validator process");
         kill_child(&mut self.handle.child);
     }
 }
@@ -62,7 +64,7 @@ impl Drop for Validator {
 impl Validator {
     /// Check if the validator process is still running
     pub fn is_running(&mut self) -> bool {
-        crate::nodes::common::lifecycle::monitor::is_running(&mut self.handle.child)
+        is_running(&mut self.handle.child)
     }
 
     /// Wait for the validator process to exit, with a timeout
@@ -80,6 +82,8 @@ impl Validator {
             !*IS_DEBUG_TRACING,
         )
         .await?;
+
+        info!("validator spawned and ready");
 
         Ok(Self { handle })
     }
