@@ -16,7 +16,11 @@ impl PortManager {
         environment: &mut StackEnvironment,
         descriptors: &GeneratedTopology,
     ) -> Result<HostPortMapping, ComposeRunnerError> {
-        debug!("resolving host ports for compose services");
+        debug!(
+            validators = descriptors.validators().len(),
+            executors = descriptors.executors().len(),
+            "resolving host ports for compose services"
+        );
         match discover_host_ports(environment, descriptors).await {
             Ok(mapping) => {
                 info!(
@@ -31,6 +35,7 @@ impl PortManager {
                 environment
                     .fail("failed to determine container host ports")
                     .await;
+                tracing::warn!(%err, "failed to resolve host ports");
                 Err(err)
             }
         }

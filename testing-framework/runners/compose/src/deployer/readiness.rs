@@ -45,6 +45,7 @@ impl ReadinessChecker {
             return Err(err.into());
         }
 
+        info!("compose readiness checks passed");
         Ok(())
     }
 }

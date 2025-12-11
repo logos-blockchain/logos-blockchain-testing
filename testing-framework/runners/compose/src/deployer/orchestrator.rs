@@ -44,6 +44,14 @@ impl DeploymentOrchestrator {
             descriptors,
         } = setup.prepare_workspace().await?;
 
+        tracing::info!(
+            validators = descriptors.validators().len(),
+            executors = descriptors.executors().len(),
+            duration_secs = scenario.duration().as_secs(),
+            readiness_checks = self.deployer.readiness_checks,
+            "compose deployment starting"
+        );
+
         let host_ports = PortManager::prepare(&mut environment, &descriptors).await?;
 
         if self.deployer.readiness_checks {
