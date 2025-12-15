@@ -201,6 +201,7 @@ pub fn prepare_workspace_state() -> Result<WorkspaceState, WorkspaceError> {
 /// Log wrapper for `prepare_workspace_state`.
 pub fn prepare_workspace_logged() -> Result<WorkspaceState, ComposeRunnerError> {
     info!("preparing compose workspace");
+
     prepare_workspace_state().map_err(Into::into)
 }
 
@@ -212,6 +213,7 @@ pub fn update_cfgsync_logged(
     cfgsync_port: u16,
 ) -> Result<(), ComposeRunnerError> {
     info!(cfgsync_port, "updating cfgsync configuration");
+
     configure_cfgsync(workspace, descriptors, cfgsync_port).map_err(Into::into)
 }
 
