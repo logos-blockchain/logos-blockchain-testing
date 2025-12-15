@@ -4,14 +4,16 @@ use tokio::time::sleep;
 
 use super::{ClusterWaitError, NodeConfigPorts, NodePortAllocation};
 
+const NODE_PORT_LOOKUP_ATTEMPTS: u32 = 120;
+const NODE_PORT_LOOKUP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
 pub async fn find_node_port(
     client: &Client,
     namespace: &str,
     service_name: &str,
     service_port: u16,
 ) -> Result<u16, ClusterWaitError> {
-    let interval = std::time::Duration::from_secs(1);
-    for _ in 0..120 {
+    for _ in 0..NODE_PORT_LOOKUP_ATTEMPTS {
         match Api::<Service>::namespaced(client.clone(), namespace)
             .get(service_name)
             .await
@@ -36,7 +38,7 @@ pub async fn find_node_port(
                 });
             }
         }
-        sleep(interval).await;
+        sleep(NODE_PORT_LOOKUP_INTERVAL).await;
     }
 
     Err(ClusterWaitError::NodePortUnavailable {

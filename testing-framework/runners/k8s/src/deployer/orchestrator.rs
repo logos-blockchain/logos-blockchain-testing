@@ -18,7 +18,7 @@ use crate::{
         helm::HelmError,
     },
     lifecycle::{block_feed::spawn_block_feed_with, cleanup::RunnerCleanup},
-    wait::ClusterWaitError,
+    wait::{ClusterWaitError, PortForwardHandle},
 };
 
 /// Deploys a scenario into Kubernetes using Helm charts and port-forwards.
@@ -285,14 +285,14 @@ async fn setup_cluster(
 struct K8sCleanupGuard {
     cleanup: RunnerCleanup,
     block_feed: Option<BlockFeedTask>,
-    port_forwards: Vec<std::process::Child>,
+    port_forwards: Vec<PortForwardHandle>,
 }
 
 impl K8sCleanupGuard {
     const fn new(
         cleanup: RunnerCleanup,
         block_feed: BlockFeedTask,
-        port_forwards: Vec<std::process::Child>,
+        port_forwards: Vec<PortForwardHandle>,
     ) -> Self {
         Self {
             cleanup,

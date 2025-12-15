@@ -1,6 +1,7 @@
-use std::{env, error::Error, process, str::FromStr, time::Duration};
+use std::{process, time::Duration};
 
-use runner_examples::ScenarioBuilderExt as _;
+use anyhow::{Context as _, Result, ensure};
+use runner_examples::{ScenarioBuilderExt as _, read_env_any};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_k8s::{K8sDeployer, K8sRunnerError};
 use tracing::{info, warn};
@@ -43,7 +44,7 @@ async fn run_k8s_case(
     validators: usize,
     executors: usize,
     run_duration: Duration,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     info!(
         validators,
         executors,
@@ -76,7 +77,7 @@ async fn run_k8s_case(
             warn!("Kubernetes cluster unavailable ({source}); skipping");
             return Ok(());
         }
-        Err(err) => return Err(err.into()),
+        Err(err) => return Err(anyhow::Error::new(err)).context("deploying k8s stack failed"),
     };
 
     if !runner.context().telemetry().is_configured() {
@@ -91,33 +92,22 @@ async fn run_k8s_case(
     let handle = runner
         .run(&mut plan)
         .await
-        .map_err(|err| format!("k8s scenario failed: {err}"))?;
+        .context("running k8s scenario failed")?;
 
     for (idx, client) in validator_clients.iter().enumerate() {
         let info = client
             .consensus_info()
             .await
-            .map_err(|err| format!("validator {idx} consensus_info failed: {err}"))?;
-        if info.height < MIN_CONSENSUS_HEIGHT {
-            return Err(format!(
-                "validator {idx} height {} should reach at least {MIN_CONSENSUS_HEIGHT} blocks",
-                info.height
-            )
-            .into());
-        }
+            .with_context(|| format!("validator {idx} consensus_info failed"))?;
+        ensure!(
+            info.height >= MIN_CONSENSUS_HEIGHT,
+            "validator {idx} height {} should reach at least {MIN_CONSENSUS_HEIGHT} blocks",
+            info.height
+        );
     }
 
     // Explicitly drop after checks, allowing cleanup to proceed.
     drop(handle);
 
     Ok(())
-}
-
-fn read_env_any<T>(keys: &[&str], default: T) -> T
-where
-    T: FromStr + Copy,
-{
-    keys.iter()
-        .find_map(|key| env::var(key).ok().and_then(|raw| raw.parse::<T>().ok()))
-        .unwrap_or(default)
 }

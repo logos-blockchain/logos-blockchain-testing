@@ -3,6 +3,8 @@ use tokio::time::sleep;
 use super::{ClusterWaitError, prometheus_http_timeout};
 use crate::host::node_host;
 
+const PROMETHEUS_HTTP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
 pub async fn wait_for_prometheus_http_nodeport(
     port: u16,
     timeout: std::time::Duration,
@@ -23,13 +25,14 @@ async fn wait_for_prometheus_http(
     let client = reqwest::Client::new();
     let url = format!("http://{host}:{port}/-/ready");
 
-    for _ in 0..timeout.as_secs() {
+    let attempts = timeout.as_secs();
+    for _ in 0..attempts {
         if let Ok(resp) = client.get(&url).send().await
             && resp.status().is_success()
         {
             return Ok(());
         }
-        sleep(std::time::Duration::from_secs(1)).await;
+        sleep(PROMETHEUS_HTTP_POLL_INTERVAL).await;
     }
 
     Err(ClusterWaitError::PrometheusTimeout { port })

@@ -1,6 +1,7 @@
-use std::{env, error::Error, process, str::FromStr, time::Duration};
+use std::{env, process, time::Duration};
 
-use runner_examples::{ChaosBuilderExt as _, ScenarioBuilderExt as _};
+use anyhow::{Context as _, Result};
+use runner_examples::{ChaosBuilderExt as _, ScenarioBuilderExt as _, read_env_any};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_compose::{ComposeDeployer, ComposeRunnerError};
 use tracing::{info, warn};
@@ -16,6 +17,7 @@ const TRANSACTION_WALLETS: usize = 500;
 const CHAOS_MIN_DELAY_SECS: u64 = 120;
 const CHAOS_MAX_DELAY_SECS: u64 = 180;
 const CHAOS_COOLDOWN_SECS: u64 = 240;
+const CHAOS_DELAY_HEADROOM_SECS: u64 = 1;
 
 // DA Testing Constants
 const DA_CHANNEL_RATE: u64 = 1;
@@ -66,13 +68,18 @@ async fn run_compose_case(
     validators: usize,
     executors: usize,
     run_duration: Duration,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     info!(
         validators,
         executors,
         duration_secs = run_duration.as_secs(),
         "building scenario plan"
     );
+
+    let chaos_min_delay = Duration::from_secs(CHAOS_MIN_DELAY_SECS)
+        .max(run_duration + Duration::from_secs(CHAOS_DELAY_HEADROOM_SECS));
+    let chaos_max_delay =
+        Duration::from_secs(CHAOS_MAX_DELAY_SECS).max(chaos_min_delay);
 
     let mut plan = ScenarioBuilder::topology_with(|t| {
         t.network_star()
@@ -83,8 +90,8 @@ async fn run_compose_case(
         .chaos_with(|c| {
             c.restart()
                 // Keep chaos restarts outside the test run window to avoid crash loops on restart.
-                .min_delay(Duration::from_secs(CHAOS_MIN_DELAY_SECS))
-                .max_delay(Duration::from_secs(CHAOS_MAX_DELAY_SECS))
+                .min_delay(chaos_min_delay)
+                .max_delay(chaos_max_delay)
                 .target_cooldown(Duration::from_secs(CHAOS_COOLDOWN_SECS))
                 .apply()
         })
@@ -110,7 +117,7 @@ async fn run_compose_case(
             warn!("Docker is unavailable; cannot run compose demo");
             return Ok(());
         }
-        Err(err) => return Err(err.into()),
+        Err(err) => return Err(anyhow::Error::new(err)).context("deploying compose stack failed"),
     };
     
     if !runner.context().telemetry().is_configured() {
@@ -118,14 +125,9 @@ async fn run_compose_case(
     }
 
     info!("running scenario");
-    runner.run(&mut plan).await.map(|_| ()).map_err(Into::into)
-}
-
-fn read_env_any<T>(keys: &[&str], default: T) -> T
-where
-    T: FromStr + Copy,
-{
-    keys.iter()
-        .find_map(|key| env::var(key).ok().and_then(|raw| raw.parse::<T>().ok()))
-        .unwrap_or(default)
+    runner
+        .run(&mut plan)
+        .await
+        .context("running compose scenario failed")?;
+    Ok(())
 }

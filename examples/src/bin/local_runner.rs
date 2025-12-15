@@ -1,6 +1,7 @@
-use std::{env, error::Error, process, str::FromStr, time::Duration};
+use std::{env, process, time::Duration};
 
-use runner_examples::ScenarioBuilderExt as _;
+use anyhow::{Context as _, Result};
+use runner_examples::{ScenarioBuilderExt as _, read_env_any};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use tracing::{info, warn};
@@ -46,11 +47,7 @@ async fn main() {
     }
 }
 
-async fn run_local_case(
-    validators: usize,
-    executors: usize,
-    run_duration: Duration,
-) -> Result<(), Box<dyn Error>> {
+async fn run_local_case(validators: usize, executors: usize, run_duration: Duration) -> Result<()> {
     info!(
         validators,
         executors,
@@ -71,20 +68,17 @@ async fn run_local_case(
     let deployer = LocalDeployer::default().with_membership_check(true);
     info!("deploying local nodes");
 
-    let runner: Runner = deployer.deploy(&plan).await?;
+    let runner: Runner = deployer
+        .deploy(&plan)
+        .await
+        .context("deploying local nodes failed")?;
     info!("running scenario");
 
-    runner.run(&mut plan).await.map(|_| ())?;
+    runner
+        .run(&mut plan)
+        .await
+        .context("running local scenario failed")?;
     info!("scenario complete");
 
     Ok(())
-}
-
-fn read_env_any<T>(keys: &[&str], default: T) -> T
-where
-    T: FromStr + Copy,
-{
-    keys.iter()
-        .find_map(|key| env::var(key).ok().and_then(|raw| raw.parse::<T>().ok()))
-        .unwrap_or(default)
 }

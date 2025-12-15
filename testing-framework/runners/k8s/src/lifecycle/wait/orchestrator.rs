@@ -7,7 +7,10 @@ use super::{
 };
 use crate::lifecycle::wait::{
     deployment::wait_for_deployment_ready,
-    forwarding::{kill_port_forwards, port_forward_group, port_forward_service},
+    forwarding::{
+        PortForwardHandle, PortForwardSpawn, kill_port_forwards, port_forward_group,
+        port_forward_service,
+    },
     http_probe::{wait_for_node_http_nodeport, wait_for_node_http_port_forward},
     ports::{discover_node_ports, find_node_port},
     prometheus::{wait_for_prometheus_http_nodeport, wait_for_prometheus_http_port_forward},
@@ -33,7 +36,7 @@ pub async fn wait_for_cluster_ready(
         validator_allocations.push(allocation);
     }
 
-    let mut port_forwards = Vec::new();
+    let mut port_forwards: Vec<PortForwardHandle> = Vec::new();
 
     let validator_api_ports: Vec<u16> = validator_allocations
         .iter()
@@ -86,18 +89,14 @@ pub async fn wait_for_cluster_ready(
             &mut executor_allocations,
         ) {
             Ok(forwards) => port_forwards.extend(forwards),
-            Err(err) => {
-                kill_port_forwards(&mut port_forwards);
-                return Err(err);
-            }
+            Err(err) => return Err(cleanup_port_forwards(&mut port_forwards, err)),
         }
         let executor_api_ports: Vec<u16> =
             executor_allocations.iter().map(|ports| ports.api).collect();
         if let Err(err) =
             wait_for_node_http_port_forward(&executor_api_ports, NodeRole::Executor).await
         {
-            kill_port_forwards(&mut port_forwards);
-            return Err(err);
+            return Err(cleanup_port_forwards(&mut port_forwards, err));
         }
     }
 
@@ -112,17 +111,16 @@ pub async fn wait_for_cluster_ready(
         .await
         .is_err()
     {
-        let (local_port, forward) =
+        let PortForwardSpawn { local_port, handle } =
             port_forward_service(namespace, PROMETHEUS_SERVICE_NAME, PROMETHEUS_HTTP_PORT)
                 .map_err(|err| {
                     kill_port_forwards(&mut port_forwards);
                     err
                 })?;
         prometheus_port = local_port;
-        port_forwards.push(forward);
+        port_forwards.push(handle);
         if let Err(err) = wait_for_prometheus_http_port_forward(prometheus_port).await {
-            kill_port_forwards(&mut port_forwards);
-            return Err(err);
+            return Err(cleanup_port_forwards(&mut port_forwards, err));
         }
     }
 
@@ -134,4 +132,12 @@ pub async fn wait_for_cluster_ready(
         },
         port_forwards,
     })
+}
+
+fn cleanup_port_forwards(
+    port_forwards: &mut Vec<PortForwardHandle>,
+    error: ClusterWaitError,
+) -> ClusterWaitError {
+    kill_port_forwards(port_forwards);
+    error
 }

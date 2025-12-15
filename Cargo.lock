@@ -6015,6 +6015,7 @@ dependencies = [
 name = "runner-examples"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",

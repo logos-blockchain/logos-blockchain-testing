@@ -15,7 +15,9 @@ use crate::{
     host::node_host,
     infrastructure::assets::RunnerAssets,
     lifecycle::{cleanup::RunnerCleanup, logs::dump_namespace_logs},
-    wait::{ClusterPorts, ClusterReady, NodeConfigPorts, wait_for_cluster_ready},
+    wait::{
+        ClusterPorts, ClusterReady, NodeConfigPorts, PortForwardHandle, wait_for_cluster_ready,
+    },
 };
 
 #[derive(Default)]
@@ -35,7 +37,7 @@ pub struct ClusterEnvironment {
     executor_api_ports: Vec<u16>,
     executor_testing_ports: Vec<u16>,
     prometheus_port: u16,
-    port_forwards: Vec<std::process::Child>,
+    port_forwards: Vec<PortForwardHandle>,
 }
 
 impl ClusterEnvironment {
@@ -45,7 +47,7 @@ impl ClusterEnvironment {
         release: String,
         cleanup: RunnerCleanup,
         ports: &ClusterPorts,
-        port_forwards: Vec<std::process::Child>,
+        port_forwards: Vec<PortForwardHandle>,
     ) -> Self {
         let validator_api_ports = ports.validators.iter().map(|ports| ports.api).collect();
         let validator_testing_ports = ports.validators.iter().map(|ports| ports.testing).collect();
@@ -80,7 +82,7 @@ impl ClusterEnvironment {
         }
     }
 
-    pub fn into_cleanup(self) -> (RunnerCleanup, Vec<std::process::Child>) {
+    pub fn into_cleanup(self) -> (RunnerCleanup, Vec<PortForwardHandle>) {
         (
             self.cleanup.expect("cleanup guard should be available"),
             self.port_forwards,
@@ -316,10 +318,9 @@ pub async fn wait_for_ports_or_cleanup(
     }
 }
 
-pub fn kill_port_forwards(handles: &mut Vec<std::process::Child>) {
+pub fn kill_port_forwards(handles: &mut Vec<PortForwardHandle>) {
     for handle in handles.iter_mut() {
-        let _ = handle.kill();
-        let _ = handle.wait();
+        handle.shutdown();
     }
     handles.clear();
 }

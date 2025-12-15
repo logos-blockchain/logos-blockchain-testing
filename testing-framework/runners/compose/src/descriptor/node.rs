@@ -55,6 +55,8 @@ impl NodeDescriptor {
     ) -> Self {
         let mut environment = base_environment(cfgsync_port);
         let identifier = kind.instance_name(index);
+        let api_port = node.general.api_config.address.port();
+        let testing_port = node.general.api_config.testing_http_address.port();
         environment.extend([
             EnvEntry::new(
                 "CFG_NETWORK_PORT",
@@ -62,28 +64,14 @@ impl NodeDescriptor {
             ),
             EnvEntry::new("CFG_DA_PORT", node.da_port.to_string()),
             EnvEntry::new("CFG_BLEND_PORT", node.blend_port.to_string()),
-            EnvEntry::new(
-                "CFG_API_PORT",
-                node.general.api_config.address.port().to_string(),
-            ),
-            EnvEntry::new(
-                "CFG_TESTING_HTTP_PORT",
-                node.general
-                    .api_config
-                    .testing_http_address
-                    .port()
-                    .to_string(),
-            ),
+            EnvEntry::new("CFG_API_PORT", api_port.to_string()),
+            EnvEntry::new("CFG_TESTING_HTTP_PORT", testing_port.to_string()),
             EnvEntry::new("CFG_HOST_IDENTIFIER", identifier),
         ]);
 
         let ports = vec![
-            node.general.api_config.address.port().to_string(),
-            node.general
-                .api_config
-                .testing_http_address
-                .port()
-                .to_string(),
+            format!("127.0.0.1:{api_port}:{api_port}"),
+            format!("127.0.0.1:{testing_port}:{testing_port}"),
         ];
 
         Self {

@@ -183,11 +183,14 @@ async fn delete_namespace_via_cli(namespace: &str) -> bool {
 }
 
 async fn wait_for_namespace_termination(namespaces: &Api<Namespace>, namespace: &str) {
-    for attempt in 0..60 {
+    const NAMESPACE_TERMINATION_POLL_ATTEMPTS: u32 = 60;
+    const NAMESPACE_TERMINATION_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+    for attempt in 0..NAMESPACE_TERMINATION_POLL_ATTEMPTS {
         if namespace_deleted(namespaces, namespace, attempt).await {
             return;
         }
-        sleep(Duration::from_secs(1)).await;
+        sleep(NAMESPACE_TERMINATION_POLL_INTERVAL).await;
     }
 
     warn!(

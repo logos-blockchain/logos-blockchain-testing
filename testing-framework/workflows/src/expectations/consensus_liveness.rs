@@ -26,7 +26,7 @@ impl Default for ConsensusLiveness {
 
 const LAG_ALLOWANCE: u64 = 2;
 const MIN_PROGRESS_BLOCKS: u64 = 5;
-const REQUEST_RETRIES: usize = 5;
+const REQUEST_RETRIES: usize = 15;
 const REQUEST_RETRY_DELAY: Duration = Duration::from_secs(2);
 const MAX_LAG_ALLOWANCE: u64 = 5;
 

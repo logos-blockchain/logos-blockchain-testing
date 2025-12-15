@@ -19,6 +19,7 @@ mod orchestrator;
 mod ports;
 mod prometheus;
 
+pub use forwarding::PortForwardHandle;
 pub use orchestrator::wait_for_cluster_ready;
 
 /// Container and host-side HTTP ports for a node in the Helm chart values.
@@ -47,7 +48,7 @@ pub struct ClusterPorts {
 #[derive(Debug)]
 pub struct ClusterReady {
     pub ports: ClusterPorts,
-    pub port_forwards: Vec<std::process::Child>,
+    pub port_forwards: Vec<PortForwardHandle>,
 }
 
 #[derive(Debug, Error)]
