@@ -28,6 +28,7 @@ non_zero_rate_fn!(
     transaction_rate_checked,
     "transaction rate must be non-zero"
 );
+
 non_zero_rate_fn!(channel_rate_checked, "channel rate must be non-zero");
 non_zero_rate_fn!(blob_rate_checked, "blob rate must be non-zero");
 

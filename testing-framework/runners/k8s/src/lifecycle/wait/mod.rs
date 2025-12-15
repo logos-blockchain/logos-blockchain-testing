@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{env, sync::LazyLock, time::Duration};
 
 use kube::Error as KubeError;
 use testing_framework_core::{
@@ -95,11 +95,71 @@ pub enum ClusterWaitError {
     },
 }
 
-pub(crate) const DEPLOYMENT_TIMEOUT: Duration = DEFAULT_K8S_DEPLOYMENT_TIMEOUT;
-pub(crate) const NODE_HTTP_TIMEOUT: Duration = DEFAULT_NODE_HTTP_TIMEOUT;
-pub(crate) const NODE_HTTP_PROBE_TIMEOUT: Duration = DEFAULT_NODE_HTTP_PROBE_TIMEOUT;
-pub(crate) const HTTP_POLL_INTERVAL: Duration = DEFAULT_HTTP_POLL_INTERVAL;
+static DEPLOYMENT_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
+    env_duration_secs(
+        "K8S_RUNNER_DEPLOYMENT_TIMEOUT_SECS",
+        DEFAULT_K8S_DEPLOYMENT_TIMEOUT,
+    )
+});
+static NODE_HTTP_TIMEOUT: LazyLock<Duration> =
+    LazyLock::new(|| env_duration_secs("K8S_RUNNER_HTTP_TIMEOUT_SECS", DEFAULT_NODE_HTTP_TIMEOUT));
+static NODE_HTTP_PROBE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
+    env_duration_secs(
+        "K8S_RUNNER_HTTP_PROBE_TIMEOUT_SECS",
+        DEFAULT_NODE_HTTP_PROBE_TIMEOUT,
+    )
+});
+static HTTP_POLL_INTERVAL: LazyLock<Duration> = LazyLock::new(|| {
+    env_duration_secs(
+        "K8S_RUNNER_HTTP_POLL_INTERVAL_SECS",
+        DEFAULT_HTTP_POLL_INTERVAL,
+    )
+});
+
+pub(crate) fn deployment_timeout() -> Duration {
+    *DEPLOYMENT_TIMEOUT
+}
+
+pub(crate) fn node_http_timeout() -> Duration {
+    *NODE_HTTP_TIMEOUT
+}
+
+pub(crate) fn node_http_probe_timeout() -> Duration {
+    *NODE_HTTP_PROBE_TIMEOUT
+}
+
+pub(crate) fn http_poll_interval() -> Duration {
+    *HTTP_POLL_INTERVAL
+}
+
 pub(crate) const PROMETHEUS_HTTP_PORT: u16 = DEFAULT_PROMETHEUS_HTTP_PORT;
-pub(crate) const PROMETHEUS_HTTP_TIMEOUT: Duration = DEFAULT_PROMETHEUS_HTTP_TIMEOUT;
-pub(crate) const PROMETHEUS_HTTP_PROBE_TIMEOUT: Duration = DEFAULT_PROMETHEUS_HTTP_PROBE_TIMEOUT;
+static PROMETHEUS_HTTP_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
+    env_duration_secs(
+        "K8S_RUNNER_PROMETHEUS_HTTP_TIMEOUT_SECS",
+        DEFAULT_PROMETHEUS_HTTP_TIMEOUT,
+    )
+});
+static PROMETHEUS_HTTP_PROBE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
+    env_duration_secs(
+        "K8S_RUNNER_PROMETHEUS_HTTP_PROBE_TIMEOUT_SECS",
+        DEFAULT_PROMETHEUS_HTTP_PROBE_TIMEOUT,
+    )
+});
+
+pub(crate) fn prometheus_http_timeout() -> Duration {
+    *PROMETHEUS_HTTP_TIMEOUT
+}
+
+pub(crate) fn prometheus_http_probe_timeout() -> Duration {
+    *PROMETHEUS_HTTP_PROBE_TIMEOUT
+}
+
 pub(crate) const PROMETHEUS_SERVICE_NAME: &str = DEFAULT_PROMETHEUS_SERVICE_NAME;
+
+fn env_duration_secs(key: &str, default: Duration) -> Duration {
+    env::var(key)
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(default)
+}

@@ -2,7 +2,7 @@ use k8s_openapi::api::apps::v1::Deployment;
 use kube::{Api, Client};
 use tokio::time::sleep;
 
-use super::{ClusterWaitError, DEPLOYMENT_TIMEOUT};
+use super::{ClusterWaitError, deployment_timeout};
 
 pub async fn wait_for_deployment_ready(
     client: &Client,
@@ -12,7 +12,8 @@ pub async fn wait_for_deployment_ready(
     let mut elapsed = std::time::Duration::ZERO;
     let interval = std::time::Duration::from_secs(2);
 
-    while elapsed <= DEPLOYMENT_TIMEOUT {
+    let timeout = deployment_timeout();
+    while elapsed <= timeout {
         match Api::<Deployment>::namespaced(client.clone(), namespace)
             .get(name)
             .await
@@ -47,6 +48,6 @@ pub async fn wait_for_deployment_ready(
     Err(ClusterWaitError::DeploymentTimeout {
         name: name.to_owned(),
         namespace: namespace.to_owned(),
-        timeout: DEPLOYMENT_TIMEOUT,
+        timeout,
     })
 }

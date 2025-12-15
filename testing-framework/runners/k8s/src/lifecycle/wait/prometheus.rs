@@ -1,6 +1,6 @@
 use tokio::time::sleep;
 
-use super::{ClusterWaitError, PROMETHEUS_HTTP_TIMEOUT};
+use super::{ClusterWaitError, prometheus_http_timeout};
 use crate::host::node_host;
 
 pub async fn wait_for_prometheus_http_nodeport(
@@ -12,7 +12,7 @@ pub async fn wait_for_prometheus_http_nodeport(
 }
 
 pub async fn wait_for_prometheus_http_port_forward(port: u16) -> Result<(), ClusterWaitError> {
-    wait_for_prometheus_http("127.0.0.1", port, PROMETHEUS_HTTP_TIMEOUT).await
+    wait_for_prometheus_http("127.0.0.1", port, prometheus_http_timeout()).await
 }
 
 async fn wait_for_prometheus_http(

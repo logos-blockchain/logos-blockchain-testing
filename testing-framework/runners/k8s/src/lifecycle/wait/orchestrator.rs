@@ -3,7 +3,7 @@ use testing_framework_core::scenario::http_probe::NodeRole;
 
 use super::{
     ClusterPorts, ClusterReady, ClusterWaitError, NodeConfigPorts, PROMETHEUS_HTTP_PORT,
-    PROMETHEUS_HTTP_PROBE_TIMEOUT, PROMETHEUS_SERVICE_NAME,
+    PROMETHEUS_SERVICE_NAME, prometheus_http_probe_timeout,
 };
 use crate::lifecycle::wait::{
     deployment::wait_for_deployment_ready,
@@ -108,7 +108,7 @@ pub async fn wait_for_cluster_ready(
         PROMETHEUS_HTTP_PORT,
     )
     .await?;
-    if wait_for_prometheus_http_nodeport(prometheus_port, PROMETHEUS_HTTP_PROBE_TIMEOUT)
+    if wait_for_prometheus_http_nodeport(prometheus_port, prometheus_http_probe_timeout())
         .await
         .is_err()
     {

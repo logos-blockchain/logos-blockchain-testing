@@ -9,7 +9,7 @@ set -euo pipefail
 #   --rev             nomos-node git revision to build (overrides NOMOS_NODE_REV)
 #   --path            Use local nomos-node checkout at DIR (skip fetch/checkout)
 #   --features        Extra cargo features to enable (comma-separated); base always includes "testing"
-#   --docker-platform Docker platform for Linux bundle when running on non-Linux host (default: linux/amd64)
+#   --docker-platform Docker platform for Linux bundle when running on non-Linux host (default: auto; linux/arm64 on Apple silicon Docker Desktop, else linux/amd64)
 
 # Always run under bash; bail out if someone invokes via sh.
 if [ -z "${BASH_VERSION:-}" ]; then
@@ -26,7 +26,7 @@ Options:
   --rev             nomos-node git revision to build (overrides NOMOS_NODE_REV)
   --path            Use local nomos-node checkout at DIR (skip fetch/checkout)
   --features        Extra cargo features to enable (comma-separated); base always includes "testing"
-  --docker-platform Docker platform for Linux bundle when running on non-Linux host (default: linux/amd64)
+  --docker-platform Docker platform for Linux bundle when running on non-Linux host (default: auto; linux/arm64 on Apple silicon Docker Desktop, else linux/amd64)
 
 Notes:
   - For compose/k8s, use platform=linux. If running on macOS, this script will
@@ -61,12 +61,23 @@ PLATFORM="host"
 OUTPUT=""
 REV_OVERRIDE=""
 PATH_OVERRIDE=""
-DOCKER_PLATFORM="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-linux/amd64}}"
+DOCKER_PLATFORM="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-}}"
 BUNDLE_RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN:-}"
 
 if [ -z "${BUNDLE_RUSTUP_TOOLCHAIN}" ] && command -v rustup >/dev/null 2>&1 && [ -f "${ROOT_DIR}/rust-toolchain.toml" ]; then
   BUNDLE_RUSTUP_TOOLCHAIN="$(awk -F '\"' '/^[[:space:]]*channel[[:space:]]*=/{print $2; exit}' "${ROOT_DIR}/rust-toolchain.toml")"
 fi
+
+# Default Docker platform to the engine architecture when possible.
+if [ -z "${DOCKER_PLATFORM}" ] && command -v docker >/dev/null 2>&1; then
+  docker_arch="$(docker version --format '{{.Server.Arch}}' 2>/dev/null || true)"
+  case "${docker_arch}" in
+    arm64|aarch64) DOCKER_PLATFORM="linux/arm64" ;;
+    amd64|x86_64) DOCKER_PLATFORM="linux/amd64" ;;
+    *) DOCKER_PLATFORM="linux/amd64" ;;
+  esac
+fi
+DOCKER_PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
 
 # To avoid confusing cache corruption errors inside the Dockerized Linux build,
 # always start from a clean cargo registry/git cache for the cross-build.

@@ -70,6 +70,27 @@ This script handles circuit setup, binary building/bundling, image building, and
 - `NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64|linux/amd64` — Docker platform used when building a Linux bundle on non-Linux hosts (macOS/Windows)
 - `COMPOSE_CIRCUITS_PLATFORM=linux-aarch64|linux-x86_64` — Circuits platform used when building the compose/k8s image (defaults based on host arch)
 - `SLOW_TEST_ENV=true` — Doubles built-in readiness timeouts (useful in slower CI / constrained laptops)
+- `TESTNET_PRINT_ENDPOINTS=1` — Print `TESTNET_ENDPOINTS` / `TESTNET_PPROF` lines during deploy (set automatically by `scripts/run-examples.sh`)
+- `COMPOSE_RUNNER_HTTP_TIMEOUT_SECS=<secs>` — Override compose node HTTP readiness timeout
+- `K8S_RUNNER_DEPLOYMENT_TIMEOUT_SECS=<secs>` — Override k8s deployment readiness timeout
+- `K8S_RUNNER_HTTP_TIMEOUT_SECS=<secs>` — Override k8s HTTP readiness timeout for port-forwards
+- `K8S_RUNNER_HTTP_PROBE_TIMEOUT_SECS=<secs>` — Override k8s HTTP readiness timeout for NodePort probes
+- `K8S_RUNNER_PROMETHEUS_HTTP_TIMEOUT_SECS=<secs>` — Override k8s Prometheus readiness timeout
+- `K8S_RUNNER_PROMETHEUS_HTTP_PROBE_TIMEOUT_SECS=<secs>` — Override k8s Prometheus NodePort probe timeout
+
+### Cleanup Helper
+
+If you hit Docker build failures, mysterious I/O errors, or are running out of disk space:
+
+```bash
+scripts/clean
+```
+
+For extra Docker cache cleanup:
+
+```bash
+scripts/clean --docker
+```
 
 ### Host Runner (Direct Cargo Run)
 

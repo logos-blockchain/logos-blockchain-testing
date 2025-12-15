@@ -102,8 +102,18 @@ if have docker; then
     warn "could not query docker engine arch (is Docker running?)"
   fi
 
-  bundle_platform="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-linux/amd64}}"
-  say "NOMOS_BUNDLE_DOCKER_PLATFORM=${bundle_platform}"
+  bundle_platform="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-}}"
+  if [ -z "${bundle_platform}" ]; then
+    say "NOMOS_BUNDLE_DOCKER_PLATFORM=<auto>"
+    if [[ "${server_arch}" == *"linux/arm64"* ]]; then
+      say "bundle docker platform (auto): linux/arm64"
+    else
+      say "bundle docker platform (auto): linux/amd64"
+    fi
+    bundle_platform="auto"
+  else
+    say "NOMOS_BUNDLE_DOCKER_PLATFORM=${bundle_platform}"
+  fi
 
   if [[ "${server_arch}" == *"linux/arm64"* ]] && [ "${bundle_platform}" = "linux/amd64" ]; then
     warn "Docker engine is linux/arm64 but bundle platform is linux/amd64 (emulation). If builds are slow/flaky, set: NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64"

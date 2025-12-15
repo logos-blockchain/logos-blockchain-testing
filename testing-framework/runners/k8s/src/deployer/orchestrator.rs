@@ -151,10 +151,38 @@ impl Deployer for K8sDeployer {
             }
         };
 
-        tracing::info!(
-            grafana_url = %format!("http://{}:{}/", crate::host::node_host(), 30030),
+        let node_host = crate::host::node_host();
+        info!(
+            prometheus_url = %format!("http://{}:{}/", node_host, cluster.as_ref().expect("cluster ready").prometheus_port()),
+            "prometheus endpoint available on host"
+        );
+        info!(
+            grafana_url = %format!("http://{}:{}/", node_host, 30030),
             "grafana dashboard available via NodePort"
         );
+        if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
+            println!(
+                "TESTNET_ENDPOINTS prometheus=http://{}:{}/ grafana=http://{}:{}/",
+                node_host,
+                cluster.as_ref().expect("cluster ready").prometheus_port(),
+                node_host,
+                30030
+            );
+            for (idx, client) in node_clients.validator_clients().iter().enumerate() {
+                println!(
+                    "TESTNET_PPROF validator_{}={}/debug/pprof/profile?seconds=15&format=proto",
+                    idx,
+                    client.base_url()
+                );
+            }
+            for (idx, client) in node_clients.executor_clients().iter().enumerate() {
+                println!(
+                    "TESTNET_PPROF executor_{}={}/debug/pprof/profile?seconds=15&format=proto",
+                    idx,
+                    client.base_url()
+                );
+            }
+        }
         let (cleanup, port_forwards) = cluster
             .take()
             .expect("cluster should still be available")

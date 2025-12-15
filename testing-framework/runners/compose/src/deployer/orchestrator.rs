@@ -84,8 +84,16 @@ impl DeploymentOrchestrator {
         );
         log_profiling_urls(&host, &host_ports);
 
-        // Log profiling endpoints (profiling feature must be enabled in the binaries).
-        log_profiling_urls(&host, &host_ports);
+        if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
+            println!(
+                "TESTNET_ENDPOINTS prometheus=http://{}:{}/ grafana=http://{}:{}/",
+                host,
+                environment.prometheus_port(),
+                host,
+                environment.grafana_port()
+            );
+            print_profiling_urls(&host, &host_ports);
+        }
 
         let (block_feed, block_feed_guard) = client_builder
             .start_block_feed(&node_clients, &mut environment)
@@ -149,6 +157,21 @@ fn log_profiling_urls(host: &str, ports: &HostPortMapping) {
                 host, node.api
             ),
             "executor profiling endpoint (profiling feature required)"
+        );
+    }
+}
+
+fn print_profiling_urls(host: &str, ports: &HostPortMapping) {
+    for (idx, node) in ports.validators.iter().enumerate() {
+        println!(
+            "TESTNET_PPROF validator_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
+            idx, host, node.api
+        );
+    }
+    for (idx, node) in ports.executors.iter().enumerate() {
+        println!(
+            "TESTNET_PPROF executor_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
+            idx, host, node.api
         );
     }
 }
