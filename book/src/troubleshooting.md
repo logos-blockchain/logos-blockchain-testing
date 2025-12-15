@@ -10,6 +10,7 @@
 - **Disk space:** bundle/image builds are storage-heavy. If you see I/O errors or Docker build failures, check free space and prune old artifacts (`.tmp/`, `target/`, and Docker build cache) before retrying.
 - **K8s runner scope:** the default Helm chart mounts KZG params via `hostPath` and uses a local image tag (`logos-blockchain-testing:local`). This is intended for local clusters (Docker Desktop / minikube / kind), not remote managed clusters without additional setup.
   - Quick cleanup: `scripts/clean` (and `scripts/clean --docker` if needed).
+  - Destructive cleanup (last resort): `scripts/clean --docker-system --dangerous` (add `--volumes` if you also want to prune Docker volumes).
 
 **Recommended:** Use `scripts/run-examples.sh` which handles all setup automatically.
 

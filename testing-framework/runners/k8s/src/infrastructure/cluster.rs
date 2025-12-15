@@ -231,6 +231,16 @@ pub async fn ensure_cluster_readiness(
 }
 
 pub fn cluster_identifiers() -> (String, String) {
+    if let Ok(namespace) = env::var("K8S_RUNNER_NAMESPACE")
+        && !namespace.is_empty()
+    {
+        let release = env::var("K8S_RUNNER_RELEASE")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| namespace.clone());
+        return (namespace, release);
+    }
+
     let run_id = Uuid::new_v4().simple().to_string();
     let namespace = format!("nomos-k8s-{run_id}");
     (namespace.clone(), namespace)

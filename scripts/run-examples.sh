@@ -30,6 +30,7 @@ Options:
   -t, --run-seconds N   Duration to run the demo (required)
   -v, --validators N    Number of validators (required)
   -e, --executors N     Number of executors (required)
+  --no-image-build      Skip rebuilding the compose/k8s image (sets NOMOS_SKIP_IMAGE_BUILD=1)
 
 Environment:
   VERSION                        Circuits version (default v0.3.1)
@@ -38,6 +39,13 @@ Environment:
   NOMOS_CIRCUITS_REBUILD_RAPIDSNARK  Force rapidsnark rebuild
   NOMOS_BINARIES_TAR             Path to prebuilt binaries/circuits tarball (required)
   NOMOS_SKIP_IMAGE_BUILD         Set to 1 to skip rebuilding the compose/k8s image
+  TESTNET_PRINT_ENDPOINTS        If set, runners print TESTNET_ENDPOINTS/TESTNET_PPROF (set automatically)
+  COMPOSE_RUNNER_HTTP_TIMEOUT_SECS  Compose readiness timeout override
+  K8S_RUNNER_DEPLOYMENT_TIMEOUT_SECS  K8s deployment readiness timeout override
+  K8S_RUNNER_HTTP_TIMEOUT_SECS      K8s port-forward readiness timeout override
+  K8S_RUNNER_HTTP_PROBE_TIMEOUT_SECS K8s NodePort readiness timeout override
+  K8S_RUNNER_PROMETHEUS_HTTP_TIMEOUT_SECS        K8s Prometheus port-forward readiness timeout override
+  K8S_RUNNER_PROMETHEUS_HTTP_PROBE_TIMEOUT_SECS  K8s Prometheus NodePort probe timeout override
 EOF
 }
 
@@ -90,6 +98,10 @@ while [ "$#" -gt 0 ]; do
       DEMO_VALIDATORS="${2:-}"; shift 2 ;;
     -e|--executors)
       DEMO_EXECUTORS="${2:-}"; shift 2 ;;
+    --no-image-build)
+      NOMOS_SKIP_IMAGE_BUILD=1
+      export NOMOS_SKIP_IMAGE_BUILD
+      shift ;;
     compose|host|k8s)
       MODE="$1"; shift ;;
     *)

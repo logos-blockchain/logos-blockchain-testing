@@ -149,6 +149,7 @@ impl<Caps> TransactionFlowBuilder<Caps> {
             users = self.users.map(|u| u.get()),
             "attaching transaction workload"
         );
+
         self.builder = self.builder.with_workload(workload);
         self.builder
     }
@@ -225,6 +226,7 @@ impl<Caps> DataAvailabilityFlowBuilder<Caps> {
             headroom_percent = self.headroom_percent,
             "attaching data-availability workload"
         );
+
         self.builder = self.builder.with_workload(workload);
         self.builder
     }

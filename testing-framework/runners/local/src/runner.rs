@@ -106,6 +106,7 @@ impl LocalDeployer {
         let skip_membership = !membership_check;
         if let Err(source) = wait_for_readiness(&topology, skip_membership).await {
             debug!(error = ?source, "local readiness failed");
+
             return Err(LocalDeployerError::ReadinessFailed { source });
         }
 
@@ -134,6 +135,7 @@ async fn wait_for_readiness(
     }
     info!("waiting for membership readiness");
     topology.wait_membership_ready().await?;
+
     info!("waiting for DA balancer readiness");
     topology.wait_da_balancer_ready().await
 }
@@ -154,6 +156,7 @@ async fn spawn_block_feed_with(
     })?;
 
     info!("starting block feed");
+
     spawn_block_feed(block_source_client)
         .await
         .map_err(|source| LocalDeployerError::WorkloadFailed {

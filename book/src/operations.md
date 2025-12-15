@@ -427,6 +427,7 @@ cargo run -p runner-examples --bin compose_runner
 - `COMPOSE_RUNNER_HOST_GATEWAY=host.docker.internal:host-gateway` — controls the `extra_hosts` entry injected into compose (set to `disable` to omit)
 - `TESTNET_RUNNER_PRESERVE=1` — alias for `COMPOSE_RUNNER_PRESERVE=1`
 - `COMPOSE_GRAFANA_PORT=<port>` — pin Grafana to a fixed host port instead of ephemeral assignment
+- `COMPOSE_RUNNER_HTTP_TIMEOUT_SECS=<secs>` — override compose node HTTP readiness timeout
 
 **Note:** Container names follow pattern `nomos-compose-{uuid}-validator-{index}-1` where `{uuid}` changes per run.
 
@@ -466,7 +467,8 @@ kubectl logs nomos-executor-1 > executor-1.log
 - Debug helpers:
   - `K8S_RUNNER_DEBUG=1` — logs Helm stdout/stderr for install commands.
   - `K8S_RUNNER_PRESERVE=1` — keep the namespace/release after the run.
-  - `K8S_RUNNER_NODE_HOST=<ip|hostname>` — override NodePort host resolution for non-local clusters.
+- `K8S_RUNNER_NODE_HOST=<ip|hostname>` — override NodePort host resolution for non-local clusters.
+- `K8S_RUNNER_NAMESPACE=<name>` / `K8S_RUNNER_RELEASE=<name>` — pin namespace/release instead of random IDs (useful for debugging)
 
 **Specify namespace (if not using default):**
 ```bash

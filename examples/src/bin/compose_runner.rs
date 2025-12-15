@@ -94,6 +94,7 @@ async fn run_compose_case(
 
     let deployer = ComposeDeployer::new();
     info!("deploying compose stack");
+    
     let runner: Runner = match deployer.deploy(&plan).await {
         Ok(runner) => runner,
         Err(ComposeRunnerError::DockerUnavailable) => {

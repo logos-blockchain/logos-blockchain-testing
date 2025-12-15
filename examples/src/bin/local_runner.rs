@@ -18,6 +18,7 @@ async fn main() {
 
     if std::env::var("POL_PROOF_DEV_MODE").is_err() {
         warn!("POL_PROOF_DEV_MODE=true is required for the local runner demo");
+
         std::process::exit(1);
     }
 
@@ -41,6 +42,7 @@ async fn main() {
 
     if let Err(err) = run_local_case(validators, executors, Duration::from_secs(run_secs)).await {
         warn!("local runner demo failed: {err}");
+
         std::process::exit(1);
     }
 }

@@ -67,6 +67,7 @@ async fn run_k8s_case(
 
     let deployer = K8sDeployer::new();
     info!("deploying k8s stack");
+    
     let runner: Runner = match deployer.deploy(&plan).await {
         Ok(runner) => runner,
         Err(K8sRunnerError::ClientInit { source }) => {

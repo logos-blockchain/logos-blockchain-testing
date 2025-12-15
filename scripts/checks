@@ -162,6 +162,49 @@ else
   warn "helm not found (k8s runner uses helm)"
 fi
 
+section "K8s Image Visibility"
+image="${NOMOS_TESTNET_IMAGE:-logos-blockchain-testing:local}"
+if [ -n "${ctx:-}" ]; then
+  case "${ctx}" in
+    docker-desktop)
+      ok "docker-desktop context shares local Docker images"
+      ;;
+    kind-*)
+      if [[ "${image}" == *":local" ]]; then
+        warn "kind cluster won't see local Docker images by default"
+        say "Suggested: kind load docker-image ${image}"
+      fi
+      ;;
+    minikube)
+      if [[ "${image}" == *":local" ]]; then
+        warn "minikube may not see local Docker images by default"
+        say "Suggested: minikube image load ${image}"
+      fi
+      ;;
+    *)
+      if [[ "${image}" == *":local" ]]; then
+        warn "current context is ${ctx}; a :local image tag may not be reachable by cluster nodes"
+        say "Suggested: push to a registry and set NOMOS_TESTNET_IMAGE, or load into the cluster if supported"
+      fi
+      ;;
+  esac
+fi
+
+section "Docker Desktop Kubernetes Health (best-effort)"
+if have kubectl && [ "${ctx:-}" = "docker-desktop" ]; then
+  if ! kubectl -n kube-system get pod storage-provisioner >/dev/null 2>&1; then
+    warn "storage-provisioner pod not found"
+  else
+    phase="$(kubectl -n kube-system get pod storage-provisioner -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+    reason="$(kubectl -n kube-system get pod storage-provisioner -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)"
+    if [ "${phase}" = "Running" ] || [ "${phase}" = "Succeeded" ]; then
+      ok "storage-provisioner: ${phase}"
+    else
+      warn "storage-provisioner: ${phase:-<unknown>} ${reason}"
+    fi
+  fi
+fi
+
 section "Runner Debug Flags (optional)"
 say "SLOW_TEST_ENV=${SLOW_TEST_ENV:-<unset>}  (if true: doubles readiness timeouts)"
 say "NOMOS_SKIP_IMAGE_BUILD=${NOMOS_SKIP_IMAGE_BUILD:-<unset>}  (compose/k8s)"
@@ -170,6 +213,7 @@ say "K8S_RUNNER_PRESERVE=${K8S_RUNNER_PRESERVE:-<unset>}  (k8s)"
 say "K8S_RUNNER_DEBUG=${K8S_RUNNER_DEBUG:-<unset>}  (k8s helm debug)"
 say "COMPOSE_RUNNER_HOST=${COMPOSE_RUNNER_HOST:-<unset>}  (compose readiness host override)"
 say "K8S_RUNNER_NODE_HOST=${K8S_RUNNER_NODE_HOST:-<unset>}  (k8s NodePort host override)"
+say "K8S_RUNNER_NAMESPACE=${K8S_RUNNER_NAMESPACE:-<unset>}  (k8s fixed namespace)"
 
 section "Done"
 say "If something looks off, start with: scripts/run-examples.sh <mode> -t 60 -v 1 -e 1"

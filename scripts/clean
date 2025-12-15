@@ -13,6 +13,9 @@ Options:
   --tmp           Remove .tmp (default)
   --target        Remove target (default)
   --docker        Prune Docker builder cache (docker builder prune -f)
+  --docker-system Prune Docker system objects (requires --dangerous)
+  --volumes       With --docker-system, also prune volumes
+  --dangerous     Required for --docker-system (destructive)
   --all           Equivalent to --tmp --target --docker
   -h, --help      Show this help
 EOF
@@ -21,6 +24,9 @@ EOF
 DO_TMP=0
 DO_TARGET=0
 DO_DOCKER=0
+DO_DOCKER_SYSTEM=0
+DO_VOLUMES=0
+DANGEROUS=0
 
 if [ "$#" -eq 0 ]; then
   DO_TMP=1
@@ -32,6 +38,9 @@ while [ "$#" -gt 0 ]; do
     --tmp) DO_TMP=1; shift ;;
     --target) DO_TARGET=1; shift ;;
     --docker) DO_DOCKER=1; shift ;;
+    --docker-system) DO_DOCKER_SYSTEM=1; shift ;;
+    --volumes) DO_VOLUMES=1; shift ;;
+    --dangerous) DANGEROUS=1; shift ;;
     --all) DO_TMP=1; DO_TARGET=1; DO_DOCKER=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
@@ -60,5 +69,22 @@ if [ "${DO_DOCKER}" -eq 1 ]; then
   fi
 fi
 
-echo "Done."
+if [ "${DO_DOCKER_SYSTEM}" -eq 1 ]; then
+  if [ "${DANGEROUS}" -ne 1 ]; then
+    echo "ERROR: --docker-system requires --dangerous" >&2
+    exit 2
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    echo "==> Pruning Docker system objects"
+    if [ "${DO_VOLUMES}" -eq 1 ]; then
+      docker system prune -af --volumes >/dev/null
+    else
+      docker system prune -af >/dev/null
+    fi
+    echo "==> Docker system prune complete"
+  else
+    echo "WARN: docker not found; skipping Docker system prune" >&2
+  fi
+fi
 
+echo "Done."
