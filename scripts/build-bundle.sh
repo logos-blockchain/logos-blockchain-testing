@@ -62,6 +62,11 @@ OUTPUT=""
 REV_OVERRIDE=""
 PATH_OVERRIDE=""
 DOCKER_PLATFORM="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-linux/amd64}}"
+BUNDLE_RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN:-}"
+
+if [ -z "${BUNDLE_RUSTUP_TOOLCHAIN}" ] && command -v rustup >/dev/null 2>&1 && [ -f "${ROOT_DIR}/rust-toolchain.toml" ]; then
+  BUNDLE_RUSTUP_TOOLCHAIN="$(awk -F '\"' '/^[[:space:]]*channel[[:space:]]*=/{print $2; exit}' "${ROOT_DIR}/rust-toolchain.toml")"
+fi
 
 # To avoid confusing cache corruption errors inside the Dockerized Linux build,
 # always start from a clean cargo registry/git cache for the cross-build.
@@ -226,10 +231,18 @@ mkdir -p "${NODE_SRC}"
     git reset --hard
     git clean -fdx
   fi
-  RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
-    cargo build --features "${FEATURES}" \
-    -p nomos-node -p nomos-executor -p nomos-cli \
-    --target-dir "${NODE_TARGET}"
+  if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
+    RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
+      RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
+      cargo build --features "${FEATURES}" \
+      -p nomos-node -p nomos-executor -p nomos-cli \
+      --target-dir "${NODE_TARGET}"
+  else
+    RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
+      cargo build --features "${FEATURES}" \
+      -p nomos-node -p nomos-executor -p nomos-cli \
+      --target-dir "${NODE_TARGET}"
+  fi
 )
 
 echo "==> Packaging bundle"

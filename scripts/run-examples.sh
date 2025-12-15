@@ -162,6 +162,9 @@ restore_binaries_from_tar() {
   else
     tar_path="$(default_tar_path)"
   fi
+  if ! bundle_matches_expected "${tar_path}"; then
+    return 1
+  fi
   local extract_dir="${ROOT_DIR}/.tmp/nomos-binaries"
   if [ ! -f "$tar_path" ]; then
     return 1
@@ -211,6 +214,41 @@ restore_binaries_from_tar() {
   export RESTORED_BINARIES
 }
 
+bundle_matches_expected() {
+  local tar_path="$1"
+  if [ ! -f "${tar_path}" ]; then
+    return 1
+  fi
+  if [ -z "${NOMOS_NODE_REV:-}" ]; then
+    return 0
+  fi
+  local meta
+  meta="$(tar -xOzf "${tar_path}" artifacts/nomos-bundle-meta.env 2>/dev/null || true)"
+  if [ -z "${meta}" ]; then
+    echo "Bundle meta missing in ${tar_path}; treating as stale and rebuilding." >&2
+    return 1
+  fi
+  local tar_rev tar_head
+  tar_rev="$(echo "${meta}" | sed -n 's/^nomos_node_rev=//p' | head -n 1)"
+  tar_head="$(echo "${meta}" | sed -n 's/^nomos_node_git_head=//p' | head -n 1)"
+  if [ -n "${tar_rev}" ] && [ "${tar_rev}" != "${NOMOS_NODE_REV}" ]; then
+    echo "Bundle ${tar_path} is for nomos-node rev ${tar_rev}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+    return 1
+  fi
+  if [ -n "${tar_head}" ] && [ "${tar_head}" != "${NOMOS_NODE_REV}" ]; then
+    echo "Bundle ${tar_path} is for nomos-node git head ${tar_head}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+    return 1
+  fi
+  return 0
+}
+
+ensure_binaries_tar() {
+  local platform="$1"
+  local tar_path="$2"
+  echo "==> Building fresh binaries bundle (${platform}) at ${tar_path}"
+  "${ROOT_DIR}/scripts/build-bundle.sh" --platform "${platform}" --output "${tar_path}" --rev "${NOMOS_NODE_REV}"
+}
+
 host_bin_matches_arch() {
   local bin_path="$1"
   if [ ! -x "$bin_path" ]; then
@@ -239,13 +277,30 @@ else
   # On non-Linux compose/k8s runs, use the Linux bundle for image build, then restore host bundle for the runner.
   if [ "$MODE" != "host" ] && [ "$(uname -s)" != "Linux" ] && [ "${NOMOS_SKIP_IMAGE_BUILD:-0}" = "0" ] && [ -f "${LINUX_TAR}" ]; then
     NEED_HOST_RESTORE_AFTER_IMAGE=1
-    _RESTORE_TAR_OVERRIDE="${LINUX_TAR}" restore_binaries_from_tar || true
+    _RESTORE_TAR_OVERRIDE="${LINUX_TAR}" restore_binaries_from_tar || {
+      ensure_binaries_tar linux "${LINUX_TAR}"
+      _RESTORE_TAR_OVERRIDE="${LINUX_TAR}" restore_binaries_from_tar
+    }
     unset _RESTORE_TAR_OVERRIDE
   fi
 
   if ! restore_binaries_from_tar; then
-    echo "ERROR: Missing or invalid binaries tarball. Provide it via NOMOS_BINARIES_TAR or place it at $(default_tar_path)." >&2
-    exit 1
+    tar_path="$(default_tar_path)"
+    case "$MODE" in
+      host) ensure_binaries_tar host "${tar_path}" ;;
+      compose|k8s)
+        if [ "${NOMOS_SKIP_IMAGE_BUILD:-0}" = "1" ]; then
+          ensure_binaries_tar host "${tar_path}"
+        else
+          ensure_binaries_tar linux "${tar_path}"
+        fi
+        ;;
+      *) ensure_binaries_tar host "${tar_path}" ;;
+    esac
+    restore_binaries_from_tar || {
+      echo "ERROR: Missing or invalid binaries tarball. Provide it via NOMOS_BINARIES_TAR or place it at $(default_tar_path)." >&2
+      exit 1
+    }
   fi
 fi
 
@@ -265,14 +320,22 @@ if [ "${NEED_HOST_RESTORE_AFTER_IMAGE}" = "1" ]; then
   if [ -f "${HOST_TAR}" ]; then
     echo "==> Restoring host bundle for runner (${HOST_TAR})"
     _RESTORE_TAR_OVERRIDE="${HOST_TAR}" restore_binaries_from_tar || {
+      ensure_binaries_tar host "${HOST_TAR}"
+      _RESTORE_TAR_OVERRIDE="${HOST_TAR}" restore_binaries_from_tar || {
+        echo "ERROR: Failed to restore host bundle from ${HOST_TAR}" >&2
+        exit 1
+      }
+    }
+    unset _RESTORE_TAR_OVERRIDE
+    echo "==> Using restored circuits/binaries bundle"
+  else
+    ensure_binaries_tar host "${HOST_TAR}"
+    _RESTORE_TAR_OVERRIDE="${HOST_TAR}" restore_binaries_from_tar || {
       echo "ERROR: Failed to restore host bundle from ${HOST_TAR}" >&2
       exit 1
     }
     unset _RESTORE_TAR_OVERRIDE
     echo "==> Using restored circuits/binaries bundle"
-  else
-    echo "ERROR: Expected host bundle at ${HOST_TAR} for runner." >&2
-    exit 1
   fi
 fi
 

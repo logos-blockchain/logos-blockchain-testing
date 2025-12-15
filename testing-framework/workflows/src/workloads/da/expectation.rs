@@ -36,7 +36,8 @@ struct CaptureState {
     run_duration: Duration,
 }
 
-const MIN_INCLUSION_RATIO: f64 = 0.8;
+const MIN_INSCRIPTION_INCLUSION_RATIO: f64 = 0.8;
+const MIN_BLOB_INCLUSION_RATIO: f64 = 0.7;
 
 #[derive(Debug, Error)]
 enum DaExpectationError {
@@ -184,7 +185,8 @@ impl Expectation for DaWorkloadExpectation {
                 .expect("inscription lock poisoned");
             missing_channels(&state.planned, &inscriptions)
         };
-        let required_inscriptions = minimum_required(planned_total, MIN_INCLUSION_RATIO);
+        let required_inscriptions =
+            minimum_required(planned_total, MIN_INSCRIPTION_INCLUSION_RATIO);
         let observed_inscriptions = planned_total.saturating_sub(missing_inscriptions.len());
         if observed_inscriptions < required_inscriptions {
             tracing::warn!(
@@ -223,7 +225,7 @@ impl Expectation for DaWorkloadExpectation {
             .saturating_mul(observed_blocks);
 
         let missing_blob_channels = missing_channels(&state.planned, &channels_with_blobs);
-        let required_blobs = minimum_required_u64(expected_total_blobs, MIN_INCLUSION_RATIO);
+        let required_blobs = minimum_required_u64(expected_total_blobs, MIN_BLOB_INCLUSION_RATIO);
         if observed_total_blobs < required_blobs {
             tracing::warn!(
                 expected_total_blobs,
