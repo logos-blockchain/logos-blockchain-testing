@@ -98,7 +98,10 @@ impl ConfigRepo {
     async fn run(&self) {
         let timeout_duration = self.timeout_duration;
 
-        if timeout(timeout_duration, self.wait_for_hosts()).await == Ok(()) {
+        if timeout(timeout_duration, self.wait_for_hosts())
+            .await
+            .is_ok()
+        {
             println!("All hosts have announced their IPs");
 
             let mut waiting_hosts = self.waiting_hosts.lock().unwrap();

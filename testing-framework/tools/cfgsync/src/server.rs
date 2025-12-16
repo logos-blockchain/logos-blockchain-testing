@@ -259,19 +259,28 @@ fn override_api_ports(config: &mut Value, ports: &PortOverrides) {
 }
 
 fn inject_da_assignations(config: &mut Value, membership: &nomos_node::NomosDaMembership) {
+    struct SubnetAssignment {
+        subnet_id: String,
+        peers: Vec<String>,
+    }
+
     fn convert_subnet_to_assignment(
         subnet_id: impl ToString,
         members: impl IntoIterator<Item = impl ToString>,
-    ) -> (String, Vec<String>) {
-        let peer_strings: Vec<String> = members.into_iter().map(|peer| peer.to_string()).collect();
+    ) -> SubnetAssignment {
+        let peers = members.into_iter().map(|peer| peer.to_string()).collect();
 
-        (subnet_id.to_string(), peer_strings)
+        SubnetAssignment {
+            subnet_id: subnet_id.to_string(),
+            peers,
+        }
     }
 
     let subnetworks = membership.subnetworks();
     let assignations: std::collections::HashMap<String, Vec<String>> = subnetworks
         .into_iter()
         .map(|(subnet_id, members)| convert_subnet_to_assignment(subnet_id, members))
+        .map(|assignment| (assignment.subnet_id, assignment.peers))
         .collect();
 
     if let Some(membership) = config.pointer_mut("/da_network/membership") {
