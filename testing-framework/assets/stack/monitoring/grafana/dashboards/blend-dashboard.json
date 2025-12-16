@@ -99,7 +99,7 @@
           "refId": "B"
         }
       ],
-      "title": "Message Flow Rate",
+      "title": "Message Flow Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -175,7 +175,7 @@
           "refId": "A"
         }
       ],
-      "title": "Mix Packet Processing Rate",
+      "title": "Mix Packet Processing Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -213,7 +213,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -225,7 +227,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Messages Sent",
+      "title": "Total Messages Sent \u2014 current",
       "type": "stat"
     },
     {
@@ -263,7 +265,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -275,7 +279,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Messages Received",
+      "title": "Total Messages Received \u2014 current",
       "type": "stat"
     },
     {
@@ -313,7 +317,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -325,7 +331,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Mix Packets Processed",
+      "title": "Total Mix Packets Processed \u2014 current",
       "type": "stat"
     },
     {
@@ -363,7 +369,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -375,7 +383,7 @@
           "refId": "A"
         }
       ],
-      "title": "Connected Peers",
+      "title": "Connected Peers \u2014 peer count",
       "type": "stat"
     },
     {
@@ -451,7 +459,7 @@
           "refId": "A"
         }
       ],
-      "title": "Peer Connectivity Over Time",
+      "title": "Peer Connectivity Over Time \u2014 current",
       "type": "timeseries"
     },
     {
@@ -527,7 +535,7 @@
           "refId": "A"
         }
       ],
-      "title": "Failed Message Rate",
+      "title": "Failed Message Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -608,7 +616,7 @@
           "refId": "B"
         }
       ],
-      "title": "Connection & Error Events",
+      "title": "Connection & Error Events \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -646,7 +654,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -658,13 +668,18 @@
           "refId": "A"
         }
       ],
-      "title": "Pending Outbound Messages",
+      "title": "Pending Outbound Messages \u2014 queue depth",
       "type": "stat"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "blend", "privacy", "mixnet"],
+  "tags": [
+    "nomos",
+    "blend",
+    "privacy",
+    "mixnet"
+  ],
   "templating": {
     "list": []
   },

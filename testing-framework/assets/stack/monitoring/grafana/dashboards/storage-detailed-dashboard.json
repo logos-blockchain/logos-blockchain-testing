@@ -99,7 +99,7 @@
           "refId": "B"
         }
       ],
-      "title": "DA: Get Light Share",
+      "title": "DA: Get Light Share \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -180,7 +180,7 @@
           "refId": "B"
         }
       ],
-      "title": "DA: Store Light Share",
+      "title": "DA: Store Light Share \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -261,7 +261,7 @@
           "refId": "B"
         }
       ],
-      "title": "DA: Get Shared Commitments",
+      "title": "DA: Get Shared Commitments \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -342,7 +342,7 @@
           "refId": "B"
         }
       ],
-      "title": "DA: Store Shared Commitments",
+      "title": "DA: Store Shared Commitments \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -423,7 +423,7 @@
           "refId": "B"
         }
       ],
-      "title": "DA: Store Transaction",
+      "title": "DA: Store Transaction \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -504,7 +504,7 @@
           "refId": "B"
         }
       ],
-      "title": "DA: Get Transaction",
+      "title": "DA: Get Transaction \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -585,7 +585,7 @@
           "refId": "B"
         }
       ],
-      "title": "Chain: Get Block",
+      "title": "Chain: Get Block \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -666,7 +666,7 @@
           "refId": "B"
         }
       ],
-      "title": "Chain: Store Block",
+      "title": "Chain: Store Block \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -747,7 +747,7 @@
           "refId": "B"
         }
       ],
-      "title": "Chain: Remove Block",
+      "title": "Chain: Remove Block \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -828,7 +828,7 @@
           "refId": "B"
         }
       ],
-      "title": "Chain: Store Transactions",
+      "title": "Chain: Store Transactions \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -904,7 +904,7 @@
           "refId": "A"
         }
       ],
-      "title": "Chain: Get Transactions",
+      "title": "Chain: Get Transactions \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -985,13 +985,18 @@
           "refId": "B"
         }
       ],
-      "title": "Chain: Remove Transactions",
+      "title": "Chain: Remove Transactions \u2014 events/sec",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "storage", "rocksdb", "detailed"],
+  "tags": [
+    "nomos",
+    "storage",
+    "rocksdb",
+    "detailed"
+  ],
   "templating": {
     "list": []
   },

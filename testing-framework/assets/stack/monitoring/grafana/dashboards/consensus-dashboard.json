@@ -56,7 +56,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -68,7 +70,7 @@
           "refId": "A"
         }
       ],
-      "title": "Tip Height",
+      "title": "Tip Height \u2014 height",
       "type": "stat"
     },
     {
@@ -106,7 +108,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -118,7 +122,7 @@
           "refId": "A"
         }
       ],
-      "title": "Finalized Height (LIB)",
+      "title": "Finalized Height (LIB) \u2014 height",
       "type": "stat"
     },
     {
@@ -156,7 +160,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -168,7 +174,7 @@
           "refId": "A"
         }
       ],
-      "title": "Current Epoch",
+      "title": "Current Epoch \u2014 epoch",
       "type": "stat"
     },
     {
@@ -206,7 +212,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -218,7 +226,7 @@
           "refId": "A"
         }
       ],
-      "title": "Current Slot",
+      "title": "Current Slot \u2014 slot",
       "type": "stat"
     },
     {
@@ -299,7 +307,7 @@
           "refId": "B"
         }
       ],
-      "title": "Block Heights Over Time",
+      "title": "Block Heights Over Time \u2014 height",
       "type": "timeseries"
     },
     {
@@ -375,7 +383,7 @@
           "refId": "A"
         }
       ],
-      "title": "Block Import Rate",
+      "title": "Block Import Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -456,7 +464,7 @@
           "refId": "B"
         }
       ],
-      "title": "Network Connectivity",
+      "title": "Network Connectivity \u2014 conn count",
       "type": "timeseries"
     },
     {
@@ -494,7 +502,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -506,7 +516,7 @@
           "refId": "A"
         }
       ],
-      "title": "Active Branches",
+      "title": "Active Branches \u2014 current",
       "type": "stat"
     },
     {
@@ -544,7 +554,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -556,7 +568,7 @@
           "refId": "A"
         }
       ],
-      "title": "Txs in Last Block",
+      "title": "Txs in Last Block \u2014 current",
       "type": "stat"
     },
     {
@@ -594,7 +606,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -606,7 +620,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Txs Processed",
+      "title": "Total Txs Processed \u2014 current",
       "type": "stat"
     },
     {
@@ -644,7 +658,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -661,7 +677,7 @@
           "refId": "B"
         }
       ],
-      "title": "Network Tx Totals",
+      "title": "Network Tx Totals \u2014 current",
       "type": "stat"
     },
     {
@@ -737,7 +753,7 @@
           "refId": "A"
         }
       ],
-      "title": "Transactions per Block",
+      "title": "Transactions per Block \u2014 current",
       "type": "timeseries"
     },
     {
@@ -813,7 +829,7 @@
           "refId": "A"
         }
       ],
-      "title": "Transaction Throughput (TPS)",
+      "title": "Transaction Throughput (TPS) \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -894,7 +910,7 @@
           "refId": "B"
         }
       ],
-      "title": "Consensus Timing Health",
+      "title": "Consensus Timing Health \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -932,7 +948,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -949,7 +967,7 @@
           "refId": "B"
         }
       ],
-      "title": "Current Epoch & Slot",
+      "title": "Current Epoch & Slot \u2014 slot",
       "type": "stat"
     },
     {
@@ -1035,7 +1053,7 @@
           "refId": "C"
         }
       ],
-      "title": "Network Message Processing",
+      "title": "Network Message Processing \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -1073,7 +1091,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -1090,7 +1110,7 @@
           "refId": "B"
         }
       ],
-      "title": "Network Subscription Errors",
+      "title": "Network Subscription Errors \u2014 events/sec",
       "type": "stat"
     },
     {
@@ -1176,7 +1196,7 @@
           "refId": "C"
         }
       ],
-      "title": "Orphan Block Processing",
+      "title": "Orphan Block Processing \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -1214,7 +1234,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -1226,111 +1248,7 @@
           "refId": "A"
         }
       ],
-      "title": "Orphan Block Queue Status",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false
-            }
-          },
-          "mappings": [
-            {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "GOOD"
-                },
-                "to": 5
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 5,
-                "result": {
-                  "color": "yellow",
-                  "index": 1,
-                  "text": "SLOW"
-                },
-                "to": 20
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 20,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "STALLED"
-                },
-                "to": null
-              },
-              "type": "range"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 5
-              },
-              {
-                "color": "red",
-                "value": 20
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 64
-      },
-      "id": 20,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "values": false,
-          "calcs": ["lastNotNull"],
-          "fields": ""
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "expr": "consensus_tip_height - consensus_finalized_height",
-          "legendFormat": "Unfinalized Block Gap - {{job}}",
-          "refId": "A"
-        }
-      ],
-      "title": "🚦 Consensus Health (Finalization Gap)",
+      "title": "Orphan Block Queue Status \u2014 queue depth",
       "type": "stat"
     },
     {
@@ -1406,13 +1324,17 @@
           "refId": "A"
         }
       ],
-      "title": "⏱️ Block Production Timing",
+      "title": "\u23f1\ufe0f Block Production Timing \u2014 time since last",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "consensus", "cryptarchia"],
+  "tags": [
+    "nomos",
+    "consensus",
+    "cryptarchia"
+  ],
   "templating": {
     "list": []
   },

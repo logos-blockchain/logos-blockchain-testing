@@ -73,7 +73,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -110,7 +112,7 @@
           "refId": "F"
         }
       ],
-      "title": "🚨 Critical Failure Rates (per minute)",
+      "title": "\ud83d\udea8 Critical Failure Rates (per minute) \u2014 events/sec",
       "type": "stat"
     },
     {
@@ -196,7 +198,7 @@
           "refId": "C"
         }
       ],
-      "title": "📊 Failure Rates (Percentage)",
+      "title": "\ud83d\udcca Failure Rates (Percentage) \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -282,7 +284,7 @@
           "refId": "C"
         }
       ],
-      "title": "🔐 KMS Failures",
+      "title": "\ud83d\udd10 KMS Failures \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -373,7 +375,7 @@
           "refId": "D"
         }
       ],
-      "title": "📋 SDP (Service Provider) Failures",
+      "title": "\ud83d\udccb SDP (Service Provider) Failures \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -464,7 +466,7 @@
           "refId": "D"
         }
       ],
-      "title": "⏰ Timing/Synchronization Issues",
+      "title": "\u23f0 Timing/Synchronization Issues \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -550,7 +552,7 @@
           "refId": "C"
         }
       ],
-      "title": "🌐 Network/Subscription Errors",
+      "title": "\ud83c\udf10 Network/Subscription Errors \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -605,7 +607,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -627,7 +631,7 @@
           "refId": "C"
         }
       ],
-      "title": "⚠️ Potential Bottlenecks",
+      "title": "\u26a0\ufe0f Potential Bottlenecks \u2014 finalization gap",
       "type": "stat"
     },
     {
@@ -703,13 +707,120 @@
           "refId": "A"
         }
       ],
-      "title": "🗄️ Top Storage Operation Failures",
+      "title": "\ud83d\uddc4\ufe0f Top Storage Operation Failures \u2014 events/sec",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(consensus_proposal_reconstruct_seconds_bucket[5m]))",
+          "legendFormat": "Reconstruct p95 - {{job}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(consensus_apply_block_seconds_bucket[5m]))",
+          "legendFormat": "Apply block p95 - {{job}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(consensus_block_blob_validation_seconds_bucket[5m]))",
+          "legendFormat": "Blob validation p95 {{mode}} - {{job}}",
+          "refId": "C"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(chainsync_request_tip_seconds_bucket[5m]))",
+          "legendFormat": "ChainSync tip p95 - {{job}}",
+          "refId": "D"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(chainsync_download_blocks_seconds_bucket[5m]))",
+          "legendFormat": "ChainSync blocks p95 - {{job}}",
+          "refId": "E"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(orphan_blocks_parent_fetch_seconds_bucket[5m]))",
+          "legendFormat": "Orphan parent fetch p95 - {{job}}",
+          "refId": "F"
+        }
+      ],
+      "title": "\u23f1\ufe0f Consensus Pipeline Latency (p95) \u2014 p95 latency",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "diagnostics", "errors", "issues", "alerting"],
+  "tags": [
+    "nomos",
+    "diagnostics",
+    "errors",
+    "issues",
+    "alerting"
+  ],
   "templating": {
     "list": []
   },
@@ -719,7 +830,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "🚨 Issues & Diagnostics Dashboard",
+  "title": "\ud83d\udea8 Issues & Diagnostics Dashboard",
   "uid": "issues-diagnostics-dashboard",
   "version": 1,
   "weekStart": ""

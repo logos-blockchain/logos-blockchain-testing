@@ -94,7 +94,7 @@
           "refId": "A"
         }
       ],
-      "title": "HTTP Request Rates by Endpoint",
+      "title": "HTTP Request Rates by Endpoint \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -141,7 +141,7 @@
             }
           },
           "mappings": [],
-          "unit": "ms"
+          "unit": "s"
         }
       },
       "gridPos": {
@@ -165,12 +165,12 @@
       },
       "targets": [
         {
-          "expr": "http_request_duration_ms",
-          "legendFormat": "{{method}} {{endpoint}} - {{job}}",
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 {{method}} {{endpoint}} - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "HTTP Request Duration by Endpoint",
+      "title": "HTTP Request Duration by Endpoint \u2014 p95 latency",
       "type": "timeseries"
     },
     {
@@ -208,7 +208,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -220,7 +222,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Requests by Endpoint",
+      "title": "Total Requests by Endpoint \u2014 current",
       "type": "stat"
     },
     {
@@ -296,7 +298,7 @@
           "refId": "A"
         }
       ],
-      "title": "Request Rate by HTTP Method",
+      "title": "Request Rate by HTTP Method \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -372,13 +374,18 @@
           "refId": "A"
         }
       ],
-      "title": "Top 10 Endpoints by Request Rate",
+      "title": "Top 10 Endpoints by Request Rate \u2014 events/sec",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "api", "http", "endpoints"],
+  "tags": [
+    "nomos",
+    "api",
+    "http",
+    "endpoints"
+  ],
   "templating": {
     "list": []
   },

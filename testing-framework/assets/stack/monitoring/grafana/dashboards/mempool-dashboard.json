@@ -56,7 +56,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -68,7 +70,7 @@
           "refId": "A"
         }
       ],
-      "title": "Pending Transactions",
+      "title": "Pending Transactions \u2014 queue depth",
       "type": "stat"
     },
     {
@@ -106,7 +108,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -118,7 +122,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Added",
+      "title": "Total Added \u2014 current",
       "type": "stat"
     },
     {
@@ -156,7 +160,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -168,7 +174,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Removed",
+      "title": "Total Removed \u2014 current",
       "type": "stat"
     },
     {
@@ -244,7 +250,7 @@
           "refId": "A"
         }
       ],
-      "title": "Pending Transactions Over Time",
+      "title": "Pending Transactions Over Time \u2014 queue depth",
       "type": "timeseries"
     },
     {
@@ -325,7 +331,7 @@
           "refId": "B"
         }
       ],
-      "title": "Transaction Processing Rate",
+      "title": "Transaction Processing Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -406,7 +412,7 @@
           "refId": "B"
         }
       ],
-      "title": "Cumulative Transaction Counts",
+      "title": "Cumulative Transaction Counts \u2014 current",
       "type": "timeseries"
     },
     {
@@ -482,7 +488,7 @@
           "refId": "A"
         }
       ],
-      "title": "Mempool Processing Efficiency",
+      "title": "Mempool Processing Efficiency \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -520,7 +526,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -532,13 +540,17 @@
           "refId": "A"
         }
       ],
-      "title": "TX Service Mempool Metrics",
+      "title": "TX Service Mempool Metrics \u2014 current",
       "type": "stat"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "mempool", "transactions"],
+  "tags": [
+    "nomos",
+    "mempool",
+    "transactions"
+  ],
   "templating": {
     "list": []
   },

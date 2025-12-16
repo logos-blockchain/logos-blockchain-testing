@@ -14,6 +14,7 @@ use thiserror::Error;
 
 mod deployment;
 mod forwarding;
+mod grafana;
 mod http_probe;
 mod orchestrator;
 mod ports;
@@ -36,12 +37,22 @@ pub struct NodePortAllocation {
     pub testing: u16,
 }
 
+/// Host/port pair reachable from the machine running the runner.
+#[derive(Clone, Debug)]
+pub struct HostPort {
+    pub host: String,
+    pub port: u16,
+}
+
 /// All port assignments for the cluster plus Prometheus.
 #[derive(Debug)]
 pub struct ClusterPorts {
     pub validators: Vec<NodePortAllocation>,
     pub executors: Vec<NodePortAllocation>,
-    pub prometheus: u16,
+    pub validator_host: String,
+    pub executor_host: String,
+    pub prometheus: HostPort,
+    pub grafana: Option<HostPort>,
 }
 
 /// Success result from waiting for the cluster: host ports and forward handles.
@@ -87,6 +98,8 @@ pub enum ClusterWaitError {
     },
     #[error("timeout waiting for prometheus readiness on NodePort {port}")]
     PrometheusTimeout { port: u16 },
+    #[error("timeout waiting for grafana readiness on port {port}")]
+    GrafanaTimeout { port: u16 },
     #[error("failed to start port-forward for service {service} port {port}: {source}")]
     PortForward {
         service: String,

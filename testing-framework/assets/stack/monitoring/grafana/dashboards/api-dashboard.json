@@ -56,7 +56,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -68,7 +70,7 @@
           "refId": "A"
         }
       ],
-      "title": "HTTP Request Rate",
+      "title": "HTTP Request Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -106,7 +108,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -118,7 +122,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total HTTP Requests",
+      "title": "Total HTTP Requests \u2014 current",
       "type": "stat"
     },
     {
@@ -199,7 +203,7 @@
           "refId": "B"
         }
       ],
-      "title": "HTTP Request Duration",
+      "title": "HTTP Request Duration \u2014 p95 latency",
       "type": "timeseries"
     },
     {
@@ -275,7 +279,7 @@
           "refId": "A"
         }
       ],
-      "title": "HTTP Error Rate",
+      "title": "HTTP Error Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -361,7 +365,7 @@
           "refId": "C"
         }
       ],
-      "title": "HTTP Status Codes",
+      "title": "HTTP Status Codes \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -437,13 +441,17 @@
           "refId": "A"
         }
       ],
-      "title": "Top API Endpoints",
+      "title": "Top API Endpoints \u2014 events/sec",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "api", "http"],
+  "tags": [
+    "nomos",
+    "api",
+    "http"
+  ],
   "templating": {
     "list": []
   },

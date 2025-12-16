@@ -56,7 +56,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -68,7 +70,7 @@
           "refId": "A"
         }
       ],
-      "title": "Chain Tip",
+      "title": "Chain Tip \u2014 height",
       "type": "stat"
     },
     {
@@ -106,7 +108,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -118,7 +122,7 @@
           "refId": "A"
         }
       ],
-      "title": "Current Epoch",
+      "title": "Current Epoch \u2014 epoch",
       "type": "stat"
     },
     {
@@ -156,7 +160,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -168,7 +174,7 @@
           "refId": "A"
         }
       ],
-      "title": "Consensus Peers",
+      "title": "Consensus Peers \u2014 peer count",
       "type": "stat"
     },
     {
@@ -206,7 +212,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -218,7 +226,7 @@
           "refId": "A"
         }
       ],
-      "title": "Blend Peers",
+      "title": "Blend Peers \u2014 peer count",
       "type": "stat"
     },
     {
@@ -256,7 +264,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -268,7 +278,7 @@
           "refId": "A"
         }
       ],
-      "title": "Pending Txs",
+      "title": "Pending Txs \u2014 queue depth",
       "type": "stat"
     },
     {
@@ -306,7 +316,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -318,7 +330,7 @@
           "refId": "A"
         }
       ],
-      "title": "DA Samples",
+      "title": "DA Samples \u2014 current",
       "type": "stat"
     },
     {
@@ -399,7 +411,7 @@
           "refId": "B"
         }
       ],
-      "title": "Consensus Heights",
+      "title": "Consensus Heights \u2014 height",
       "type": "timeseries"
     },
     {
@@ -485,7 +497,7 @@
           "refId": "C"
         }
       ],
-      "title": "Processing Rates",
+      "title": "Processing Rates \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -523,7 +535,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -545,7 +559,7 @@
           "refId": "C"
         }
       ],
-      "title": "Network Transaction Totals",
+      "title": "Network Transaction Totals \u2014 current",
       "type": "stat"
     },
     {
@@ -626,7 +640,7 @@
           "refId": "B"
         }
       ],
-      "title": "Blend Message Flow",
+      "title": "Blend Message Flow \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -707,7 +721,7 @@
           "refId": "B"
         }
       ],
-      "title": "Network Connectivity",
+      "title": "Network Connectivity \u2014 current",
       "type": "timeseries"
     },
     {
@@ -745,7 +759,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -757,7 +773,7 @@
           "refId": "A"
         }
       ],
-      "title": "Current Epoch",
+      "title": "Current Epoch \u2014 epoch",
       "type": "stat"
     },
     {
@@ -795,7 +811,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -807,7 +825,7 @@
           "refId": "A"
         }
       ],
-      "title": "Current Slot",
+      "title": "Current Slot \u2014 slot",
       "type": "stat"
     },
     {
@@ -893,7 +911,7 @@
           "refId": "C"
         }
       ],
-      "title": "Service Activity Rates",
+      "title": "Service Activity Rates \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -967,7 +985,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -979,13 +999,17 @@
           "refId": "A"
         }
       ],
-      "title": "🚦 Overall System Health",
+      "title": "\ud83d\udea6 Overall System Health \u2014 events/sec",
       "type": "stat"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "overview", "summary"],
+  "tags": [
+    "nomos",
+    "overview",
+    "summary"
+  ],
   "templating": {
     "list": []
   },

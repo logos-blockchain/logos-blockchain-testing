@@ -4,7 +4,7 @@ use futures::future::try_join_all;
 use nomos_http_api_common::paths;
 use reqwest::Client as ReqwestClient;
 use thiserror::Error;
-use tokio::time::{sleep, timeout};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 
 /// Role used for labelling readiness probes.
@@ -115,24 +115,61 @@ async fn wait_for_single_port(
 ) -> Result<(), HttpReadinessError> {
     let url = format!("http://{host}:{port}{}", paths::CRYPTARCHIA_INFO);
     debug!(role = role.label(), %url, "probing HTTP endpoint");
-    let probe = async {
-        loop {
-            let is_ready = client
-                .get(&url)
-                .send()
-                .await
-                .map(|response| response.status().is_success())
-                .unwrap_or(false);
+    let start = Instant::now();
+    let deadline = start + timeout_duration;
+    let mut attempts: u64 = 0;
 
-            if is_ready {
-                return;
+    loop {
+        attempts += 1;
+
+        let last_failure: Option<String> = match client.get(&url).send().await {
+            Ok(response) if response.status().is_success() => {
+                info!(
+                    role = role.label(),
+                    port,
+                    host,
+                    %url,
+                    attempts,
+                    elapsed_ms = start.elapsed().as_millis(),
+                    "HTTP readiness confirmed"
+                );
+                return Ok(());
             }
+            Ok(response) => {
+                let status = response.status();
+                Some(format!("HTTP {status}"))
+            }
+            Err(error) => Some(format!("request error: {error}")),
+        };
 
-            sleep(poll_interval).await;
+        if attempts == 1 || attempts % 10 == 0 {
+            debug!(
+                role = role.label(),
+                port,
+                host,
+                %url,
+                attempts,
+                elapsed_ms = start.elapsed().as_millis(),
+                last_failure = last_failure.as_deref().unwrap_or("<none>"),
+                "HTTP readiness not yet available"
+            );
         }
-    };
 
-    timeout(timeout_duration, probe)
-        .await
-        .map_err(|_| HttpReadinessError::new(role, port, timeout_duration))
+        if Instant::now() >= deadline {
+            info!(
+                role = role.label(),
+                port,
+                host,
+                %url,
+                attempts,
+                elapsed_ms = start.elapsed().as_millis(),
+                timeout_secs = timeout_duration.as_secs_f32(),
+                last_failure = last_failure.as_deref().unwrap_or("<none>"),
+                "HTTP readiness timed out"
+            );
+            return Err(HttpReadinessError::new(role, port, timeout_duration));
+        }
+
+        sleep(poll_interval).await;
+    }
 }

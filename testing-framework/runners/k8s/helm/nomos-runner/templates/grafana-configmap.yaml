@@ -9,9 +9,12 @@ data:
     datasources:
       - name: Prometheus
         type: prometheus
-        url: http://{{ include "nomos-runner.fullname" . }}-prometheus:9090
         access: proxy
         isDefault: true
+        uid: PBFA97CFB590B2093
+        orgId: 1
+        url: http://prometheus:9090
+        editable: true
   dashboards.yaml: |
     apiVersion: 1
     providers:
@@ -23,6 +26,8 @@ data:
         editable: true
         options:
           path: /var/lib/grafana/dashboards
-  testnet_metrics.json: |
-{{ (.Files.Get "grafana/dashboards/testnet_metrics.json") | indent 4 }}
+{{ range $path, $_ := .Files.Glob "grafana/dashboards/*.json" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{ end }}
 {{- end }}

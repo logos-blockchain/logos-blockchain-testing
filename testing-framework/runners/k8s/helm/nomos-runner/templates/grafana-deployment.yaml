@@ -57,6 +57,8 @@ spec:
           configMap:
             name: {{ include "nomos-runner.fullname" . }}-grafana-config
             items:
-              - key: testnet_metrics.json
-                path: testnet_metrics.json
+{{ range $path, $_ := .Files.Glob "grafana/dashboards/*.json" }}
+              - key: {{ base $path }}
+                path: {{ base $path }}
+{{ end }}
 {{- end }}

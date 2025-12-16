@@ -75,9 +75,7 @@ async fn run_compose_case(
         "building scenario plan"
     );
 
-    let chaos_min_delay = Duration::from_secs(CHAOS_MIN_DELAY_SECS)
-        .max(run_duration + Duration::from_secs(CHAOS_DELAY_HEADROOM_SECS));
-    let chaos_max_delay = Duration::from_secs(CHAOS_MAX_DELAY_SECS).max(chaos_min_delay);
+    let (chaos_min_delay, chaos_max_delay, chaos_target_cooldown) = chaos_timings(run_duration);
 
     let mut plan = ScenarioBuilder::topology_with(|t| {
         t.network_star().validators(validators).executors(executors)
@@ -88,7 +86,7 @@ async fn run_compose_case(
             // Keep chaos restarts outside the test run window to avoid crash loops on restart.
             .min_delay(chaos_min_delay)
             .max_delay(chaos_max_delay)
-            .target_cooldown(Duration::from_secs(CHAOS_COOLDOWN_SECS))
+            .target_cooldown(chaos_target_cooldown)
             .apply()
     })
     .wallets(TOTAL_WALLETS)
@@ -120,4 +118,24 @@ async fn run_compose_case(
         .await
         .context("running compose scenario failed")?;
     Ok(())
+}
+
+fn chaos_timings(run_duration: Duration) -> (Duration, Duration, Duration) {
+    let headroom = Duration::from_secs(CHAOS_DELAY_HEADROOM_SECS);
+    let chaos_min_delay = Duration::from_secs(CHAOS_MIN_DELAY_SECS).max(run_duration + headroom);
+    let chaos_max_delay = Duration::from_secs(CHAOS_MAX_DELAY_SECS).max(chaos_min_delay);
+    let chaos_target_cooldown = Duration::from_secs(CHAOS_COOLDOWN_SECS).max(chaos_min_delay);
+
+    (chaos_min_delay, chaos_max_delay, chaos_target_cooldown)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chaos_cooldown_is_never_less_than_min_delay() {
+        let (min_delay, _max_delay, cooldown) = chaos_timings(Duration::from_secs(600));
+        assert!(cooldown >= min_delay);
+    }
 }

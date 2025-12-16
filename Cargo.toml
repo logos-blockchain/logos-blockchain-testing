@@ -38,50 +38,50 @@ testing-framework-runner-local   = { default-features = false, path = "testing-f
 testing-framework-workflows      = { default-features = false, path = "testing-framework/workflows" }
 
 # Nomos git dependencies (pinned to latest master)
-broadcast-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
+broadcast-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
 cfgsync = { default-features = false, path = "testing-framework/tools/cfgsync" }
-chain-leader = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99", features = [
+chain-leader = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917", features = [
   "pol-dev-mode",
 ] }
-chain-network = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-chain-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-common-http-client = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-cryptarchia-engine = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-cryptarchia-sync = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-executor-http-client = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-groth16 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-key-management-system-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-kzgrs = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-kzgrs-backend = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-api = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-blend-message = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-blend-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-cli = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-core = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-da-dispersal = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-da-network-core = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-da-network-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-da-sampling = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-da-verifier = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-executor = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-http-api-common = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-ledger = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-libp2p = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-network = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-node = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-sdp = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-time = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-tracing = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-tracing-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-utils = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-nomos-wallet = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-poc = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-pol = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-subnetworks-assignations = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-tests = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-tx-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-wallet = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
-zksign = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "3f623e0c9d159bd8b398a25eda8db0642c491f99" }
+chain-network = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+chain-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+common-http-client = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+cryptarchia-engine = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+cryptarchia-sync = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+executor-http-client = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+groth16 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+key-management-system-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+kzgrs = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+kzgrs-backend = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-api = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-blend-message = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-blend-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-cli = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-core = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-da-dispersal = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-da-network-core = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-da-network-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-da-sampling = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-da-verifier = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-executor = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-http-api-common = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-ledger = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-libp2p = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-network = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-node = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-sdp = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-time = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-tracing = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-tracing-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-utils = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+nomos-wallet = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+poc = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+pol = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+subnetworks-assignations = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+tests = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+tx-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+wallet = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
+zksign = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
 
 # External crates
 async-trait      = { default-features = false, version = "0.1" }

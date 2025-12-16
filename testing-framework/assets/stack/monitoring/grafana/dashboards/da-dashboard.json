@@ -99,7 +99,7 @@
           "refId": "B"
         }
       ],
-      "title": "Sample Verification Rate",
+      "title": "Sample Verification Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -180,7 +180,7 @@
           "refId": "B"
         }
       ],
-      "title": "Blob Request/Response Rate",
+      "title": "Blob Request/Response Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -218,7 +218,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -230,7 +232,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Samples Verified",
+      "title": "Total Samples Verified \u2014 current",
       "type": "stat"
     },
     {
@@ -268,7 +270,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -280,7 +284,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Blob Requests",
+      "title": "Total Blob Requests \u2014 current",
       "type": "stat"
     },
     {
@@ -318,7 +322,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -330,7 +336,7 @@
           "refId": "A"
         }
       ],
-      "title": "Total Blob Responses",
+      "title": "Total Blob Responses \u2014 current",
       "type": "stat"
     },
     {
@@ -416,7 +422,7 @@
           "refId": "C"
         }
       ],
-      "title": "DA Network Connections",
+      "title": "DA Network Connections \u2014 conn count",
       "type": "timeseries"
     },
     {
@@ -492,13 +498,18 @@
           "refId": "A"
         }
       ],
-      "title": "Sampling Success Rate",
+      "title": "Sampling Success Rate \u2014 events/sec",
       "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "data-availability", "da", "sampling"],
+  "tags": [
+    "nomos",
+    "data-availability",
+    "da",
+    "sampling"
+  ],
   "templating": {
     "list": []
   },

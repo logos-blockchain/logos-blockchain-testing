@@ -12,11 +12,11 @@ use url::ParseError;
 use uuid::Uuid;
 
 use crate::{
-    host::node_host,
     infrastructure::assets::RunnerAssets,
     lifecycle::{cleanup::RunnerCleanup, logs::dump_namespace_logs},
     wait::{
-        ClusterPorts, ClusterReady, NodeConfigPorts, PortForwardHandle, wait_for_cluster_ready,
+        ClusterPorts, ClusterReady, HostPort, NodeConfigPorts, PortForwardHandle,
+        wait_for_cluster_ready,
     },
 };
 
@@ -32,11 +32,14 @@ pub struct ClusterEnvironment {
     namespace: String,
     release: String,
     cleanup: Option<RunnerCleanup>,
+    validator_host: String,
+    executor_host: String,
     validator_api_ports: Vec<u16>,
     validator_testing_ports: Vec<u16>,
     executor_api_ports: Vec<u16>,
     executor_testing_ports: Vec<u16>,
-    prometheus_port: u16,
+    prometheus: HostPort,
+    grafana: Option<HostPort>,
     port_forwards: Vec<PortForwardHandle>,
 }
 
@@ -59,11 +62,14 @@ impl ClusterEnvironment {
             namespace,
             release,
             cleanup: Some(cleanup),
+            validator_host: ports.validator_host.clone(),
+            executor_host: ports.executor_host.clone(),
             validator_api_ports,
             validator_testing_ports,
             executor_api_ports,
             executor_testing_ports,
-            prometheus_port: ports.prometheus,
+            prometheus: ports.prometheus.clone(),
+            grafana: ports.grafana.clone(),
             port_forwards,
         }
     }
@@ -89,16 +95,22 @@ impl ClusterEnvironment {
         )
     }
 
+    #[allow(dead_code)]
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
+    #[allow(dead_code)]
     pub fn release(&self) -> &str {
         &self.release
     }
 
-    pub fn prometheus_port(&self) -> u16 {
-        self.prometheus_port
+    pub fn prometheus_endpoint(&self) -> &HostPort {
+        &self.prometheus
+    }
+
+    pub fn grafana_endpoint(&self) -> Option<&HostPort> {
+        self.grafana.as_ref()
     }
 
     pub fn validator_ports(&self) -> (&[u16], &[u16]) {
@@ -185,7 +197,12 @@ pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, N
         .copied()
         .zip(cluster.validator_testing_ports.iter().copied())
         .map(|(api_port, testing_port)| {
-            api_client_from_ports(NodeRole::Validator, api_port, testing_port)
+            api_client_from_ports(
+                &cluster.validator_host,
+                NodeRole::Validator,
+                api_port,
+                testing_port,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
     let executors = cluster
@@ -194,7 +211,12 @@ pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, N
         .copied()
         .zip(cluster.executor_testing_ports.iter().copied())
         .map(|(api_port, testing_port)| {
-            api_client_from_ports(NodeRole::Executor, api_port, testing_port)
+            api_client_from_ports(
+                &cluster.executor_host,
+                NodeRole::Executor,
+                api_port,
+                testing_port,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -207,8 +229,8 @@ pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, N
     Ok(NodeClients::new(validators, executors))
 }
 
-pub fn metrics_handle_from_port(port: u16) -> Result<Metrics, MetricsError> {
-    let url = cluster_host_url(port)
+pub fn metrics_handle_from_endpoint(endpoint: &HostPort) -> Result<Metrics, MetricsError> {
+    let url = cluster_host_url(&endpoint.host, endpoint.port)
         .map_err(|err| MetricsError::new(format!("invalid prometheus url: {err}")))?;
     Metrics::from_prometheus(url)
 }
@@ -221,10 +243,16 @@ pub async fn ensure_cluster_readiness(
     let (validator_api, validator_testing) = cluster.validator_ports();
     let (executor_api, executor_testing) = cluster.executor_ports();
 
-    let validator_urls = readiness_urls(validator_api, NodeRole::Validator)?;
-    let executor_urls = readiness_urls(executor_api, NodeRole::Executor)?;
-    let validator_membership_urls = readiness_urls(validator_testing, NodeRole::Validator)?;
-    let executor_membership_urls = readiness_urls(executor_testing, NodeRole::Executor)?;
+    let validator_urls =
+        readiness_urls(validator_api, NodeRole::Validator, &cluster.validator_host)?;
+    let executor_urls = readiness_urls(executor_api, NodeRole::Executor, &cluster.executor_host)?;
+    let validator_membership_urls = readiness_urls(
+        validator_testing,
+        NodeRole::Validator,
+        &cluster.validator_host,
+    )?;
+    let executor_membership_urls =
+        readiness_urls(executor_testing, NodeRole::Executor, &cluster.executor_host)?;
 
     descriptors
         .wait_remote_readiness(
@@ -312,7 +340,7 @@ pub async fn wait_for_ports_or_cleanup(
     {
         Ok(ports) => {
             info!(
-                prometheus_port = ports.ports.prometheus,
+                prometheus = ?ports.ports.prometheus,
                 validator_ports = ?ports.ports.validators,
                 executor_ports = ?ports.ports.executors,
                 "cluster port-forwards established"
@@ -340,36 +368,46 @@ async fn cleanup_pending(client: &Client, namespace: &str, guard: &mut Option<Ru
     }
 }
 
-fn readiness_urls(ports: &[u16], role: NodeRole) -> Result<Vec<Url>, RemoteReadinessError> {
+fn readiness_urls(
+    ports: &[u16],
+    role: NodeRole,
+    host: &str,
+) -> Result<Vec<Url>, RemoteReadinessError> {
     ports
         .iter()
         .copied()
-        .map(|port| readiness_url(role, port))
+        .map(|port| readiness_url(host, role, port))
         .collect()
 }
 
-fn readiness_url(role: NodeRole, port: u16) -> Result<Url, RemoteReadinessError> {
-    cluster_host_url(port).map_err(|source| RemoteReadinessError::Endpoint { role, port, source })
+fn readiness_url(host: &str, role: NodeRole, port: u16) -> Result<Url, RemoteReadinessError> {
+    cluster_host_url(host, port).map_err(|source| RemoteReadinessError::Endpoint {
+        role,
+        port,
+        source,
+    })
 }
 
-fn cluster_host_url(port: u16) -> Result<Url, ParseError> {
-    Url::parse(&format!("http://{}:{port}/", node_host()))
+fn cluster_host_url(host: &str, port: u16) -> Result<Url, ParseError> {
+    Url::parse(&format!("http://{host}:{port}/"))
 }
 
 fn api_client_from_ports(
+    host: &str,
     role: NodeRole,
     api_port: u16,
     testing_port: u16,
 ) -> Result<ApiClient, NodeClientError> {
-    let base_endpoint = cluster_host_url(api_port).map_err(|source| NodeClientError::Endpoint {
-        role,
-        endpoint: "api",
-        port: api_port,
-        source,
-    })?;
+    let base_endpoint =
+        cluster_host_url(host, api_port).map_err(|source| NodeClientError::Endpoint {
+            role,
+            endpoint: "api",
+            port: api_port,
+            source,
+        })?;
     let testing_endpoint =
         Some(
-            cluster_host_url(testing_port).map_err(|source| NodeClientError::Endpoint {
+            cluster_host_url(host, testing_port).map_err(|source| NodeClientError::Endpoint {
                 role,
                 endpoint: "testing",
                 port: testing_port,

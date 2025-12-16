@@ -53,6 +53,8 @@ pub enum AssetsError {
     MissingKzg { path: PathBuf },
     #[error("missing Helm chart at {path}; ensure the repository is up-to-date")]
     MissingChart { path: PathBuf },
+    #[error("missing Grafana dashboards source at {path}")]
+    MissingGrafanaDashboards { path: PathBuf },
     #[error("failed to create temporary directory for rendered assets: {source}")]
     TempDir {
         #[source]
@@ -109,6 +111,7 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
         KzgMode::InImage => None,
     };
     let chart_path = helm_chart_path()?;
+    sync_grafana_dashboards(&root, &chart_path)?;
     let values_yaml = render_values_yaml(topology)?;
     let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
     let image = env::var("NOMOS_TESTNET_IMAGE")
@@ -146,6 +149,72 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
 const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
 const DEFAULT_GRAFANA_NODE_PORT: u16 = 30030;
 const DEFAULT_IN_IMAGE_KZG_PARAMS_PATH: &str = "/opt/nomos/kzg-params/kzgrs_test_params";
+
+fn sync_grafana_dashboards(root: &Path, chart_path: &Path) -> Result<(), AssetsError> {
+    let source_dir = stack_assets_root(root).join("monitoring/grafana/dashboards");
+    let dest_dir = chart_path.join("grafana/dashboards");
+
+    if !source_dir.exists() {
+        return Err(AssetsError::MissingGrafanaDashboards { path: source_dir });
+    }
+
+    fs::create_dir_all(&dest_dir).map_err(|source| AssetsError::Io {
+        path: dest_dir.clone(),
+        source,
+    })?;
+
+    let mut removed = 0usize;
+    for entry in fs::read_dir(&dest_dir).map_err(|source| AssetsError::Io {
+        path: dest_dir.clone(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| AssetsError::Io {
+            path: dest_dir.clone(),
+            source,
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        fs::remove_file(&path).map_err(|source| AssetsError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        removed += 1;
+    }
+
+    let mut copied = 0usize;
+    for entry in fs::read_dir(&source_dir).map_err(|source| AssetsError::Io {
+        path: source_dir.clone(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| AssetsError::Io {
+            path: source_dir.clone(),
+            source,
+        })?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        let file_name = path.file_name().unwrap_or_default();
+        let dest_path = dest_dir.join(file_name);
+        fs::copy(&path, &dest_path).map_err(|source| AssetsError::Io {
+            path: dest_path.clone(),
+            source,
+        })?;
+        copied += 1;
+    }
+
+    debug!(
+        source = %source_dir.display(),
+        dest = %dest_dir.display(),
+        removed,
+        copied,
+        "synced Grafana dashboards into Helm chart"
+    );
+
+    Ok(())
+}
 
 fn render_cfgsync_config(
     root: &Path,

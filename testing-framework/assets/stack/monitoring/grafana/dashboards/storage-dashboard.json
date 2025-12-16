@@ -94,7 +94,7 @@
           "refId": "A"
         }
       ],
-      "title": "DA Storage Operations Rate",
+      "title": "DA Storage Operations Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -170,7 +170,7 @@
           "refId": "A"
         }
       ],
-      "title": "Chain Storage Operations Rate",
+      "title": "Chain Storage Operations Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -246,7 +246,7 @@
           "refId": "A"
         }
       ],
-      "title": "DA Storage Failures Rate",
+      "title": "DA Storage Failures Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -322,7 +322,7 @@
           "refId": "A"
         }
       ],
-      "title": "Chain Storage Failures Rate",
+      "title": "Chain Storage Failures Rate \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -360,7 +360,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -372,7 +374,7 @@
           "refId": "A"
         }
       ],
-      "title": "DA Storage Operations Total",
+      "title": "DA Storage Operations Total \u2014 current",
       "type": "stat"
     },
     {
@@ -410,7 +412,9 @@
         "orientation": "auto",
         "reduceOptions": {
           "values": false,
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": ""
         },
         "textMode": "auto"
@@ -422,13 +426,17 @@
           "refId": "A"
         }
       ],
-      "title": "Chain Storage Operations Total",
+      "title": "Chain Storage Operations Total \u2014 current",
       "type": "stat"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["nomos", "storage", "rocksdb"],
+  "tags": [
+    "nomos",
+    "storage",
+    "rocksdb"
+  ],
   "templating": {
     "list": []
   },
