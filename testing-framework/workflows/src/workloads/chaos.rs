@@ -6,6 +6,8 @@ use testing_framework_core::scenario::{DynError, RunContext, Workload};
 use tokio::time::{Instant, sleep};
 use tracing::info;
 
+const MIN_DELAY_SPREAD_FALLBACK: Duration = Duration::from_millis(1);
+
 /// Randomly restarts validators and executors during a run to introduce chaos.
 #[derive(Debug)]
 pub struct RandomRestartWorkload {
@@ -66,7 +68,7 @@ impl RandomRestartWorkload {
         let spread = self
             .max_delay
             .checked_sub(self.min_delay)
-            .unwrap_or_else(|| Duration::from_millis(1))
+            .unwrap_or(MIN_DELAY_SPREAD_FALLBACK)
             .as_secs_f64();
         let offset = thread_rng().gen_range(0.0..=spread);
         let delay = self

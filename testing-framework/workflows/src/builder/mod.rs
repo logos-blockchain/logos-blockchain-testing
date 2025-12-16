@@ -275,11 +275,15 @@ impl ChaosBuilder {
     /// Configure a random restarts chaos workload.
     #[must_use]
     pub fn restart(self) -> ChaosRestartBuilder {
+        const DEFAULT_CHAOS_MIN_DELAY: Duration = Duration::from_secs(10);
+        const DEFAULT_CHAOS_MAX_DELAY: Duration = Duration::from_secs(30);
+        const DEFAULT_CHAOS_TARGET_COOLDOWN: Duration = Duration::from_secs(60);
+
         ChaosRestartBuilder {
             builder: self.builder,
-            min_delay: Duration::from_secs(10),
-            max_delay: Duration::from_secs(30),
-            target_cooldown: Duration::from_secs(60),
+            min_delay: DEFAULT_CHAOS_MIN_DELAY,
+            max_delay: DEFAULT_CHAOS_MAX_DELAY,
+            target_cooldown: DEFAULT_CHAOS_TARGET_COOLDOWN,
             include_validators: true,
             include_executors: true,
         }

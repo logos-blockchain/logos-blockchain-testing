@@ -103,22 +103,32 @@ impl ConsensusLiveness {
         let mut issues = Vec::new();
 
         for (idx, client) in clients.iter().enumerate() {
+            let node = format!("node-{idx}");
+
             for attempt in 0..REQUEST_RETRIES {
                 match Self::fetch_cluster_info(client).await {
-                    Ok((height, tip)) => {
-                        let label = format!("node-{idx}");
-
-                        tracing::debug!(node = %label, height, tip = ?tip, attempt, "consensus_info collected");
-                        samples.push(NodeSample { label, height, tip });
+                    Ok(sample) => {
+                        tracing::debug!(
+                            node = %node,
+                            height = sample.height,
+                            tip = ?sample.tip,
+                            attempt,
+                            "consensus_info collected"
+                        );
+                        samples.push(NodeSample {
+                            label: node.clone(),
+                            height: sample.height,
+                            tip: sample.tip,
+                        });
 
                         break;
                     }
 
                     Err(err) if attempt + 1 == REQUEST_RETRIES => {
-                        tracing::warn!(node = %format!("node-{idx}"), %err, "consensus_info failed after retries");
+                        tracing::warn!(node = %node, %err, "consensus_info failed after retries");
 
                         issues.push(ConsensusLivenessIssue::RequestFailed {
-                            node: format!("node-{idx}"),
+                            node: node.clone(),
                             source: err,
                         });
                     }
@@ -131,11 +141,14 @@ impl ConsensusLiveness {
         LivenessCheck { samples, issues }
     }
 
-    async fn fetch_cluster_info(client: &ApiClient) -> Result<(u64, HeaderId), DynError> {
+    async fn fetch_cluster_info(client: &ApiClient) -> Result<ConsensusInfoSample, DynError> {
         client
             .consensus_info()
             .await
-            .map(|info| (info.height, info.tip))
+            .map(|info| ConsensusInfoSample {
+                height: info.height,
+                tip: info.tip,
+            })
             .map_err(|err| -> DynError { err.into() })
     }
 
@@ -213,6 +226,11 @@ impl ConsensusLiveness {
             }))
         }
     }
+}
+
+struct ConsensusInfoSample {
+    height: u64,
+    tip: HeaderId,
 }
 
 struct NodeSample {
