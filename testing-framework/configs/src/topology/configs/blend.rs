@@ -9,6 +9,8 @@ use nomos_blend_service::{
 use nomos_libp2p::{Multiaddr, protocol_name::StreamProtocol};
 use num_bigint::BigUint;
 
+const EDGE_NODE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);
+
 #[derive(Clone)]
 pub struct GeneralBlendConfig {
     pub backend_core: Libp2pCoreBlendBackendSettings,
@@ -49,7 +51,7 @@ pub fn create_blend_configs(ids: &[[u8; 32]], ports: &[u16]) -> Vec<GeneralBlend
                     normalization_constant: 1.03f64
                         .try_into()
                         .expect("Normalization constant cannot be negative."),
-                    edge_node_connection_timeout: Duration::from_secs(1),
+                    edge_node_connection_timeout: EDGE_NODE_CONNECTION_TIMEOUT,
                     max_edge_node_incoming_connections: 300,
                     max_dial_attempts_per_peer: NonZeroU64::try_from(3)
                         .expect("Max dial attempts per peer cannot be zero."),

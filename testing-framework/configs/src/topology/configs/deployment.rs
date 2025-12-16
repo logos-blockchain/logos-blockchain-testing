@@ -15,6 +15,8 @@ use nomos_node::config::{
 };
 use nomos_utils::math::NonNegativeF64;
 
+const DEFAULT_ROUND_DURATION: Duration = Duration::from_secs(1);
+
 #[must_use]
 pub fn default_e2e_deployment_settings() -> DeploymentSettings {
     DeploymentSettings::Custom(CustomDeployment {
@@ -25,7 +27,7 @@ pub fn default_e2e_deployment_settings() -> DeploymentSettings {
                 num_blend_layers: NonZeroU64::try_from(3)
                     .expect("Number of blend layers cannot be zero."),
                 timing: TimingSettings {
-                    round_duration: Duration::from_secs(1),
+                    round_duration: DEFAULT_ROUND_DURATION,
                     rounds_per_interval: NonZeroU64::try_from(30u64)
                         .expect("Rounds per interval cannot be zero."),
                     // (21,600 blocks * 30s per block) / 1s per round = 648,000 rounds

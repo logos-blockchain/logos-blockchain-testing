@@ -24,6 +24,13 @@ use crate::secret_key_to_peer_id;
 
 pub static GLOBAL_PARAMS_PATH: LazyLock<String> = LazyLock::new(resolve_global_params_path);
 
+const DEFAULT_OLD_BLOBS_CHECK_INTERVAL: Duration = Duration::from_secs(5);
+const DEFAULT_BLOBS_VALIDITY_DURATION: Duration = Duration::from_secs(60);
+const DEFAULT_FAILURE_TIME_WINDOW: Duration = Duration::from_secs(5);
+const DEFAULT_BALANCER_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_SEEN_MESSAGE_TTL: Duration = Duration::from_secs(3600);
+const DEFAULT_SUBNETS_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+
 fn canonicalize_params_path(mut path: PathBuf) -> PathBuf {
     if path.is_dir() {
         let candidates = [
@@ -101,8 +108,8 @@ impl Default for DaParams {
             dispersal_factor: 1,
             num_samples: 1,
             num_subnets: 2,
-            old_blobs_check_interval: Duration::from_secs(5),
-            blobs_validity_duration: Duration::from_secs(60),
+            old_blobs_check_interval: DEFAULT_OLD_BLOBS_CHECK_INTERVAL,
+            blobs_validity_duration: DEFAULT_BLOBS_VALIDITY_DURATION,
             global_params_path: GLOBAL_PARAMS_PATH.to_string(),
             policy_settings: DAConnectionPolicySettings {
                 min_dispersal_peers: 1,
@@ -113,16 +120,16 @@ impl Default for DaParams {
                 malicious_threshold: 0,
             },
             monitor_settings: DAConnectionMonitorSettings {
-                failure_time_window: Duration::from_secs(5),
+                failure_time_window: DEFAULT_FAILURE_TIME_WINDOW,
                 ..Default::default()
             },
-            balancer_interval: Duration::from_secs(1),
+            balancer_interval: DEFAULT_BALANCER_INTERVAL,
             redial_cooldown: Duration::ZERO,
             replication_settings: ReplicationConfig {
                 seen_message_cache_size: 1000,
-                seen_message_ttl: Duration::from_secs(3600),
+                seen_message_ttl: DEFAULT_SEEN_MESSAGE_TTL,
             },
-            subnets_refresh_interval: Duration::from_secs(30),
+            subnets_refresh_interval: DEFAULT_SUBNETS_REFRESH_INTERVAL,
             retry_shares_limit: 1,
             retry_commitments_limit: 1,
         }
