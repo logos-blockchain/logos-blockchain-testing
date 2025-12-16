@@ -112,7 +112,7 @@ KZG parameters required for DA workloads:
 
 ### Compose Stack
 Templates and configs in `testing-framework/runners/compose/assets/`:
-- `docker-compose.yml.tera` — Stack template (validators, executors, Prometheus)
+- `docker-compose.yml.tera` — Stack template (validators, executors, Prometheus, Grafana)
 - Cfgsync config: `testing-framework/assets/stack/cfgsync.yaml`
 - Monitoring: `testing-framework/assets/stack/monitoring/prometheus.yml`
 
@@ -134,10 +134,14 @@ Templates and configs in `testing-framework/runners/compose/assets/`:
 
 ## Observability
 
-**Prometheus (Compose only):**
+**Prometheus (Compose + K8s):**
 - Exposed at `http://localhost:9090` (configurable)
 - Scrapes all validator and executor metrics
 - Accessible in expectations: `ctx.telemetry().prometheus().map(|p| p.base_url())`
+
+**Grafana dashboards (Compose + K8s):**
+- Provisioned automatically; URL is printed in `TESTNET_ENDPOINTS` when using `scripts/run-examples.sh`
+- Default credentials: `admin` / `admin`
 
 **Node APIs:**
 - HTTP endpoints per node for consensus info, network status, DA membership

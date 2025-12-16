@@ -78,6 +78,25 @@ This script handles circuit setup, binary building/bundling, image building, and
 - `K8S_RUNNER_PROMETHEUS_HTTP_TIMEOUT_SECS=<secs>` — Override k8s Prometheus readiness timeout
 - `K8S_RUNNER_PROMETHEUS_HTTP_PROBE_TIMEOUT_SECS=<secs>` — Override k8s Prometheus NodePort probe timeout
 
+### Updating `nomos-node` Revision (Dev Workflow)
+
+The repo pins a `nomos-node` revision in `versions.env` for reproducible builds. To update it (or point to a local checkout), use the helper script:
+
+```bash
+# Pin to a new git revision (updates versions.env + Cargo.toml git revs)
+scripts/update-nomos-rev.sh --rev <git_sha>
+
+# Use a local nomos-node checkout instead (for development)
+scripts/update-nomos-rev.sh --path /path/to/nomos-node
+
+# If Cargo.toml was marked skip-worktree, clear it
+scripts/update-nomos-rev.sh --unskip-worktree
+```
+
+Notes:
+- Don’t commit absolute `NOMOS_NODE_PATH` values; prefer `--rev` for shared history/CI.
+- After changing rev/path, expect `Cargo.lock` to update on the next `cargo build`/`cargo test`.
+
 ### Cleanup Helper
 
 If you hit Docker build failures, mysterious I/O errors, or are running out of disk space:
@@ -506,11 +525,15 @@ cargo run -p runner-examples --bin local_runner
 
 Runners expose metrics and node HTTP endpoints for expectation code and debugging:
 
-**Prometheus (Compose only):**
+**Prometheus (Compose + K8s):**
 - Default: `http://localhost:9090`
 - Override: `TEST_FRAMEWORK_PROMETHEUS_PORT=9091`
 - Note: the host port can vary if `9090` is unavailable; prefer the printed `TESTNET_ENDPOINTS` line as the source of truth.
 - Access from expectations: `ctx.telemetry().prometheus().map(|p| p.base_url())`
+
+**Grafana dashboards (Compose + K8s):**
+- The deployer prints the Grafana base URL in `TESTNET_ENDPOINTS`.
+- Default credentials are `admin` / `admin`.
 
 **Node APIs:**
 - Access from expectations: `ctx.node_clients().validator_clients().get(0)`
