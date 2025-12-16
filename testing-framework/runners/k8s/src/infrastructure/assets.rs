@@ -94,7 +94,8 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
     );
 
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
-    let cfgsync_yaml = render_cfgsync_config(&root, topology)?;
+    let kzg_mode = kzg_mode();
+    let cfgsync_yaml = render_cfgsync_config(&root, topology, kzg_mode)?;
 
     let tempdir = tempfile::Builder::new()
         .prefix("nomos-helm-")
@@ -103,7 +104,6 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
 
     let cfgsync_file = write_temp_file(tempdir.path(), "cfgsync.yaml", cfgsync_yaml)?;
     let scripts = validate_scripts(&root)?;
-    let kzg_mode = kzg_mode();
     let kzg_path = match kzg_mode {
         KzgMode::HostPath => Some(validate_kzg_params(&root)?),
         KzgMode::InImage => None,
@@ -145,13 +145,23 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
 
 const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
 const DEFAULT_GRAFANA_NODE_PORT: u16 = 30030;
+const DEFAULT_IN_IMAGE_KZG_PARAMS_PATH: &str = "/opt/nomos/kzg-params/kzgrs_test_params";
 
-fn render_cfgsync_config(root: &Path, topology: &GeneratedTopology) -> Result<String, AssetsError> {
+fn render_cfgsync_config(
+    root: &Path,
+    topology: &GeneratedTopology,
+    kzg_mode: KzgMode,
+) -> Result<String, AssetsError> {
     let cfgsync_template_path = stack_assets_root(root).join("cfgsync.yaml");
     debug!(path = %cfgsync_template_path.display(), "loading cfgsync template");
     let mut cfg = load_cfgsync_template(&cfgsync_template_path)
         .map_err(|source| AssetsError::Cfgsync { source })?;
-    apply_topology_overrides(&mut cfg, topology, true);
+    apply_topology_overrides(&mut cfg, topology, kzg_mode == KzgMode::HostPath);
+    if kzg_mode == KzgMode::InImage {
+        cfg.global_params_path = env::var("NOMOS_KZGRS_PARAMS_PATH")
+            .ok()
+            .unwrap_or_else(|| DEFAULT_IN_IMAGE_KZG_PARAMS_PATH.to_string());
+    }
     cfg.timeout = cfg.timeout.max(CFGSYNC_K8S_TIMEOUT_SECS);
     render_cfgsync_yaml(&cfg).map_err(|source| AssetsError::Cfgsync { source })
 }
@@ -321,6 +331,15 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let pol_mode = pol_proof_mode();
     let image_pull_policy =
         env::var("NOMOS_TESTNET_IMAGE_PULL_POLICY").unwrap_or_else(|_| "IfNotPresent".into());
+    let grafana_node_port = match kzg_mode() {
+        KzgMode::HostPath => Some(DEFAULT_GRAFANA_NODE_PORT),
+        KzgMode::InImage => env::var("NOMOS_GRAFANA_NODE_PORT").ok().and_then(|value| {
+            value
+                .parse::<u16>()
+                .ok()
+                .filter(|port| *port >= 30000 && *port <= 32767)
+        }),
+    };
     let grafana = GrafanaValues {
         enabled: true,
         image: "grafana/grafana:10.4.1".into(),
@@ -329,7 +348,7 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
         admin_password: "admin".into(),
         service: GrafanaServiceValues {
             type_field: "NodePort".into(),
-            node_port: Some(DEFAULT_GRAFANA_NODE_PORT),
+            node_port: grafana_node_port,
         },
     };
     debug!(pol_mode, "rendering Helm values for k8s stack");

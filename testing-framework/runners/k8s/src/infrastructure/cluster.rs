@@ -89,6 +89,14 @@ impl ClusterEnvironment {
         )
     }
 
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    pub fn release(&self) -> &str {
+        &self.release
+    }
+
     pub fn prometheus_port(&self) -> u16 {
         self.prometheus_port
     }

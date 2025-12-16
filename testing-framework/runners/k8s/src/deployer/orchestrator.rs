@@ -1,6 +1,7 @@
 use anyhow::Error;
 use async_trait::async_trait;
-use kube::Client;
+use k8s_openapi::api::core::v1::Service;
+use kube::{Client, api::Api};
 use testing_framework_core::{
     scenario::{BlockFeedTask, CleanupGuard, Deployer, MetricsError, RunContext, Runner, Scenario},
     topology::generation::GeneratedTopology,
@@ -150,15 +151,45 @@ impl Deployer for K8sDeployer {
             prometheus_url = %format!("http://{}:{}/", node_host, prometheus_port),
             "prometheus endpoint available on host"
         );
-        info!(
-            grafana_url = %format!("http://{}:{}/", node_host, 30030),
-            "grafana dashboard available via NodePort"
-        );
+        if let Some(grafana_port) = cluster_grafana_node_port(
+            &client,
+            cluster
+                .as_ref()
+                .expect("cluster must be available")
+                .namespace(),
+            cluster
+                .as_ref()
+                .expect("cluster must be available")
+                .release(),
+        )
+        .await
+        {
+            info!(
+                grafana_url = %format!("http://{}:{}/", node_host, grafana_port),
+                "grafana dashboard available via NodePort"
+            );
+        }
 
         if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
+            let grafana_port = cluster_grafana_node_port(
+                &client,
+                cluster
+                    .as_ref()
+                    .expect("cluster must be available")
+                    .namespace(),
+                cluster
+                    .as_ref()
+                    .expect("cluster must be available")
+                    .release(),
+            )
+            .await;
             println!(
-                "TESTNET_ENDPOINTS prometheus=http://{}:{}/ grafana=http://{}:{}/",
-                node_host, prometheus_port, node_host, 30030
+                "TESTNET_ENDPOINTS prometheus=http://{}:{}/ grafana={}",
+                node_host,
+                prometheus_port,
+                grafana_port
+                    .map(|port| format!("http://{}:{}/", node_host, port))
+                    .unwrap_or_else(|| "<disabled>".to_string())
             );
 
             for (idx, client) in node_clients.validator_clients().iter().enumerate() {
@@ -214,6 +245,21 @@ fn cluster_prometheus_port(cluster: &Option<ClusterEnvironment>) -> u16 {
         .as_ref()
         .expect("cluster must be available")
         .prometheus_port()
+}
+
+async fn cluster_grafana_node_port(client: &Client, namespace: &str, release: &str) -> Option<u16> {
+    let services: Api<Service> = Api::namespaced(client.clone(), namespace);
+    let service_name = format!("{release}-grafana");
+    let service = services.get(&service_name).await.ok()?;
+    let spec = service.spec?;
+    if spec.type_.as_deref() != Some("NodePort") {
+        return None;
+    }
+    let ports = spec.ports?;
+    ports.into_iter().find_map(|port| {
+        let node_port = port.node_port?;
+        u16::try_from(node_port).ok()
+    })
 }
 
 async fn fail_cluster(cluster: &mut Option<ClusterEnvironment>, reason: &str) {
