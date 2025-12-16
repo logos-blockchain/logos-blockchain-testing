@@ -25,6 +25,9 @@ use crate::topology::{
     utils::{create_kms_configs, resolve_ids, resolve_ports},
 };
 
+const DEFAULT_DA_BALANCER_INTERVAL: Duration = Duration::from_secs(1);
+const VALIDATOR_EXECUTOR_DA_BALANCER_INTERVAL: Duration = Duration::from_secs(5);
+
 /// High-level topology settings used to generate node configs for a scenario.
 #[derive(Clone)]
 pub struct TopologyConfig {
@@ -82,7 +85,7 @@ impl TopologyConfig {
                     max_replication_failures: 0,
                     malicious_threshold: 0,
                 },
-                balancer_interval: Duration::from_secs(1),
+                balancer_interval: DEFAULT_DA_BALANCER_INTERVAL,
                 ..Default::default()
             },
             network_params: NetworkParams::default(),
@@ -112,7 +115,7 @@ impl TopologyConfig {
             let min_peers = dispersal.saturating_sub(1).max(1);
             da_params.policy_settings.min_dispersal_peers = min_peers;
             da_params.policy_settings.min_replication_peers = min_peers;
-            da_params.balancer_interval = Duration::from_secs(1);
+            da_params.balancer_interval = DEFAULT_DA_BALANCER_INTERVAL;
         }
 
         Self {
@@ -148,7 +151,7 @@ impl TopologyConfig {
                     max_replication_failures: 0,
                     malicious_threshold: 0,
                 },
-                balancer_interval: Duration::from_secs(5),
+                balancer_interval: VALIDATOR_EXECUTOR_DA_BALANCER_INTERVAL,
                 ..Default::default()
             },
             network_params: NetworkParams::default(),

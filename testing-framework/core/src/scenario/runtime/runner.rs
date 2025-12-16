@@ -16,6 +16,8 @@ type WorkloadOutcome = Result<(), DynError>;
 
 const COOLDOWN_BLOCK_INTERVAL_MULTIPLIER: f64 = 5.0;
 const MIN_NODE_CONTROL_COOLDOWN: Duration = Duration::from_secs(30);
+const DEFAULT_BLOCK_FEED_SETTLE_WAIT: Duration = Duration::from_secs(1);
+const MIN_BLOCK_FEED_SETTLE_WAIT: Duration = Duration::from_secs(2);
 
 /// Represents a fully prepared environment capable of executing a scenario.
 pub struct Runner {
@@ -136,8 +138,8 @@ impl Runner {
             return;
         }
 
-        let mut wait = hint.unwrap_or_else(|| Duration::from_secs(1));
-        wait = wait.max(Duration::from_secs(2));
+        let mut wait = hint.unwrap_or(DEFAULT_BLOCK_FEED_SETTLE_WAIT);
+        wait = wait.max(MIN_BLOCK_FEED_SETTLE_WAIT);
         sleep(wait).await;
     }
 
