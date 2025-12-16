@@ -10,7 +10,7 @@ High-level roles of the crates that make up the framework:
 
 - **Runners** (`testing-framework/runners/{local,compose,k8s}/`): Implements deployment backends (local host, Docker Compose, Kubernetes) that all consume the same scenario plan. Each provides a `Deployer` implementation (`LocalDeployer`, `ComposeDeployer`, `K8sDeployer`).
 
-- **Runner Examples** (`examples/runner-examples`): Runnable binaries demonstrating framework usage and serving as living documentation. These are the **primary entry point** for running scenarios (`local_runner.rs`, `compose_runner.rs`, `k8s_runner.rs`).
+- **Runner Examples** (crate name: `runner-examples`, path: `examples/`): Runnable binaries demonstrating framework usage and serving as living documentation. These are the **primary entry point** for running scenarios (`examples/src/bin/local_runner.rs`, `examples/src/bin/compose_runner.rs`, `examples/src/bin/k8s_runner.rs`).
 
 ## Where to Add New Capabilities
 
