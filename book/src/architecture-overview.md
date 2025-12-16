@@ -97,7 +97,7 @@ Three deployer implementations:
 ## Assets and Images
 
 ### Docker Image
-Built via `testing-framework/assets/stack/scripts/build_test_image.sh`:
+Built via `scripts/build_test_image.sh`:
 - Embeds KZG circuit parameters and binaries from `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
 - Includes runner scripts: `run_nomos_node.sh`, `run_nomos_executor.sh`
 - Tagged as `NOMOS_TESTNET_IMAGE` (default: `logos-blockchain-testing:local`)
@@ -123,12 +123,12 @@ Templates and configs in `testing-framework/runners/compose/assets/`:
 | Component | Configuration | Output |
 |-----------|--------------|--------|
 | **Runner binaries** | `RUST_LOG` | Framework orchestration logs |
-| **Node processes** | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER`, `NOMOS_LOG_DIR` | Consensus, DA, mempool logs |
+| **Node processes** | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER` (+ `NOMOS_LOG_DIR` on host runner) | Consensus, DA, mempool logs |
 
 **Node logging:**
 - **Local runner:** Writes to temporary directories by default (cleaned up). Set `NOMOS_TESTS_TRACING=true` + `NOMOS_LOG_DIR` for persistent files.
-- **Compose runner:** Default logs to container stdout/stderr (`docker logs`). Optional per-node files if `NOMOS_LOG_DIR` is set and mounted.
-- **K8s runner:** Logs to pod stdout/stderr (`kubectl logs`). Optional per-node files if `NOMOS_LOG_DIR` is set and mounted.
+- **Compose runner:** Default logs to container stdout/stderr (`docker logs`). To write per-node files, set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory).
+- **K8s runner:** Logs to pod stdout/stderr (`kubectl logs`). To write per-node files, set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory).
 
 **File naming:** Per-node files use prefix `nomos-node-{index}` or `nomos-executor-{index}` (may include timestamps).
 

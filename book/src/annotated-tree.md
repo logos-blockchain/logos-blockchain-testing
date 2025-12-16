@@ -17,7 +17,7 @@ logos-blockchain-testing/
 │        ├─ kzgrs_test_params/  # KZG circuit parameters directory
 │        │  └─ kzgrs_test_params  # Actual proving key file (note repeated name)
 │        ├─ monitoring/         # Prometheus config
-│        ├─ scripts/            # Container entrypoints, image builder
+│        ├─ scripts/            # Container entrypoints
 │        └─ cfgsync.yaml        # Config sync server template
 │
 ├─ examples/                    # PRIMARY ENTRY POINT: runnable binaries
@@ -53,12 +53,13 @@ Core library crates providing the testing API.
 Docker/K8s deployment assets:
 - **`kzgrs_test_params/kzgrs_test_params`**: Circuit parameters file (note repeated name; override via `NOMOS_KZGRS_PARAMS_PATH`)
 - **`monitoring/`**: Prometheus config
-- **`scripts/`**: Container entrypoints and image builder
+- **`scripts/`**: Container entrypoints
 
 ### `scripts/`
 Convenience utilities:
 - **`run-examples.sh`**: All-in-one script for host/compose/k8s modes (recommended)
 - **`build-bundle.sh`**: Create prebuilt binaries+circuits bundle for compose/k8s
+- **`build_test_image.sh`**: Build the compose/k8s Docker image (bakes in assets)
 - **`setup-circuits-stack.sh`**: Fetch KZG parameters for both Linux and host
 - **`cfgsync.yaml`**: Configuration sync server template
 
@@ -86,7 +87,7 @@ Helper utilities:
 **Logging** controlled by:
 - `NOMOS_LOG_DIR` — Write per-node log files
 - `NOMOS_LOG_LEVEL` — Global log level (error/warn/info/debug/trace)
-- `NOMOS_LOG_FILTER` — Target-specific filtering (e.g., `consensus=trace,da=debug`)
+- `NOMOS_LOG_FILTER` — Target-specific filtering (e.g., `cryptarchia=trace,nomos_da_sampling=debug`)
 - `NOMOS_TESTS_TRACING` — Enable file logging for local runner
 
 See [Logging and Observability](operations.md#logging-and-observability) for details.

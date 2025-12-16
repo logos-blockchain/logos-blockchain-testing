@@ -4,7 +4,7 @@ use std::{
 };
 
 use testing_framework_core::{
-    scenario::{Builder as CoreScenarioBuilder, NodeControlCapability},
+    scenario::{Builder as CoreScenarioBuilder, NodeControlCapability, ObservabilityCapability},
     topology::configs::wallet::WalletConfig,
 };
 
@@ -91,6 +91,41 @@ impl<Caps> ScenarioBuilderExt<Caps> for CoreScenarioBuilder<Caps> {
         let user_count = NonZeroUsize::new(users).expect("wallet user count must be non-zero");
         let wallet = WalletConfig::uniform(total_funds, user_count);
         self.with_wallet_config(wallet)
+    }
+}
+
+/// Observability helpers for scenarios that want to reuse external telemetry.
+pub trait ObservabilityBuilderExt: Sized {
+    /// Reuse an existing Prometheus endpoint instead of provisioning one (k8s
+    /// runner).
+    fn with_external_prometheus(
+        self,
+        url: reqwest::Url,
+    ) -> CoreScenarioBuilder<ObservabilityCapability>;
+
+    /// Convenience wrapper that parses a URL string (panics if invalid).
+    fn with_external_prometheus_str(
+        self,
+        url: &str,
+    ) -> CoreScenarioBuilder<ObservabilityCapability>;
+}
+
+impl ObservabilityBuilderExt for CoreScenarioBuilder<()> {
+    fn with_external_prometheus(
+        self,
+        url: reqwest::Url,
+    ) -> CoreScenarioBuilder<ObservabilityCapability> {
+        self.with_capabilities(ObservabilityCapability {
+            external_prometheus: Some(url),
+        })
+    }
+
+    fn with_external_prometheus_str(
+        self,
+        url: &str,
+    ) -> CoreScenarioBuilder<ObservabilityCapability> {
+        let parsed = reqwest::Url::parse(url).expect("external prometheus url must be valid");
+        self.with_external_prometheus(parsed)
     }
 }
 

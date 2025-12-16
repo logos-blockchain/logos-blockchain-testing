@@ -114,7 +114,7 @@ scripts/build-bundle.sh --platform linux
 
 # Use the bundle when building images
 export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-testing-framework/assets/stack/scripts/build_test_image.sh
+scripts/build_test_image.sh
 ```
 
 ## Environment Variables

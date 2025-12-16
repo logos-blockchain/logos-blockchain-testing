@@ -25,6 +25,7 @@ pub async fn wait_for_cluster_ready(
     release: &str,
     validator_ports: &[NodeConfigPorts],
     executor_ports: &[NodeConfigPorts],
+    prometheus_enabled: bool,
 ) -> Result<ClusterReady, ClusterWaitError> {
     if validator_ports.is_empty() {
         return Err(ClusterWaitError::MissingValidator);
@@ -107,30 +108,37 @@ pub async fn wait_for_cluster_ready(
         }
     }
 
-    let mut prometheus_port = find_node_port(
-        client,
-        namespace,
-        PROMETHEUS_SERVICE_NAME,
-        PROMETHEUS_HTTP_PORT,
-    )
-    .await?;
-    let mut prometheus_host = crate::host::node_host();
-    if wait_for_prometheus_http_nodeport(prometheus_port, prometheus_http_probe_timeout())
-        .await
-        .is_err()
-    {
-        let PortForwardSpawn { local_port, handle } =
-            port_forward_service(namespace, PROMETHEUS_SERVICE_NAME, PROMETHEUS_HTTP_PORT)
-                .map_err(|err| {
-                    kill_port_forwards(&mut port_forwards);
-                    err
-                })?;
-        prometheus_port = local_port;
-        prometheus_host = "127.0.0.1".to_owned();
-        port_forwards.push(handle);
-        if let Err(err) = wait_for_prometheus_http_port_forward(prometheus_port).await {
-            return Err(cleanup_port_forwards(&mut port_forwards, err));
+    let mut prometheus = None;
+    if prometheus_enabled {
+        let mut prometheus_port = find_node_port(
+            client,
+            namespace,
+            PROMETHEUS_SERVICE_NAME,
+            PROMETHEUS_HTTP_PORT,
+        )
+        .await?;
+        let mut prometheus_host = crate::host::node_host();
+        if wait_for_prometheus_http_nodeport(prometheus_port, prometheus_http_probe_timeout())
+            .await
+            .is_err()
+        {
+            let PortForwardSpawn { local_port, handle } =
+                port_forward_service(namespace, PROMETHEUS_SERVICE_NAME, PROMETHEUS_HTTP_PORT)
+                    .map_err(|err| {
+                        kill_port_forwards(&mut port_forwards);
+                        err
+                    })?;
+            prometheus_port = local_port;
+            prometheus_host = "127.0.0.1".to_owned();
+            port_forwards.push(handle);
+            if let Err(err) = wait_for_prometheus_http_port_forward(prometheus_port).await {
+                return Err(cleanup_port_forwards(&mut port_forwards, err));
+            }
         }
+        prometheus = Some(HostPort {
+            host: prometheus_host,
+            port: prometheus_port,
+        });
     }
 
     let mut grafana = None;
@@ -167,10 +175,7 @@ pub async fn wait_for_cluster_ready(
             executors: executor_allocations,
             validator_host,
             executor_host,
-            prometheus: HostPort {
-                host: prometheus_host,
-                port: prometheus_port,
-            },
+            prometheus,
             grafana,
         },
         port_forwards,

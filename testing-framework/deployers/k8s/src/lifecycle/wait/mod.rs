@@ -51,7 +51,7 @@ pub struct ClusterPorts {
     pub executors: Vec<NodePortAllocation>,
     pub validator_host: String,
     pub executor_host: String,
-    pub prometheus: HostPort,
+    pub prometheus: Option<HostPort>,
     pub grafana: Option<HostPort>,
 }
 

@@ -29,6 +29,7 @@ kzg:
 
 prometheus:
   enabled: true
+  externalUrl: ""
   image: "prom/prometheus:v3.0.1"
   imagePullPolicy: IfNotPresent
   retention: "7d"

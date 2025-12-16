@@ -13,10 +13,17 @@
 
 set -euo pipefail
 
-VERSION="${1:-v0.3.1}"
-DEFAULT_INSTALL_DIR="$HOME/.nomos-circuits"
-INSTALL_DIR="${2:-$DEFAULT_INSTALL_DIR}"
-REPO="logos-co/nomos-circuits"
+readonly DEFAULT_CIRCUITS_VERSION="v0.3.1"
+readonly DEFAULT_INSTALL_SUBDIR=".nomos-circuits"
+readonly DEFAULT_CIRCUITS_REPO="logos-co/nomos-circuits"
+
+readonly CURL_RETRY_COUNT=5
+readonly CURL_RETRY_DELAY_SECONDS=2
+
+VERSION="${1:-${DEFAULT_CIRCUITS_VERSION}}"
+DEFAULT_INSTALL_DIR="${HOME}/${DEFAULT_INSTALL_SUBDIR}"
+INSTALL_DIR="${2:-${DEFAULT_INSTALL_DIR}}"
+REPO="${DEFAULT_CIRCUITS_REPO}"
 
 detect_platform() {
     local os=""
@@ -43,13 +50,13 @@ download_release() {
     temp_dir=$(mktemp -d)
 
     echo "Downloading nomos-circuits ${VERSION} for ${platform}..."
+    local -a curl_args=(curl -fL --retry "${CURL_RETRY_COUNT}" --retry-delay "${CURL_RETRY_DELAY_SECONDS}" --retry-all-errors)
     if [ -n "${GITHUB_TOKEN:-}" ]; then
-        auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
-    else
-        auth_header=""
+        curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
     fi
+    curl_args+=(-o "${temp_dir}/${artifact}" "${url}")
 
-    if ! curl -L ${auth_header:+-H "$auth_header"} -o "${temp_dir}/${artifact}" "${url}"; then
+    if ! "${curl_args[@]}"; then
         echo "Failed to download release artifact from ${url}" >&2
         rm -rf "${temp_dir}"
         exit 1

@@ -33,10 +33,9 @@ retry_commitments_limit: 5
 
 # Tracing
 tracing_settings:
-  # Write node logs to disk for debugging (avoid noisy stdout/trace DNS spam).
-  logger: !File
-    directory: /var/log/nomos
-    prefix: node
+  # Default to stdout so `docker logs` / `kubectl logs` shows node output.
+  # Switch to `!File` if you want per-node log files inside the container/pod.
+  logger: Stdout
   # Disable OTLP traces to remove DNS errors; metrics stay enabled below.
   tracing: None
   filter: !EnvFilter

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Shared helpers for `scripts/*.sh`.
+
 common::ensure_bash() {
   if [ -z "${BASH_VERSION:-}" ]; then
     exec bash "$0" "$@"

@@ -102,13 +102,13 @@ Notes:
 If you hit Docker build failures, mysterious I/O errors, or are running out of disk space:
 
 ```bash
-scripts/clean
+scripts/clean.sh
 ```
 
 For extra Docker cache cleanup:
 
 ```bash
-scripts/clean --docker
+scripts/clean.sh --docker
 ```
 
 ### Host Runner (Direct Cargo Run)
@@ -127,11 +127,11 @@ cargo run -p runner-examples --bin local_runner
 - `NOMOS_DEMO_EXECUTORS=2` — Number of executors (default: 1, or use legacy `LOCAL_DEMO_EXECUTORS`)
 - `NOMOS_DEMO_RUN_SECS=120` — Run duration in seconds (default: 60, or use legacy `LOCAL_DEMO_RUN_SECS`)
 - `NOMOS_NODE_BIN` / `NOMOS_EXECUTOR_BIN` — Paths to binaries (required for direct run)
-- `NOMOS_LOG_DIR=/tmp/logs` — Directory for per-node log files (works across runners)
+- `NOMOS_LOG_DIR=/tmp/logs` — Directory for per-node log files (host runner). For compose/k8s, set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml`.
 - `NOMOS_TESTS_KEEP_LOGS=1` — Keep per-run temporary directories (useful for debugging/CI artifacts)
 - `NOMOS_TESTS_TRACING=true` — Enable the debug tracing preset (optional; combine with `NOMOS_LOG_DIR` unless you have external tracing backends configured)
 - `NOMOS_LOG_LEVEL=debug` — Set log level (default: info)
-- `NOMOS_LOG_FILTER=consensus=trace,da=debug` — Fine-grained module filtering
+- `NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug"` — Fine-grained module filtering
 
 **Note:** Requires circuit assets and host binaries. Use `scripts/run-examples.sh host` to handle setup automatically.
 
@@ -148,7 +148,7 @@ scripts/build-bundle.sh --platform linux
 
 # Build image (embeds bundle assets)
 export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-testing-framework/assets/stack/scripts/build_test_image.sh
+scripts/build_test_image.sh
 
 # Run
 NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
@@ -168,7 +168,7 @@ scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
 cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
 
 # Build image
-testing-framework/assets/stack/scripts/build_test_image.sh
+scripts/build_test_image.sh
 
 # Run
 NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
@@ -184,7 +184,8 @@ cargo run -p runner-examples --bin compose_runner
 - `TEST_FRAMEWORK_PROMETHEUS_PORT=9091` — Override Prometheus port (default: 9090)
 - `COMPOSE_RUNNER_HOST=127.0.0.1` — Host address for port mappings
 - `COMPOSE_RUNNER_PRESERVE=1` — Keep containers running after test
-- `NOMOS_LOG_DIR=/tmp/compose-logs` — Write logs to files inside containers
+- `NOMOS_LOG_LEVEL=debug` / `NOMOS_LOG_FILTER=...` — Control node log verbosity (stdout/stderr)
+- `testing-framework/assets/stack/cfgsync.yaml` (`tracing_settings.logger`) — Switch node logs between stdout/stderr and file output
 
 **Compose-specific features:**
 - **Node control support**: Only runner that supports chaos testing (`.enable_node_control()` + chaos workloads)
@@ -208,7 +209,7 @@ For manual control, you can run the `k8s_runner` binary directly. K8s requires t
 # Build image with bundle (recommended)
 scripts/build-bundle.sh --platform linux
 export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-testing-framework/assets/stack/scripts/build_test_image.sh
+scripts/build_test_image.sh
 
 # Load into cluster
 export NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local
@@ -228,6 +229,32 @@ cargo run -p runner-examples --bin k8s_runner
 - `NOMOS_TESTNET_IMAGE` — Image tag (required)
 - `POL_PROOF_DEV_MODE=true` — **Required** for all runners
 - `NOMOS_DEMO_VALIDATORS` / `NOMOS_DEMO_EXECUTORS` / `NOMOS_DEMO_RUN_SECS` — Topology overrides
+- `K8S_RUNNER_EXTERNAL_PROMETHEUS_URL` (or `NOMOS_EXTERNAL_PROMETHEUS_URL`) — Reuse an existing Prometheus and skip deploying the in-chart Prometheus; also points node OTLP metrics export and the in-cluster Grafana datasource at that Prometheus
+
+**External Prometheus (optional):**
+```bash
+export K8S_RUNNER_EXTERNAL_PROMETHEUS_URL=http://your-prometheus:9090
+cargo run -p runner-examples --bin k8s_runner
+```
+
+Notes:
+- The runner config expects Prometheus to accept OTLP metrics at `/api/v1/otlp/v1/metrics` (the in-chart Prometheus is started with `--web.enable-otlp-receiver` and `--enable-feature=otlp-write-receiver`).
+- Use a URL reachable from inside the cluster (for example a `Service` DNS name like `http://prometheus.monitoring:9090`).
+
+**Via `scripts/run-examples.sh` (optional):**
+```bash
+scripts/run-examples.sh -t 60 -v 1 -e 1 k8s --external-prometheus http://your-prometheus:9090
+```
+
+**In code (optional):**
+```rust
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ObservabilityBuilderExt as _;
+
+let plan = ScenarioBuilder::with_node_counts(1, 1)
+    .with_external_prometheus_str("http://your-prometheus:9090")
+    .build();
+```
 
 **Important:** 
 - K8s runner mounts `testing-framework/assets/stack/kzgrs_test_params` as a hostPath volume with file `/kzgrs_test_params/kzgrs_test_params` inside pods
@@ -314,7 +341,7 @@ If you see this error, the file `kzgrs_test_params` is missing from the director
 | Component | Controlled By | Purpose |
 |-----------|--------------|---------|
 | **Framework binaries** (`cargo run -p runner-examples --bin local_runner`) | `RUST_LOG` | Runner orchestration, deployment logs |
-| **Node processes** (validators, executors spawned by runner) | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER`, `NOMOS_LOG_DIR` | Consensus, DA, mempool, network logs |
+| **Node processes** (validators, executors spawned by runner) | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER` (+ `NOMOS_LOG_DIR` on host runner) | Consensus, DA, mempool, network logs |
 
 **Common mistake:** Setting `RUST_LOG=debug` only increases verbosity of the runner binary itself. Node logs remain at their default level unless you also set `NOMOS_LOG_LEVEL=debug`.
 
@@ -334,9 +361,9 @@ RUST_LOG=debug NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_ru
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_LOG_DIR` | None (console only) | Directory for per-node log files. If unset, logs go to stdout/stderr. |
+| `NOMOS_LOG_DIR` | None (console only) | Host runner: directory for per-node log files. Compose/k8s: use `testing-framework/assets/stack/cfgsync.yaml` (`tracing_settings.logger: !File`) and mount a writable directory. |
 | `NOMOS_LOG_LEVEL` | `info` | Global log level: `error`, `warn`, `info`, `debug`, `trace` |
-| `NOMOS_LOG_FILTER` | None | Fine-grained target filtering (e.g., `consensus=trace,da=debug`) |
+| `NOMOS_LOG_FILTER` | None | Fine-grained target filtering (e.g., `cryptarchia=trace,nomos_da_sampling=debug`) |
 | `NOMOS_TESTS_TRACING` | `false` | Enable the debug tracing preset (optional; combine with `NOMOS_LOG_DIR` unless you have external tracing backends configured) |
 | `NOMOS_OTLP_ENDPOINT` | None | OTLP trace endpoint (optional, disables OTLP noise if unset) |
 | `NOMOS_OTLP_METRICS_ENDPOINT` | None | OTLP metrics endpoint (optional) |
@@ -346,7 +373,7 @@ RUST_LOG=debug NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_ru
 NOMOS_TESTS_TRACING=true \
 NOMOS_LOG_DIR=/tmp/test-logs \
 NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="nomos_consensus=trace,nomos_da_sampling=debug" \
+NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug,nomos_da_dispersal=debug,nomos_da_verifier=debug,nomos_blend=debug,chain_service=info,chain_network=info,chain_leader=info" \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
@@ -367,18 +394,18 @@ Common target prefixes for `NOMOS_LOG_FILTER`:
 
 | Target Prefix | Subsystem |
 |---------------|-----------|
-| `nomos_consensus` | Consensus (Cryptarchia) |
+| `cryptarchia` | Consensus (Cryptarchia) |
 | `nomos_da_sampling` | DA sampling service |
 | `nomos_da_dispersal` | DA dispersal service |
 | `nomos_da_verifier` | DA verification |
-| `nomos_mempool` | Transaction mempool |
 | `nomos_blend` | Mix network/privacy layer |
+| `chain_service` | Chain service (node APIs/state) |
 | `chain_network` | P2P networking |
 | `chain_leader` | Leader election |
 
 **Example filter:**
 ```bash
-NOMOS_LOG_FILTER="nomos_consensus=trace,nomos_da_sampling=debug,chain_network=info"
+NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug,chain_service=info,chain_network=info,chain_leader=info"
 ```
 
 ### Accessing Logs Per Runner
@@ -422,18 +449,19 @@ docker logs -f $(docker ps --filter "name=nomos-compose-.*-validator-0" -q | hea
 
 **Via file collection (advanced):**
 
-Setting `NOMOS_LOG_DIR` writes files **inside the container**. To access them, you must either:
+To write per-node log files inside containers, set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and ensure the directory is writable). To access them, you must either:
 
 1. **Copy files out after the run:**
 ```bash
-NOMOS_LOG_DIR=/logs \
+# Ensure `testing-framework/assets/stack/cfgsync.yaml` is configured to log to `/logs`
+# via `tracing_settings.logger: !File`.
 NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 
 # After test, copy files from containers:
 docker ps --filter "name=nomos-compose-"
-docker cp <container-id>:/logs/nomos-node-0* /tmp/
+docker cp <container-id>:/logs/node* /tmp/
 ```
 
 2. **Mount a host volume** (requires modifying compose template):

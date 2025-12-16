@@ -231,7 +231,7 @@ export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
 # Option 2: Manual circuit/image setup (rebuilds during image build)
 scripts/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
 cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
-testing-framework/assets/stack/scripts/build_test_image.sh
+scripts/build_test_image.sh
 
 # Run with Compose
 NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \

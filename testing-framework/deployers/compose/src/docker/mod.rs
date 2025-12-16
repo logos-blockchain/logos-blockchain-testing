@@ -104,7 +104,7 @@ pub async fn build_local_image(
 ) -> Result<(), ComposeRunnerError> {
     let repo_root =
         repository_root().map_err(|source| ComposeRunnerError::ImageBuild { source })?;
-    let dockerfile = repo_root.join("testing-framework/runners/docker/runner.Dockerfile");
+    let dockerfile = repo_root.join("../../../docker/runner.Dockerfile");
 
     tracing::info!(image, "building compose runner docker image");
 

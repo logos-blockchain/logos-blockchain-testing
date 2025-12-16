@@ -9,8 +9,8 @@
 - **macOS + Docker Desktop (Apple silicon):** prefer `NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64` for local compose/k8s runs to avoid slow/fragile amd64 emulation builds.
 - **Disk space:** bundle/image builds are storage-heavy. If you see I/O errors or Docker build failures, check free space and prune old artifacts (`.tmp/`, `target/`, and Docker build cache) before retrying.
 - **K8s runner scope:** the default Helm chart mounts KZG params via `hostPath` and uses a local image tag (`logos-blockchain-testing:local`). This is intended for local clusters (Docker Desktop / minikube / kind), not remote managed clusters without additional setup.
-  - Quick cleanup: `scripts/clean` (and `scripts/clean --docker` if needed).
-  - Destructive cleanup (last resort): `scripts/clean --docker-system --dangerous` (add `--volumes` if you also want to prune Docker volumes).
+  - Quick cleanup: `scripts/clean.sh` (and `scripts/clean.sh --docker` if needed).
+  - Destructive cleanup (last resort): `scripts/clean.sh --docker-system --dangerous` (add `--volumes` if you also want to prune Docker volumes).
 
 **Recommended:** Use `scripts/run-examples.sh` which handles all setup automatically.
 
@@ -31,12 +31,12 @@ Common symptoms and likely causes:
 | Runner | Default Output | With `NOMOS_LOG_DIR` + Flags | Access Command |
 |--------|---------------|------------------------------|----------------|
 | **Host** (local) | Per-run temporary directories under the current working directory (removed unless `NOMOS_TESTS_KEEP_LOGS=1`) | Per-node files with prefix `nomos-node-{index}` (set `NOMOS_LOG_DIR`) | `cat $NOMOS_LOG_DIR/nomos-node-0*` |
-| **Compose** | Docker container stdout/stderr | Per-node files inside containers (if path is mounted) | `docker ps` then `docker logs <container-id>` |
-| **K8s** | Pod stdout/stderr | Per-node files inside pods (if path is mounted) | `kubectl logs -l nomos/logical-role=validator` |
+| **Compose** | Docker container stdout/stderr | Set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory) | `docker ps` then `docker logs <container-id>` |
+| **K8s** | Pod stdout/stderr | Set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory) | `kubectl logs -l nomos/logical-role=validator` |
 
 **Important Notes:**
 - **Host runner** (local processes): Per-run temporary directories are created under the current working directory and removed after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. To write per-node log files to a stable location, set `NOMOS_LOG_DIR=/path/to/logs`.
-- **Compose/K8s**: Per-node log files only exist inside containers/pods if `NOMOS_LOG_DIR` is set AND the path is writable inside the container/pod. By default, rely on `docker logs` or `kubectl logs`.
+- **Compose/K8s**: Node log destination is controlled by `testing-framework/assets/stack/cfgsync.yaml` (`tracing_settings.logger`). By default, rely on `docker logs` or `kubectl logs`.
 - **File naming**: Log files use prefix `nomos-node-{index}*` or `nomos-executor-{index}*` with timestamps, e.g., `nomos-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
 - **Container names**: Compose containers include project UUID, e.g., `nomos-compose-<uuid>-validator-0-1` where `<uuid>` is randomly generated per run
 
@@ -203,7 +203,7 @@ If logs are too sparse, increase verbosity:
 
 ```bash
 NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="nomos_consensus=trace,nomos_da_sampling=debug" \
+NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug" \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -294,7 +294,7 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
 - **Fix (manual)**:
   1. Build bundle: `scripts/build-bundle.sh --platform linux`
   2. Set bundle path: `export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz`
-  3. Build image: `testing-framework/assets/stack/scripts/build_test_image.sh`
+  3. Build image: `scripts/build_test_image.sh`
   4. **kind/minikube:** load the image into the cluster nodes (e.g. `kind load docker-image logos-blockchain-testing:local`, or `minikube image load ...`), or push to a registry and set `NOMOS_TESTNET_IMAGE` accordingly.
 
 ### "Failed to load KZG parameters" or "Circuit file not found"

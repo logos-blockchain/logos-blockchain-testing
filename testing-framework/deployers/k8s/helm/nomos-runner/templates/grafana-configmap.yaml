@@ -13,7 +13,7 @@ data:
         isDefault: true
         uid: PBFA97CFB590B2093
         orgId: 1
-        url: http://prometheus:9090
+        url: {{ if .Values.prometheus.enabled }}http://prometheus:9090{{ else }}{{ required "prometheus.externalUrl must be set when prometheus.enabled=false" .Values.prometheus.externalUrl }}{{ end }}
         editable: true
   dashboards.yaml: |
     apiVersion: 1
