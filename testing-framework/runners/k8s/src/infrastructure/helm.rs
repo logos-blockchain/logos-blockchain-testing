@@ -4,7 +4,7 @@ use thiserror::Error;
 use tokio::process::Command;
 use tracing::{debug, info};
 
-use crate::infrastructure::assets::{RunnerAssets, cfgsync_port_value, workspace_root};
+use crate::infrastructure::assets::{KzgMode, RunnerAssets, cfgsync_port_value, workspace_root};
 
 /// Errors returned from Helm invocations.
 #[derive(Debug, Error)]
@@ -32,10 +32,20 @@ pub async fn install_release(
     validators: usize,
     executors: usize,
 ) -> Result<(), HelmError> {
-    let host_path_type = if assets.kzg_path.is_dir() {
-        "Directory"
-    } else {
-        "File"
+    let (host_path_type, host_path) = match assets.kzg_mode {
+        KzgMode::HostPath => {
+            let host_path = assets
+                .kzg_path
+                .as_ref()
+                .expect("kzg_path must be present for HostPath mode");
+            let host_path_type = if host_path.is_dir() {
+                "Directory"
+            } else {
+                "File"
+            };
+            (Some(host_path_type), Some(host_path))
+        }
+        KzgMode::InImage => (None, None),
     };
     info!(
         release,
@@ -44,7 +54,11 @@ pub async fn install_release(
         executors,
         image = %assets.image,
         cfgsync_port = cfgsync_port_value(),
-        kzg = %assets.kzg_path.display(),
+        kzg_mode = ?assets.kzg_mode,
+        kzg = %host_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<in-image>".to_string()),
         values = %assets.values_file.display(),
         "installing helm release"
     );
@@ -67,12 +81,13 @@ pub async fn install_release(
         .arg(format!("executors.count={executors}"))
         .arg("--set")
         .arg(format!("cfgsync.port={}", cfgsync_port_value()))
-        .arg("--set")
-        .arg(format!("kzg.hostPath={}", assets.kzg_path.display()))
-        .arg("--set")
-        .arg(format!("kzg.hostPathType={host_path_type}"))
         .arg("-f")
         .arg(&assets.values_file)
+        .arg("--set")
+        .arg(match assets.kzg_mode {
+            KzgMode::HostPath => "kzg.mode=hostPath",
+            KzgMode::InImage => "kzg.mode=inImage",
+        })
         .arg("--set-file")
         .arg(format!("cfgsync.config={}", assets.cfgsync_file.display()))
         .arg("--set-file")
@@ -97,6 +112,13 @@ pub async fn install_release(
         ))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    if let (Some(host_path), Some(host_path_type)) = (host_path, host_path_type) {
+        cmd.arg("--set")
+            .arg(format!("kzg.hostPath={}", host_path.display()))
+            .arg("--set")
+            .arg(format!("kzg.hostPathType={host_path_type}"));
+    }
 
     if let Ok(root) = workspace_root() {
         cmd.current_dir(root);

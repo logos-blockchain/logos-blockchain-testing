@@ -189,6 +189,14 @@ select_image() {
 
   export IMAGE_TAG="${IMAGE}"
   export NOMOS_TESTNET_IMAGE="${IMAGE}"
+
+  if [ "${MODE}" = "k8s" ]; then
+    if [ "${selection}" = "ecr" ]; then
+      export NOMOS_KZG_MODE="${NOMOS_KZG_MODE:-inImage}"
+    else
+      export NOMOS_KZG_MODE="${NOMOS_KZG_MODE:-hostPath}"
+    fi
+  fi
 }
 
 select_image
@@ -450,7 +458,11 @@ fi
 echo "==> Running ${BIN} for ${RUN_SECS}s"
 cd "${ROOT_DIR}"
 if [ "$MODE" = "compose" ] || [ "$MODE" = "k8s" ]; then
-  KZG_PATH="${KZG_CONTAINER_PATH}"
+  if [ "$MODE" = "k8s" ] && [ "${NOMOS_KZG_MODE:-hostPath}" = "inImage" ]; then
+    KZG_PATH="${NOMOS_KZG_IN_IMAGE_PARAMS_PATH:-/opt/nomos/kzg-params/kzgrs_test_params}"
+  else
+    KZG_PATH="${KZG_CONTAINER_PATH}"
+  fi
 else
   KZG_PATH="${KZG_HOST_PATH}"
 fi

@@ -167,6 +167,19 @@ RUN apt-get update && apt-get install -yq \
 
 COPY --from=builder /opt/circuits /opt/circuits
 
+# Provide a stable in-image location for the KZG test parameters so EKS runs do
+# not rely on hostPath volumes.
+RUN set -eu; \
+    mkdir -p /opt/nomos/kzg-params; \
+    if [ -f "/opt/circuits/kzgrs_test_params/kzgrs_test_params" ]; then \
+      cp "/opt/circuits/kzgrs_test_params/kzgrs_test_params" "/opt/nomos/kzg-params/kzgrs_test_params"; \
+    elif [ -f "/opt/circuits/kzgrs_test_params" ]; then \
+      cp "/opt/circuits/kzgrs_test_params" "/opt/nomos/kzg-params/kzgrs_test_params"; \
+    else \
+      echo "ERROR: kzgrs_test_params not found under /opt/circuits; cannot seed /opt/nomos/kzg-params" >&2; \
+      exit 1; \
+    fi
+
 COPY --from=builder /workspace/artifacts/nomos-node /usr/bin/nomos-node
 COPY --from=builder /workspace/artifacts/nomos-executor /usr/bin/nomos-executor
 COPY --from=builder /workspace/artifacts/nomos-cli /usr/bin/nomos-cli

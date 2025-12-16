@@ -31,6 +31,8 @@ spec:
           env:
             - name: CFG_SERVER_ADDR
               value: http://{{ include "nomos-runner.fullname" $root }}-cfgsync:{{ $root.Values.cfgsync.port }}
+            - name: NOMOS_KZGRS_PARAMS_PATH
+              value: '{{ if eq $root.Values.kzg.mode "inImage" }}{{ $root.Values.kzg.inImageParamsPath }}{{ else }}{{ $root.Values.kzg.hostPathParamsPath }}{{ end }}'
             {{- range $key, $value := $node.env }}
             - name: {{ $key }}
               value: "{{ $value }}"
@@ -39,9 +41,11 @@ spec:
             - name: assets
               mountPath: /etc/nomos
               readOnly: true
+            {{- if eq $root.Values.kzg.mode "hostPath" }}
             - name: kzg-params
               mountPath: /kzgrs_test_params
               readOnly: true
+            {{- end }}
       volumes:
         - name: assets
           configMap:
@@ -58,8 +62,10 @@ spec:
                 path: scripts/run_nomos_executor.sh
               - key: run_nomos_node.sh
                 path: scripts/run_nomos_node.sh
+        {{- if eq $root.Values.kzg.mode "hostPath" }}
         - name: kzg-params
           persistentVolumeClaim:
             claimName: {{ include "nomos-runner.fullname" $root }}-kzg
             readOnly: true
+        {{- end }}
 {{- end }}

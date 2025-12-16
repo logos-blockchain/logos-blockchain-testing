@@ -18,7 +18,8 @@ use tracing::{debug, info};
 /// Paths and image metadata required to deploy the Helm chart.
 pub struct RunnerAssets {
     pub image: String,
-    pub kzg_path: PathBuf,
+    pub kzg_mode: KzgMode,
+    pub kzg_path: Option<PathBuf>,
     pub chart_path: PathBuf,
     pub cfgsync_file: PathBuf,
     pub run_cfgsync_script: PathBuf,
@@ -70,6 +71,19 @@ pub enum AssetsError {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KzgMode {
+    HostPath,
+    InImage,
+}
+
+fn kzg_mode() -> KzgMode {
+    match env::var("NOMOS_KZG_MODE").ok().as_deref() {
+        Some("inImage") => KzgMode::InImage,
+        _ => KzgMode::HostPath,
+    }
+}
+
 /// Render cfgsync config, Helm values, and locate scripts/KZG assets for a
 /// topology.
 pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, AssetsError> {
@@ -89,24 +103,34 @@ pub fn prepare_assets(topology: &GeneratedTopology) -> Result<RunnerAssets, Asse
 
     let cfgsync_file = write_temp_file(tempdir.path(), "cfgsync.yaml", cfgsync_yaml)?;
     let scripts = validate_scripts(&root)?;
-    let kzg_path = validate_kzg_params(&root)?;
+    let kzg_mode = kzg_mode();
+    let kzg_path = match kzg_mode {
+        KzgMode::HostPath => Some(validate_kzg_params(&root)?),
+        KzgMode::InImage => None,
+    };
     let chart_path = helm_chart_path()?;
     let values_yaml = render_values_yaml(topology)?;
     let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
     let image = env::var("NOMOS_TESTNET_IMAGE")
         .unwrap_or_else(|_| String::from("logos-blockchain-testing:test"));
 
+    let kzg_display = kzg_path
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "<in-image>".to_string());
     debug!(
         cfgsync = %cfgsync_file.display(),
         values = %values_file.display(),
         image,
-        kzg = %kzg_path.display(),
+        kzg_mode = ?kzg_mode,
+        kzg = %kzg_display,
         chart = %chart_path.display(),
         "k8s runner assets prepared"
     );
 
     Ok(RunnerAssets {
         image,
+        kzg_mode,
         kzg_path,
         chart_path,
         cfgsync_file,

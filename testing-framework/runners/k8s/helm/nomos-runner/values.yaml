@@ -20,6 +20,9 @@ executors:
   nodes: []
 
 kzg:
+  mode: "hostPath"
+  hostPathParamsPath: "/kzgrs_test_params/kzgrs_test_params"
+  inImageParamsPath: "/opt/nomos/kzg-params/kzgrs_test_params"
   hostPath: "/var/lib/nomos/kzgrs_test_params"
   hostPathType: "Directory"
   storageSize: "1Gi"
