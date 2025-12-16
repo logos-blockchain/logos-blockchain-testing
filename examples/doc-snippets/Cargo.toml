@@ -1,0 +1,23 @@
+[package]
+categories.workspace  = true
+description.workspace = true
+edition.workspace     = true
+keywords.workspace    = true
+license.workspace     = true
+name                  = "doc-snippets"
+publish               = false
+readme.workspace      = true
+repository.workspace  = true
+version.workspace     = true
+
+[dependencies]
+anyhow                           = "1"
+async-trait                      = { workspace = true }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+testing-framework-runner-local   = { workspace = true }
+testing-framework-workflows      = { workspace = true }
+
+[lints]
+workspace = true

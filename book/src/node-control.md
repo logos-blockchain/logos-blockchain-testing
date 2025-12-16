@@ -39,7 +39,9 @@ struct RestartWorkload;
 
 #[async_trait]
 impl Workload for RestartWorkload {
-    fn name(&self) -> &str { "restart_workload" }
+    fn name(&self) -> &str {
+        "restart_workload"
+    }
 
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
         if let Some(control) = ctx.node_control() {
@@ -59,6 +61,10 @@ scenario builder and deploy with a runner that supports it.
 The `NodeControlHandle` trait currently provides:
 
 ```rust
+use async_trait::async_trait;
+use testing_framework_core::scenario::DynError;
+
+#[async_trait]
 pub trait NodeControlHandle: Send + Sync {
     async fn restart_validator(&self, index: usize) -> Result<(), DynError>;
     async fn restart_executor(&self, index: usize) -> Result<(), DynError>;

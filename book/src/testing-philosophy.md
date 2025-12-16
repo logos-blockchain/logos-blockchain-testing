@@ -9,21 +9,22 @@ interpret results correctly.
 Describe **what** you want to test, not **how** to orchestrate it:
 
 ```rust
-// Good: declarative
-ScenarioBuilder::topology_with(|t| {
-        t.network_star()
-            .validators(2)
-            .executors(1)
-    })
-    .transactions_with(|txs| {
-        txs.rate(5)             // 5 transactions per block
-    })
-    .expect_consensus_liveness()
-    .build();
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
 
-// Bad: imperative (framework doesn't work this way)
-// spawn_validator(); spawn_executor(); 
-// loop { submit_tx(); check_block(); }
+pub fn declarative_over_imperative() {
+    // Good: declarative
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+        .transactions_with(|txs| {
+            txs.rate(5) // 5 transactions per block
+        })
+        .expect_consensus_liveness()
+        .build();
+
+    // Bad: imperative (framework doesn't work this way)
+    // spawn_validator(); spawn_executor();
+    // loop { submit_tx(); check_block(); }
+}
 ```
 
 **Why it matters:** The framework handles deployment, readiness, and cleanup.
@@ -39,22 +40,25 @@ Reason in **blocks** and **consensus intervals**, not wall-clock seconds.
 - Expected rate: ~27 blocks per minute
 
 ```rust
-// Good: protocol-oriented thinking
-let plan = ScenarioBuilder::topology_with(|t| {
-        t.network_star()
-            .validators(2)
-            .executors(1)
-    })
-    .transactions_with(|txs| {
-        txs.rate(5)             // 5 transactions per block
-    })
-    .with_run_duration(Duration::from_secs(60))  // Let framework calculate expected blocks
-    .expect_consensus_liveness()  // "Did we produce the expected blocks?"
-    .build();
+use std::time::Duration;
 
-// Bad: wall-clock assumptions
-// "I expect exactly 30 blocks in 60 seconds"
-// This breaks on slow CI where slot timing might drift
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub fn protocol_time_not_wall_time() {
+    // Good: protocol-oriented thinking
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+        .transactions_with(|txs| {
+            txs.rate(5) // 5 transactions per block
+        })
+        .with_run_duration(Duration::from_secs(60)) // Let framework calculate expected blocks
+        .expect_consensus_liveness() // "Did we produce the expected blocks?"
+        .build();
+
+    // Bad: wall-clock assumptions
+    // "I expect exactly 30 blocks in 60 seconds"
+    // This breaks on slow CI where slot timing might drift
+}
 ```
 
 **Why it matters:** Slot timing is fixed (2s by default, NTP-synchronized), so the
@@ -73,37 +77,37 @@ not "blocks produced in exact wall-clock seconds".
 
 **Chaos is opt-in:**
 ```rust
-// Separate: functional test (deterministic)
-let plan = ScenarioBuilder::topology_with(|t| {
-        t.network_star()
-            .validators(2)
-            .executors(1)
-    })
-    .transactions_with(|txs| {
-        txs.rate(5)             // 5 transactions per block
-    })
-    .expect_consensus_liveness()
-    .build();
+use std::time::Duration;
 
-// Separate: chaos test (introduces randomness)
-let chaos_plan = ScenarioBuilder::topology_with(|t| {
-        t.network_star()
-            .validators(3)
-            .executors(2)
-    })
-    .enable_node_control()
-    .chaos_with(|c| {
-        c.restart()
-            .min_delay(Duration::from_secs(30))
-            .max_delay(Duration::from_secs(60))
-            .target_cooldown(Duration::from_secs(45))
-            .apply()
-    })
-    .transactions_with(|txs| {
-        txs.rate(5)             // 5 transactions per block
-    })
-    .expect_consensus_liveness()
-    .build();
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
+
+pub fn determinism_first() {
+    // Separate: functional test (deterministic)
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+        .transactions_with(|txs| {
+            txs.rate(5) // 5 transactions per block
+        })
+        .expect_consensus_liveness()
+        .build();
+
+    // Separate: chaos test (introduces randomness)
+    let _chaos_plan =
+        ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+            .enable_node_control()
+            .chaos_with(|c| {
+                c.restart()
+                    .min_delay(Duration::from_secs(30))
+                    .max_delay(Duration::from_secs(60))
+                    .target_cooldown(Duration::from_secs(45))
+                    .apply()
+            })
+            .transactions_with(|txs| {
+                txs.rate(5) // 5 transactions per block
+            })
+            .expect_consensus_liveness()
+            .build();
+}
 ```
 
 **Why it matters:** Mixing determinism with chaos creates noisy, hard-to-debug
@@ -132,11 +136,25 @@ perspective.
 Always run long enough for **meaningful block production**:
 
 ```rust
-// Bad: too short
-.with_run_duration(Duration::from_secs(5))  // ~2 blocks (with default 2s slots, 0.9 coeff)
+use std::time::Duration;
 
-// Good: enough blocks for assertions
-.with_run_duration(Duration::from_secs(60))  // ~27 blocks (with default 2s slots, 0.9 coeff)
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub fn minimum_run_windows() {
+    // Bad: too short (~2 blocks with default 2s slots, 0.9 coeff)
+    let _too_short = ScenarioBuilder::with_node_counts(1, 0)
+        .with_run_duration(Duration::from_secs(5))
+        .expect_consensus_liveness()
+        .build();
+
+    // Good: enough blocks for assertions (~27 blocks with default 2s slots, 0.9
+    // coeff)
+    let _good = ScenarioBuilder::with_node_counts(1, 0)
+        .with_run_duration(Duration::from_secs(60))
+        .expect_consensus_liveness()
+        .build();
+}
 ```
 
 **Note:** Block counts assume default consensus parameters:

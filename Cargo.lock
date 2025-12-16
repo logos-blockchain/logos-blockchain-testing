@@ -1699,6 +1699,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "doc-snippets"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "testing-framework-runner-k8s",
+ "testing-framework-runner-local",
+ "testing-framework-workflows",
+]
+
+[[package]]
 name = "dtoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

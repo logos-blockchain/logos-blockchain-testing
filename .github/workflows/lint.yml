@@ -98,6 +98,37 @@ jobs:
           restore-keys: ${{ runner.os }}-target-clippy-
       - run: cargo +nightly-2025-09-14 clippy --all --all-targets --all-features -- -D warnings
 
+  doc_snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load versions
+        run: |
+          set -euo pipefail
+          if [ ! -f versions.env ]; then
+            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            exit 1
+          fi
+          set -a
+          . versions.env
+          set +a
+          # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
+          : "${VERSION:?Missing VERSION}"
+          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
+          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-09-14
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - run: cargo +nightly-2025-09-14 check -p doc-snippets
+
   deny:
     runs-on: ubuntu-latest
     steps:

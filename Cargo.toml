@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "examples",
+  "examples/doc-snippets",
   "testing-framework/configs",
   "testing-framework/core",
   "testing-framework/runners/compose",

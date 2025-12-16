@@ -15,34 +15,30 @@ Realistic advanced scenarios demonstrating framework capabilities for production
 Test consensus under progressively increasing transaction load:
 
 ```rust
+use std::time::Duration;
+
+use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
-use std::time::Duration;
 
-async fn load_progression_test() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn load_progression_test() -> Result<()> {
     for rate in [5, 10, 20, 30] {
         println!("Testing with rate: {}", rate);
-        
-        let mut plan = ScenarioBuilder::topology_with(|t| {
-                t.network_star()
-                    .validators(3)
-                    .executors(2)
-            })
-            .wallets(50)
-            .transactions_with(|txs| {
-                txs.rate(rate)
-                    .users(20)
-            })
-            .expect_consensus_liveness()
-            .with_run_duration(Duration::from_secs(60))
-            .build();
+
+        let mut plan =
+            ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+                .wallets(50)
+                .transactions_with(|txs| txs.rate(rate).users(20))
+                .expect_consensus_liveness()
+                .with_run_duration(Duration::from_secs(60))
+                .build();
 
         let deployer = ComposeDeployer::default();
         let runner = deployer.deploy(&plan).await?;
         let _handle = runner.run(&mut plan).await?;
     }
-    
+
     Ok(())
 }
 ```
@@ -54,26 +50,18 @@ async fn load_progression_test() -> Result<(), Box<dyn std::error::Error + Send 
 Run high transaction and DA load for extended duration:
 
 ```rust
+use std::time::Duration;
+
+use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
-use std::time::Duration;
 
-async fn sustained_load_test() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut plan = ScenarioBuilder::topology_with(|t| {
-            t.network_star()
-                .validators(4)
-                .executors(2)
-        })
+pub async fn sustained_load_test() -> Result<()> {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
         .wallets(100)
-        .transactions_with(|txs| {
-            txs.rate(15)
-                .users(50)
-        })
-        .da_with(|da| {
-            da.channel_rate(2)
-                .blob_rate(3)
-        })
+        .transactions_with(|txs| txs.rate(15).users(50))
+        .da_with(|da| da.channel_rate(2).blob_rate(3))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(300))
         .build();
@@ -81,7 +69,7 @@ async fn sustained_load_test() -> Result<(), Box<dyn std::error::Error + Send + 
     let deployer = ComposeDeployer::default();
     let runner = deployer.deploy(&plan).await?;
     let _handle = runner.run(&mut plan).await?;
-    
+
     Ok(())
 }
 ```
@@ -93,23 +81,18 @@ async fn sustained_load_test() -> Result<(), Box<dyn std::error::Error + Send + 
 Frequent node restarts with active traffic:
 
 ```rust
-use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
-use testing_framework_runner_compose::ComposeDeployer;
-use testing_framework_workflows::{ScenarioBuilderExt, ChaosBuilderExt};
 use std::time::Duration;
 
-async fn aggressive_chaos_test() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut plan = ScenarioBuilder::topology_with(|t| {
-            t.network_star()
-                .validators(4)
-                .executors(2)
-        })
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_compose::ComposeDeployer;
+use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
+
+pub async fn aggressive_chaos_test() -> Result<()> {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
         .enable_node_control()
         .wallets(50)
-        .transactions_with(|txs| {
-            txs.rate(10)
-                .users(20)
-        })
+        .transactions_with(|txs| txs.rate(10).users(20))
         .chaos_with(|c| {
             c.restart()
                 .min_delay(Duration::from_secs(10))
@@ -124,7 +107,7 @@ async fn aggressive_chaos_test() -> Result<(), Box<dyn std::error::Error + Send 
     let deployer = ComposeDeployer::default();
     let runner = deployer.deploy(&plan).await?;
     let _handle = runner.run(&mut plan).await?;
-    
+
     Ok(())
 }
 ```

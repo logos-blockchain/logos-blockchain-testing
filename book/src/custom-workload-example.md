@@ -14,10 +14,10 @@ Key ideas:
 
 ```rust
 use async_trait::async_trait;
-use testing_framework_core::scenario::{
-    DynError, Expectation, RunContext, Workload, runtime::context::RunMetrics,
+use testing_framework_core::{
+    scenario::{DynError, Expectation, RunContext, RunMetrics, Workload},
+    topology::generation::GeneratedTopology,
 };
-use testing_framework_core::topology::generation::GeneratedTopology;
 
 pub struct ReachabilityWorkload {
     target_idx: usize,
@@ -36,16 +36,23 @@ impl Workload for ReachabilityWorkload {
     }
 
     fn expectations(&self) -> Vec<Box<dyn Expectation>> {
-        vec![Box::new(ReachabilityExpectation::new(self.target_idx))]
+        vec![Box::new(
+            crate::custom_workload_example_expectation::ReachabilityExpectation::new(
+                self.target_idx,
+            ),
+        )]
     }
 
     fn init(
         &mut self,
         topology: &GeneratedTopology,
-        _metrics: &RunMetrics,
+        _run_metrics: &RunMetrics,
     ) -> Result<(), DynError> {
         if topology.validators().get(self.target_idx).is_none() {
-            return Err("no validator at requested index".into());
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "no validator at requested index",
+            )));
         }
         Ok(())
     }
@@ -55,10 +62,19 @@ impl Workload for ReachabilityWorkload {
             .node_clients()
             .validator_clients()
             .get(self.target_idx)
-            .ok_or("missing target client")?;
+            .ok_or_else(|| {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "missing target client",
+                )) as DynError
+            })?;
 
         // Lightweight API call to prove reachability.
-        client.consensus_info().await.map(|_| ()).map_err(|e| e.into())
+        client
+            .consensus_info()
+            .await
+            .map(|_| ())
+            .map_err(|e| e.into())
     }
 }
 ```
@@ -94,13 +110,18 @@ impl Expectation for ReachabilityExpectation {
             .node_clients()
             .validator_clients()
             .get(self.target_idx)
-            .ok_or("missing target client")?;
+            .ok_or_else(|| {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "missing target client",
+                )) as DynError
+            })?;
 
         client
             .consensus_info()
             .await
             .map(|_| ())
-            .map_err(|e| format!("target became unreachable during run: {e}").into())
+            .map_err(|e| e.into())
     }
 }
 ```

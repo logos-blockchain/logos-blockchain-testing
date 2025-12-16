@@ -21,17 +21,15 @@ and expectations.
 Minimal test that validates basic block production:
 
 ```rust
+use std::time::Duration;
+
+use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
-use std::time::Duration;
 
-async fn simple_consensus() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut plan = ScenarioBuilder::topology_with(|t| {
-            t.network_star()
-                .validators(3)
-                .executors(0)
-        })
+pub async fn simple_consensus() -> Result<()> {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(0))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(30))
         .build();
@@ -39,7 +37,7 @@ async fn simple_consensus() -> Result<(), Box<dyn std::error::Error + Send + Syn
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&plan).await?;
     let _handle = runner.run(&mut plan).await?;
-    
+
     Ok(())
 }
 ```
@@ -51,22 +49,17 @@ async fn simple_consensus() -> Result<(), Box<dyn std::error::Error + Send + Syn
 Test consensus under transaction load:
 
 ```rust
+use std::time::Duration;
+
+use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
-use std::time::Duration;
 
-async fn transaction_workload() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut plan = ScenarioBuilder::topology_with(|t| {
-            t.network_star()
-                .validators(2)
-                .executors(0)
-        })
+pub async fn transaction_workload() -> Result<()> {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(0))
         .wallets(20)
-        .transactions_with(|txs| {
-            txs.rate(5)
-                .users(10)
-        })
+        .transactions_with(|txs| txs.rate(5).users(10))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(60))
         .build();
@@ -74,7 +67,7 @@ async fn transaction_workload() -> Result<(), Box<dyn std::error::Error + Send +
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&plan).await?;
     let _handle = runner.run(&mut plan).await?;
-    
+
     Ok(())
 }
 ```
@@ -86,26 +79,18 @@ async fn transaction_workload() -> Result<(), Box<dyn std::error::Error + Send +
 Combined test stressing both transaction and DA layers:
 
 ```rust
+use std::time::Duration;
+
+use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
-use std::time::Duration;
 
-async fn da_and_transactions() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut plan = ScenarioBuilder::topology_with(|t| {
-            t.network_star()
-                .validators(3)
-                .executors(2)
-        })
+pub async fn da_and_transactions() -> Result<()> {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
         .wallets(30)
-        .transactions_with(|txs| {
-            txs.rate(5)
-                .users(15)
-        })
-        .da_with(|da| {
-            da.channel_rate(2)
-                .blob_rate(2)
-        })
+        .transactions_with(|txs| txs.rate(5).users(15))
+        .da_with(|da| da.channel_rate(2).blob_rate(2))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(90))
         .build();
@@ -113,7 +98,7 @@ async fn da_and_transactions() -> Result<(), Box<dyn std::error::Error + Send + 
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&plan).await?;
     let _handle = runner.run(&mut plan).await?;
-    
+
     Ok(())
 }
 ```
@@ -125,23 +110,18 @@ async fn da_and_transactions() -> Result<(), Box<dyn std::error::Error + Send + 
 Test system resilience under node restarts:
 
 ```rust
-use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
-use testing_framework_runner_compose::ComposeDeployer;
-use testing_framework_workflows::{ScenarioBuilderExt, ChaosBuilderExt};
 use std::time::Duration;
 
-async fn chaos_resilience() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut plan = ScenarioBuilder::topology_with(|t| {
-            t.network_star()
-                .validators(4)
-                .executors(2)
-        })
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_compose::ComposeDeployer;
+use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
+
+pub async fn chaos_resilience() -> Result<()> {
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
         .enable_node_control()
         .wallets(20)
-        .transactions_with(|txs| {
-            txs.rate(3)
-                .users(10)
-        })
+        .transactions_with(|txs| txs.rate(3).users(10))
         .chaos_with(|c| {
             c.restart()
                 .min_delay(Duration::from_secs(20))
@@ -156,7 +136,7 @@ async fn chaos_resilience() -> Result<(), Box<dyn std::error::Error + Send + Syn
     let deployer = ComposeDeployer::default();
     let runner = deployer.deploy(&plan).await?;
     let _handle = runner.run(&mut plan).await?;
-    
+
     Ok(())
 }
 ```

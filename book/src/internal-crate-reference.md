@@ -30,92 +30,142 @@ High-level roles of the crates that make up the framework:
 ### Adding a New Workload
 
 1. **Define the workload** in `testing-framework/workflows/src/workloads/your_workload.rs`:
-   ```rust
-   use async_trait::async_trait;
-   use testing_framework_core::scenario::{Workload, RunContext, DynError};
-   
-   pub struct YourWorkload {
-       // config fields
-   }
-   
-   #[async_trait]
-   impl Workload for YourWorkload {
-       fn name(&self) -> &'static str { "your_workload" }
-       async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
-           // implementation
-           Ok(())
-       }
-   }
-   ```
+```rust
+use async_trait::async_trait;
+use testing_framework_core::scenario::{DynError, RunContext, Workload};
+
+pub struct YourWorkload;
+
+#[async_trait]
+impl Workload for YourWorkload {
+    fn name(&self) -> &'static str {
+        "your_workload"
+    }
+
+    async fn start(&self, _ctx: &RunContext) -> Result<(), DynError> {
+        // implementation
+        Ok(())
+    }
+}
+```
 
 2. **Add builder extension** in `testing-framework/workflows/src/builder/mod.rs`:
-   ```rust
-   pub trait ScenarioBuilderExt {
-       fn your_workload(self) -> YourWorkloadBuilder;
-   }
-   ```
+```rust
+pub struct YourWorkloadBuilder;
+
+impl YourWorkloadBuilder {
+    pub fn some_config(self) -> Self {
+        self
+    }
+}
+
+pub trait ScenarioBuilderExt: Sized {
+    fn your_workload(self) -> YourWorkloadBuilder;
+}
+```
 
 3. **Use in examples** in `examples/src/bin/your_scenario.rs`:
-   ```rust
-   let mut plan = ScenarioBuilder::topology_with(|t| {
-           t.network_star()
-               .validators(3)
-               .executors(0)
-       })
-       .your_workload_with(|w| {  // Your new DSL method with closure
-           w.some_config()
-       })
-       .build();
-   ```
+```rust
+use testing_framework_core::scenario::ScenarioBuilder;
+
+pub struct YourWorkloadBuilder;
+
+impl YourWorkloadBuilder {
+    pub fn some_config(self) -> Self {
+        self
+    }
+}
+
+pub trait YourWorkloadDslExt: Sized {
+    fn your_workload_with<F>(self, configurator: F) -> Self
+    where
+        F: FnOnce(YourWorkloadBuilder) -> YourWorkloadBuilder;
+}
+
+impl<Caps> YourWorkloadDslExt for testing_framework_core::scenario::Builder<Caps> {
+    fn your_workload_with<F>(self, configurator: F) -> Self
+    where
+        F: FnOnce(YourWorkloadBuilder) -> YourWorkloadBuilder,
+    {
+        let _ = configurator(YourWorkloadBuilder);
+        self
+    }
+}
+
+pub fn use_in_examples() {
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(0))
+        .your_workload_with(|w| w.some_config())
+        .build();
+}
+```
 
 ### Adding a New Expectation
 
 1. **Define the expectation** in `testing-framework/workflows/src/expectations/your_expectation.rs`:
-   ```rust
-   use async_trait::async_trait;
-   use testing_framework_core::scenario::{Expectation, RunContext, DynError};
-   
-   pub struct YourExpectation {
-       // config fields
-   }
-   
-   #[async_trait]
-   impl Expectation for YourExpectation {
-       fn name(&self) -> &str { "your_expectation" }
-       async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
-           // implementation
-           Ok(())
-       }
-   }
-   ```
+```rust
+use async_trait::async_trait;
+use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+
+pub struct YourExpectation;
+
+#[async_trait]
+impl Expectation for YourExpectation {
+    fn name(&self) -> &'static str {
+        "your_expectation"
+    }
+
+    async fn evaluate(&mut self, _ctx: &RunContext) -> Result<(), DynError> {
+        // implementation
+        Ok(())
+    }
+}
+```
 
 2. **Add builder extension** in `testing-framework/workflows/src/builder/mod.rs`:
-   ```rust
-   pub trait ScenarioBuilderExt {
-       fn expect_your_condition(self) -> Self;
-   }
-   ```
+```rust
+use testing_framework_core::scenario::ScenarioBuilder;
+
+pub trait YourExpectationDslExt: Sized {
+    fn expect_your_condition(self) -> Self;
+}
+
+impl<Caps> YourExpectationDslExt for testing_framework_core::scenario::Builder<Caps> {
+    fn expect_your_condition(self) -> Self {
+        self
+    }
+}
+
+pub fn use_in_examples() {
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(0))
+        .expect_your_condition()
+        .build();
+}
+```
 
 ### Adding a New Deployer
 
 1. **Implement `Deployer` trait** in `testing-framework/runners/your_runner/src/deployer.rs`:
-   ```rust
-   use async_trait::async_trait;
-   use testing_framework_core::scenario::{Deployer, Runner, Scenario};
-   
-   pub struct YourDeployer;
-   
-   #[async_trait]
-   impl Deployer for YourDeployer {
-       type Error = YourError;
-       
-       async fn deploy(&self, scenario: &Scenario) -> Result<Runner, Self::Error> {
-           // Provision infrastructure
-           // Wait for readiness
-           // Return Runner
-       }
-   }
-   ```
+```rust
+use async_trait::async_trait;
+use testing_framework_core::scenario::{Deployer, Runner, Scenario};
+
+#[derive(Debug)]
+pub struct YourError;
+
+pub struct YourDeployer;
+
+#[async_trait]
+impl Deployer for YourDeployer {
+    type Error = YourError;
+
+    async fn deploy(&self, _scenario: &Scenario<()>) -> Result<Runner, Self::Error> {
+        // Provision infrastructure
+        // Wait for readiness
+        // Return Runner
+        todo!()
+    }
+}
+```
 
 2. **Provide cleanup** and handle node control if supported.
 

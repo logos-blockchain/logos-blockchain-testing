@@ -38,35 +38,37 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 **Core API Pattern** (simplified example):
 
 ```rust
+use std::time::Duration;
+
+use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
-use std::time::Duration;
 
-// Define the scenario (1 validator + 1 executor, tx + DA workload)
-let mut plan = ScenarioBuilder::topology_with(|t| {
-        t.network_star()
-            .validators(1)
-            .executors(1)
-    })
-    .wallets(1_000)
-    .transactions_with(|txs| {
-        txs.rate(5)                 // 5 transactions per block
-            .users(500)             // use 500 of the seeded wallets
-    })
-    .da_with(|da| {
-        da.channel_rate(1)          // 1 channel
-            .blob_rate(1)           // target 1 blob per block
-            .headroom_percent(20)   // default headroom when sizing channels
-    })
-    .expect_consensus_liveness()
-    .with_run_duration(Duration::from_secs(60))
-    .build();
+pub async fn run_local_demo() -> Result<()> {
+    // Define the scenario (1 validator + 1 executor, tx + DA workload)
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(1))
+        .wallets(1_000)
+        .transactions_with(|txs| {
+            txs.rate(5) // 5 transactions per block
+                .users(500) // use 500 of the seeded wallets
+        })
+        .da_with(|da| {
+            da.channel_rate(1) // 1 channel
+                .blob_rate(1) // target 1 blob per block
+                .headroom_percent(20) // default headroom when sizing channels
+        })
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(60))
+        .build();
 
-// Deploy and run
-let deployer = LocalDeployer::default();
-let runner = deployer.deploy(&plan).await?;
-let _handle = runner.run(&mut plan).await?;
+    // Deploy and run
+    let deployer = LocalDeployer::default();
+    let runner = deployer.deploy(&plan).await?;
+    let _handle = runner.run(&mut plan).await?;
+
+    Ok(())
+}
 ```
 
 **Note:** The examples are binaries with `#[tokio::main]`, not test functions. If you want to write integration tests, wrap this pattern in `#[tokio::test]` functions in your own test suite.
@@ -87,11 +89,15 @@ Let's unpack the code:
 ### 1. Topology Configuration
 
 ```rust
-ScenarioBuilder::topology_with(|t| {
-        t.network_star()      // Star topology: all nodes connect to seed
-            .validators(1)    // 1 validator node
-            .executors(1)     // 1 executor node (validator + DA dispersal)
+use testing_framework_core::scenario::ScenarioBuilder;
+
+pub fn step_1_topology() -> testing_framework_core::scenario::Builder<()> {
+    ScenarioBuilder::topology_with(|t| {
+        t.network_star() // Star topology: all nodes connect to seed
+            .validators(1) // 1 validator node
+            .executors(1) // 1 executor node (validator + DA dispersal)
     })
+}
 ```
 
 This defines **what** your test network looks like.
@@ -99,7 +105,12 @@ This defines **what** your test network looks like.
 ### 2. Wallet Seeding
 
 ```rust
-.wallets(1_000)              // Seed 1,000 funded wallet accounts
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub fn step_2_wallets() -> testing_framework_core::scenario::Builder<()> {
+    ScenarioBuilder::with_node_counts(1, 1).wallets(1_000) // Seed 1,000 funded wallet accounts
+}
 ```
 
 Provides funded accounts for transaction submission.
@@ -107,15 +118,22 @@ Provides funded accounts for transaction submission.
 ### 3. Workloads
 
 ```rust
-.transactions_with(|txs| {
-    txs.rate(5)              // 5 transactions per block
-        .users(500)          // Use 500 of the 1,000 wallets
-})
-.da_with(|da| {
-    da.channel_rate(1)       // 1 DA channel (more spawned with headroom)
-        .blob_rate(1)        // target 1 blob per block
-        .headroom_percent(20)// default headroom when sizing channels
-})
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub fn step_3_workloads() -> testing_framework_core::scenario::Builder<()> {
+    ScenarioBuilder::with_node_counts(1, 1)
+        .wallets(1_000)
+        .transactions_with(|txs| {
+            txs.rate(5) // 5 transactions per block
+                .users(500) // Use 500 of the 1,000 wallets
+        })
+        .da_with(|da| {
+            da.channel_rate(1) // 1 DA channel (more spawned with headroom)
+                .blob_rate(1) // target 1 blob per block
+                .headroom_percent(20) // default headroom when sizing channels
+        })
+}
 ```
 
 Generates both transaction and DA traffic to stress both subsystems.
@@ -123,7 +141,12 @@ Generates both transaction and DA traffic to stress both subsystems.
 ### 4. Expectation
 
 ```rust
-.expect_consensus_liveness()
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+pub fn step_4_expectation() -> testing_framework_core::scenario::Builder<()> {
+    ScenarioBuilder::with_node_counts(1, 1).expect_consensus_liveness() // This says what success means: blocks must be produced continuously.
+}
 ```
 
 This says **what success means**: blocks must be produced continuously.
@@ -131,7 +154,13 @@ This says **what success means**: blocks must be produced continuously.
 ### 5. Run Duration
 
 ```rust
-.with_run_duration(Duration::from_secs(60))
+use std::time::Duration;
+
+use testing_framework_core::scenario::ScenarioBuilder;
+
+pub fn step_5_run_duration() -> testing_framework_core::scenario::Builder<()> {
+    ScenarioBuilder::with_node_counts(1, 1).with_run_duration(Duration::from_secs(60))
+}
 ```
 
 Run for 60 seconds (~27 blocks with default 2s slots, 0.9 coefficient). Framework ensures this is at least 2× the consensus slot duration.
@@ -139,9 +168,19 @@ Run for 60 seconds (~27 blocks with default 2s slots, 0.9 coefficient). Framewor
 ### 6. Deploy and Execute
 
 ```rust
-let deployer = LocalDeployer::default();  // Use local process deployer
-let runner = deployer.deploy(&plan).await?;  // Provision infrastructure
-let _handle = runner.run(&mut plan).await?;  // Execute workloads & expectations
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
+use testing_framework_runner_local::LocalDeployer;
+
+pub async fn step_6_deploy_and_execute() -> Result<()> {
+    let mut plan = ScenarioBuilder::with_node_counts(1, 1).build();
+
+    let deployer = LocalDeployer::default(); // Use local process deployer
+    let runner = deployer.deploy(&plan).await?; // Provision infrastructure
+    let _handle = runner.run(&mut plan).await?; // Execute workloads & expectations
+
+    Ok(())
+}
 ```
 
 **Deployer** provisions the infrastructure. **Runner** orchestrates execution.
@@ -207,13 +246,20 @@ cargo run -p runner-examples --bin compose_runner
 **In code:** Just swap the deployer:
 
 ```rust
+use anyhow::Result;
+use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_compose::ComposeDeployer;
 
-// ... same scenario definition ...
+pub async fn run_with_compose_deployer() -> Result<()> {
+    // ... same scenario definition ...
+    let mut plan = ScenarioBuilder::with_node_counts(1, 1).build();
 
-let deployer = ComposeDeployer::default();  // Use Docker Compose
-let runner = deployer.deploy(&plan).await?;
-let _handle = runner.run(&mut plan).await?;
+    let deployer = ComposeDeployer::default(); // Use Docker Compose
+    let runner = deployer.deploy(&plan).await?;
+    let _handle = runner.run(&mut plan).await?;
+
+    Ok(())
+}
 ```
 
 ## Next Steps
