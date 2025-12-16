@@ -31,6 +31,7 @@ use crate::{
 };
 
 const CFGSYNC_START_TIMEOUT: Duration = Duration::from_secs(180);
+const COMPOSE_PORT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(30);
 const STACK_BRINGUP_MAX_ATTEMPTS: usize = 3;
 
 /// Paths and flags describing the prepared compose workspace.
@@ -531,7 +532,7 @@ async fn resolve_service_port(
         .arg(container_port.to_string())
         .current_dir(root);
 
-    let output = timeout(adjust_timeout(Duration::from_secs(30)), cmd.output())
+    let output = timeout(adjust_timeout(COMPOSE_PORT_DISCOVERY_TIMEOUT), cmd.output())
         .await
         .map_err(|_| ComposeRunnerError::PortDiscovery {
             service: service.to_owned(),

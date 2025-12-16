@@ -16,6 +16,8 @@ use crate::{
     infrastructure::environment::StackEnvironment,
 };
 
+const COMPOSE_PORT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Host ports mapped for a single node.
 #[derive(Clone, Debug)]
 pub struct NodeHostPorts {
@@ -100,7 +102,7 @@ async fn resolve_service_port(
         .arg(container_port.to_string())
         .current_dir(environment.root());
 
-    let output = timeout(adjust_timeout(Duration::from_secs(30)), cmd.output())
+    let output = timeout(adjust_timeout(COMPOSE_PORT_DISCOVERY_TIMEOUT), cmd.output())
         .await
         .map_err(|_| ComposeRunnerError::PortDiscovery {
             service: service.to_owned(),

@@ -1,10 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use testing_framework_core::scenario::{DynError, NodeControlHandle};
 use tokio::process::Command;
 use tracing::info;
 
 use crate::{docker::commands::run_docker_command, errors::ComposeRunnerError};
+
+const COMPOSE_RESTART_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub async fn restart_compose_service(
     compose_file: &Path,
@@ -25,7 +30,7 @@ pub async fn restart_compose_service(
     info!(service, project = project_name, compose_file = %compose_file.display(), "restarting compose service");
     run_docker_command(
         command,
-        testing_framework_core::adjust_timeout(std::time::Duration::from_secs(120)),
+        testing_framework_core::adjust_timeout(COMPOSE_RESTART_TIMEOUT),
         description,
     )
     .await
