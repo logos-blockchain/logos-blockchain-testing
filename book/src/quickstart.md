@@ -77,8 +77,8 @@ let _handle = runner.run(&mut plan).await?;
 - Nodes spawn as local processes
 - Consensus starts producing blocks
 - Scenario runs for the configured duration
-- Node logs written to temporary directories in working directory (auto-cleaned up after test)
-- To persist logs: set `NOMOS_TESTS_TRACING=true` and `NOMOS_LOG_DIR=/path/to/logs` (files will have prefix like `nomos-node-0*`, may include timestamps)
+- Node state/logs written under a temporary per-run directory in the current working directory (removed after the run unless `NOMOS_TESTS_KEEP_LOGS=1`)
+- To write per-node log files to a stable location: set `NOMOS_LOG_DIR=/path/to/logs` (files will have prefix like `nomos-node-0*`, may include timestamps)
 
 ## What Just Happened?
 

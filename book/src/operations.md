@@ -108,8 +108,9 @@ cargo run -p runner-examples --bin local_runner
 - `NOMOS_DEMO_EXECUTORS=2` — Number of executors (default: 1, or use legacy `LOCAL_DEMO_EXECUTORS`)
 - `NOMOS_DEMO_RUN_SECS=120` — Run duration in seconds (default: 60, or use legacy `LOCAL_DEMO_RUN_SECS`)
 - `NOMOS_NODE_BIN` / `NOMOS_EXECUTOR_BIN` — Paths to binaries (required for direct run)
-- `NOMOS_TESTS_TRACING=true` — Enable persistent file logging
-- `NOMOS_LOG_DIR=/tmp/logs` — Directory for per-node log files
+- `NOMOS_LOG_DIR=/tmp/logs` — Directory for per-node log files (works across runners)
+- `NOMOS_TESTS_KEEP_LOGS=1` — Keep per-run temporary directories (useful for debugging/CI artifacts)
+- `NOMOS_TESTS_TRACING=true` — Enable the debug tracing preset (optional; combine with `NOMOS_LOG_DIR` unless you have external tracing backends configured)
 - `NOMOS_LOG_LEVEL=debug` — Set log level (default: info)
 - `NOMOS_LOG_FILTER=consensus=trace,da=debug` — Fine-grained module filtering
 
@@ -317,7 +318,7 @@ RUST_LOG=debug NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_ru
 | `NOMOS_LOG_DIR` | None (console only) | Directory for per-node log files. If unset, logs go to stdout/stderr. |
 | `NOMOS_LOG_LEVEL` | `info` | Global log level: `error`, `warn`, `info`, `debug`, `trace` |
 | `NOMOS_LOG_FILTER` | None | Fine-grained target filtering (e.g., `consensus=trace,da=debug`) |
-| `NOMOS_TESTS_TRACING` | `false` | Enable tracing subscriber for local runner file logging |
+| `NOMOS_TESTS_TRACING` | `false` | Enable the debug tracing preset (optional; combine with `NOMOS_LOG_DIR` unless you have external tracing backends configured) |
 | `NOMOS_OTLP_ENDPOINT` | None | OTLP trace endpoint (optional, disables OTLP noise if unset) |
 | `NOMOS_OTLP_METRICS_ENDPOINT` | None | OTLP metrics endpoint (optional) |
 
@@ -339,7 +340,7 @@ When `NOMOS_LOG_DIR` is set, each node writes logs to separate files:
 - **Validators**: Prefix `nomos-node-0`, `nomos-node-1`, etc. (may include timestamp suffix)
 - **Executors**: Prefix `nomos-executor-0`, `nomos-executor-1`, etc. (may include timestamp suffix)
 
-**Local runner caveat:** By default, the local runner writes logs to temporary directories in the working directory. These are automatically cleaned up after tests complete. To preserve logs, you MUST set both `NOMOS_TESTS_TRACING=true` AND `NOMOS_LOG_DIR=/path/to/logs`.
+**Local runner note:** The local runner uses per-run temporary directories under the current working directory and removes them after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. Use `NOMOS_LOG_DIR=/path/to/logs` to write per-node log files to a stable location.
 
 ### Filter Target Names
 
@@ -374,7 +375,6 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 
 **Persistent file output:**
 ```bash
-NOMOS_TESTS_TRACING=true \
 NOMOS_LOG_DIR=/tmp/local-logs \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
@@ -385,7 +385,7 @@ ls /tmp/local-logs/
 # May include timestamps in filename
 ```
 
-**Both flags required:** You MUST set both `NOMOS_TESTS_TRACING=true` (enables tracing file sink) AND `NOMOS_LOG_DIR` (specifies directory) to get persistent logs.
+**Tip:** Use `NOMOS_LOG_DIR` for persistent per-node log files, and `NOMOS_TESTS_KEEP_LOGS=1` if you want to keep the per-run temporary directories (configs/state) for post-mortem inspection.
 
 #### Compose Runner
 

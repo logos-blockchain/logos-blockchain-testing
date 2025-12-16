@@ -30,12 +30,12 @@ Common symptoms and likely causes:
 
 | Runner | Default Output | With `NOMOS_LOG_DIR` + Flags | Access Command |
 |--------|---------------|------------------------------|----------------|
-| **Host** (local) | Temporary directories (cleaned up) | Per-node files with prefix `nomos-node-{index}` (requires `NOMOS_TESTS_TRACING=true`) | `cat $NOMOS_LOG_DIR/nomos-node-0*` |
+| **Host** (local) | Per-run temporary directories under the current working directory (removed unless `NOMOS_TESTS_KEEP_LOGS=1`) | Per-node files with prefix `nomos-node-{index}` (set `NOMOS_LOG_DIR`) | `cat $NOMOS_LOG_DIR/nomos-node-0*` |
 | **Compose** | Docker container stdout/stderr | Per-node files inside containers (if path is mounted) | `docker ps` then `docker logs <container-id>` |
-| **K8s** | Pod stdout/stderr | Per-node files inside pods (if path is mounted) | `kubectl logs -l app=nomos-validator` |
+| **K8s** | Pod stdout/stderr | Per-node files inside pods (if path is mounted) | `kubectl logs -l nomos/logical-role=validator` |
 
 **Important Notes:**
-- **Host runner** (local processes): Logs go to system temporary directories (NOT in working directory) by default and are automatically cleaned up after tests. To persist logs, you MUST set both `NOMOS_TESTS_TRACING=true` AND `NOMOS_LOG_DIR=/path/to/logs`.
+- **Host runner** (local processes): Per-run temporary directories are created under the current working directory and removed after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. To write per-node log files to a stable location, set `NOMOS_LOG_DIR=/path/to/logs`.
 - **Compose/K8s**: Per-node log files only exist inside containers/pods if `NOMOS_LOG_DIR` is set AND the path is writable inside the container/pod. By default, rely on `docker logs` or `kubectl logs`.
 - **File naming**: Log files use prefix `nomos-node-{index}*` or `nomos-executor-{index}*` with timestamps, e.g., `nomos-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
 - **Container names**: Compose containers include project UUID, e.g., `nomos-compose-<uuid>-validator-0-1` where `<uuid>` is randomly generated per run
@@ -51,7 +51,6 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner 2>&1 | t
 
 **Persistent file output:**
 ```bash
-NOMOS_TESTS_TRACING=true \
 NOMOS_LOG_DIR=/tmp/debug-logs \
 NOMOS_LOG_LEVEL=debug \
 POL_PROOF_DEV_MODE=true \
@@ -109,28 +108,28 @@ docker logs <container-id> > debug.log
 kubectl config view --minify | grep namespace
 
 # All validator pods (add -n <namespace> if not using default)
-kubectl logs -l app=nomos-validator -f
+kubectl logs -l nomos/logical-role=validator -f
 
 # All executor pods
-kubectl logs -l app=nomos-executor -f
+kubectl logs -l nomos/logical-role=executor -f
 
 # Specific pod by name (find exact name first)
-kubectl get pods -l app=nomos-validator  # Find the exact pod name
+kubectl get pods -l nomos/logical-role=validator  # Find the exact pod name
 kubectl logs -f <actual-pod-name>        # Then use it
 
 # With explicit namespace
-kubectl logs -n my-namespace -l app=nomos-validator -f
+kubectl logs -n my-namespace -l nomos/logical-role=validator -f
 ```
 
 **Download logs from crashed pods:**
 
 ```bash
 # Previous logs from crashed pod
-kubectl get pods -l app=nomos-validator  # Find crashed pod name first
+kubectl get pods -l nomos/logical-role=validator  # Find crashed pod name first
 kubectl logs --previous <actual-pod-name> > crashed-validator.log
 
 # Or use label selector for all crashed validators
-for pod in $(kubectl get pods -l app=nomos-validator -o name); do
+for pod in $(kubectl get pods -l nomos/logical-role=validator -o name); do
   kubectl logs --previous $pod > $(basename $pod)-previous.log 2>&1
 done
 ```
@@ -145,11 +144,11 @@ for pod in $(kubectl get pods -o name); do
 done > all-logs.txt
 
 # Or use label selectors (recommended)
-kubectl logs -l app=nomos-validator --tail=500 > validators.log
-kubectl logs -l app=nomos-executor --tail=500 > executors.log
+kubectl logs -l nomos/logical-role=validator --tail=500 > validators.log
+kubectl logs -l nomos/logical-role=executor --tail=500 > executors.log
 
 # With explicit namespace
-kubectl logs -n my-namespace -l app=nomos-validator --tail=500 > validators.log
+kubectl logs -n my-namespace -l nomos/logical-role=validator --tail=500 > validators.log
 ```
 
 ## Debugging Workflow
@@ -180,8 +179,8 @@ ps aux | grep nomos
 docker ps -a --filter "name=nomos-compose-"
 
 # K8s: check pod status (use label selectors, add -n <namespace> if needed)
-kubectl get pods -l app=nomos-validator
-kubectl get pods -l app=nomos-executor
+kubectl get pods -l nomos/logical-role=validator
+kubectl get pods -l nomos/logical-role=executor
 kubectl describe pod <actual-pod-name>  # Get name from above first
 ```
 
@@ -272,11 +271,11 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
 - **Cause**: Helper scripts (`run-examples.sh`, `build-bundle.sh`, `setup-circuits-stack.sh`) require `versions.env` file at repository root.
 - **Fix**: Ensure you're running from the repository root directory. The `versions.env` file should already exist and contains:
   ```
-  VERSION=v0.3.1
-  NOMOS_NODE_REV=d2dd5a5084e1daef4032562c77d41de5e4d495f8
-  NOMOS_BUNDLE_VERSION=v4
+  VERSION=<circuit release tag>
+  NOMOS_NODE_REV=<nomos-node git revision>
+  NOMOS_BUNDLE_VERSION=<bundle schema version>
   ```
-  If the file is missing, restore it from version control or create it with the above content.
+  Use the checked-in `versions.env` at the repository root as the source of truth.
 
 ### "Port already in use"
 
