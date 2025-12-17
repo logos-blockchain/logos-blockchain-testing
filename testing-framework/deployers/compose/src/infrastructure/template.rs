@@ -10,7 +10,7 @@ use tracing::{debug, info};
 use crate::descriptor::ComposeDescriptor;
 
 const TEMPLATE_RELATIVE_PATH: &str =
-    "testing-framework/runners/compose/assets/docker-compose.yml.tera";
+    "testing-framework/deployers/compose/assets/docker-compose.yml.tera";
 
 /// Errors when templating docker-compose files.
 #[derive(Debug, thiserror::Error)]

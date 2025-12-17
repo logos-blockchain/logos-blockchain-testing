@@ -235,7 +235,7 @@ setup_nomos_circuits::maybe_rebuild_rapidsnark() {
   if [[ "${REBUILD_REQUIRED}" == "1" ]]; then
     echo
     setup_nomos_circuits::print_info "Rebuilding rapidsnark prover for ${PLATFORM}..."
-    "${SCRIPT_DIR}/build-rapidsnark.sh" "${INSTALL_DIR}"
+    "${SCRIPT_DIR}/scripts/build-rapidsnark.sh" "${INSTALL_DIR}"
   else
     setup_nomos_circuits::print_info "Skipping rapidsnark rebuild (set NOMOS_CIRCUITS_REBUILD_RAPIDSNARK=1 to force)."
   fi

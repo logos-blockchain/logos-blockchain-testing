@@ -13,6 +13,7 @@ const MIXED_TXS_PER_BLOCK: u64 = 5;
 const TOTAL_WALLETS: usize = 1000;
 const TRANSACTION_WALLETS: usize = 500;
 const DA_BLOB_RATE: u64 = 1;
+const SMOKE_RUN_SECS_MAX: u64 = 30;
 
 #[tokio::main]
 async fn main() {
@@ -55,15 +56,22 @@ async fn run_local_case(validators: usize, executors: usize, run_duration: Durat
         "building scenario plan"
     );
 
-    let mut plan = ScenarioBuilder::topology_with(|t| {
+    let scenario = ScenarioBuilder::topology_with(|t| {
         t.network_star().validators(validators).executors(executors)
     })
     .wallets(TOTAL_WALLETS)
-    .transactions_with(|txs| txs.rate(MIXED_TXS_PER_BLOCK).users(TRANSACTION_WALLETS))
-    .da_with(|da| da.blob_rate(DA_BLOB_RATE))
-    .with_run_duration(run_duration)
-    .expect_consensus_liveness()
-    .build();
+    .with_run_duration(run_duration);
+
+    let scenario = if run_duration.as_secs() <= SMOKE_RUN_SECS_MAX {
+        scenario
+    } else {
+        scenario
+            .transactions_with(|txs| txs.rate(MIXED_TXS_PER_BLOCK).users(TRANSACTION_WALLETS))
+            .da_with(|da| da.blob_rate(DA_BLOB_RATE))
+            .expect_consensus_liveness()
+    };
+
+    let mut plan = scenario.build();
 
     let deployer = LocalDeployer::default().with_membership_check(true);
     info!("deploying local nodes");
