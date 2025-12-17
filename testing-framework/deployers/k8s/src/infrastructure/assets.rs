@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context as _, Result as AnyResult};
+use nomos_tracing::metrics::otlp::OtlpMetricsConfig;
 use nomos_tracing_service::MetricsLayer;
 use reqwest::Url;
 use serde::Serialize;
@@ -55,8 +56,6 @@ pub enum AssetsError {
     MissingKzg { path: PathBuf },
     #[error("missing Helm chart at {path}; ensure the repository is up-to-date")]
     MissingChart { path: PathBuf },
-    #[error("missing Grafana dashboards source at {path}")]
-    MissingGrafanaDashboards { path: PathBuf },
     #[error("failed to create temporary directory for rendered assets: {source}")]
     TempDir {
         #[source]
@@ -92,9 +91,7 @@ fn kzg_mode() -> KzgMode {
 /// topology.
 pub fn prepare_assets(
     topology: &GeneratedTopology,
-    external_prometheus: Option<&Url>,
-    external_prometheus_grafana_url: Option<&Url>,
-    external_otlp_metrics_endpoint: Option<&Url>,
+    metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<RunnerAssets, AssetsError> {
     info!(
         validators = topology.validators().len(),
@@ -104,13 +101,7 @@ pub fn prepare_assets(
 
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
     let kzg_mode = kzg_mode();
-    let cfgsync_yaml = render_cfgsync_config(
-        &root,
-        topology,
-        kzg_mode,
-        external_prometheus,
-        external_otlp_metrics_endpoint,
-    )?;
+    let cfgsync_yaml = render_cfgsync_config(&root, topology, kzg_mode, metrics_otlp_ingest_url)?;
 
     let tempdir = tempfile::Builder::new()
         .prefix("nomos-helm-")
@@ -124,12 +115,7 @@ pub fn prepare_assets(
         KzgMode::InImage => None,
     };
     let chart_path = helm_chart_path()?;
-    sync_grafana_dashboards(&root, &chart_path)?;
-    let values_yaml = render_values_yaml(
-        topology,
-        external_prometheus,
-        external_prometheus_grafana_url,
-    )?;
+    let values_yaml = render_values_yaml(topology)?;
     let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
     let image = env::var("NOMOS_TESTNET_IMAGE")
         .unwrap_or_else(|_| String::from("public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"));
@@ -164,81 +150,13 @@ pub fn prepare_assets(
 }
 
 const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
-const DEFAULT_GRAFANA_NODE_PORT: u16 = 30030;
 const DEFAULT_IN_IMAGE_KZG_PARAMS_PATH: &str = "/opt/nomos/kzg-params/kzgrs_test_params";
-
-fn sync_grafana_dashboards(root: &Path, chart_path: &Path) -> Result<(), AssetsError> {
-    let source_dir = stack_assets_root(root).join("monitoring/grafana/dashboards");
-    let dest_dir = chart_path.join("grafana/dashboards");
-
-    if !source_dir.exists() {
-        return Err(AssetsError::MissingGrafanaDashboards { path: source_dir });
-    }
-
-    fs::create_dir_all(&dest_dir).map_err(|source| AssetsError::Io {
-        path: dest_dir.clone(),
-        source,
-    })?;
-
-    let mut removed = 0usize;
-    for entry in fs::read_dir(&dest_dir).map_err(|source| AssetsError::Io {
-        path: dest_dir.clone(),
-        source,
-    })? {
-        let entry = entry.map_err(|source| AssetsError::Io {
-            path: dest_dir.clone(),
-            source,
-        })?;
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
-        }
-        fs::remove_file(&path).map_err(|source| AssetsError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        removed += 1;
-    }
-
-    let mut copied = 0usize;
-    for entry in fs::read_dir(&source_dir).map_err(|source| AssetsError::Io {
-        path: source_dir.clone(),
-        source,
-    })? {
-        let entry = entry.map_err(|source| AssetsError::Io {
-            path: source_dir.clone(),
-            source,
-        })?;
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
-        }
-        let file_name = path.file_name().unwrap_or_default();
-        let dest_path = dest_dir.join(file_name);
-        fs::copy(&path, &dest_path).map_err(|source| AssetsError::Io {
-            path: dest_path.clone(),
-            source,
-        })?;
-        copied += 1;
-    }
-
-    debug!(
-        source = %source_dir.display(),
-        dest = %dest_dir.display(),
-        removed,
-        copied,
-        "synced Grafana dashboards into Helm chart"
-    );
-
-    Ok(())
-}
 
 fn render_cfgsync_config(
     root: &Path,
     topology: &GeneratedTopology,
     kzg_mode: KzgMode,
-    external_prometheus: Option<&Url>,
-    external_otlp_metrics_endpoint: Option<&Url>,
+    metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<String, AssetsError> {
     let cfgsync_template_path = stack_assets_root(root).join("cfgsync.yaml");
     debug!(path = %cfgsync_template_path.display(), "loading cfgsync template");
@@ -254,30 +172,16 @@ fn render_cfgsync_config(
             .unwrap_or_else(|| DEFAULT_IN_IMAGE_KZG_PARAMS_PATH.to_string());
     }
 
-    let external_metrics_endpoint = match external_otlp_metrics_endpoint {
-        Some(endpoint) => Some(Ok(endpoint.clone())),
-        None => external_prometheus.map(derive_prometheus_otlp_metrics_endpoint),
-    };
-
-    if let Some(endpoint) = external_metrics_endpoint.transpose()? {
-        if let MetricsLayer::Otlp(ref mut config) = cfg.tracing_settings.metrics {
-            config.endpoint = endpoint;
-        }
+    if let Some(endpoint) = metrics_otlp_ingest_url.cloned() {
+        cfg.tracing_settings.metrics = MetricsLayer::Otlp(OtlpMetricsConfig {
+            endpoint,
+            host_identifier: "node".into(),
+        });
     }
 
     cfg.timeout = cfg.timeout.max(CFGSYNC_K8S_TIMEOUT_SECS);
 
     render_cfgsync_yaml(&cfg).map_err(|source| AssetsError::Cfgsync { source })
-}
-
-fn derive_prometheus_otlp_metrics_endpoint(base: &Url) -> Result<Url, AssetsError> {
-    let base = base.as_str().trim_end_matches('/');
-    let otlp_metrics = format!("{base}/api/v1/otlp/v1/metrics");
-    Url::parse(&otlp_metrics).map_err(|source| AssetsError::Cfgsync {
-        source: anyhow::anyhow!(
-            "invalid OTLP metrics endpoint derived from external Prometheus url '{base}': {source}"
-        ),
-    })
 }
 
 struct ScriptPaths {
@@ -337,16 +241,8 @@ fn helm_chart_path() -> Result<PathBuf, AssetsError> {
     }
 }
 
-fn render_values_yaml(
-    topology: &GeneratedTopology,
-    external_prometheus: Option<&Url>,
-    external_prometheus_grafana_url: Option<&Url>,
-) -> Result<String, AssetsError> {
-    let values = build_values(
-        topology,
-        external_prometheus,
-        external_prometheus_grafana_url,
-    );
+fn render_values_yaml(topology: &GeneratedTopology) -> Result<String, AssetsError> {
+    let values = build_values(topology);
     serde_yaml::to_string(&values).map_err(|source| AssetsError::Values { source })
 }
 
@@ -402,8 +298,6 @@ struct HelmValues {
     cfgsync: CfgsyncValues,
     validators: NodeGroup,
     executors: NodeGroup,
-    prometheus: PrometheusValues,
-    grafana: GrafanaValues,
 }
 
 #[derive(Serialize)]
@@ -426,72 +320,13 @@ struct NodeValues {
     env: BTreeMap<String, String>,
 }
 
-#[derive(Serialize)]
-struct PrometheusValues {
-    enabled: bool,
-    #[serde(rename = "externalUrl", skip_serializing_if = "Option::is_none")]
-    external_url: Option<String>,
-}
-
-#[derive(Serialize)]
-struct GrafanaValues {
-    enabled: bool,
-    image: String,
-    #[serde(rename = "imagePullPolicy")]
-    image_pull_policy: String,
-    #[serde(rename = "adminUser")]
-    admin_user: String,
-    #[serde(rename = "adminPassword")]
-    admin_password: String,
-    service: GrafanaServiceValues,
-}
-
-#[derive(Serialize)]
-struct GrafanaServiceValues {
-    #[serde(rename = "type")]
-    type_field: String,
-    #[serde(rename = "nodePort")]
-    node_port: Option<u16>,
-}
-
-fn build_values(
-    topology: &GeneratedTopology,
-    external_prometheus: Option<&Url>,
-    external_prometheus_grafana_url: Option<&Url>,
-) -> HelmValues {
+fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let cfgsync = CfgsyncValues {
         port: cfgsync_port(),
     };
     let pol_mode = pol_proof_mode();
     let image_pull_policy =
         env::var("NOMOS_TESTNET_IMAGE_PULL_POLICY").unwrap_or_else(|_| "IfNotPresent".into());
-    let grafana_node_port = match kzg_mode() {
-        KzgMode::HostPath => Some(DEFAULT_GRAFANA_NODE_PORT),
-        KzgMode::InImage => env::var("NOMOS_GRAFANA_NODE_PORT").ok().and_then(|value| {
-            value
-                .parse::<u16>()
-                .ok()
-                .filter(|port| *port >= 30000 && *port <= 32767)
-        }),
-    };
-    let grafana = GrafanaValues {
-        enabled: true,
-        image: "grafana/grafana:10.4.1".into(),
-        image_pull_policy: "IfNotPresent".into(),
-        admin_user: "admin".into(),
-        admin_password: "admin".into(),
-        service: GrafanaServiceValues {
-            type_field: "NodePort".into(),
-            node_port: grafana_node_port,
-        },
-    };
-    let prometheus_external_url = external_prometheus_grafana_url
-        .or(external_prometheus)
-        .map(|url| url.as_str().trim_end_matches('/').to_string());
-    let prometheus = PrometheusValues {
-        enabled: prometheus_external_url.is_none(),
-        external_url: prometheus_external_url,
-    };
     debug!(pol_mode, "rendering Helm values for k8s stack");
     let validators = topology
         .validators()
@@ -578,8 +413,6 @@ fn build_values(
             count: topology.executors().len(),
             nodes: executors,
         },
-        prometheus,
-        grafana,
     }
 }
 

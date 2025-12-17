@@ -1,5 +1,8 @@
 use std::{path::Path, process::Command as StdCommand};
 
+use nomos_tracing::metrics::otlp::OtlpMetricsConfig;
+use nomos_tracing_service::MetricsLayer;
+use reqwest::Url;
 use testing_framework_core::{
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, write_cfgsync_template},
     topology::generation::GeneratedTopology,
@@ -60,6 +63,7 @@ pub fn update_cfgsync_config(
     topology: &GeneratedTopology,
     use_kzg_mount: bool,
     port: u16,
+    metrics_otlp_ingest_url: Option<&Url>,
 ) -> anyhow::Result<()> {
     debug!(
         path = %path.display(),
@@ -72,6 +76,12 @@ pub fn update_cfgsync_config(
     let mut cfg = load_cfgsync_template(path)?;
     cfg.port = port;
     apply_topology_overrides(&mut cfg, topology, use_kzg_mount);
+    if let Some(endpoint) = metrics_otlp_ingest_url.cloned() {
+        cfg.tracing_settings.metrics = MetricsLayer::Otlp(OtlpMetricsConfig {
+            endpoint,
+            host_identifier: "node".into(),
+        });
+    }
     write_cfgsync_template(path, &cfg)?;
     Ok(())
 }

@@ -4,7 +4,7 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{CleanupGuard, Metrics, MetricsError, NodeClients, http_probe::NodeRole},
+    scenario::{CleanupGuard, NodeClients, http_probe::NodeRole},
     topology::{generation::GeneratedTopology, readiness::ReadinessError},
 };
 use tracing::{debug, info};
@@ -15,8 +15,7 @@ use crate::{
     infrastructure::assets::RunnerAssets,
     lifecycle::{cleanup::RunnerCleanup, logs::dump_namespace_logs},
     wait::{
-        ClusterPorts, ClusterReady, HostPort, NodeConfigPorts, PortForwardHandle,
-        wait_for_cluster_ready,
+        ClusterPorts, ClusterReady, NodeConfigPorts, PortForwardHandle, wait_for_cluster_ready,
     },
 };
 
@@ -38,8 +37,6 @@ pub struct ClusterEnvironment {
     validator_testing_ports: Vec<u16>,
     executor_api_ports: Vec<u16>,
     executor_testing_ports: Vec<u16>,
-    prometheus: Option<HostPort>,
-    grafana: Option<HostPort>,
     port_forwards: Vec<PortForwardHandle>,
 }
 
@@ -68,8 +65,6 @@ impl ClusterEnvironment {
             validator_testing_ports,
             executor_api_ports,
             executor_testing_ports,
-            prometheus: ports.prometheus.clone(),
-            grafana: ports.grafana.clone(),
             port_forwards,
         }
     }
@@ -103,14 +98,6 @@ impl ClusterEnvironment {
     #[allow(dead_code)]
     pub fn release(&self) -> &str {
         &self.release
-    }
-
-    pub fn prometheus_endpoint(&self) -> Option<&HostPort> {
-        self.prometheus.as_ref()
-    }
-
-    pub fn grafana_endpoint(&self) -> Option<&HostPort> {
-        self.grafana.as_ref()
     }
 
     pub fn validator_ports(&self) -> (&[u16], &[u16]) {
@@ -229,16 +216,6 @@ pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, N
     Ok(NodeClients::new(validators, executors))
 }
 
-pub fn metrics_handle_from_endpoint(endpoint: &HostPort) -> Result<Metrics, MetricsError> {
-    let url = cluster_host_url(&endpoint.host, endpoint.port)
-        .map_err(|err| MetricsError::new(format!("invalid prometheus url: {err}")))?;
-    Metrics::from_prometheus(url)
-}
-
-pub fn metrics_handle_from_url(url: Url) -> Result<Metrics, MetricsError> {
-    Metrics::from_prometheus(url)
-}
-
 pub async fn ensure_cluster_readiness(
     descriptors: &GeneratedTopology,
     cluster: &ClusterEnvironment,
@@ -324,7 +301,6 @@ pub async fn wait_for_ports_or_cleanup(
     namespace: &str,
     release: &str,
     specs: &PortSpecs,
-    prometheus_enabled: bool,
     cleanup_guard: &mut Option<RunnerCleanup>,
 ) -> Result<ClusterReady, crate::deployer::K8sRunnerError> {
     info!(
@@ -340,13 +316,11 @@ pub async fn wait_for_ports_or_cleanup(
         release,
         &specs.validators,
         &specs.executors,
-        prometheus_enabled,
     )
     .await
     {
         Ok(ports) => {
             info!(
-                prometheus = ?ports.ports.prometheus,
                 validator_ports = ?ports.ports.validators,
                 executor_ports = ?ports.ports.executors,
                 "cluster port-forwards established"

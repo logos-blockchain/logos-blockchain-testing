@@ -37,9 +37,3 @@ app.kubernetes.io/instance: {{ $root.Release.Name }}
 nomos/logical-role: executor
 nomos/executor-index: "{{ $index }}"
 {{- end -}}
-
-{{- define "nomos-runner.prometheusLabels" -}}
-app.kubernetes.io/name: {{ include "nomos-runner.chart" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-nomos/logical-role: prometheus
-{{- end -}}

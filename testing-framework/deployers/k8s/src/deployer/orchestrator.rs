@@ -1,11 +1,10 @@
 use anyhow::Error;
 use async_trait::async_trait;
 use kube::Client;
-use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        BlockFeedTask, CleanupGuard, Deployer, MetricsError, ObservabilityCapability, RunContext,
-        Runner, Scenario,
+        BlockFeedTask, CleanupGuard, Deployer, MetricsError, ObservabilityCapability,
+        ObservabilityInputs, RunContext, Runner, Scenario,
     },
     topology::generation::GeneratedTopology,
 };
@@ -17,13 +16,12 @@ use crate::{
         cluster::{
             ClusterEnvironment, NodeClientError, PortSpecs, RemoteReadinessError,
             build_node_clients, cluster_identifiers, collect_port_specs, ensure_cluster_readiness,
-            install_stack, kill_port_forwards, metrics_handle_from_endpoint,
-            metrics_handle_from_url, wait_for_ports_or_cleanup,
+            install_stack, kill_port_forwards, wait_for_ports_or_cleanup,
         },
         helm::HelmError,
     },
     lifecycle::{block_feed::spawn_block_feed_with, cleanup::RunnerCleanup},
-    wait::{ClusterWaitError, HostPort, PortForwardHandle},
+    wait::{ClusterWaitError, PortForwardHandle},
 };
 
 /// Deploys a scenario into Kubernetes using Helm charts and port-forwards.
@@ -93,7 +91,7 @@ impl Deployer for K8sDeployer {
     type Error = K8sRunnerError;
 
     async fn deploy(&self, scenario: &Scenario) -> Result<Runner, Self::Error> {
-        deploy_with_observability(self, scenario, None, None, None).await
+        deploy_with_observability(self, scenario, None).await
     }
 }
 
@@ -105,29 +103,8 @@ impl Deployer<ObservabilityCapability> for K8sDeployer {
         &self,
         scenario: &Scenario<ObservabilityCapability>,
     ) -> Result<Runner, Self::Error> {
-        deploy_with_observability(
-            self,
-            scenario,
-            scenario.capabilities().metrics_query_url.clone(),
-            scenario.capabilities().metrics_query_grafana_url.clone(),
-            scenario.capabilities().metrics_otlp_ingest_url.clone(),
-        )
-        .await
+        deploy_with_observability(self, scenario, Some(scenario.capabilities())).await
     }
-}
-
-fn cluster_prometheus_endpoint(cluster: &Option<ClusterEnvironment>) -> Option<&HostPort> {
-    cluster
-        .as_ref()
-        .expect("cluster must be available")
-        .prometheus_endpoint()
-}
-
-fn cluster_grafana_endpoint(cluster: &Option<ClusterEnvironment>) -> Option<&HostPort> {
-    cluster
-        .as_ref()
-        .expect("cluster must be available")
-        .grafana_endpoint()
 }
 
 async fn fail_cluster(cluster: &mut Option<ClusterEnvironment>, reason: &str) {
@@ -157,59 +134,13 @@ fn ensure_supported_topology(descriptors: &GeneratedTopology) -> Result<(), K8sR
 async fn deploy_with_observability<Caps>(
     deployer: &K8sDeployer,
     scenario: &Scenario<Caps>,
-    metrics_query_url: Option<Url>,
-    metrics_query_grafana_url: Option<Url>,
-    metrics_otlp_ingest_url: Option<Url>,
+    observability: Option<&ObservabilityCapability>,
 ) -> Result<Runner, K8sRunnerError> {
-    let external_prometheus = match metrics_query_url {
-        Some(url) => Some(url),
-        None => match std::env::var("K8S_RUNNER_METRICS_QUERY_URL")
-            .ok()
-            .or_else(|| std::env::var("NOMOS_METRICS_QUERY_URL").ok())
-            // Back-compat:
-            .or_else(|| std::env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_URL").ok())
-            .or_else(|| std::env::var("NOMOS_EXTERNAL_PROMETHEUS_URL").ok())
-        {
-            Some(raw) if !raw.trim().is_empty() => {
-                Some(Url::parse(raw.trim()).map_err(|err| {
-                    MetricsError::new(format!("invalid metrics query url: {err}"))
-                })?)
-            }
-            _ => None,
-        },
-    };
-
-    let external_prometheus_grafana_url = match metrics_query_grafana_url {
-        Some(url) => Some(url),
-        None => match std::env::var("K8S_RUNNER_METRICS_QUERY_GRAFANA_URL")
-            .ok()
-            .or_else(|| std::env::var("NOMOS_METRICS_QUERY_GRAFANA_URL").ok())
-            // Back-compat:
-            .or_else(|| std::env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_GRAFANA_URL").ok())
-            .or_else(|| std::env::var("NOMOS_EXTERNAL_PROMETHEUS_GRAFANA_URL").ok())
-        {
-            Some(raw) if !raw.trim().is_empty() => Some(Url::parse(raw.trim()).map_err(|err| {
-                MetricsError::new(format!("invalid metrics query grafana url: {err}"))
-            })?),
-            _ => None,
-        },
-    };
-
-    let external_otlp_metrics_endpoint = match metrics_otlp_ingest_url {
-        Some(url) => Some(url),
-        None => match std::env::var("K8S_RUNNER_METRICS_OTLP_INGEST_URL")
-            .ok()
-            .or_else(|| std::env::var("NOMOS_METRICS_OTLP_INGEST_URL").ok())
-            // Back-compat:
-            .or_else(|| std::env::var("K8S_RUNNER_EXTERNAL_OTLP_METRICS_ENDPOINT").ok())
-            .or_else(|| std::env::var("NOMOS_EXTERNAL_OTLP_METRICS_ENDPOINT").ok())
-        {
-            Some(raw) if !raw.trim().is_empty() => Some(Url::parse(raw.trim()).map_err(|err| {
-                MetricsError::new(format!("invalid metrics OTLP ingest url: {err}"))
-            })?),
-            _ => None,
-        },
-    };
+    let env_inputs = ObservabilityInputs::from_env()?;
+    let cap_inputs = observability
+        .map(ObservabilityInputs::from_capability)
+        .unwrap_or_default();
+    let observability = env_inputs.with_overrides(cap_inputs).normalized();
 
     let descriptors = scenario.topology().clone();
     let validator_count = descriptors.validators().len();
@@ -225,9 +156,16 @@ async fn deploy_with_observability<Caps>(
         executors = executor_count,
         duration_secs = scenario.duration().as_secs(),
         readiness_checks = deployer.readiness_checks,
-        metrics_query_url = external_prometheus.as_ref().map(|u| u.as_str()),
-        metrics_query_grafana_url = external_prometheus_grafana_url.as_ref().map(|u| u.as_str()),
-        metrics_otlp_ingest_url = external_otlp_metrics_endpoint.as_ref().map(|u| u.as_str()),
+        metrics_query_url = observability.metrics_query_url.as_ref().map(|u| u.as_str()),
+        metrics_query_grafana_url = observability
+            .metrics_query_grafana_url
+            .as_ref()
+            .map(|u| u.as_str()),
+        metrics_otlp_ingest_url = observability
+            .metrics_otlp_ingest_url
+            .as_ref()
+            .map(|u| u.as_str()),
+        grafana_url = observability.grafana_url.as_ref().map(|u| u.as_str()),
         "starting k8s deployment"
     );
 
@@ -238,9 +176,7 @@ async fn deploy_with_observability<Caps>(
             &port_specs,
             &descriptors,
             deployer.readiness_checks,
-            external_prometheus.as_ref(),
-            external_prometheus_grafana_url.as_ref(),
-            external_otlp_metrics_endpoint.as_ref(),
+            &observability,
         )
         .await?,
     );
@@ -259,23 +195,11 @@ async fn deploy_with_observability<Caps>(
         }
     };
 
-    let telemetry = match external_prometheus.clone() {
-        Some(url) => metrics_handle_from_url(url),
-        None => cluster
-            .as_ref()
-            .and_then(|cluster| cluster.prometheus_endpoint())
-            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))
-            .and_then(metrics_handle_from_endpoint),
-    };
-    let telemetry = match telemetry {
+    let telemetry = match observability.telemetry_handle() {
         Ok(handle) => handle,
         Err(err) => {
-            fail_cluster(
-                &mut cluster,
-                "failed to configure prometheus metrics handle",
-            )
-            .await;
-            error!(error = ?err, "failed to configure prometheus metrics handle");
+            fail_cluster(&mut cluster, "failed to configure metrics telemetry handle").await;
+            error!(error = ?err, "failed to configure metrics telemetry handle");
             return Err(err.into());
         }
     };
@@ -289,36 +213,29 @@ async fn deploy_with_observability<Caps>(
         }
     };
 
-    if let Some(url) = external_prometheus.as_ref() {
-        info!(prometheus_url = %url.as_str(), "using external prometheus endpoint");
-    } else if let Some(prometheus) = cluster_prometheus_endpoint(&cluster) {
+    if let Some(url) = observability.metrics_query_url.as_ref() {
         info!(
-            prometheus_url = %format!("http://{}:{}/", prometheus.host, prometheus.port),
-            "prometheus endpoint available on host"
+            metrics_query_url = %url.as_str(),
+            "metrics query endpoint configured"
         );
     }
-    if let Some(grafana) = cluster_grafana_endpoint(&cluster) {
-        info!(
-            grafana_url = %format!("http://{}:{}/", grafana.host, grafana.port),
-            "grafana dashboard available on host"
-        );
+    if let Some(url) = observability.grafana_url.as_ref() {
+        info!(grafana_url = %url.as_str(), "grafana url configured");
     }
 
     if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
-        let prometheus = external_prometheus
+        let prometheus = observability
+            .metrics_query_url
             .as_ref()
             .map(|u| u.as_str().to_string())
-            .or_else(|| {
-                cluster_prometheus_endpoint(&cluster)
-                    .map(|endpoint| format!("http://{}:{}/", endpoint.host, endpoint.port))
-            })
             .unwrap_or_else(|| "<disabled>".to_string());
-        let grafana = cluster_grafana_endpoint(&cluster);
         println!(
             "TESTNET_ENDPOINTS prometheus={} grafana={}",
             prometheus,
-            grafana
-                .map(|endpoint| format!("http://{}:{}/", endpoint.host, endpoint.port))
+            observability
+                .grafana_url
+                .as_ref()
+                .map(|u| u.as_str().to_string())
                 .unwrap_or_else(|| "<disabled>".to_string())
         );
 
@@ -374,16 +291,9 @@ async fn setup_cluster(
     specs: &PortSpecs,
     descriptors: &GeneratedTopology,
     readiness_checks: bool,
-    external_prometheus: Option<&Url>,
-    external_prometheus_grafana_url: Option<&Url>,
-    external_otlp_metrics_endpoint: Option<&Url>,
+    observability: &ObservabilityInputs,
 ) -> Result<ClusterEnvironment, K8sRunnerError> {
-    let assets = prepare_assets(
-        descriptors,
-        external_prometheus,
-        external_prometheus_grafana_url,
-        external_otlp_metrics_endpoint,
-    )?;
+    let assets = prepare_assets(descriptors, observability.metrics_otlp_ingest_url.as_ref())?;
     let validators = descriptors.validators().len();
     let executors = descriptors.executors().len();
 
@@ -394,19 +304,8 @@ async fn setup_cluster(
         Some(install_stack(client, &assets, &namespace, &release, validators, executors).await?);
 
     info!("waiting for helm-managed services to become ready");
-    let cluster_ready = wait_for_ports_or_cleanup(
-        client,
-        &namespace,
-        &release,
-        specs,
-        external_prometheus.is_none() && external_prometheus_grafana_url.is_none(),
-        &mut cleanup_guard,
-    )
-    .await?;
-
-    if let Some(prometheus) = cluster_ready.ports.prometheus.as_ref() {
-        info!(prometheus = ?prometheus, "discovered prometheus endpoint");
-    }
+    let cluster_ready =
+        wait_for_ports_or_cleanup(client, &namespace, &release, specs, &mut cleanup_guard).await?;
 
     let environment = ClusterEnvironment::new(
         client.clone(),

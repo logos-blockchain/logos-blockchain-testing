@@ -5,6 +5,7 @@ pub mod cfgsync;
 mod definition;
 mod expectation;
 pub mod http_probe;
+mod observability;
 mod runtime;
 mod workload;
 
@@ -15,6 +16,7 @@ pub use capabilities::{
 };
 pub use definition::{Builder, Scenario, ScenarioBuilder, TopologyConfigurator};
 pub use expectation::Expectation;
+pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
     BlockFeed, BlockFeedTask, BlockRecord, BlockStats, CleanupGuard, Deployer, NodeClients,
     RunContext, RunHandle, RunMetrics, Runner, ScenarioError,

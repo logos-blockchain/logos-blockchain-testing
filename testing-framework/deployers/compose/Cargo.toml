@@ -16,6 +16,8 @@ workspace = true
 anyhow                 = "1"
 async-trait            = { workspace = true }
 cfgsync                = { workspace = true }
+nomos-tracing          = { workspace = true }
+nomos-tracing-service  = { workspace = true }
 reqwest                = { workspace = true, features = ["json"] }
 serde                  = { workspace = true, features = ["derive"] }
 tempfile               = { workspace = true }
@@ -32,6 +34,5 @@ groth16                       = { workspace = true }
 key-management-system-service = { workspace = true }
 nomos-core                    = { workspace = true }
 nomos-ledger                  = { workspace = true }
-nomos-tracing-service         = { workspace = true }
 tests                         = { workspace = true }
 zksign                        = { workspace = true }

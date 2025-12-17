@@ -26,7 +26,6 @@ impl PortManager {
                 info!(
                     validator_ports = ?mapping.validator_api_ports(),
                     executor_ports = ?mapping.executor_api_ports(),
-                    prometheus_port = environment.prometheus_port(),
                     "resolved container host ports"
                 );
                 Ok(mapping)

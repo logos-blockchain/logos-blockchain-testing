@@ -90,7 +90,7 @@ Three deployer implementations:
 | `K8sDeployer` | Kubernetes Helm | Cluster + image loaded | Not yet |
 
 **Compose-specific features:**
-- Includes Prometheus at `http://localhost:9090` (override via `TEST_FRAMEWORK_PROMETHEUS_PORT`)
+- Observability is external (set `NOMOS_METRICS_QUERY_URL` / `NOMOS_METRICS_OTLP_INGEST_URL` / `NOMOS_GRAFANA_URL` as needed)
 - Optional OTLP trace/metrics endpoints (`NOMOS_OTLP_ENDPOINT`, `NOMOS_OTLP_METRICS_ENDPOINT`)
 - Node control for chaos testing (restart validators/executors)
 
@@ -112,9 +112,9 @@ KZG parameters required for DA workloads:
 
 ### Compose Stack
 Templates and configs in `testing-framework/runners/compose/assets/`:
-- `docker-compose.yml.tera` — Stack template (validators, executors, Prometheus, Grafana)
+- `docker-compose.yml.tera` — Stack template (validators, executors)
 - Cfgsync config: `testing-framework/assets/stack/cfgsync.yaml`
-- Monitoring: `testing-framework/assets/stack/monitoring/prometheus.yml`
+- Monitoring assets (not deployed by the framework): `testing-framework/assets/stack/monitoring/`
 
 ## Logging Architecture
 
@@ -134,14 +134,14 @@ Templates and configs in `testing-framework/runners/compose/assets/`:
 
 ## Observability
 
-**Prometheus (Compose + K8s):**
-- Exposed at `http://localhost:9090` (configurable)
-- Scrapes all validator and executor metrics
-- Accessible in expectations: `ctx.telemetry().prometheus().map(|p| p.base_url())`
+**Prometheus-compatible metrics querying (optional):**
+- The framework does **not** deploy Prometheus/Grafana.
+- Provide a Prometheus-compatible base URL (PromQL API) via `NOMOS_METRICS_QUERY_URL`.
+- Accessible in expectations when configured: `ctx.telemetry().prometheus().map(|p| p.base_url())`
 
-**Grafana dashboards (Compose + K8s):**
-- Provisioned automatically; URL is printed in `TESTNET_ENDPOINTS` when using `scripts/run-examples.sh`
-- Default credentials: `admin` / `admin`
+**Grafana dashboards (optional):**
+- Dashboards live in `testing-framework/assets/stack/monitoring/grafana/dashboards/` and can be imported into your Grafana.
+- If you set `NOMOS_GRAFANA_URL`, the deployer prints it in `TESTNET_ENDPOINTS`.
 
 **Node APIs:**
 - HTTP endpoints per node for consensus info, network status, DA membership

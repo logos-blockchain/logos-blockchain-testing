@@ -8,9 +8,6 @@ use super::DynError;
 pub struct NodeControlCapability;
 
 /// Optional observability settings attached to a scenario.
-///
-/// Runners may use this to decide whether to provision in-cluster Prometheus or
-/// reuse an existing endpoint.
 #[derive(Clone, Debug, Default)]
 pub struct ObservabilityCapability {
     /// Prometheus-compatible base URL used by the *runner process* to query
@@ -24,6 +21,8 @@ pub struct ObservabilityCapability {
     /// Full OTLP HTTP metrics ingest endpoint used by *nodes* to export metrics
     /// (backend-specific host and path).
     pub metrics_otlp_ingest_url: Option<Url>,
+    /// Optional Grafana base URL for printing/logging (human access).
+    pub grafana_url: Option<Url>,
 }
 
 /// Trait implemented by scenario capability markers to signal whether node

@@ -1,37 +1,4 @@
 services:
-  prometheus:
-    image: prom/prometheus:v3.0.1
-{% if prometheus.platform %}    platform: {{ prometheus.platform }}
-{% endif %}    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=7d
-      - --web.enable-otlp-receiver
-      - --enable-feature=otlp-write-receiver
-    volumes:
-      - ./stack/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:z
-    ports:
-      - {{ prometheus.host_port }}
-    restart: on-failure
-
-  grafana:
-    image: grafana/grafana:10.4.1
-    environment:
-      GF_PATHS_CONFIG: /etc/grafana/grafana.ini
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-    ports:
-      - {{ grafana.host_port }}
-    volumes:
-      - ./stack/monitoring/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:z
-      - ./stack/monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml:z
-      - ./stack/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - ./stack/monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
-    env_file:
-      - ./stack/monitoring/grafana/plugins.env
-    depends_on:
-      - prometheus
-    restart: on-failure
-
 {% for node in validators %}
   {{ node.name }}:
     image: {{ node.image }}

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use testing_framework_core::scenario::{
-    NodeControlHandle, RequiresNodeControl, RunContext, Runner, Scenario,
+    NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl,
+    RunContext, Runner, Scenario,
 };
 use tracing::info;
 
@@ -20,7 +21,6 @@ use crate::{
         environment::StackEnvironment,
         ports::{HostPortMapping, compose_runner_host},
     },
-    lifecycle::readiness::metrics_handle_from_port,
 };
 
 pub struct DeploymentOrchestrator {
@@ -37,21 +37,35 @@ impl DeploymentOrchestrator {
         scenario: &Scenario<Caps>,
     ) -> Result<Runner, ComposeRunnerError>
     where
-        Caps: RequiresNodeControl + Send + Sync,
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
         let setup = DeploymentSetup::new(scenario.topology());
         setup.validate_environment().await?;
 
+        let env_inputs = ObservabilityInputs::from_env()?;
+        let cap_inputs = scenario
+            .capabilities()
+            .observability_capability()
+            .map(ObservabilityInputs::from_capability)
+            .unwrap_or_default();
+        let observability = env_inputs.with_overrides(cap_inputs).normalized();
+
         let DeploymentContext {
             mut environment,
             descriptors,
-        } = setup.prepare_workspace().await?;
+        } = setup.prepare_workspace(&observability).await?;
 
         tracing::info!(
             validators = descriptors.validators().len(),
             executors = descriptors.executors().len(),
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
+            metrics_query_url = observability.metrics_query_url.as_ref().map(|u| u.as_str()),
+            metrics_otlp_ingest_url = observability
+                .metrics_otlp_ingest_url
+                .as_ref()
+                .map(|u| u.as_str()),
+            grafana_url = observability.grafana_url.as_ref().map(|u| u.as_str()),
             "compose deployment starting"
         );
 
@@ -71,26 +85,31 @@ impl DeploymentOrchestrator {
         let node_clients = client_builder
             .build_node_clients(&descriptors, &host_ports, &host, &mut environment)
             .await?;
-        let telemetry = metrics_handle_from_port(environment.prometheus_port(), &host)?;
+        let telemetry = observability.telemetry_handle()?;
         let node_control = self.maybe_node_control::<Caps>(&environment);
 
-        info!(
-            prometheus_url = %format!("http://{}:{}/", host, environment.prometheus_port()),
-            "prometheus endpoint available on host"
-        );
-        info!(
-            grafana_url = %format!("http://{}:{}/", host, environment.grafana_port()),
-            "grafana dashboard available on host"
-        );
+        if let Some(url) = observability.metrics_query_url.as_ref() {
+            info!(metrics_query_url = %url.as_str(), "metrics query endpoint configured");
+        }
+        if let Some(url) = observability.grafana_url.as_ref() {
+            info!(grafana_url = %url.as_str(), "grafana url configured");
+        }
         log_profiling_urls(&host, &host_ports);
 
         if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
+            let prometheus = observability
+                .metrics_query_url
+                .as_ref()
+                .map(|u| u.as_str().to_string())
+                .unwrap_or_else(|| "<disabled>".to_string());
+            let grafana = observability
+                .grafana_url
+                .as_ref()
+                .map(|u| u.as_str().to_string())
+                .unwrap_or_else(|| "<disabled>".to_string());
             println!(
-                "TESTNET_ENDPOINTS prometheus=http://{}:{}/ grafana=http://{}:{}/",
-                host,
-                environment.prometheus_port(),
-                host,
-                environment.grafana_port()
+                "TESTNET_ENDPOINTS prometheus={} grafana={}",
+                prometheus, grafana
             );
 
             print_profiling_urls(&host, &host_ports);

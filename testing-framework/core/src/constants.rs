@@ -21,18 +21,6 @@ pub const DEFAULT_NODE_HTTP_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Default Kubernetes deployment readiness timeout.
 pub const DEFAULT_K8S_DEPLOYMENT_TIMEOUT: Duration = Duration::from_secs(180);
 
-/// Default Prometheus HTTP port.
-pub const DEFAULT_PROMETHEUS_HTTP_PORT: u16 = 9090;
-
-/// Default Prometheus HTTP timeout.
-pub const DEFAULT_PROMETHEUS_HTTP_TIMEOUT: Duration = Duration::from_secs(240);
-
-/// Default Prometheus HTTP probe timeout for NodePort checks.
-pub const DEFAULT_PROMETHEUS_HTTP_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Default Prometheus service name.
-pub const DEFAULT_PROMETHEUS_SERVICE_NAME: &str = "prometheus";
-
 /// Default API port used by nodes.
 pub const DEFAULT_API_PORT: u16 = 18080;
 

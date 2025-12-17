@@ -1,21 +1,15 @@
-use std::{
-    env,
-    net::{Ipv4Addr, TcpListener as StdTcpListener},
+use testing_framework_core::{
+    scenario::ObservabilityInputs, topology::generation::GeneratedTopology,
 };
-
-use testing_framework_core::topology::generation::GeneratedTopology;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
     docker::ensure_docker_available,
     errors::ComposeRunnerError,
     infrastructure::environment::{
-        PortReservation, StackEnvironment, ensure_supported_topology, prepare_environment,
+        StackEnvironment, ensure_supported_topology, prepare_environment,
     },
 };
-
-pub const PROMETHEUS_PORT_ENV: &str = "TEST_FRAMEWORK_PROMETHEUS_PORT";
-pub const DEFAULT_PROMETHEUS_PORT: u16 = 9090;
 
 pub struct DeploymentSetup {
     descriptors: GeneratedTopology,
@@ -46,27 +40,15 @@ impl DeploymentSetup {
         Ok(())
     }
 
-    pub async fn prepare_workspace(self) -> Result<DeploymentContext, ComposeRunnerError> {
-        let prometheus_env = env::var(PROMETHEUS_PORT_ENV)
-            .ok()
-            .and_then(|raw| raw.parse::<u16>().ok());
-        if prometheus_env.is_some() {
-            info!(port = prometheus_env, "using prometheus port from env");
-        }
-
-        let prometheus_port = prometheus_env
-            .and_then(|port| reserve_port(port))
-            .or_else(|| allocate_prometheus_port())
-            .unwrap_or_else(|| PortReservation::new(DEFAULT_PROMETHEUS_PORT, None));
-
-        debug!(
-            prometheus_port = prometheus_port.port(),
-            "selected prometheus port"
-        );
-
-        let environment =
-            prepare_environment(&self.descriptors, prometheus_port, prometheus_env.is_some())
-                .await?;
+    pub async fn prepare_workspace(
+        self,
+        observability: &ObservabilityInputs,
+    ) -> Result<DeploymentContext, ComposeRunnerError> {
+        let environment = prepare_environment(
+            &self.descriptors,
+            observability.metrics_otlp_ingest_url.as_ref(),
+        )
+        .await?;
 
         info!(
             compose_file = %environment.compose_path().display(),
@@ -80,14 +62,4 @@ impl DeploymentSetup {
             environment,
         })
     }
-}
-
-fn allocate_prometheus_port() -> Option<PortReservation> {
-    reserve_port(DEFAULT_PROMETHEUS_PORT).or_else(|| reserve_port(0))
-}
-
-fn reserve_port(port: u16) -> Option<PortReservation> {
-    let listener = StdTcpListener::bind((Ipv4Addr::LOCALHOST, port)).ok()?;
-    let actual_port = listener.local_addr().ok()?.port();
-    Some(PortReservation::new(actual_port, Some(listener)))
 }

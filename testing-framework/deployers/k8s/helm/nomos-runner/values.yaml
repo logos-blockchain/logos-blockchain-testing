@@ -26,28 +26,3 @@ kzg:
   hostPath: "/var/lib/nomos/kzgrs_test_params"
   hostPathType: "Directory"
   storageSize: "1Gi"
-
-prometheus:
-  enabled: true
-  externalUrl: ""
-  image: "prom/prometheus:v3.0.1"
-  imagePullPolicy: IfNotPresent
-  retention: "7d"
-  service:
-    type: NodePort
-    nodePort: null
-  config: |
-    global:
-      evaluation_interval: 15s
-      external_labels:
-        monitor: "NomosRunner"
-
-grafana:
-  enabled: true
-  image: "grafana/grafana:10.4.1"
-  imagePullPolicy: IfNotPresent
-  adminUser: admin
-  adminPassword: admin
-  service:
-    type: NodePort
-    nodePort: null

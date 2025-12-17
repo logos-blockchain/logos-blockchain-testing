@@ -42,8 +42,6 @@ tracing_settings:
     filters:
       nomos: debug
       cryptarchia: debug
-  metrics: !Otlp
-    endpoint: http://prometheus:9090/api/v1/otlp/v1/metrics
-    host_identifier: node
+  metrics: None
   console: None
   level: INFO

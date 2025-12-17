@@ -104,7 +104,7 @@ async fn run_k8s_case(validators: usize, executors: usize, run_duration: Duratio
     };
 
     if !runner.context().telemetry().is_configured() {
-        warn!("k8s runner should expose prometheus metrics");
+        warn!("metrics querying is disabled; set NOMOS_METRICS_QUERY_URL to enable PromQL queries");
     }
 
     let validator_clients = runner.context().node_clients().validator_clients().to_vec();

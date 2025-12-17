@@ -9,10 +9,7 @@ use testing_framework_core::{
 };
 use url::ParseError;
 
-use crate::{
-    descriptor::DescriptorBuildError, docker::commands::ComposeCommandError,
-    infrastructure::template::TemplateError,
-};
+use crate::{docker::commands::ComposeCommandError, infrastructure::template::TemplateError};
 
 #[derive(Debug, thiserror::Error)]
 /// Top-level compose runner errors.
@@ -93,11 +90,6 @@ pub enum ConfigError {
         port: u16,
         #[source]
         source: anyhow::Error,
-    },
-    #[error("failed to build compose descriptor: {source}")]
-    Descriptor {
-        #[source]
-        source: DescriptorBuildError,
     },
     #[error("failed to render compose template: {source}")]
     Template {

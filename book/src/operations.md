@@ -181,7 +181,9 @@ cargo run -p runner-examples --bin compose_runner
 - `POL_PROOF_DEV_MODE=true` — **Required** for all runners
 - `NOMOS_DEMO_VALIDATORS=3` / `NOMOS_DEMO_EXECUTORS=2` / `NOMOS_DEMO_RUN_SECS=120` — Topology overrides
 - `COMPOSE_NODE_PAIRS=1x1` — Alternative topology format: "validators×executors"
-- `TEST_FRAMEWORK_PROMETHEUS_PORT=9091` — Override Prometheus port (default: 9090)
+- `NOMOS_METRICS_QUERY_URL` — Prometheus-compatible base URL for the runner process to query (optional)
+- `NOMOS_METRICS_OTLP_INGEST_URL` — Full OTLP HTTP ingest URL for node metrics export (optional)
+- `NOMOS_GRAFANA_URL` — Grafana base URL for printing/logging (optional)
 - `COMPOSE_RUNNER_HOST=127.0.0.1` — Host address for port mappings
 - `COMPOSE_RUNNER_PRESERVE=1` — Keep containers running after test
 - `NOMOS_LOG_LEVEL=debug` / `NOMOS_LOG_FILTER=...` — Control node log verbosity (stdout/stderr)
@@ -189,7 +191,7 @@ cargo run -p runner-examples --bin compose_runner
 
 **Compose-specific features:**
 - **Node control support**: Only runner that supports chaos testing (`.enable_node_control()` + chaos workloads)
-- **Prometheus observability**: Metrics at `http://localhost:9090`
+- **Observability is external**: Set `NOMOS_METRICS_*` / `NOMOS_GRAFANA_URL` to enable telemetry links and querying
 
 **Important:** 
 - Containers expect KZG parameters at `/kzgrs_test_params/kzgrs_test_params` (note the repeated filename)
@@ -229,21 +231,30 @@ cargo run -p runner-examples --bin k8s_runner
 - `NOMOS_TESTNET_IMAGE` — Image tag (required)
 - `POL_PROOF_DEV_MODE=true` — **Required** for all runners
 - `NOMOS_DEMO_VALIDATORS` / `NOMOS_DEMO_EXECUTORS` / `NOMOS_DEMO_RUN_SECS` — Topology overrides
-- `K8S_RUNNER_EXTERNAL_PROMETHEUS_URL` (or `NOMOS_EXTERNAL_PROMETHEUS_URL`) — Reuse an existing Prometheus and skip deploying the in-chart Prometheus; also points node OTLP metrics export and the in-cluster Grafana datasource at that Prometheus
+- `NOMOS_METRICS_QUERY_URL` — Prometheus-compatible base URL for the runner process to query (PromQL)
+- `NOMOS_METRICS_OTLP_INGEST_URL` — Full OTLP HTTP ingest URL for node metrics export (optional)
+- `NOMOS_GRAFANA_URL` — Grafana base URL for printing/logging (optional)
 
-**External Prometheus (optional):**
+**Metrics + Grafana (optional):**
 ```bash
-export K8S_RUNNER_EXTERNAL_PROMETHEUS_URL=http://your-prometheus:9090
+export NOMOS_METRICS_QUERY_URL=http://your-prometheus:9090
+# Prometheus OTLP receiver example:
+export NOMOS_METRICS_OTLP_INGEST_URL=http://your-prometheus:9090/api/v1/otlp/v1/metrics
+# Optional: print a Grafana link in TESTNET_ENDPOINTS
+export NOMOS_GRAFANA_URL=http://your-grafana:3000
 cargo run -p runner-examples --bin k8s_runner
 ```
 
 Notes:
-- The runner config expects Prometheus to accept OTLP metrics at `/api/v1/otlp/v1/metrics` (the in-chart Prometheus is started with `--web.enable-otlp-receiver` and `--enable-feature=otlp-write-receiver`).
-- Use a URL reachable from inside the cluster (for example a `Service` DNS name like `http://prometheus.monitoring:9090`).
+- `NOMOS_METRICS_QUERY_URL` must be reachable from the runner process (often via `kubectl port-forward`).
+- `NOMOS_METRICS_OTLP_INGEST_URL` must be reachable from nodes (pods/containers) and is backend-specific (Prometheus vs VictoriaMetrics paths differ).
 
 **Via `scripts/run-examples.sh` (optional):**
 ```bash
-scripts/run-examples.sh -t 60 -v 1 -e 1 k8s --external-prometheus http://your-prometheus:9090
+scripts/run-examples.sh -t 60 -v 1 -e 1 k8s \
+  --metrics-query-url http://your-prometheus:9090 \
+  --metrics-otlp-ingest-url http://your-prometheus:9090/api/v1/otlp/v1/metrics \
+  --grafana-url http://your-grafana:3000
 ```
 
 **In code (optional):**
@@ -252,7 +263,8 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ObservabilityBuilderExt as _;
 
 let plan = ScenarioBuilder::with_node_counts(1, 1)
-    .with_external_prometheus_str("http://your-prometheus:9090")
+    .with_metrics_query_url_str("http://your-prometheus:9090")
+    .with_metrics_otlp_ingest_url_str("http://your-prometheus:9090/api/v1/otlp/v1/metrics")
     .build();
 ```
 
@@ -484,7 +496,6 @@ cargo run -p runner-examples --bin compose_runner
 - `COMPOSE_RUNNER_HOST=127.0.0.1` — host used for readiness probes (override for remote Docker daemons / VM networking)
 - `COMPOSE_RUNNER_HOST_GATEWAY=host.docker.internal:host-gateway` — controls the `extra_hosts` entry injected into compose (set to `disable` to omit)
 - `TESTNET_RUNNER_PRESERVE=1` — alias for `COMPOSE_RUNNER_PRESERVE=1`
-- `COMPOSE_GRAFANA_PORT=<port>` — pin Grafana to a fixed host port instead of ephemeral assignment
 - `COMPOSE_RUNNER_HTTP_TIMEOUT_SECS=<secs>` — override compose node HTTP readiness timeout
 
 **Note:** Container names follow pattern `nomos-compose-{uuid}-validator-{index}-1` where `{uuid}` changes per run.
@@ -553,15 +564,15 @@ cargo run -p runner-examples --bin local_runner
 
 Runners expose metrics and node HTTP endpoints for expectation code and debugging:
 
-**Prometheus (Compose + K8s):**
-- Default: `http://localhost:9090`
-- Override: `TEST_FRAMEWORK_PROMETHEUS_PORT=9091`
-- Note: the host port can vary if `9090` is unavailable; prefer the printed `TESTNET_ENDPOINTS` line as the source of truth.
-- Access from expectations: `ctx.telemetry().prometheus().map(|p| p.base_url())`
+**Prometheus-compatible metrics querying (optional):**
+- The framework does **not** deploy Prometheus.
+- Provide `NOMOS_METRICS_QUERY_URL` (PromQL base URL) to enable `ctx.telemetry()` queries.
+- Access from expectations when configured: `ctx.telemetry().prometheus().map(|p| p.base_url())`
 
-**Grafana dashboards (Compose + K8s):**
-- The deployer prints the Grafana base URL in `TESTNET_ENDPOINTS`.
-- Default credentials are `admin` / `admin`.
+**Grafana (optional):**
+- The framework does **not** deploy Grafana.
+- If you set `NOMOS_GRAFANA_URL`, the deployer prints it in `TESTNET_ENDPOINTS`.
+- Dashboards live in `testing-framework/assets/stack/monitoring/grafana/dashboards/` for import into your Grafana.
 
 **Node APIs:**
 - Access from expectations: `ctx.node_clients().validator_clients().get(0)`

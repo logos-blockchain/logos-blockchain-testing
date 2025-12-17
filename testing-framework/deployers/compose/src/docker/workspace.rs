@@ -49,24 +49,6 @@ impl ComposeWorkspace {
             copy_dir_recursive(&scripts_source, &temp.path().join("stack/scripts"))?;
         }
 
-        // Ensure Prometheus config is a file (Docker bind mount fails if a directory
-        // exists).
-        let prometheus_src = stack_source.join("monitoring/prometheus.yml");
-        let prometheus_dst = temp.path().join("stack/monitoring/prometheus.yml");
-        if prometheus_dst.exists() && prometheus_dst.is_dir() {
-            fs::remove_dir_all(&prometheus_dst)
-                .with_context(|| format!("removing bogus dir {}", prometheus_dst.display()))?;
-        }
-        if !prometheus_dst.exists() {
-            fs::copy(&prometheus_src, &prometheus_dst).with_context(|| {
-                format!(
-                    "copying prometheus.yml {} -> {}",
-                    prometheus_src.display(),
-                    prometheus_dst.display()
-                )
-            })?;
-        }
-
         let kzg_source = repo_root.join("testing-framework/assets/stack/kzgrs_test_params");
         let target = temp.path().join("kzgrs_test_params");
         if kzg_source.exists() {

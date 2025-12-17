@@ -4,9 +4,7 @@ use kube::Error as KubeError;
 use testing_framework_core::{
     constants::{
         DEFAULT_HTTP_POLL_INTERVAL, DEFAULT_K8S_DEPLOYMENT_TIMEOUT,
-        DEFAULT_NODE_HTTP_PROBE_TIMEOUT, DEFAULT_NODE_HTTP_TIMEOUT, DEFAULT_PROMETHEUS_HTTP_PORT,
-        DEFAULT_PROMETHEUS_HTTP_PROBE_TIMEOUT, DEFAULT_PROMETHEUS_HTTP_TIMEOUT,
-        DEFAULT_PROMETHEUS_SERVICE_NAME,
+        DEFAULT_NODE_HTTP_PROBE_TIMEOUT, DEFAULT_NODE_HTTP_TIMEOUT,
     },
     scenario::http_probe::NodeRole,
 };
@@ -14,11 +12,9 @@ use thiserror::Error;
 
 mod deployment;
 mod forwarding;
-mod grafana;
 mod http_probe;
 mod orchestrator;
 mod ports;
-mod prometheus;
 
 pub use forwarding::PortForwardHandle;
 pub use orchestrator::wait_for_cluster_ready;
@@ -44,15 +40,13 @@ pub struct HostPort {
     pub port: u16,
 }
 
-/// All port assignments for the cluster plus Prometheus.
+/// All port assignments for the cluster.
 #[derive(Debug)]
 pub struct ClusterPorts {
     pub validators: Vec<NodePortAllocation>,
     pub executors: Vec<NodePortAllocation>,
     pub validator_host: String,
     pub executor_host: String,
-    pub prometheus: Option<HostPort>,
-    pub grafana: Option<HostPort>,
 }
 
 /// Success result from waiting for the cluster: host ports and forward handles.
@@ -96,10 +90,6 @@ pub enum ClusterWaitError {
         port: u16,
         timeout: Duration,
     },
-    #[error("timeout waiting for prometheus readiness on NodePort {port}")]
-    PrometheusTimeout { port: u16 },
-    #[error("timeout waiting for grafana readiness on port {port}")]
-    GrafanaTimeout { port: u16 },
     #[error("failed to start port-forward for service {service} port {port}: {source}")]
     PortForward {
         service: String,
@@ -148,32 +138,6 @@ pub(crate) fn node_http_probe_timeout() -> Duration {
 pub(crate) fn http_poll_interval() -> Duration {
     *HTTP_POLL_INTERVAL
 }
-
-pub(crate) const PROMETHEUS_HTTP_PORT: u16 = DEFAULT_PROMETHEUS_HTTP_PORT;
-
-static PROMETHEUS_HTTP_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
-    env_duration_secs(
-        "K8S_RUNNER_PROMETHEUS_HTTP_TIMEOUT_SECS",
-        DEFAULT_PROMETHEUS_HTTP_TIMEOUT,
-    )
-});
-
-static PROMETHEUS_HTTP_PROBE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
-    env_duration_secs(
-        "K8S_RUNNER_PROMETHEUS_HTTP_PROBE_TIMEOUT_SECS",
-        DEFAULT_PROMETHEUS_HTTP_PROBE_TIMEOUT,
-    )
-});
-
-pub(crate) fn prometheus_http_timeout() -> Duration {
-    *PROMETHEUS_HTTP_TIMEOUT
-}
-
-pub(crate) fn prometheus_http_probe_timeout() -> Duration {
-    *PROMETHEUS_HTTP_PROBE_TIMEOUT
-}
-
-pub(crate) const PROMETHEUS_SERVICE_NAME: &str = DEFAULT_PROMETHEUS_SERVICE_NAME;
 
 fn env_duration_secs(key: &str, default: Duration) -> Duration {
     env::var(key)

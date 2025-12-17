@@ -38,12 +38,13 @@ Options:
   -v, --validators N      Number of validators (required)
   -e, --executors N       Number of executors (required)
   --bundle PATH           Convenience alias for setting NOMOS_BINARIES_TAR=PATH
-  --metrics-query-url URL  (k8s) PromQL base URL the runner process can query (often localhost port-forward)
-  --metrics-query-grafana-url URL  (k8s) PromQL base URL reachable from inside the cluster (Grafana datasource)
-  --metrics-otlp-ingest-url URL  (k8s) Full OTLP HTTP ingest URL for node metrics export
-  --external-prometheus URL  (k8s) Alias for --metrics-query-url
-  --external-prometheus-grafana-url URL  (k8s) Alias for --metrics-query-grafana-url
-  --external-otlp-metrics-endpoint URL  (k8s) Alias for --metrics-otlp-ingest-url
+  --metrics-query-url URL         PromQL base URL the runner process can query (optional)
+  --metrics-query-grafana-url URL PromQL base URL for a Grafana datasource (optional)
+  --metrics-otlp-ingest-url URL   Full OTLP HTTP ingest URL for node metrics export (optional)
+  --grafana-url URL               Grafana base URL for printing/logging (optional)
+  --external-prometheus URL            Alias for --metrics-query-url
+  --external-prometheus-grafana-url URL Alias for --metrics-query-grafana-url
+  --external-otlp-metrics-endpoint URL  Alias for --metrics-otlp-ingest-url
   --local                 Use a local Docker image tag (default for docker-desktop k8s)
   --ecr                   Use an ECR image reference (default for non-docker-desktop k8s)
   --no-image-build        Skip rebuilding the compose/k8s image (sets NOMOS_SKIP_IMAGE_BUILD=1)
@@ -64,6 +65,8 @@ Environment:
   NOMOS_METRICS_QUERY_GRAFANA_URL            Alias for K8S_RUNNER_METRICS_QUERY_GRAFANA_URL
   K8S_RUNNER_METRICS_OTLP_INGEST_URL         Full OTLP HTTP ingest URL for node metrics export
   NOMOS_METRICS_OTLP_INGEST_URL              Alias for K8S_RUNNER_METRICS_OTLP_INGEST_URL
+  K8S_RUNNER_GRAFANA_URL                     Grafana base URL for printing/logging (optional)
+  NOMOS_GRAFANA_URL                          Alias for K8S_RUNNER_GRAFANA_URL
 
 Deprecated env vars (still supported):
   K8S_RUNNER_EXTERNAL_PROMETHEUS_URL, NOMOS_EXTERNAL_PROMETHEUS_URL
@@ -115,6 +118,7 @@ run_examples::parse_args() {
   METRICS_QUERY_URL=""
   METRICS_QUERY_GRAFANA_URL=""
   METRICS_OTLP_INGEST_URL=""
+  GRAFANA_URL=""
 
   RUN_SECS_RAW_SPECIFIED=""
 
@@ -182,6 +186,14 @@ run_examples::parse_args() {
         ;;
       --metrics-otlp-ingest-url=*)
         METRICS_OTLP_INGEST_URL="${1#*=}"
+        shift
+        ;;
+      --grafana-url)
+        GRAFANA_URL="${2:-}"
+        shift 2
+        ;;
+      --grafana-url=*)
+        GRAFANA_URL="${1#*=}"
         shift
         ;;
       --external-prometheus)
@@ -262,18 +274,6 @@ run_examples::parse_args() {
     run_examples::fail_with_usage "executors must be a non-negative integer (pass -e/--executors)"
   fi
 
-  if [ -n "${METRICS_QUERY_URL}" ] && [ "${MODE}" != "k8s" ]; then
-    echo "Warning: --metrics-query-url is only used in k8s mode; ignoring." >&2
-    METRICS_QUERY_URL=""
-  fi
-  if [ -n "${METRICS_QUERY_GRAFANA_URL}" ] && [ "${MODE}" != "k8s" ]; then
-    echo "Warning: --metrics-query-grafana-url is only used in k8s mode; ignoring." >&2
-    METRICS_QUERY_GRAFANA_URL=""
-  fi
-  if [ -n "${METRICS_OTLP_INGEST_URL}" ] && [ "${MODE}" != "k8s" ]; then
-    echo "Warning: --metrics-otlp-ingest-url is only used in k8s mode; ignoring." >&2
-    METRICS_OTLP_INGEST_URL=""
-  fi
 }
 
 run_examples::select_image() {
@@ -582,17 +582,21 @@ run_examples::run() {
   export NOMOS_DEMO_VALIDATORS="${DEMO_VALIDATORS}"
   export NOMOS_DEMO_EXECUTORS="${DEMO_EXECUTORS}"
 
-  if [ "${MODE}" = "k8s" ] && [ -n "${METRICS_QUERY_URL}" ]; then
-    export K8S_RUNNER_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
+  if [ -n "${METRICS_QUERY_URL}" ]; then
     export NOMOS_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
+    export K8S_RUNNER_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
   fi
-  if [ "${MODE}" = "k8s" ] && [ -n "${METRICS_QUERY_GRAFANA_URL}" ]; then
-    export K8S_RUNNER_METRICS_QUERY_GRAFANA_URL="${METRICS_QUERY_GRAFANA_URL}"
+  if [ -n "${METRICS_QUERY_GRAFANA_URL}" ]; then
     export NOMOS_METRICS_QUERY_GRAFANA_URL="${METRICS_QUERY_GRAFANA_URL}"
+    export K8S_RUNNER_METRICS_QUERY_GRAFANA_URL="${METRICS_QUERY_GRAFANA_URL}"
   fi
-  if [ "${MODE}" = "k8s" ] && [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
-    export K8S_RUNNER_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
+  if [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
     export NOMOS_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
+    export K8S_RUNNER_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
+  fi
+  if [ -n "${GRAFANA_URL}" ]; then
+    export NOMOS_GRAFANA_URL="${GRAFANA_URL}"
+    export K8S_RUNNER_GRAFANA_URL="${GRAFANA_URL}"
   fi
 
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"

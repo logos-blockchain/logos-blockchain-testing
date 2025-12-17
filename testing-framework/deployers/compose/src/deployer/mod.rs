@@ -6,7 +6,8 @@ pub mod setup;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    BlockFeedTask, CleanupGuard, Deployer, RequiresNodeControl, Runner, Scenario,
+    BlockFeedTask, CleanupGuard, Deployer, ObservabilityCapabilityProvider, RequiresNodeControl,
+    Runner, Scenario,
 };
 
 use crate::{errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
@@ -41,7 +42,7 @@ impl ComposeDeployer {
 #[async_trait]
 impl<Caps> Deployer<Caps> for ComposeDeployer
 where
-    Caps: RequiresNodeControl + Send + Sync,
+    Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
 {
     type Error = ComposeRunnerError;
 

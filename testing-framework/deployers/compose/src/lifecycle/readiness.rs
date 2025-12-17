@@ -3,7 +3,7 @@ use std::time::Duration;
 use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{Metrics, MetricsError, NodeClients, http_probe::NodeRole as HttpNodeRole},
+    scenario::{NodeClients, http_probe::NodeRole as HttpNodeRole},
     topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
 };
 use tokio::time::sleep;
@@ -15,13 +15,6 @@ use crate::{
 };
 
 const DISABLED_READINESS_SLEEP: Duration = Duration::from_secs(5);
-
-/// Build a metrics client from host/port, validating the URL.
-pub fn metrics_handle_from_port(port: u16, host: &str) -> Result<Metrics, MetricsError> {
-    let url = Url::parse(&format!("http://{host}:{port}/"))
-        .map_err(|err| MetricsError::new(format!("invalid prometheus url: {err}")))?;
-    Metrics::from_prometheus(url)
-}
 
 /// Wait until all validators respond on their API ports.
 pub async fn ensure_validators_ready_with_ports(ports: &[u16]) -> Result<(), StackReadinessError> {

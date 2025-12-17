@@ -109,7 +109,7 @@ async fn run_compose_case(
     };
 
     if !runner.context().telemetry().is_configured() {
-        warn!("compose runner should expose prometheus metrics");
+        warn!("metrics querying is disabled; set NOMOS_METRICS_QUERY_URL to enable PromQL queries");
     }
 
     info!("running scenario");
