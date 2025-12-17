@@ -139,7 +139,7 @@ build_test_image::restore_from_bundle() {
   echo "==> Restoring binaries/circuits from ${TAR_PATH}"
   local tmp_extract
   tmp_extract="$(common::tmpdir nomos-bundle-extract.XXXXXX)"
-  trap 'rm -rf "${tmp_extract}"' RETURN
+  trap "rm -rf -- '${tmp_extract}'" RETURN
 
   tar -xzf "${TAR_PATH}" -C "${tmp_extract}"
   local artifacts="${tmp_extract}/artifacts"
