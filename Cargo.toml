@@ -4,6 +4,7 @@ members = [
   "examples/doc-snippets",
   "testing-framework/configs",
   "testing-framework/core",
+  "testing-framework/cucumber_ext",
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
   "testing-framework/deployers/local",

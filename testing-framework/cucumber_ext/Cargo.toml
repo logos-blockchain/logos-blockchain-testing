@@ -1,0 +1,21 @@
+[package]
+categories.workspace  = true
+description.workspace = true
+edition.workspace     = true
+keywords.workspace    = true
+license.workspace     = true
+name                  = "cucumber_ext"
+readme.workspace      = true
+repository.workspace  = true
+version.workspace     = true
+
+[dependencies]
+cucumber                         = { version = "0.22.0", features = ["default", "macros"] }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-local   = { workspace = true }
+testing-framework-workflows      = { workspace = true }
+thiserror                        = { workspace = true }
+
+[lints]
+workspace = true
