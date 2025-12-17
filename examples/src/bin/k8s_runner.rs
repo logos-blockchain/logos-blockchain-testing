@@ -1,9 +1,12 @@
-use std::{process, time::Duration};
+use std::{env, process, time::Duration};
 
 use anyhow::{Context as _, Result, ensure};
 use runner_examples::{ScenarioBuilderExt as _, read_env_any};
-use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
+use testing_framework_core::scenario::{
+    Deployer as _, ObservabilityCapability, Runner, ScenarioBuilder,
+};
 use testing_framework_runner_k8s::{K8sDeployer, K8sRunnerError};
+use testing_framework_workflows::ObservabilityBuilderExt as _;
 use tracing::{info, warn};
 
 const DEFAULT_RUN_SECS: u64 = 60;
@@ -46,15 +49,47 @@ async fn run_k8s_case(validators: usize, executors: usize, run_duration: Duratio
         duration_secs = run_duration.as_secs(),
         "building scenario plan"
     );
-    let mut plan = ScenarioBuilder::topology_with(|t| {
+    let mut scenario = ScenarioBuilder::topology_with(|t| {
         t.network_star().validators(validators).executors(executors)
     })
+    .with_capabilities(ObservabilityCapability::default())
     .wallets(TOTAL_WALLETS)
     .transactions_with(|txs| txs.rate(MIXED_TXS_PER_BLOCK).users(TRANSACTION_WALLETS))
     .da_with(|da| da.blob_rate(DA_BLOB_RATE))
     .with_run_duration(run_duration)
-    .expect_consensus_liveness()
-    .build();
+    .expect_consensus_liveness();
+
+    if let Ok(url) = env::var("K8S_RUNNER_METRICS_QUERY_URL")
+        .or_else(|_| env::var("NOMOS_METRICS_QUERY_URL"))
+        .or_else(|_| env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_URL"))
+        .or_else(|_| env::var("NOMOS_EXTERNAL_PROMETHEUS_URL"))
+    {
+        if !url.trim().is_empty() {
+            scenario = scenario.with_metrics_query_url_str(url.trim());
+        }
+    }
+
+    if let Ok(url) = env::var("K8S_RUNNER_METRICS_QUERY_GRAFANA_URL")
+        .or_else(|_| env::var("NOMOS_METRICS_QUERY_GRAFANA_URL"))
+        .or_else(|_| env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_GRAFANA_URL"))
+        .or_else(|_| env::var("NOMOS_EXTERNAL_PROMETHEUS_GRAFANA_URL"))
+    {
+        if !url.trim().is_empty() {
+            scenario = scenario.with_metrics_query_grafana_url_str(url.trim());
+        }
+    }
+
+    if let Ok(url) = env::var("K8S_RUNNER_METRICS_OTLP_INGEST_URL")
+        .or_else(|_| env::var("NOMOS_METRICS_OTLP_INGEST_URL"))
+        .or_else(|_| env::var("K8S_RUNNER_EXTERNAL_OTLP_METRICS_ENDPOINT"))
+        .or_else(|_| env::var("NOMOS_EXTERNAL_OTLP_METRICS_ENDPOINT"))
+    {
+        if !url.trim().is_empty() {
+            scenario = scenario.with_metrics_otlp_ingest_url_str(url.trim());
+        }
+    }
+
+    let mut plan = scenario.build();
 
     let deployer = K8sDeployer::new();
     info!("deploying k8s stack");

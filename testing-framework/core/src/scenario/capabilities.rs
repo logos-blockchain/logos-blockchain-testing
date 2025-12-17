@@ -13,7 +13,17 @@ pub struct NodeControlCapability;
 /// reuse an existing endpoint.
 #[derive(Clone, Debug, Default)]
 pub struct ObservabilityCapability {
-    pub external_prometheus: Option<Url>,
+    /// Prometheus-compatible base URL used by the *runner process* to query
+    /// metrics (commonly a localhost port-forward, but can be any reachable
+    /// endpoint).
+    pub metrics_query_url: Option<Url>,
+    /// Optional Prometheus-compatible base URL used by the *Grafana pod* as its
+    /// datasource. This must be reachable from inside the cluster. If unset,
+    /// the k8s runner falls back to `metrics_query_url`.
+    pub metrics_query_grafana_url: Option<Url>,
+    /// Full OTLP HTTP metrics ingest endpoint used by *nodes* to export metrics
+    /// (backend-specific host and path).
+    pub metrics_otlp_ingest_url: Option<Url>,
 }
 
 /// Trait implemented by scenario capability markers to signal whether node

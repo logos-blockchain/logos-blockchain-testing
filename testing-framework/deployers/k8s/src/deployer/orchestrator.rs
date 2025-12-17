@@ -93,7 +93,7 @@ impl Deployer for K8sDeployer {
     type Error = K8sRunnerError;
 
     async fn deploy(&self, scenario: &Scenario) -> Result<Runner, Self::Error> {
-        deploy_with_prometheus(self, scenario, None).await
+        deploy_with_observability(self, scenario, None, None, None).await
     }
 }
 
@@ -105,10 +105,12 @@ impl Deployer<ObservabilityCapability> for K8sDeployer {
         &self,
         scenario: &Scenario<ObservabilityCapability>,
     ) -> Result<Runner, Self::Error> {
-        deploy_with_prometheus(
+        deploy_with_observability(
             self,
             scenario,
-            scenario.capabilities().external_prometheus.clone(),
+            scenario.capabilities().metrics_query_url.clone(),
+            scenario.capabilities().metrics_query_grafana_url.clone(),
+            scenario.capabilities().metrics_otlp_ingest_url.clone(),
         )
         .await
     }
@@ -152,19 +154,58 @@ fn ensure_supported_topology(descriptors: &GeneratedTopology) -> Result<(), K8sR
     Ok(())
 }
 
-async fn deploy_with_prometheus<Caps>(
+async fn deploy_with_observability<Caps>(
     deployer: &K8sDeployer,
     scenario: &Scenario<Caps>,
-    external_prometheus: Option<Url>,
+    metrics_query_url: Option<Url>,
+    metrics_query_grafana_url: Option<Url>,
+    metrics_otlp_ingest_url: Option<Url>,
 ) -> Result<Runner, K8sRunnerError> {
-    let external_prometheus = match external_prometheus {
+    let external_prometheus = match metrics_query_url {
         Some(url) => Some(url),
-        None => match std::env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_URL")
+        None => match std::env::var("K8S_RUNNER_METRICS_QUERY_URL")
             .ok()
+            .or_else(|| std::env::var("NOMOS_METRICS_QUERY_URL").ok())
+            // Back-compat:
+            .or_else(|| std::env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_URL").ok())
             .or_else(|| std::env::var("NOMOS_EXTERNAL_PROMETHEUS_URL").ok())
         {
+            Some(raw) if !raw.trim().is_empty() => {
+                Some(Url::parse(raw.trim()).map_err(|err| {
+                    MetricsError::new(format!("invalid metrics query url: {err}"))
+                })?)
+            }
+            _ => None,
+        },
+    };
+
+    let external_prometheus_grafana_url = match metrics_query_grafana_url {
+        Some(url) => Some(url),
+        None => match std::env::var("K8S_RUNNER_METRICS_QUERY_GRAFANA_URL")
+            .ok()
+            .or_else(|| std::env::var("NOMOS_METRICS_QUERY_GRAFANA_URL").ok())
+            // Back-compat:
+            .or_else(|| std::env::var("K8S_RUNNER_EXTERNAL_PROMETHEUS_GRAFANA_URL").ok())
+            .or_else(|| std::env::var("NOMOS_EXTERNAL_PROMETHEUS_GRAFANA_URL").ok())
+        {
             Some(raw) if !raw.trim().is_empty() => Some(Url::parse(raw.trim()).map_err(|err| {
-                MetricsError::new(format!("invalid external prometheus url: {err}"))
+                MetricsError::new(format!("invalid metrics query grafana url: {err}"))
+            })?),
+            _ => None,
+        },
+    };
+
+    let external_otlp_metrics_endpoint = match metrics_otlp_ingest_url {
+        Some(url) => Some(url),
+        None => match std::env::var("K8S_RUNNER_METRICS_OTLP_INGEST_URL")
+            .ok()
+            .or_else(|| std::env::var("NOMOS_METRICS_OTLP_INGEST_URL").ok())
+            // Back-compat:
+            .or_else(|| std::env::var("K8S_RUNNER_EXTERNAL_OTLP_METRICS_ENDPOINT").ok())
+            .or_else(|| std::env::var("NOMOS_EXTERNAL_OTLP_METRICS_ENDPOINT").ok())
+        {
+            Some(raw) if !raw.trim().is_empty() => Some(Url::parse(raw.trim()).map_err(|err| {
+                MetricsError::new(format!("invalid metrics OTLP ingest url: {err}"))
             })?),
             _ => None,
         },
@@ -178,12 +219,15 @@ async fn deploy_with_prometheus<Caps>(
     let client = Client::try_default()
         .await
         .map_err(|source| K8sRunnerError::ClientInit { source })?;
+
     info!(
         validators = validator_count,
         executors = executor_count,
         duration_secs = scenario.duration().as_secs(),
         readiness_checks = deployer.readiness_checks,
-        external_prometheus = external_prometheus.as_ref().map(|u| u.as_str()),
+        metrics_query_url = external_prometheus.as_ref().map(|u| u.as_str()),
+        metrics_query_grafana_url = external_prometheus_grafana_url.as_ref().map(|u| u.as_str()),
+        metrics_otlp_ingest_url = external_otlp_metrics_endpoint.as_ref().map(|u| u.as_str()),
         "starting k8s deployment"
     );
 
@@ -195,6 +239,8 @@ async fn deploy_with_prometheus<Caps>(
             &descriptors,
             deployer.readiness_checks,
             external_prometheus.as_ref(),
+            external_prometheus_grafana_url.as_ref(),
+            external_otlp_metrics_endpoint.as_ref(),
         )
         .await?,
     );
@@ -329,8 +375,15 @@ async fn setup_cluster(
     descriptors: &GeneratedTopology,
     readiness_checks: bool,
     external_prometheus: Option<&Url>,
+    external_prometheus_grafana_url: Option<&Url>,
+    external_otlp_metrics_endpoint: Option<&Url>,
 ) -> Result<ClusterEnvironment, K8sRunnerError> {
-    let assets = prepare_assets(descriptors, external_prometheus)?;
+    let assets = prepare_assets(
+        descriptors,
+        external_prometheus,
+        external_prometheus_grafana_url,
+        external_otlp_metrics_endpoint,
+    )?;
     let validators = descriptors.validators().len();
     let executors = descriptors.executors().len();
 
@@ -346,7 +399,7 @@ async fn setup_cluster(
         &namespace,
         &release,
         specs,
-        external_prometheus.is_none(),
+        external_prometheus.is_none() && external_prometheus_grafana_url.is_none(),
         &mut cleanup_guard,
     )
     .await?;

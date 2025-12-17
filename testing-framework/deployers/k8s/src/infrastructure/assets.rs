@@ -93,6 +93,8 @@ fn kzg_mode() -> KzgMode {
 pub fn prepare_assets(
     topology: &GeneratedTopology,
     external_prometheus: Option<&Url>,
+    external_prometheus_grafana_url: Option<&Url>,
+    external_otlp_metrics_endpoint: Option<&Url>,
 ) -> Result<RunnerAssets, AssetsError> {
     info!(
         validators = topology.validators().len(),
@@ -102,7 +104,13 @@ pub fn prepare_assets(
 
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
     let kzg_mode = kzg_mode();
-    let cfgsync_yaml = render_cfgsync_config(&root, topology, kzg_mode, external_prometheus)?;
+    let cfgsync_yaml = render_cfgsync_config(
+        &root,
+        topology,
+        kzg_mode,
+        external_prometheus,
+        external_otlp_metrics_endpoint,
+    )?;
 
     let tempdir = tempfile::Builder::new()
         .prefix("nomos-helm-")
@@ -117,7 +125,11 @@ pub fn prepare_assets(
     };
     let chart_path = helm_chart_path()?;
     sync_grafana_dashboards(&root, &chart_path)?;
-    let values_yaml = render_values_yaml(topology, external_prometheus)?;
+    let values_yaml = render_values_yaml(
+        topology,
+        external_prometheus,
+        external_prometheus_grafana_url,
+    )?;
     let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
     let image = env::var("NOMOS_TESTNET_IMAGE")
         .unwrap_or_else(|_| String::from("public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"));
@@ -226,31 +238,46 @@ fn render_cfgsync_config(
     topology: &GeneratedTopology,
     kzg_mode: KzgMode,
     external_prometheus: Option<&Url>,
+    external_otlp_metrics_endpoint: Option<&Url>,
 ) -> Result<String, AssetsError> {
     let cfgsync_template_path = stack_assets_root(root).join("cfgsync.yaml");
     debug!(path = %cfgsync_template_path.display(), "loading cfgsync template");
+
     let mut cfg = load_cfgsync_template(&cfgsync_template_path)
         .map_err(|source| AssetsError::Cfgsync { source })?;
+
     apply_topology_overrides(&mut cfg, topology, kzg_mode == KzgMode::HostPath);
+
     if kzg_mode == KzgMode::InImage {
         cfg.global_params_path = env::var("NOMOS_KZGRS_PARAMS_PATH")
             .ok()
             .unwrap_or_else(|| DEFAULT_IN_IMAGE_KZG_PARAMS_PATH.to_string());
     }
-    if let Some(external_prometheus) = external_prometheus {
-        let base = external_prometheus.as_str().trim_end_matches('/');
-        let otlp_metrics = format!("{base}/api/v1/otlp/v1/metrics");
-        let endpoint = Url::parse(&otlp_metrics).map_err(|source| AssetsError::Cfgsync {
-            source: anyhow::anyhow!(
-                "invalid OTLP metrics endpoint derived from external Prometheus url '{base}': {source}"
-            ),
-        })?;
+
+    let external_metrics_endpoint = match external_otlp_metrics_endpoint {
+        Some(endpoint) => Some(Ok(endpoint.clone())),
+        None => external_prometheus.map(derive_prometheus_otlp_metrics_endpoint),
+    };
+
+    if let Some(endpoint) = external_metrics_endpoint.transpose()? {
         if let MetricsLayer::Otlp(ref mut config) = cfg.tracing_settings.metrics {
             config.endpoint = endpoint;
         }
     }
+
     cfg.timeout = cfg.timeout.max(CFGSYNC_K8S_TIMEOUT_SECS);
+
     render_cfgsync_yaml(&cfg).map_err(|source| AssetsError::Cfgsync { source })
+}
+
+fn derive_prometheus_otlp_metrics_endpoint(base: &Url) -> Result<Url, AssetsError> {
+    let base = base.as_str().trim_end_matches('/');
+    let otlp_metrics = format!("{base}/api/v1/otlp/v1/metrics");
+    Url::parse(&otlp_metrics).map_err(|source| AssetsError::Cfgsync {
+        source: anyhow::anyhow!(
+            "invalid OTLP metrics endpoint derived from external Prometheus url '{base}': {source}"
+        ),
+    })
 }
 
 struct ScriptPaths {
@@ -313,8 +340,13 @@ fn helm_chart_path() -> Result<PathBuf, AssetsError> {
 fn render_values_yaml(
     topology: &GeneratedTopology,
     external_prometheus: Option<&Url>,
+    external_prometheus_grafana_url: Option<&Url>,
 ) -> Result<String, AssetsError> {
-    let values = build_values(topology, external_prometheus);
+    let values = build_values(
+        topology,
+        external_prometheus,
+        external_prometheus_grafana_url,
+    );
     serde_yaml::to_string(&values).map_err(|source| AssetsError::Values { source })
 }
 
@@ -422,7 +454,11 @@ struct GrafanaServiceValues {
     node_port: Option<u16>,
 }
 
-fn build_values(topology: &GeneratedTopology, external_prometheus: Option<&Url>) -> HelmValues {
+fn build_values(
+    topology: &GeneratedTopology,
+    external_prometheus: Option<&Url>,
+    external_prometheus_grafana_url: Option<&Url>,
+) -> HelmValues {
     let cfgsync = CfgsyncValues {
         port: cfgsync_port(),
     };
@@ -449,9 +485,12 @@ fn build_values(topology: &GeneratedTopology, external_prometheus: Option<&Url>)
             node_port: grafana_node_port,
         },
     };
+    let prometheus_external_url = external_prometheus_grafana_url
+        .or(external_prometheus)
+        .map(|url| url.as_str().trim_end_matches('/').to_string());
     let prometheus = PrometheusValues {
-        enabled: external_prometheus.is_none(),
-        external_url: external_prometheus.map(|url| url.as_str().trim_end_matches('/').to_string()),
+        enabled: prometheus_external_url.is_none(),
+        external_url: prometheus_external_url,
     };
     debug!(pol_mode, "rendering Helm values for k8s stack");
     let validators = topology

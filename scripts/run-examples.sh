@@ -38,7 +38,12 @@ Options:
   -v, --validators N      Number of validators (required)
   -e, --executors N       Number of executors (required)
   --bundle PATH           Convenience alias for setting NOMOS_BINARIES_TAR=PATH
-  --external-prometheus URL  (k8s) Reuse existing Prometheus; skips Helm Prometheus
+  --metrics-query-url URL  (k8s) PromQL base URL the runner process can query (often localhost port-forward)
+  --metrics-query-grafana-url URL  (k8s) PromQL base URL reachable from inside the cluster (Grafana datasource)
+  --metrics-otlp-ingest-url URL  (k8s) Full OTLP HTTP ingest URL for node metrics export
+  --external-prometheus URL  (k8s) Alias for --metrics-query-url
+  --external-prometheus-grafana-url URL  (k8s) Alias for --metrics-query-grafana-url
+  --external-otlp-metrics-endpoint URL  (k8s) Alias for --metrics-otlp-ingest-url
   --local                 Use a local Docker image tag (default for docker-desktop k8s)
   --ecr                   Use an ECR image reference (default for non-docker-desktop k8s)
   --no-image-build        Skip rebuilding the compose/k8s image (sets NOMOS_SKIP_IMAGE_BUILD=1)
@@ -53,7 +58,17 @@ Environment:
   NOMOS_TESTNET_IMAGE_PULL_POLICY  K8s imagePullPolicy (default ${DEFAULT_PULL_POLICY_LOCAL}; set to ${DEFAULT_PULL_POLICY_ECR} for --ecr)
   NOMOS_BINARIES_TAR               Path to prebuilt binaries/circuits tarball (default .tmp/nomos-binaries-<platform>-<version>.tar.gz)
   NOMOS_SKIP_IMAGE_BUILD           Set to 1 to skip rebuilding the compose/k8s image
-  K8S_RUNNER_EXTERNAL_PROMETHEUS_URL  Reuse existing Prometheus; skips Helm Prometheus
+  K8S_RUNNER_METRICS_QUERY_URL               PromQL base URL for the runner process
+  NOMOS_METRICS_QUERY_URL                    Alias for K8S_RUNNER_METRICS_QUERY_URL
+  K8S_RUNNER_METRICS_QUERY_GRAFANA_URL       PromQL base URL for Grafana (cluster-reachable)
+  NOMOS_METRICS_QUERY_GRAFANA_URL            Alias for K8S_RUNNER_METRICS_QUERY_GRAFANA_URL
+  K8S_RUNNER_METRICS_OTLP_INGEST_URL         Full OTLP HTTP ingest URL for node metrics export
+  NOMOS_METRICS_OTLP_INGEST_URL              Alias for K8S_RUNNER_METRICS_OTLP_INGEST_URL
+
+Deprecated env vars (still supported):
+  K8S_RUNNER_EXTERNAL_PROMETHEUS_URL, NOMOS_EXTERNAL_PROMETHEUS_URL
+  K8S_RUNNER_EXTERNAL_PROMETHEUS_GRAFANA_URL, NOMOS_EXTERNAL_PROMETHEUS_GRAFANA_URL
+  K8S_RUNNER_EXTERNAL_OTLP_METRICS_ENDPOINT, NOMOS_EXTERNAL_OTLP_METRICS_ENDPOINT
 EOF
 }
 
@@ -97,7 +112,9 @@ run_examples::parse_args() {
   DEMO_VALIDATORS=""
   DEMO_EXECUTORS=""
   IMAGE_SELECTION_MODE="auto"
-  EXTERNAL_PROMETHEUS_URL=""
+  METRICS_QUERY_URL=""
+  METRICS_QUERY_GRAFANA_URL=""
+  METRICS_OTLP_INGEST_URL=""
 
   RUN_SECS_RAW_SPECIFIED=""
 
@@ -143,12 +160,52 @@ run_examples::parse_args() {
         export NOMOS_BINARIES_TAR
         shift
         ;;
+      --metrics-query-url)
+        METRICS_QUERY_URL="${2:-}"
+        shift 2
+        ;;
+      --metrics-query-url=*)
+        METRICS_QUERY_URL="${1#*=}"
+        shift
+        ;;
+      --metrics-query-grafana-url)
+        METRICS_QUERY_GRAFANA_URL="${2:-}"
+        shift 2
+        ;;
+      --metrics-query-grafana-url=*)
+        METRICS_QUERY_GRAFANA_URL="${1#*=}"
+        shift
+        ;;
+      --metrics-otlp-ingest-url)
+        METRICS_OTLP_INGEST_URL="${2:-}"
+        shift 2
+        ;;
+      --metrics-otlp-ingest-url=*)
+        METRICS_OTLP_INGEST_URL="${1#*=}"
+        shift
+        ;;
       --external-prometheus)
-        EXTERNAL_PROMETHEUS_URL="${2:-}"
+        METRICS_QUERY_URL="${2:-}"
         shift 2
         ;;
       --external-prometheus=*)
-        EXTERNAL_PROMETHEUS_URL="${1#*=}"
+        METRICS_QUERY_URL="${1#*=}"
+        shift
+        ;;
+      --external-prometheus-grafana-url)
+        METRICS_QUERY_GRAFANA_URL="${2:-}"
+        shift 2
+        ;;
+      --external-prometheus-grafana-url=*)
+        METRICS_QUERY_GRAFANA_URL="${1#*=}"
+        shift
+        ;;
+      --external-otlp-metrics-endpoint)
+        METRICS_OTLP_INGEST_URL="${2:-}"
+        shift 2
+        ;;
+      --external-otlp-metrics-endpoint=*)
+        METRICS_OTLP_INGEST_URL="${1#*=}"
         shift
         ;;
       --local)
@@ -205,9 +262,17 @@ run_examples::parse_args() {
     run_examples::fail_with_usage "executors must be a non-negative integer (pass -e/--executors)"
   fi
 
-  if [ -n "${EXTERNAL_PROMETHEUS_URL}" ] && [ "${MODE}" != "k8s" ]; then
-    echo "Warning: --external-prometheus is only used in k8s mode; ignoring." >&2
-    EXTERNAL_PROMETHEUS_URL=""
+  if [ -n "${METRICS_QUERY_URL}" ] && [ "${MODE}" != "k8s" ]; then
+    echo "Warning: --metrics-query-url is only used in k8s mode; ignoring." >&2
+    METRICS_QUERY_URL=""
+  fi
+  if [ -n "${METRICS_QUERY_GRAFANA_URL}" ] && [ "${MODE}" != "k8s" ]; then
+    echo "Warning: --metrics-query-grafana-url is only used in k8s mode; ignoring." >&2
+    METRICS_QUERY_GRAFANA_URL=""
+  fi
+  if [ -n "${METRICS_OTLP_INGEST_URL}" ] && [ "${MODE}" != "k8s" ]; then
+    echo "Warning: --metrics-otlp-ingest-url is only used in k8s mode; ignoring." >&2
+    METRICS_OTLP_INGEST_URL=""
   fi
 }
 
@@ -517,9 +582,17 @@ run_examples::run() {
   export NOMOS_DEMO_VALIDATORS="${DEMO_VALIDATORS}"
   export NOMOS_DEMO_EXECUTORS="${DEMO_EXECUTORS}"
 
-  if [ "${MODE}" = "k8s" ] && [ -n "${EXTERNAL_PROMETHEUS_URL}" ]; then
-    export K8S_RUNNER_EXTERNAL_PROMETHEUS_URL="${EXTERNAL_PROMETHEUS_URL}"
-    export NOMOS_EXTERNAL_PROMETHEUS_URL="${EXTERNAL_PROMETHEUS_URL}"
+  if [ "${MODE}" = "k8s" ] && [ -n "${METRICS_QUERY_URL}" ]; then
+    export K8S_RUNNER_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
+    export NOMOS_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
+  fi
+  if [ "${MODE}" = "k8s" ] && [ -n "${METRICS_QUERY_GRAFANA_URL}" ]; then
+    export K8S_RUNNER_METRICS_QUERY_GRAFANA_URL="${METRICS_QUERY_GRAFANA_URL}"
+    export NOMOS_METRICS_QUERY_GRAFANA_URL="${METRICS_QUERY_GRAFANA_URL}"
+  fi
+  if [ "${MODE}" = "k8s" ] && [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
+    export K8S_RUNNER_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
+    export NOMOS_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
   fi
 
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"
