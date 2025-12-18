@@ -13,6 +13,18 @@ use crate::{
     workloads::{chaos::RandomRestartWorkload, da, transaction},
 };
 
+#[derive(Debug, thiserror::Error)]
+pub enum BuilderInputError {
+    #[error("{field} must be non-zero")]
+    ZeroValue { field: &'static str },
+    #[error("invalid url for {field}: '{value}': {message}")]
+    InvalidUrl {
+        field: &'static str,
+        value: String,
+        message: String,
+    },
+}
+
 macro_rules! non_zero_rate_fn {
     ($name:ident, $message:literal) => {
         const fn $name(rate: u64) -> NonZeroU64 {
@@ -106,6 +118,13 @@ pub trait ObservabilityBuilderExt: Sized {
     /// Convenience wrapper that parses a URL string (panics if invalid).
     fn with_metrics_query_url_str(self, url: &str) -> CoreScenarioBuilder<ObservabilityCapability>;
 
+    /// Like `with_metrics_query_url_str`, but returns an error instead of
+    /// panicking.
+    fn try_with_metrics_query_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError>;
+
     /// Configure the OTLP HTTP metrics ingest endpoint to which nodes should
     /// export metrics (must be a full URL, including any required path).
     fn with_metrics_otlp_ingest_url(
@@ -119,11 +138,24 @@ pub trait ObservabilityBuilderExt: Sized {
         url: &str,
     ) -> CoreScenarioBuilder<ObservabilityCapability>;
 
+    /// Like `with_metrics_otlp_ingest_url_str`, but returns an error instead of
+    /// panicking.
+    fn try_with_metrics_otlp_ingest_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError>;
+
     /// Optional Grafana base URL for printing/logging (human access).
     fn with_grafana_url(self, url: reqwest::Url) -> CoreScenarioBuilder<ObservabilityCapability>;
 
     /// Convenience wrapper that parses a URL string (panics if invalid).
     fn with_grafana_url_str(self, url: &str) -> CoreScenarioBuilder<ObservabilityCapability>;
+
+    /// Like `with_grafana_url_str`, but returns an error instead of panicking.
+    fn try_with_grafana_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError>;
 
     #[deprecated(note = "use with_metrics_query_url")]
     fn with_external_prometheus(
@@ -175,6 +207,18 @@ impl ObservabilityBuilderExt for CoreScenarioBuilder<()> {
         self.with_metrics_query_url(parsed)
     }
 
+    fn try_with_metrics_query_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError> {
+        let parsed = reqwest::Url::parse(url).map_err(|err| BuilderInputError::InvalidUrl {
+            field: "metrics_query_url",
+            value: url.to_string(),
+            message: err.to_string(),
+        })?;
+        Ok(self.with_metrics_query_url(parsed))
+    }
+
     fn with_metrics_otlp_ingest_url(
         self,
         url: reqwest::Url,
@@ -194,6 +238,18 @@ impl ObservabilityBuilderExt for CoreScenarioBuilder<()> {
         self.with_metrics_otlp_ingest_url(parsed)
     }
 
+    fn try_with_metrics_otlp_ingest_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError> {
+        let parsed = reqwest::Url::parse(url).map_err(|err| BuilderInputError::InvalidUrl {
+            field: "metrics_otlp_ingest_url",
+            value: url.to_string(),
+            message: err.to_string(),
+        })?;
+        Ok(self.with_metrics_otlp_ingest_url(parsed))
+    }
+
     fn with_grafana_url(self, url: reqwest::Url) -> CoreScenarioBuilder<ObservabilityCapability> {
         self.with_capabilities(ObservabilityCapability {
             metrics_query_url: None,
@@ -205,6 +261,18 @@ impl ObservabilityBuilderExt for CoreScenarioBuilder<()> {
     fn with_grafana_url_str(self, url: &str) -> CoreScenarioBuilder<ObservabilityCapability> {
         let parsed = reqwest::Url::parse(url).expect("grafana url must be valid");
         self.with_grafana_url(parsed)
+    }
+
+    fn try_with_grafana_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError> {
+        let parsed = reqwest::Url::parse(url).map_err(|err| BuilderInputError::InvalidUrl {
+            field: "grafana_url",
+            value: url.to_string(),
+            message: err.to_string(),
+        })?;
+        Ok(self.with_grafana_url(parsed))
     }
 }
 
@@ -220,6 +288,18 @@ impl ObservabilityBuilderExt for CoreScenarioBuilder<ObservabilityCapability> {
     fn with_metrics_query_url_str(self, url: &str) -> CoreScenarioBuilder<ObservabilityCapability> {
         let parsed = reqwest::Url::parse(url).expect("metrics query url must be valid");
         self.with_metrics_query_url(parsed)
+    }
+
+    fn try_with_metrics_query_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError> {
+        let parsed = reqwest::Url::parse(url).map_err(|err| BuilderInputError::InvalidUrl {
+            field: "metrics_query_url",
+            value: url.to_string(),
+            message: err.to_string(),
+        })?;
+        Ok(self.with_metrics_query_url(parsed))
     }
 
     fn with_metrics_otlp_ingest_url(
@@ -238,6 +318,18 @@ impl ObservabilityBuilderExt for CoreScenarioBuilder<ObservabilityCapability> {
         self.with_metrics_otlp_ingest_url(parsed)
     }
 
+    fn try_with_metrics_otlp_ingest_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError> {
+        let parsed = reqwest::Url::parse(url).map_err(|err| BuilderInputError::InvalidUrl {
+            field: "metrics_otlp_ingest_url",
+            value: url.to_string(),
+            message: err.to_string(),
+        })?;
+        Ok(self.with_metrics_otlp_ingest_url(parsed))
+    }
+
     fn with_grafana_url(
         mut self,
         url: reqwest::Url,
@@ -249,6 +341,18 @@ impl ObservabilityBuilderExt for CoreScenarioBuilder<ObservabilityCapability> {
     fn with_grafana_url_str(self, url: &str) -> CoreScenarioBuilder<ObservabilityCapability> {
         let parsed = reqwest::Url::parse(url).expect("grafana url must be valid");
         self.with_grafana_url(parsed)
+    }
+
+    fn try_with_grafana_url_str(
+        self,
+        url: &str,
+    ) -> Result<CoreScenarioBuilder<ObservabilityCapability>, BuilderInputError> {
+        let parsed = reqwest::Url::parse(url).map_err(|err| BuilderInputError::InvalidUrl {
+            field: "grafana_url",
+            value: url.to_string(),
+            message: err.to_string(),
+        })?;
+        Ok(self.with_grafana_url(parsed))
     }
 }
 
@@ -279,6 +383,16 @@ impl<Caps> TransactionFlowBuilder<Caps> {
         self
     }
 
+    /// Like `rate`, but returns an error instead of panicking.
+    pub fn try_rate(self, rate: u64) -> Result<Self, BuilderInputError> {
+        let Some(rate) = NonZeroU64::new(rate) else {
+            return Err(BuilderInputError::ZeroValue {
+                field: "transaction_rate",
+            });
+        };
+        Ok(self.rate_per_block(rate))
+    }
+
     #[must_use]
     /// Set transaction submission rate per block.
     pub const fn rate_per_block(mut self, rate: NonZeroU64) -> Self {
@@ -294,6 +408,17 @@ impl<Caps> TransactionFlowBuilder<Caps> {
             None => panic!("transaction user count must be non-zero"),
         }
         self
+    }
+
+    /// Like `users`, but returns an error instead of panicking.
+    pub fn try_users(mut self, users: usize) -> Result<Self, BuilderInputError> {
+        let Some(value) = NonZeroUsize::new(users) else {
+            return Err(BuilderInputError::ZeroValue {
+                field: "transaction_users",
+            });
+        };
+        self.users = Some(value);
+        Ok(self)
     }
 
     #[must_use]
@@ -347,6 +472,16 @@ impl<Caps> DataAvailabilityFlowBuilder<Caps> {
         self
     }
 
+    /// Like `channel_rate`, but returns an error instead of panicking.
+    pub fn try_channel_rate(self, rate: u64) -> Result<Self, BuilderInputError> {
+        let Some(rate) = NonZeroU64::new(rate) else {
+            return Err(BuilderInputError::ZeroValue {
+                field: "da_channel_rate",
+            });
+        };
+        Ok(self.channel_rate_per_block(rate))
+    }
+
     #[must_use]
     /// Set the number of DA channels to run.
     pub const fn channel_rate_per_block(mut self, rate: NonZeroU64) -> Self {
@@ -359,6 +494,16 @@ impl<Caps> DataAvailabilityFlowBuilder<Caps> {
     pub const fn blob_rate(mut self, rate: u64) -> Self {
         self.blob_rate = blob_rate_checked(rate);
         self
+    }
+
+    /// Like `blob_rate`, but returns an error instead of panicking.
+    pub fn try_blob_rate(self, rate: u64) -> Result<Self, BuilderInputError> {
+        let Some(rate) = NonZeroU64::new(rate) else {
+            return Err(BuilderInputError::ZeroValue {
+                field: "da_blob_rate",
+            });
+        };
+        Ok(self.blob_rate_per_block(rate))
     }
 
     #[must_use]
