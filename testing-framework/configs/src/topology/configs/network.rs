@@ -31,6 +31,10 @@ pub type GeneralNetworkConfig = Config;
 pub enum NetworkConfigError {
     #[error("failed to allocate a free UDP port for libp2p swarm")]
     PortAllocationFailed,
+    #[error("failed to derive node key from bytes: {message}")]
+    NodeKeyFromBytes { message: String },
+    #[error("failed to build loopback multiaddr for NAT settings: {message}")]
+    LoopbackMultiaddr { message: String },
 }
 
 fn default_swarm_config() -> SwarmConfig {
@@ -46,17 +50,19 @@ fn default_swarm_config() -> SwarmConfig {
     }
 }
 
-fn nat_settings(port: u16) -> NatSettings {
+fn nat_settings(port: u16) -> Result<NatSettings, NetworkConfigError> {
     if tf_env::nomos_use_autonat() {
-        return NatSettings::default();
+        return Ok(NatSettings::default());
     }
 
     let addr: Multiaddr = format!("/ip4/127.0.0.1/udp/{port}/quic-v1")
-        .parse()
-        .expect("failed to build loopback multiaddr");
-    NatSettings::Static {
+        .parse::<Multiaddr>()
+        .map_err(|err| NetworkConfigError::LoopbackMultiaddr {
+            message: err.to_string(),
+        })?;
+    Ok(NatSettings::Static {
         external_address: addr,
-    }
+    })
 }
 
 #[must_use]
@@ -68,8 +74,12 @@ pub fn create_network_configs(
         .iter()
         .map(|id| {
             let mut node_key_bytes = *id;
-            let node_key = ed25519::SecretKey::try_from_bytes(&mut node_key_bytes)
-                .expect("Failed to generate secret key from bytes");
+            let node_key =
+                ed25519::SecretKey::try_from_bytes(&mut node_key_bytes).map_err(|err| {
+                    NetworkConfigError::NodeKeyFromBytes {
+                        message: err.to_string(),
+                    }
+                })?;
 
             let port = get_available_udp_port().ok_or(NetworkConfigError::PortAllocationFailed)?;
             Ok(SwarmConfig {
@@ -78,7 +88,7 @@ pub fn create_network_configs(
                 chain_sync_config: cryptarchia_sync::Config {
                     peer_response_timeout: PEER_RESPONSE_TIMEOUT,
                 },
-                nat_config: nat_settings(port),
+                nat_config: nat_settings(port)?,
                 ..default_swarm_config()
             })
         })
@@ -102,9 +112,9 @@ fn initial_peers_by_network_layout(
     swarm_configs: &[SwarmConfig],
     network_params: &NetworkParams,
 ) -> Vec<Vec<Multiaddr>> {
-    if swarm_configs.is_empty() {
+    let Some(first_swarm) = swarm_configs.first() else {
         return Vec::new();
-    }
+    };
 
     let mut all_initial_peers = vec![];
 
@@ -112,7 +122,7 @@ fn initial_peers_by_network_layout(
         Libp2pNetworkLayout::Star => {
             // First node is the hub - has no initial peers
             all_initial_peers.push(vec![]);
-            let first_addr = node_address_from_port(swarm_configs[0].port);
+            let first_addr = node_address_from_port(first_swarm.port);
 
             // All other nodes connect to the first node
             for _ in 1..swarm_configs.len() {
