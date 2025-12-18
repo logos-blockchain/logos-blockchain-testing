@@ -22,6 +22,7 @@ Options:
   --modes LIST            Comma-separated: host,compose,k8s (default: host,compose,k8s)
   --no-clean              Skip scripts/ops/clean.sh step
   --no-bundles            Skip scripts/build/build-bundle.sh (uses existing .tmp tarballs)
+  --no-image-build        Skip image-build variants (compose/k8s); only run the --no-image-build cases
   --force-k8s-image-build Allow the k8s "rebuild image" run even on non-docker-desktop clusters
   --metrics-query-url URL       Forwarded to scripts/run/run-examples.sh (optional)
   --metrics-otlp-ingest-url URL Forwarded to scripts/run/run-examples.sh (optional)
@@ -47,6 +48,7 @@ matrix::parse_args() {
   MODES_RAW="host,compose,k8s"
   DO_CLEAN=1
   DO_BUNDLES=1
+  SKIP_IMAGE_BUILD_VARIANTS=0
   FORCE_K8S_IMAGE_BUILD=0
   METRICS_QUERY_URL=""
   METRICS_OTLP_INGEST_URL=""
@@ -64,6 +66,7 @@ matrix::parse_args() {
       --modes=*) MODES_RAW="${1#*=}"; shift ;;
       --no-clean) DO_CLEAN=0; shift ;;
       --no-bundles) DO_BUNDLES=0; shift ;;
+      --no-image-build) SKIP_IMAGE_BUILD_VARIANTS=1; shift ;;
       --force-k8s-image-build) FORCE_K8S_IMAGE_BUILD=1; shift ;;
       --metrics-query-url) METRICS_QUERY_URL="${2:-}"; shift 2 ;;
       --metrics-query-url=*) METRICS_QUERY_URL="${1#*=}"; shift ;;
@@ -184,11 +187,15 @@ matrix::main() {
             host
         ;;
       compose)
-        matrix::run_case "compose.image_build" \
-          "${ROOT_DIR}/scripts/run/run-examples.sh" \
-            -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
-            "${forward[@]}" \
-            compose
+        if [ "${SKIP_IMAGE_BUILD_VARIANTS}" -eq 0 ]; then
+          matrix::run_case "compose.image_build" \
+            "${ROOT_DIR}/scripts/run/run-examples.sh" \
+              -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+              "${forward[@]}" \
+              compose
+        else
+          echo "==> [compose] Skipping image-build variant (--no-image-build)"
+        fi
 
         matrix::run_case "compose.skip_image_build" \
           "${ROOT_DIR}/scripts/run/run-examples.sh" \
@@ -205,20 +212,24 @@ matrix::main() {
           continue
         fi
 
-        if [ "${ctx}" = "docker-desktop" ] || [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
-          # On non-docker-desktop clusters, run-examples.sh defaults to skipping local image builds
-          # since the cluster can't see them. Honor the matrix "force" option by overriding.
-          if [ "${ctx}" != "docker-desktop" ] && [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
-            export NOMOS_FORCE_IMAGE_BUILD=1
+        if [ "${SKIP_IMAGE_BUILD_VARIANTS}" -eq 0 ]; then
+          if [ "${ctx}" = "docker-desktop" ] || [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
+            # On non-docker-desktop clusters, run-examples.sh defaults to skipping local image builds
+            # since the cluster can't see them. Honor the matrix "force" option by overriding.
+            if [ "${ctx}" != "docker-desktop" ] && [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
+              export NOMOS_FORCE_IMAGE_BUILD=1
+            fi
+            matrix::run_case "k8s.image_build" \
+              "${ROOT_DIR}/scripts/run/run-examples.sh" \
+                -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+                "${forward[@]}" \
+                k8s
+            unset NOMOS_FORCE_IMAGE_BUILD || true
+          else
+            echo "==> [k8s] Detected context '${ctx}'; skipping image-build variant (use --force-k8s-image-build to override)"
           fi
-          matrix::run_case "k8s.image_build" \
-            "${ROOT_DIR}/scripts/run/run-examples.sh" \
-              -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
-              "${forward[@]}" \
-              k8s
-          unset NOMOS_FORCE_IMAGE_BUILD || true
         else
-          echo "==> [k8s] Detected context '${ctx}'; skipping image-build variant (use --force-k8s-image-build to override)"
+          echo "==> [k8s] Skipping image-build variant (--no-image-build)"
         fi
 
         matrix::run_case "k8s.skip_image_build" \
