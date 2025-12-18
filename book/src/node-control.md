@@ -43,10 +43,13 @@ Expectations typically use BlockFeed to verify block production and inclusion of
 **Example: Counting blocks during a run**
 
 ```rust
-use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
+
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
-use tokio::{spawn, time::sleep, select, pin};
 
 struct MinimumBlocksExpectation {
     min_blocks: u64,
@@ -67,7 +70,7 @@ impl Expectation for MinimumBlocksExpectation {
         let mut receiver = ctx.block_feed().subscribe();
         
         // Spawn a task to count blocks
-        spawn(async move {
+        tokio::spawn(async move {
             loop {
                 match receiver.recv().await {
                     Ok(_record) => {
@@ -110,12 +113,12 @@ impl Expectation for MinimumBlocksExpectation {
 **Example: Inspecting block contents**
 
 ```rust
-use testing_framework_core::scenario::{BlockRecord, RunContext};
+use testing_framework_core::scenario::{DynError, RunContext};
 
-async fn start_capture(&mut self, ctx: &RunContext) -> Result<(), DynError> {
+async fn start_capture(ctx: &RunContext) -> Result<(), DynError> {
     let mut receiver = ctx.block_feed().subscribe();
     
-    spawn(async move {
+    tokio::spawn(async move {
         loop {
             match receiver.recv().await {
                 Ok(record) => {
@@ -123,8 +126,7 @@ async fn start_capture(&mut self, ctx: &RunContext) -> Result<(), DynError> {
                     let header_id = &record.header;
                     
                     // Access full block
-                    let block = &record.block;
-                    let tx_count = block.transactions().len();
+                    let tx_count = record.block.transactions().len();
                     
                     tracing::debug!(
                         ?header_id,
@@ -195,26 +197,32 @@ impl Workload for DelayedWorkload {
 **Example: Rate limiting based on block production**
 
 ```rust
-async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
+use testing_framework_core::scenario::{DynError, RunContext};
+
+async fn generate_request() -> Option<()> {
+    None
+}
+
+async fn start(ctx: &RunContext) -> Result<(), DynError> {
     let clients = ctx.node_clients().validator_clients();
     let mut receiver = ctx.block_feed().subscribe();
-    let mut pending_txs = Vec::new();
-    
+    let mut pending_requests: Vec<()> = Vec::new();
+
     loop {
         tokio::select! {
-            // Send batch on new block
+            // Issue a batch on each new block.
             Ok(_record) = receiver.recv() => {
-                if !pending_txs.is_empty() {
-                    tracing::debug!(count = pending_txs.len(), "sending batch on new block");
-                    for tx in pending_txs.drain(..) {
-                        clients[0].send_transaction(tx).await?;
+                if !pending_requests.is_empty() {
+                    tracing::debug!(count = pending_requests.len(), "issuing requests on new block");
+                    for _req in pending_requests.drain(..) {
+                        let _info = clients[0].consensus_info().await?;
                     }
                 }
             }
-            
-            // Generate transactions continuously
-            Some(tx) = generate_transaction() => {
-                pending_txs.push(tx);
+
+            // Generate work continuously.
+            Some(req) = generate_request() => {
+                pending_requests.push(req);
             }
         }
     }
@@ -238,7 +246,9 @@ async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
 Example direct polling in expectations:
 
 ```rust
-async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
+use testing_framework_core::scenario::{DynError, RunContext};
+
+async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {
     let client = &ctx.node_clients().validator_clients()[0];
     
     // Poll current height once
@@ -255,16 +265,18 @@ async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
 Access aggregated statistics without subscribing to the feed:
 
 ```rust
-async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
+use testing_framework_core::scenario::{DynError, RunContext};
+
+async fn evaluate(ctx: &RunContext, expected_min: u64) -> Result<(), DynError> {
     let stats = ctx.block_feed().stats();
     let total_txs = stats.total_transactions();
     
     tracing::info!(total_txs, "transactions observed across all blocks");
     
-    if total_txs < self.expected_min {
+    if total_txs < expected_min {
         return Err(format!(
             "expected at least {} transactions, observed {}",
-            self.expected_min, total_txs
+            expected_min, total_txs
         ).into());
     }
     

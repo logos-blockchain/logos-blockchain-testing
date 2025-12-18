@@ -1,5 +1,7 @@
 # Core Content: ScenarioBuilderExt Patterns
 
+> **When should I read this?** After writing 2-3 scenarios. This page documents patterns that emerge from real usage—come back when you're refactoring or standardizing your test suite.
+
 Patterns that keep scenarios readable and reusable:
 
 - **Topology-first**: start by shaping the cluster (counts, layout) so later

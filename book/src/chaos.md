@@ -1,5 +1,7 @@
 # Chaos Workloads
 
+> **When should I read this?** You don't need chaos testing to be productive with the framework. Focus on basic scenarios first—chaos is for resilience validation and operational readiness drills once your core tests are stable.
+
 Chaos in the framework uses node control to introduce failures and validate
 recovery. The built-in restart workload lives in
 `testing_framework_workflows::workloads::chaos::RandomRestartWorkload`.

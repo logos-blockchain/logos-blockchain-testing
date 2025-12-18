@@ -32,6 +32,24 @@ Operational readiness focuses on prerequisites, environment fit, and clear signa
 - Health checks prevent premature workload execution
 - Consensus liveness expectations validate basic operation
 
+## Runner-Agnostic Design
+
+The framework is intentionally **runner-agnostic**: the same scenario plan runs across all deployment targets. Understanding which operational concerns apply to each runner helps you choose the right fit.
+
+| Concern | Host | Compose | Kubernetes |
+|---------|------|---------|------------|
+| **Topology** | Full support | Full support | Full support |
+| **Workloads** | All workloads | All workloads | All workloads |
+| **Expectations** | All expectations | All expectations | All expectations |
+| **Chaos / Node Control** | Not supported | Supported | Not yet |
+| **Metrics / Observability** | Manual setup | External stack | Cluster-wide |
+| **Log Collection** | Temp files | Container logs | Pod logs |
+| **Isolation** | Process-level | Container | Pod + namespace |
+| **Setup Time** | < 1 min | 2-5 min | 5-10 min |
+| **CI Recommended?** | Smoke tests | Primary | Large-scale only |
+
+**Key insight:** Operational concerns (prerequisites, environment variables) are largely **consistent** across runners, while deployment-specific concerns (isolation, chaos support) vary by backend.
+
 ## Operational Workflow
 
 ```mermaid

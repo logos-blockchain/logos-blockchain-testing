@@ -291,13 +291,14 @@ POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
 **Example usage in expectations:**
 
 ```rust
-async fn evaluate(&self, ctx: &RunContext) -> Result<(), DynError> {
-    let clients = ctx.node_clients().validator_clients();
-    let client = &clients[0];
-    
+use testing_framework_core::scenario::{DynError, RunContext};
+
+async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {
+    let client = &ctx.node_clients().validator_clients()[0];
+
     let info = client.consensus_info().await?;
-    tracing::info!(?info, "consensus info from validator 0");
-    
+    tracing::info!(height = info.height, "consensus info from validator 0");
+
     Ok(())
 }
 ```
@@ -362,4 +363,3 @@ kubectl logs -n nomos-debug -l nomos/logical-role=validator
 - [Troubleshooting](troubleshooting.md) — Log-related debugging (see "Where to Find Logs")
 - [Running Examples](running-examples.md) — Runner-specific logging details
 - [Prerequisites & Setup](prerequisites.md) — Setup before running
-

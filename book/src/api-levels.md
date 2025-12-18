@@ -92,14 +92,15 @@ Mixing is common: use the DSL for built-ins, and direct instantiation for custom
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::ScenarioBuilderExt;
+use testing_framework_workflows::{ScenarioBuilderExt, workloads::transaction};
 
-let custom_workload = MyCustomWorkload::new(config);
+let tx_workload = transaction::Workload::with_rate(5)
+    .expect("transaction rate must be non-zero");
 
 let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
-    .transactions_with(|txs| txs.rate(5).users(3)) // DSL
-    .with_workload(custom_workload)                // direct
-    .expect_consensus_liveness()                   // DSL
+    .wallets(5)
+    .with_workload(tx_workload)          // direct instantiation
+    .expect_consensus_liveness()         // DSL
     .with_run_duration(Duration::from_secs(60))
     .build();
 ```
@@ -108,15 +109,11 @@ let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).exe
 
 The DSL methods are thin wrappers. For example:
 
-```rust
-builder.transactions_with(|txs| txs.rate(5).users(3))
-```
+`builder.transactions_with(|txs| txs.rate(5).users(3))`
 
 is roughly equivalent to:
 
-```rust
-builder.transactions().rate(5).users(3).apply()
-```
+`builder.transactions().rate(5).users(3).apply()`
 
 ## Troubleshooting
 

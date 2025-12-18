@@ -42,7 +42,7 @@
 - **State assertion**: expectation that verifies specific values in the system
   state (e.g., wallet balances, UTXO sets) rather than just progress signals.
   Also called "correctness expectations."
-- **Mantle transaction**: transaction type in Nomos that can contain UTXO transfers
+- **Mantle transaction**: transaction type in Logos that can contain UTXO transfers
   (LedgerTx) and operations (Op), including channel data (ChannelBlob).
 - **Channel**: logical grouping for DA blobs; each blob belongs to a channel and
   references a parent blob in the same channel, creating a chain of related data.
@@ -50,3 +50,9 @@
   proof generation for leader election. **Required for all runners** (local, compose, k8s)
   for practical testing—without it, proof generation causes timeouts. Should never be
   used in production environments.
+
+---
+
+## External Resources
+
+- **[Nomos Project Documentation](https://nomos-tech.notion.site/project)** — Protocol specifications, node internals, and architecture details

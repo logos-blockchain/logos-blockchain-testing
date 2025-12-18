@@ -20,6 +20,19 @@ use testing_framework_core::scenario::{
 };
 use testing_framework_core::topology::generation::GeneratedTopology;
 
+struct MyExpectation;
+
+#[async_trait]
+impl Expectation for MyExpectation {
+    fn name(&self) -> &str {
+        "my_expectation"
+    }
+
+    async fn evaluate(&mut self, _ctx: &RunContext) -> Result<(), DynError> {
+        Ok(())
+    }
+}
+
 pub struct MyWorkload {
     // Configuration fields
     target_rate: u64,
@@ -39,7 +52,7 @@ impl Workload for MyWorkload {
 
     fn expectations(&self) -> Vec<Box<dyn Expectation>> {
         // Return bundled expectations that should run with this workload
-        vec![Box::new(MyExpectation::new(self.target_rate))]
+        vec![Box::new(MyExpectation)]
     }
 
     fn init(
@@ -60,7 +73,7 @@ impl Workload for MyWorkload {
         
         for client in clients {
             let info = client.consensus_info().await?;
-            tracing::info!(?info, "workload queried node");
+            tracing::info!(height = info.height, "workload queried node");
         }
         
         Ok(())
@@ -117,7 +130,7 @@ impl Expectation for MyExpectation {
             .ok_or("no validators")?;
         
         let info = client.consensus_info().await?;
-        self.captured_baseline = Some(info.current_block_id.slot);
+        self.captured_baseline = Some(info.height);
         
         tracing::info!(baseline = self.captured_baseline, "captured baseline");
         Ok(())
@@ -129,10 +142,10 @@ impl Expectation for MyExpectation {
             .ok_or("no validators")?;
         
         let info = client.consensus_info().await?;
-        let final_slot = info.current_block_id.slot;
+        let final_height = info.height;
         
         let baseline = self.captured_baseline.unwrap_or(0);
-        let delta = final_slot.saturating_sub(baseline);
+        let delta = final_height.saturating_sub(baseline);
         
         if delta < self.expected_value {
             return Err(format!(
@@ -198,7 +211,11 @@ impl Deployer<()> for MyDeployer {
         let topology: Option<Topology> = None; // Some(topology) if you spawned one
         let node_clients = NodeClients::default(); // Or NodeClients::from_topology(...)
 
-        let (block_feed, block_feed_guard) = spawn_block_feed(&node_clients).await?;
+        let client = node_clients
+            .any_client()
+            .ok_or("no api clients available")?
+            .clone();
+        let (block_feed, block_feed_guard) = spawn_block_feed(client).await?;
 
         let telemetry = Metrics::empty(); // or Metrics::from_prometheus(...)
         let node_control = None; // or Some(Arc<dyn NodeControlHandle>)
@@ -237,28 +254,18 @@ impl Deployer<()> for MyDeployer {
 **Example:**
 
 ```rust
-use testing_framework_core::topology::config::TopologyBuilder;
+use testing_framework_core::topology::{
+    config::TopologyBuilder,
+    configs::network::Libp2pNetworkLayout,
+};
 
-impl TopologyBuilder {
-    /// Creates a "ring" topology where each node connects to its neighbors
-    pub fn network_ring(&mut self) -> &mut Self {
-        // Configure peer connections in a ring layout
-        self.with_network_layout(|layout| {
-            // Implement ring connection logic
-            layout.ring_peers()
-        });
-        self
-    }
+pub trait TopologyBuilderExt {
+    fn network_full(self) -> Self;
+}
 
-    /// Preset for high-throughput DA configuration
-    pub fn da_high_throughput(&mut self) -> &mut Self {
-        self.with_da_params(|params| {
-            params
-                .dispersal_factor(8)
-                .replication_factor(16)
-                .chunk_size(4096)
-        });
-        self
+impl TopologyBuilderExt for TopologyBuilder {
+    fn network_full(self) -> Self {
+        self.with_network_layout(Libp2pNetworkLayout::Full)
     }
 }
 ```
@@ -273,7 +280,49 @@ impl TopologyBuilder {
 To expose your custom workload through the high-level DSL, add a trait extension:
 
 ```rust
-use testing_framework_core::scenario::Builder as ScenarioBuilder;
+use async_trait::async_trait;
+use testing_framework_core::scenario::{DynError, RunContext, ScenarioBuilder, Workload};
+
+#[derive(Default)]
+pub struct MyWorkloadBuilder {
+    target_rate: u64,
+    some_option: bool,
+}
+
+impl MyWorkloadBuilder {
+    pub const fn target_rate(mut self, target_rate: u64) -> Self {
+        self.target_rate = target_rate;
+        self
+    }
+
+    pub const fn some_option(mut self, some_option: bool) -> Self {
+        self.some_option = some_option;
+        self
+    }
+
+    pub const fn build(self) -> MyWorkload {
+        MyWorkload {
+            target_rate: self.target_rate,
+            some_option: self.some_option,
+        }
+    }
+}
+
+pub struct MyWorkload {
+    target_rate: u64,
+    some_option: bool,
+}
+
+#[async_trait]
+impl Workload for MyWorkload {
+    fn name(&self) -> &str {
+        "my_workload"
+    }
+
+    async fn start(&self, _ctx: &RunContext) -> Result<(), DynError> {
+        Ok(())
+    }
+}
 
 pub trait MyWorkloadDsl {
     fn my_workload_with(
@@ -282,7 +331,7 @@ pub trait MyWorkloadDsl {
     ) -> Self;
 }
 
-impl<Caps> MyWorkloadDsl for ScenarioBuilder<Caps> {
+impl MyWorkloadDsl for ScenarioBuilder {
     fn my_workload_with(
         self,
         f: impl FnOnce(MyWorkloadBuilder) -> MyWorkloadBuilder,
@@ -296,7 +345,7 @@ impl<Caps> MyWorkloadDsl for ScenarioBuilder<Caps> {
 Users can then call:
 
 ```rust
-ScenarioBuilder::topology_with(|t| { /* ... */ })
+ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(1))
     .my_workload_with(|w| {
         w.target_rate(10)
          .some_option(true)

@@ -2,7 +2,7 @@
 authors  = ["Nomos Testing"]
 language = "en"
 src      = "src"
-title    = "Nomos Testing Book"
+title    = "Logos Blockchain Testing Framework Book"
 
 [build]
 # Keep book output in target/ to avoid polluting the workspace root.

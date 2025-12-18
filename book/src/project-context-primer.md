@@ -8,6 +8,20 @@ The Nomos Testing Framework enables you to test consensus, data availability, an
 
 ---
 
+## Core Concept
+
+**Everything in this framework is a Scenario.**
+
+A Scenario is a controlled experiment over time, composed of:
+- **Topology** — The cluster shape (validators, executors, network layout)
+- **Workloads** — Traffic and conditions that exercise the system (transactions, DA, chaos)
+- **Expectations** — Success criteria verified after execution (liveness, inclusion, recovery)
+- **Duration** — The time window for the experiment
+
+This single abstraction makes tests declarative, portable, and composable.
+
+---
+
 ## How It Works
 
 ```mermaid
@@ -56,7 +70,10 @@ flowchart LR
 ## Quick Example
 
 ```rust
+use std::time::Duration;
+
 use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_core::scenario::Deployer as _;
 use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -67,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
             .validators(3)
             .executors(1)
     })
-    .transactions_with(|tx| tx.rate(10.0).users(5))
+    .transactions_with(|tx| tx.rate(10).users(5))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -115,6 +132,8 @@ Check the **[Developer Reference](part-iii.md)** to implement custom workloads, 
 These roles interact tightly, which is why meaningful testing must be performed in multi-node environments that include real networking, timing, and DA interaction.
 
 The Nomos Testing Framework provides the infrastructure to orchestrate these multi-node scenarios reliably across development, CI, and production-like environments.
+
+**Learn more about the protocol:** [Nomos Project Documentation](https://nomos-tech.notion.site/project)
 
 ---
 

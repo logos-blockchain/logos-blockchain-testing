@@ -1,5 +1,7 @@
 # Advanced Examples
 
+> **When should I read this?** Skim now to see what's possible, revisit later when you need load testing, chaos scenarios, or custom extensions. Start with [basic examples](examples.md) first.
+
 Realistic advanced scenarios demonstrating framework capabilities for production testing.
 
 **Adapt from Complete Source:**

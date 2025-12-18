@@ -334,15 +334,15 @@ thread 'main' panicked at 'workload init failed: insufficient wallets'
 **Fix:**
 
 ```rust
-// In your scenario:
-let scenario = Scenario::builder("my_test")
-    .topology(
-        Topology::preset_3v1e()
-            .wallets(20)  // ← Increase wallet count
-    )
-    .workload(TransactionWorkload::new()
-        .users(10)  // ← Must be ≤ wallets(20)
-        .rate(5.0))
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .wallets(20) // ← Increase wallet count
+    .transactions_with(|tx| {
+        tx.users(10) // ← Must be ≤ wallets(20)
+            .rate(5)
+    })
     .build();
 ```
 
@@ -453,13 +453,15 @@ thread 'main' panicked at 'expectations failed'
 **Fix:**
 
 ```rust
-// Increase run duration to allow more blocks
-let scenario = Scenario::builder("my_test")
-    .topology(Topology::preset_3v1e())
-    .with_run_duration(Duration::from_secs(120))  // ← Give more time
-    .expectation(ConsensusLiveness::new()
-        .min_blocks(5)  // ← Adjust expectation to match duration
-    )
+use std::time::Duration;
+
+use testing_framework_core::scenario::ScenarioBuilder;
+use testing_framework_workflows::ScenarioBuilderExt;
+
+// Increase run duration to allow more blocks.
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    .expect_consensus_liveness()
+    .with_run_duration(Duration::from_secs(120)) // ← Give more time
     .build();
 ```
 
