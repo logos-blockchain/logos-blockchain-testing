@@ -40,19 +40,31 @@ pub(crate) fn build_blend_service_config(
     BlendDeploymentSettings,
     NetworkDeploymentSettings,
 ) {
-    let message_frequency_per_round = match NonNegativeF64::try_from(MESSAGE_FREQUENCY_PER_ROUND) {
+    let message_frequency_per_round = message_frequency_per_round();
+    let zk_key_id = key_id_for_preload_backend(&Key::from(config.secret_zk_key.clone()));
+
+    let user = build_blend_user_config(config, zk_key_id);
+    let deployment_settings = build_blend_deployment_settings(config, message_frequency_per_round);
+    let network_deployment = build_network_deployment_settings();
+
+    (user, deployment_settings, network_deployment)
+}
+
+fn message_frequency_per_round() -> NonNegativeF64 {
+    match NonNegativeF64::try_from(MESSAGE_FREQUENCY_PER_ROUND) {
         Ok(value) => value,
         Err(_) => unsafe {
             // Safety: `MESSAGE_FREQUENCY_PER_ROUND` is a finite non-negative constant.
             std::hint::unreachable_unchecked()
         },
-    };
-    let zk_key_id = key_id_for_preload_backend(&Key::from(config.secret_zk_key.clone()));
+    }
+}
 
+fn build_blend_user_config(config: &TopologyBlendConfig, zk_key_id: String) -> BlendUserConfig {
     let backend_core = &config.backend_core;
     let backend_edge = &config.backend_edge;
 
-    let user = BlendUserConfig {
+    BlendUserConfig {
         non_ephemeral_signing_key: config.private_key.clone(),
         // Persist recovery data under the tempdir so components expecting it
         // can start cleanly.
@@ -76,9 +88,16 @@ pub(crate) fn build_blend_service_config(
                 replication_factor: backend_edge.replication_factor,
             },
         },
-    };
+    }
+}
 
-    let deployment_settings = BlendDeploymentSettings {
+fn build_blend_deployment_settings(
+    config: &TopologyBlendConfig,
+    message_frequency_per_round: NonNegativeF64,
+) -> BlendDeploymentSettings {
+    let backend_core = &config.backend_core;
+
+    BlendDeploymentSettings {
         common: blend_deployment::CommonSettings {
             num_blend_layers: unsafe { NonZeroU64::new_unchecked(BLEND_LAYERS_COUNT) },
             minimum_network_size: unsafe { NonZeroU64::new_unchecked(MINIMUM_NETWORK_SIZE) },
@@ -113,16 +132,16 @@ pub(crate) fn build_blend_service_config(
             minimum_messages_coefficient: backend_core.minimum_messages_coefficient,
             normalization_constant: backend_core.normalization_constant,
         },
-    };
+    }
+}
 
-    let network_deployment = NetworkDeploymentSettings {
+fn build_network_deployment_settings() -> NetworkDeploymentSettings {
+    NetworkDeploymentSettings {
         identify_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
             "/integration/nomos/identify/1.0.0",
         ),
         kademlia_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
             "/integration/nomos/kad/1.0.0",
         ),
-    };
-
-    (user, deployment_settings, network_deployment)
+    }
 }

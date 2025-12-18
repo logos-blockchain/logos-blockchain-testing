@@ -336,7 +336,23 @@ pub fn create_genesis_tx_with_declarations(
     ledger_tx: LedgerTx,
     providers: Vec<ProviderInfo>,
 ) -> Result<GenesisTx, ConsensusConfigError> {
-    let inscription = InscriptionOp {
+    let inscription = build_genesis_inscription()?;
+    let ledger_tx_hash = ledger_tx.hash();
+
+    let ops = build_genesis_ops(inscription, ledger_tx_hash, &providers);
+    let mantle_tx = MantleTx {
+        ops,
+        ledger_tx,
+        execution_gas_price: 0,
+        storage_gas_price: 0,
+    };
+
+    let ops_proofs = build_genesis_ops_proofs(mantle_tx.hash(), providers)?;
+    build_genesis_tx(mantle_tx, ops_proofs)
+}
+
+fn build_genesis_inscription() -> Result<InscriptionOp, ConsensusConfigError> {
+    Ok(InscriptionOp {
         channel_id: ChannelId::from([0; 32]),
         inscription: vec![103, 101, 110, 101, 115, 105, 115], // "genesis" in bytes
         parent: MsgId::root(),
@@ -345,13 +361,18 @@ pub fn create_genesis_tx_with_declarations(
                 message: err.to_string(),
             }
         })?,
-    };
+    })
+}
 
-    let ledger_tx_hash = ledger_tx.hash();
+fn build_genesis_ops(
+    inscription: InscriptionOp,
+    ledger_tx_hash: nomos_core::mantle::TxHash,
+    providers: &[ProviderInfo],
+) -> Vec<Op> {
+    let mut ops = Vec::with_capacity(1 + providers.len());
+    ops.push(Op::ChannelInscribe(inscription));
 
-    let mut ops = vec![Op::ChannelInscribe(inscription)];
-
-    for provider in &providers {
+    for provider in providers {
         let utxo = Utxo {
             tx_hash: ledger_tx_hash,
             output_index: provider.note.output_index,
@@ -367,15 +388,15 @@ pub fn create_genesis_tx_with_declarations(
         ops.push(Op::SDPDeclare(declaration));
     }
 
-    let mantle_tx = MantleTx {
-        ops,
-        ledger_tx,
-        execution_gas_price: 0,
-        storage_gas_price: 0,
-    };
+    ops
+}
 
-    let mantle_tx_hash = mantle_tx.hash();
-    let mut ops_proofs = vec![OpProof::NoProof];
+fn build_genesis_ops_proofs(
+    mantle_tx_hash: nomos_core::mantle::TxHash,
+    providers: Vec<ProviderInfo>,
+) -> Result<Vec<OpProof>, ConsensusConfigError> {
+    let mut ops_proofs = Vec::with_capacity(1 + providers.len());
+    ops_proofs.push(OpProof::NoProof);
 
     for provider in providers {
         let zk_sig =
@@ -393,6 +414,13 @@ pub fn create_genesis_tx_with_declarations(
         });
     }
 
+    Ok(ops_proofs)
+}
+
+fn build_genesis_tx(
+    mantle_tx: MantleTx,
+    ops_proofs: Vec<OpProof>,
+) -> Result<GenesisTx, ConsensusConfigError> {
     let signed_mantle_tx = SignedMantleTx {
         mantle_tx,
         ops_proofs,

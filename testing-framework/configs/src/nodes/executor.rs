@@ -33,13 +33,8 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
     let (blend_user_config, blend_deployment, network_deployment) =
         build_blend_service_config(&config.blend_config);
 
-    let deployment_settings = DeploymentSettings::new_custom(
-        blend_deployment,
-        network_deployment,
-        cryptarchia_deployment(&config),
-        time_deployment(&config),
-        mempool_deployment(),
-    );
+    let deployment_settings =
+        build_executor_deployment_settings(&config, blend_deployment, network_deployment);
 
     ExecutorConfig {
         network: network_config,
@@ -47,23 +42,7 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
         deployment: deployment_settings,
         cryptarchia: cryptarchia_config(&config),
         da_network: DaNetworkConfig {
-            backend: DaNetworkExecutorBackendSettings {
-                validator_settings: DaNetworkBackendSettings {
-                    node_key: config.da_config.node_key.clone(),
-                    listening_address: config.da_config.listening_address.clone(),
-                    policy_settings: config.da_config.policy_settings.clone(),
-                    monitor_settings: config.da_config.monitor_settings.clone(),
-                    balancer_interval: config.da_config.balancer_interval,
-                    redial_cooldown: config.da_config.redial_cooldown,
-                    replication_settings: config.da_config.replication_settings,
-                    subnets_settings: SubnetsConfig {
-                        num_of_subnets: config.da_config.num_samples as usize,
-                        shares_retry_limit: config.da_config.retry_shares_limit,
-                        commitments_retry_limit: config.da_config.retry_commitments_limit,
-                    },
-                },
-                num_subnets: config.da_config.num_subnets,
-            },
+            backend: build_executor_da_network_backend_settings(&config),
             membership: config.da_config.membership.clone(),
             api_adapter_settings: ApiAdapterSettings {
                 api_port: config.api_config.address.port(),
@@ -77,22 +56,9 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
         tracing: tracing_settings(&config),
         http: http_config(&config),
         da_sampling: da_sampling_config(&config),
-        storage: RocksBackendSettings {
-            db_path: "./db".into(),
-            read_only: false,
-            column_family: Some("blocks".into()),
-        },
+        storage: rocks_storage_settings(),
         da_dispersal: DispersalServiceSettings {
-            backend: DispersalKZGRSBackendSettings {
-                encoder_settings: EncoderSettings {
-                    num_columns: config.da_config.num_subnets as usize,
-                    with_cache: false,
-                    global_params_path: config.da_config.global_params_path.clone(),
-                },
-                dispersal_timeout: timeouts::dispersal_timeout(),
-                retry_cooldown: timeouts::retry_cooldown(),
-                retry_limit: 2,
-            },
+            backend: build_dispersal_backend_settings(&config),
         },
         time: time_config(&config),
         mempool: mempool_config(),
@@ -100,5 +66,62 @@ pub fn create_executor_config(config: GeneralConfig) -> ExecutorConfig {
         wallet: wallet_settings(&config),
         key_management: config.kms_config.clone(),
         testing_http: testing_http_config(&config),
+    }
+}
+
+fn build_executor_deployment_settings(
+    config: &GeneralConfig,
+    blend_deployment: nomos_node::config::blend::deployment::Settings,
+    network_deployment: nomos_node::config::network::deployment::Settings,
+) -> DeploymentSettings {
+    DeploymentSettings::new_custom(
+        blend_deployment,
+        network_deployment,
+        cryptarchia_deployment(config),
+        time_deployment(config),
+        mempool_deployment(),
+    )
+}
+
+fn build_executor_da_network_backend_settings(
+    config: &GeneralConfig,
+) -> DaNetworkExecutorBackendSettings {
+    DaNetworkExecutorBackendSettings {
+        validator_settings: DaNetworkBackendSettings {
+            node_key: config.da_config.node_key.clone(),
+            listening_address: config.da_config.listening_address.clone(),
+            policy_settings: config.da_config.policy_settings.clone(),
+            monitor_settings: config.da_config.monitor_settings.clone(),
+            balancer_interval: config.da_config.balancer_interval,
+            redial_cooldown: config.da_config.redial_cooldown,
+            replication_settings: config.da_config.replication_settings,
+            subnets_settings: SubnetsConfig {
+                num_of_subnets: config.da_config.num_samples as usize,
+                shares_retry_limit: config.da_config.retry_shares_limit,
+                commitments_retry_limit: config.da_config.retry_commitments_limit,
+            },
+        },
+        num_subnets: config.da_config.num_subnets,
+    }
+}
+
+fn rocks_storage_settings() -> RocksBackendSettings {
+    RocksBackendSettings {
+        db_path: "./db".into(),
+        read_only: false,
+        column_family: Some("blocks".into()),
+    }
+}
+
+fn build_dispersal_backend_settings(config: &GeneralConfig) -> DispersalKZGRSBackendSettings {
+    DispersalKZGRSBackendSettings {
+        encoder_settings: EncoderSettings {
+            num_columns: config.da_config.num_subnets as usize,
+            with_cache: false,
+            global_params_path: config.da_config.global_params_path.clone(),
+        },
+        dispersal_timeout: timeouts::dispersal_timeout(),
+        retry_cooldown: timeouts::retry_cooldown(),
+        retry_limit: 2,
     }
 }

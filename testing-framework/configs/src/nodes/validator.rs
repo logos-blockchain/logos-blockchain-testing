@@ -24,44 +24,20 @@ use crate::{
 
 #[must_use]
 pub fn create_validator_config(config: GeneralConfig) -> ValidatorConfig {
-    let da_policy_settings = config.da_config.policy_settings.clone();
     let network_config = config.network_config.clone();
     let (blend_user_config, blend_deployment, network_deployment) =
         build_blend_service_config(&config.blend_config);
-    let deployment_settings = DeploymentSettings::new_custom(
-        blend_deployment,
-        network_deployment,
-        cryptarchia_deployment(&config),
-        time_deployment(&config),
-        mempool_deployment(),
-    );
+
+    let deployment_settings =
+        build_validator_deployment_settings(&config, blend_deployment, network_deployment);
+
     ValidatorConfig {
         network: network_config,
         blend: blend_user_config,
         deployment: deployment_settings,
         cryptarchia: cryptarchia_config(&config),
         da_network: DaNetworkConfig {
-            backend: DaNetworkBackendSettings {
-                node_key: config.da_config.node_key.clone(),
-                listening_address: config.da_config.listening_address.clone(),
-                policy_settings: DAConnectionPolicySettings {
-                    min_dispersal_peers: 0,
-                    min_replication_peers: da_policy_settings.min_replication_peers,
-                    max_dispersal_failures: da_policy_settings.max_dispersal_failures,
-                    max_sampling_failures: da_policy_settings.max_sampling_failures,
-                    max_replication_failures: da_policy_settings.max_replication_failures,
-                    malicious_threshold: da_policy_settings.malicious_threshold,
-                },
-                monitor_settings: config.da_config.monitor_settings.clone(),
-                balancer_interval: config.da_config.balancer_interval,
-                redial_cooldown: config.da_config.redial_cooldown,
-                replication_settings: config.da_config.replication_settings,
-                subnets_settings: SubnetsConfig {
-                    num_of_subnets: config.da_config.num_samples as usize,
-                    shares_retry_limit: config.da_config.retry_shares_limit,
-                    commitments_retry_limit: config.da_config.retry_commitments_limit,
-                },
-            },
+            backend: build_validator_da_network_backend_settings(&config),
             membership: config.da_config.membership.clone(),
             api_adapter_settings: ApiAdapterSettings {
                 api_port: config.api_config.address.port(),
@@ -75,16 +51,60 @@ pub fn create_validator_config(config: GeneralConfig) -> ValidatorConfig {
         tracing: tracing_settings(&config),
         http: http_config(&config),
         da_sampling: da_sampling_config(&config),
-        storage: RocksBackendSettings {
-            db_path: "./db".into(),
-            read_only: false,
-            column_family: Some("blocks".into()),
-        },
+        storage: rocks_storage_settings(),
         time: time_config(&config),
         mempool: mempool_config(),
         sdp: SdpSettings { declaration: None },
         testing_http: testing_http_config(&config),
         wallet: wallet_settings(&config),
         key_management: config.kms_config.clone(),
+    }
+}
+
+fn build_validator_deployment_settings(
+    config: &GeneralConfig,
+    blend_deployment: nomos_node::config::blend::deployment::Settings,
+    network_deployment: nomos_node::config::network::deployment::Settings,
+) -> DeploymentSettings {
+    DeploymentSettings::new_custom(
+        blend_deployment,
+        network_deployment,
+        cryptarchia_deployment(config),
+        time_deployment(config),
+        mempool_deployment(),
+    )
+}
+
+fn build_validator_da_network_backend_settings(config: &GeneralConfig) -> DaNetworkBackendSettings {
+    let da_policy_settings = config.da_config.policy_settings.clone();
+
+    DaNetworkBackendSettings {
+        node_key: config.da_config.node_key.clone(),
+        listening_address: config.da_config.listening_address.clone(),
+        policy_settings: DAConnectionPolicySettings {
+            min_dispersal_peers: 0,
+            min_replication_peers: da_policy_settings.min_replication_peers,
+            max_dispersal_failures: da_policy_settings.max_dispersal_failures,
+            max_sampling_failures: da_policy_settings.max_sampling_failures,
+            max_replication_failures: da_policy_settings.max_replication_failures,
+            malicious_threshold: da_policy_settings.malicious_threshold,
+        },
+        monitor_settings: config.da_config.monitor_settings.clone(),
+        balancer_interval: config.da_config.balancer_interval,
+        redial_cooldown: config.da_config.redial_cooldown,
+        replication_settings: config.da_config.replication_settings,
+        subnets_settings: SubnetsConfig {
+            num_of_subnets: config.da_config.num_samples as usize,
+            shares_retry_limit: config.da_config.retry_shares_limit,
+            commitments_retry_limit: config.da_config.retry_commitments_limit,
+        },
+    }
+}
+
+fn rocks_storage_settings() -> RocksBackendSettings {
+    RocksBackendSettings {
+        db_path: "./db".into(),
+        read_only: false,
+        column_family: Some("blocks".into()),
     }
 }
