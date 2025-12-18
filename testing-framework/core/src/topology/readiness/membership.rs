@@ -174,27 +174,6 @@ pub async fn try_fetch_membership(
         .map_err(MembershipError::Http)
 }
 
-#[deprecated(note = "use try_fetch_membership to avoid panics and preserve error details")]
-pub async fn fetch_membership(
-    client: &Client,
-    base: &Url,
-    session: SessionNumber,
-) -> Result<MembershipResponse, reqwest::Error> {
-    try_fetch_membership(client, base, session)
-        .await
-        .map_err(|err| match err {
-            MembershipError::Http(source) => source,
-            MembershipError::JoinUrl {
-                base,
-                path,
-                message,
-            } => {
-                panic!("failed to join url {base} with path {path}: {message}")
-            }
-            MembershipError::ApiClient(err) => panic!("{err}"),
-        })
-}
-
 fn is_membership_ready(
     result: Result<&MembershipResponse, &MembershipError>,
     expect_non_empty: bool,
