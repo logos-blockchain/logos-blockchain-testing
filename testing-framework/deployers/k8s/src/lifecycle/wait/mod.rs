@@ -97,6 +97,11 @@ pub enum ClusterWaitError {
         #[source]
         source: anyhow::Error,
     },
+    #[error("port-forward task failed: {source}")]
+    PortForwardTask {
+        #[source]
+        source: anyhow::Error,
+    },
 }
 
 static DEPLOYMENT_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
