@@ -104,55 +104,39 @@ pub async fn build_local_image(
 ) -> Result<(), ComposeRunnerError> {
     let repo_root =
         repository_root().map_err(|source| ComposeRunnerError::ImageBuild { source })?;
-    let dockerfile = repo_root.join("../../../docker/runner.Dockerfile");
+    let runtime_dockerfile = repo_root.join("testing-framework/assets/stack/Dockerfile.runtime");
 
-    tracing::info!(image, "building compose runner docker image");
+    tracing::info!(
+        image,
+        "building compose test image via scripts/build_test_image.sh"
+    );
 
-    let mut cmd = Command::new("docker");
-    cmd.arg("build");
+    let mut cmd = Command::new("bash");
+    cmd.arg(repo_root.join("scripts/build_test_image.sh"))
+        .arg("--tag")
+        .arg(image)
+        .arg("--dockerfile")
+        .arg(runtime_dockerfile)
+        // Make the build self-contained (don't require a local bundle tar).
+        .arg("--no-restore");
 
     if let Some(build_platform) = select_build_platform(platform)? {
-        cmd.arg("--platform").arg(&build_platform);
+        cmd.env("DOCKER_DEFAULT_PLATFORM", build_platform);
     }
 
-    let circuits_platform = env::var("COMPOSE_CIRCUITS_PLATFORM")
+    if let Some(circuits_platform) = env::var("COMPOSE_CIRCUITS_PLATFORM")
         .ok()
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| String::from("linux-x86_64"));
-
-    cmd.arg("--build-arg")
-        .arg(format!("NOMOS_CIRCUITS_PLATFORM={circuits_platform}"));
+    {
+        cmd.arg("--circuits-platform").arg(circuits_platform);
+    }
 
     if let Some(value) = env::var("CIRCUITS_OVERRIDE")
         .ok()
         .filter(|val| !val.is_empty())
     {
-        cmd.arg("--build-arg")
-            .arg(format!("CIRCUITS_OVERRIDE={value}"));
+        cmd.arg("--circuits-override").arg(value);
     }
-
-    let node_rev = std::env::var("NOMOS_NODE_REV")
-        .unwrap_or_else(|_| String::from("d2dd5a5084e1daef4032562c77d41de5e4d495f8"));
-    cmd.arg("--build-arg")
-        .arg(format!("NOMOS_NODE_REV={node_rev}"));
-
-    if let Some(value) = env::var("NOMOS_CIRCUITS_VERSION")
-        .ok()
-        .filter(|val| !val.is_empty())
-    {
-        cmd.arg("--build-arg")
-            .arg(format!("NOMOS_CIRCUITS_VERSION={value}"));
-    }
-
-    if env::var("NOMOS_CIRCUITS_REBUILD_RAPIDSNARK").is_ok() {
-        cmd.arg("--build-arg").arg("RAPIDSNARK_REBUILD=1");
-    }
-
-    cmd.arg("-t")
-        .arg(image)
-        .arg("-f")
-        .arg(dockerfile)
-        .arg(&repo_root);
 
     cmd.current_dir(&repo_root);
 
@@ -162,27 +146,31 @@ pub async fn build_local_image(
     )
     .await
     .map_err(|_| {
-        warn!(image, timeout = ?IMAGE_BUILD_TIMEOUT, "docker build timed out");
+        warn!(
+            image,
+            timeout = ?IMAGE_BUILD_TIMEOUT,
+            "test image build timed out"
+        );
         ComposeRunnerError::Compose(ComposeCommandError::Timeout {
-            command: String::from("docker build"),
+            command: String::from("scripts/build_test_image.sh"),
             timeout: testing_framework_core::adjust_timeout(IMAGE_BUILD_TIMEOUT),
         })
     })?;
 
     match status {
         Ok(code) if code.success() => {
-            info!(image, platform = ?platform, "docker build completed");
+            info!(image, platform = ?platform, "test image build completed");
             Ok(())
         }
         Ok(code) => {
-            warn!(image, status = ?code, "docker build failed");
+            warn!(image, status = ?code, "test image build failed");
             Err(ComposeRunnerError::Compose(ComposeCommandError::Failed {
-                command: String::from("docker build"),
+                command: String::from("scripts/build_test_image.sh"),
                 status: code,
             }))
         }
         Err(err) => {
-            warn!(image, error = ?err, "docker build spawn failed");
+            warn!(image, error = ?err, "test image build spawn failed");
             Err(ComposeRunnerError::ImageBuild { source: err.into() })
         }
     }

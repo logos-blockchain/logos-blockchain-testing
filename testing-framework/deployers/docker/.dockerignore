@@ -1,9 +1,0 @@
-# Build context trim for runner image
-.git
-**/target
-.tmp
-tests/workflows/.tmp*
-book
-scripts/build-rapidsnark.sh~
-rust-project-all-in-one.txt
-**/*.log
