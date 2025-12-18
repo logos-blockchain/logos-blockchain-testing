@@ -171,102 +171,163 @@ impl Expectation for DaWorkloadExpectation {
     }
 
     async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
-        let state = self
-            .capture_state
+        let state = self.capture_state()?;
+        self.evaluate_inscriptions(state)?;
+        self.evaluate_blobs(ctx, state)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BlockWindow {
+    observed_blocks: u64,
+    expected_blocks: u64,
+    effective_blocks: u64,
+}
+
+#[derive(Debug)]
+struct BlobObservation {
+    observed_total_blobs: u64,
+    channels_with_blobs: HashSet<ChannelId>,
+}
+
+impl DaWorkloadExpectation {
+    fn capture_state(&self) -> Result<&CaptureState, DynError> {
+        self.capture_state
             .as_ref()
             .ok_or(DaExpectationError::NotCaptured)
-            .map_err(DynError::from)?;
+            .map_err(DynError::from)
+    }
 
+    fn evaluate_inscriptions(&self, state: &CaptureState) -> Result<(), DynError> {
         let planned_total = state.planned.len();
-        let missing_inscriptions = {
-            let inscriptions = state
-                .inscriptions
-                .lock()
-                .expect("inscription lock poisoned");
-            missing_channels(&state.planned, &inscriptions)
-        };
+        let missing_inscriptions = self.missing_inscriptions(state);
         let required_inscriptions =
             minimum_required(planned_total, MIN_INSCRIPTION_INCLUSION_RATIO);
         let observed_inscriptions = planned_total.saturating_sub(missing_inscriptions.len());
-        if observed_inscriptions < required_inscriptions {
-            tracing::warn!(
-                planned = planned_total,
-                missing = missing_inscriptions.len(),
-                required = required_inscriptions,
-                "DA expectation missing inscriptions"
-            );
-            return Err(DaExpectationError::MissingInscriptions {
-                planned: planned_total,
-                observed: observed_inscriptions,
-                required: required_inscriptions,
-                missing: missing_inscriptions,
-            }
-            .into());
+
+        if observed_inscriptions >= required_inscriptions {
+            return Ok(());
         }
 
-        let observed_total_blobs = {
-            let blobs = state.blobs.lock().expect("blob lock poisoned");
-            blobs.values().sum::<u64>()
-        };
+        tracing::warn!(
+            planned = planned_total,
+            missing = missing_inscriptions.len(),
+            required = required_inscriptions,
+            "DA expectation missing inscriptions"
+        );
+        Err(DaExpectationError::MissingInscriptions {
+            planned: planned_total,
+            observed: observed_inscriptions,
+            required: required_inscriptions,
+            missing: missing_inscriptions,
+        }
+        .into())
+    }
 
-        let channels_with_blobs: HashSet<ChannelId> = {
-            let blobs = state.blobs.lock().expect("blob lock poisoned");
-            blobs
-                .iter()
-                .filter(|(_, count)| **count > 0)
-                .map(|(channel, _)| *channel)
-                .collect::<HashSet<_>>()
-        };
+    fn evaluate_blobs(&self, ctx: &RunContext, state: &CaptureState) -> Result<(), DynError> {
+        let planned_total = state.planned.len();
+        let BlobObservation {
+            observed_total_blobs,
+            channels_with_blobs,
+        } = self.observe_blobs(state);
 
-        let observed_blocks = state.run_blocks.load(Ordering::Relaxed).max(1);
-        let expected_blocks = ctx.run_metrics().expected_consensus_blocks().max(1);
-        let effective_blocks = observed_blocks.min(expected_blocks).max(1);
-        let expected_total_blobs = self
-            .blob_rate_per_block
-            .get()
-            .saturating_mul(effective_blocks);
+        let window = self.block_window(ctx, state);
+        let expected_total_blobs = self.expected_total_blobs(window.effective_blocks);
+        let required_blobs = minimum_required_u64(expected_total_blobs, MIN_BLOB_INCLUSION_RATIO);
+
+        if observed_total_blobs >= required_blobs {
+            tracing::info!(
+                planned_channels = planned_total,
+                channels_with_blobs = channels_with_blobs.len(),
+                inscriptions_observed = planned_total - self.missing_inscriptions(state).len(),
+                observed_total_blobs,
+                expected_total_blobs,
+                required_blobs,
+                observed_blocks = window.observed_blocks,
+                expected_blocks = window.expected_blocks,
+                effective_blocks = window.effective_blocks,
+                "DA inclusion expectation satisfied"
+            );
+            return Ok(());
+        }
 
         let missing_blob_channels = missing_channels(&state.planned, &channels_with_blobs);
-        let required_blobs = minimum_required_u64(expected_total_blobs, MIN_BLOB_INCLUSION_RATIO);
-        if observed_total_blobs < required_blobs {
-            tracing::warn!(
-                expected_total_blobs,
-                observed_total_blobs,
-                required_blobs,
-                observed_blocks,
-                expected_blocks,
-                effective_blocks,
-                run_duration_secs = state.run_duration.as_secs(),
-                missing_blob_channels = missing_blob_channels.len(),
-                "DA expectation missing blobs"
-            );
-            return Err(DaExpectationError::MissingBlobs {
-                expected_total_blobs,
-                observed_total_blobs,
-                required_blobs,
-                planned_channels: planned_total,
-                channels_with_blobs: channels_with_blobs.len(),
-                // Best-effort diagnostics: which planned channels never got any
-                // blob included.
-                missing: missing_blob_channels,
-            }
-            .into());
-        }
-
-        tracing::info!(
-            planned_channels = planned_total,
-            channels_with_blobs = channels_with_blobs.len(),
-            inscriptions_observed = planned_total - missing_inscriptions.len(),
-            observed_total_blobs,
+        tracing::warn!(
             expected_total_blobs,
+            observed_total_blobs,
             required_blobs,
+            observed_blocks = window.observed_blocks,
+            expected_blocks = window.expected_blocks,
+            effective_blocks = window.effective_blocks,
+            run_duration_secs = state.run_duration.as_secs(),
+            missing_blob_channels = missing_blob_channels.len(),
+            "DA expectation missing blobs"
+        );
+
+        Err(DaExpectationError::MissingBlobs {
+            expected_total_blobs,
+            observed_total_blobs,
+            required_blobs,
+            planned_channels: planned_total,
+            channels_with_blobs: channels_with_blobs.len(),
+            missing: missing_blob_channels,
+        }
+        .into())
+    }
+
+    fn missing_inscriptions(&self, state: &CaptureState) -> Vec<ChannelId> {
+        let inscriptions = state
+            .inscriptions
+            .lock()
+            .expect("inscription lock poisoned");
+        missing_channels(&state.planned, &inscriptions)
+    }
+
+    fn observe_blobs(&self, state: &CaptureState) -> BlobObservation {
+        let blobs = state.blobs.lock().expect("blob lock poisoned");
+        let observed_total_blobs = blobs.values().sum::<u64>();
+        let channels_with_blobs = blobs
+            .iter()
+            .filter(|(_, count)| **count > 0)
+            .map(|(channel, _)| *channel)
+            .collect::<HashSet<_>>();
+
+        BlobObservation {
+            observed_total_blobs,
+            channels_with_blobs,
+        }
+    }
+
+    fn block_window(&self, ctx: &RunContext, state: &CaptureState) -> BlockWindow {
+        let observed_blocks = state.run_blocks.load(Ordering::Relaxed).max(1);
+        let expected_blocks = ctx.run_metrics().expected_consensus_blocks().max(1);
+        let security_param = u64::from(
+            ctx.descriptors()
+                .config()
+                .consensus_params
+                .security_param
+                .get(),
+        )
+        .max(1);
+
+        let observed_inclusion_blocks = (observed_blocks / security_param).max(1);
+        let expected_inclusion_blocks = (expected_blocks / security_param).max(1);
+        let effective_blocks = observed_inclusion_blocks
+            .min(expected_inclusion_blocks)
+            .max(1);
+
+        BlockWindow {
             observed_blocks,
             expected_blocks,
             effective_blocks,
-            "DA inclusion expectation satisfied"
-        );
+        }
+    }
 
-        Ok(())
+    fn expected_total_blobs(&self, effective_blocks: u64) -> u64 {
+        self.blob_rate_per_block
+            .get()
+            .saturating_mul(effective_blocks)
     }
 }
 

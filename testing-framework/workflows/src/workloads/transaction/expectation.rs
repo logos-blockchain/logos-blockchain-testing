@@ -5,6 +5,7 @@ use std::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -12,11 +13,13 @@ use key_management_system_service::keys::ZkPublicKey;
 use nomos_core::{header::HeaderId, mantle::AuthenticatedMantleTx as _};
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
 use thiserror::Error;
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, time::sleep};
 
 use super::workload::{limited_user_count, submission_plan};
 
 const MIN_INCLUSION_RATIO: f64 = 0.5;
+const CATCHUP_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const MAX_CATCHUP_WAIT: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct TxInclusionExpectation {
@@ -142,21 +145,37 @@ impl Expectation for TxInclusionExpectation {
         Ok(())
     }
 
-    async fn evaluate(&mut self, _ctx: &RunContext) -> Result<(), DynError> {
+    async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
         let state = self
             .capture_state
             .as_ref()
             .ok_or(TxExpectationError::NotCaptured)?;
 
-        let observed = state.observed.load(Ordering::Relaxed);
         let required = ((state.expected as f64) * MIN_INCLUSION_RATIO).ceil() as u64;
+
+        let mut observed = state.observed.load(Ordering::Relaxed);
+        if observed < required {
+            let security_param = ctx.descriptors().config().consensus_params.security_param;
+            let hinted_wait = ctx
+                .run_metrics()
+                .block_interval_hint()
+                .map(|interval| interval.mul_f64(security_param.get() as f64));
+
+            let mut remaining = hinted_wait
+                .unwrap_or(MAX_CATCHUP_WAIT)
+                .min(MAX_CATCHUP_WAIT);
+            while observed < required && remaining > Duration::ZERO {
+                sleep(CATCHUP_POLL_INTERVAL).await;
+                remaining = remaining.saturating_sub(CATCHUP_POLL_INTERVAL);
+                observed = state.observed.load(Ordering::Relaxed);
+            }
+        }
 
         if observed >= required {
             tracing::info!(
                 observed,
                 required,
                 expected = state.expected,
-                min_inclusion_ratio = MIN_INCLUSION_RATIO,
                 "tx inclusion expectation satisfied"
             );
             Ok(())

@@ -29,6 +29,8 @@ use tokio::time::sleep;
 use super::expectation::TxInclusionExpectation;
 use crate::workloads::util::submit_transaction_via_cluster;
 
+const MAX_SUBMISSION_INTERVAL: Duration = Duration::from_secs(1);
+
 #[derive(Clone)]
 pub struct Workload {
     txs_per_block: NonZeroU64,
@@ -304,8 +306,11 @@ pub(super) fn submission_plan(
         return Err("Transaction workload planning failed: calculated zero transactions to submit based on run duration and target rate".into());
     }
 
-    let submission_interval =
+    let mut submission_interval =
         Duration::from_secs_f64(run_secs / actual_transactions_to_submit as f64);
+    if submission_interval > MAX_SUBMISSION_INTERVAL {
+        submission_interval = MAX_SUBMISSION_INTERVAL;
+    }
     Ok(SubmissionPlan {
         transaction_count: actual_transactions_to_submit,
         submission_interval,

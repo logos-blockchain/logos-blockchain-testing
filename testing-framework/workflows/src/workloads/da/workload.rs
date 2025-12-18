@@ -17,9 +17,7 @@ use nomos_core::{
 use rand::{RngCore as _, seq::SliceRandom as _, thread_rng};
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{
-        BlockRecord, DynError, Expectation, RunContext, RunMetrics, Workload as ScenarioWorkload,
-    },
+    scenario::{BlockRecord, DynError, Expectation, RunContext, Workload as ScenarioWorkload},
 };
 use tokio::{sync::broadcast, time::sleep};
 
@@ -96,7 +94,16 @@ impl ScenarioWorkload for Workload {
             self.headroom_percent,
         ));
 
-        let expected_blobs = planned_blob_count(self.blob_rate_per_block, &ctx.run_metrics());
+        let expected_blobs = planned_blob_count(
+            self.blob_rate_per_block,
+            ctx.run_metrics().expected_consensus_blocks(),
+            ctx.descriptors()
+                .config()
+                .consensus_params
+                .security_param
+                .get()
+                .into(),
+        );
         let per_channel_target =
             per_channel_blob_target(expected_blobs, planned_channels.len().max(1) as u64);
 
@@ -303,9 +310,15 @@ pub fn planned_channel_count(channel_rate_per_block: NonZeroU64, headroom_percen
 }
 
 #[must_use]
-pub fn planned_blob_count(blob_rate_per_block: NonZeroU64, run_metrics: &RunMetrics) -> u64 {
-    let expected_blocks = run_metrics.expected_consensus_blocks().max(1);
-    blob_rate_per_block.get().saturating_mul(expected_blocks)
+pub fn planned_blob_count(
+    blob_rate_per_block: NonZeroU64,
+    expected_consensus_blocks: u64,
+    security_param: u64,
+) -> u64 {
+    let expected_blocks = expected_consensus_blocks.max(1);
+    let security_param = security_param.max(1);
+    let inclusion_blocks = (expected_blocks / security_param).max(1);
+    blob_rate_per_block.get().saturating_mul(inclusion_blocks)
 }
 
 #[must_use]

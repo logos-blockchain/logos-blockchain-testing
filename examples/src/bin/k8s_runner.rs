@@ -13,8 +13,8 @@ const DEFAULT_RUN_SECS: u64 = 60;
 const DEFAULT_VALIDATORS: usize = 1;
 const DEFAULT_EXECUTORS: usize = 1;
 const MIXED_TXS_PER_BLOCK: u64 = 2;
-const TOTAL_WALLETS: usize = 1000;
-const TRANSACTION_WALLETS: usize = 500;
+const TOTAL_WALLETS: usize = 200;
+const TRANSACTION_WALLETS: usize = 50;
 const DA_BLOB_RATE: u64 = 1;
 const MIN_CONSENSUS_HEIGHT: u64 = 5;
 
@@ -49,10 +49,6 @@ async fn run_k8s_case(validators: usize, executors: usize, run_duration: Duratio
         duration_secs = run_duration.as_secs(),
         "building scenario plan"
     );
-    let enable_da = env::var("NOMOS_DEMO_DA")
-        .or_else(|_| env::var("K8S_DEMO_DA"))
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
 
     let mut scenario = ScenarioBuilder::topology_with(|t| {
         t.network_star().validators(validators).executors(executors)
@@ -60,11 +56,8 @@ async fn run_k8s_case(validators: usize, executors: usize, run_duration: Duratio
     .with_capabilities(ObservabilityCapability::default())
     .wallets(TOTAL_WALLETS)
     .transactions_with(|txs| txs.rate(MIXED_TXS_PER_BLOCK).users(TRANSACTION_WALLETS))
+    .da_with(|da| da.blob_rate(DA_BLOB_RATE).headroom_percent(0))
     .with_run_duration(run_duration);
-
-    if enable_da {
-        scenario = scenario.da_with(|da| da.blob_rate(DA_BLOB_RATE).headroom_percent(0));
-    }
 
     if let Ok(url) = env::var("K8S_RUNNER_METRICS_QUERY_URL")
         .or_else(|_| env::var("NOMOS_METRICS_QUERY_URL"))
