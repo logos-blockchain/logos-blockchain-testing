@@ -112,12 +112,26 @@ matrix::forwarded_args() {
 
 matrix::log_has_nonzero_progress() {
   local log="$1"
+  # Heuristic: "some progress happened" means we observed some non-zero metric
+  # from the runner/expectations. Keep this intentionally lax; it's a local
+  # iteration escape hatch, not a CI signal.
+  #
   # Use portable awk (no 3-arg match()) so this works on macOS / busybox.
   awk '
-    match($0, /height[^0-9]*[0-9]+/) {
-      s = substr($0, RSTART, RLENGTH)
-      gsub(/[^0-9]/, "", s)
-      if (s + 0 > 0) { ok = 1 }
+    function record_num(re) {
+      if (match($0, re)) {
+        s = substr($0, RSTART, RLENGTH)
+        gsub(/[^0-9]/, "", s)
+        if (s + 0 > 0) { ok = 1 }
+      }
+    }
+    {
+      record_num(/height[^0-9]*[0-9]+/)
+      record_num(/observed_blocks[^0-9]*[0-9]+/)
+      record_num(/observed_total_blobs[^0-9]*[0-9]+/)
+      record_num(/channels_with_blobs[^0-9]*[0-9]+/)
+      record_num(/inscriptions_observed[^0-9]*[0-9]+/)
+      record_num(/observed[^0-9]*[0-9]+\/[0-9]+/)
     }
     END { exit ok ? 0 : 1 }
   ' "${log}"
