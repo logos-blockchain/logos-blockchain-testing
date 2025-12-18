@@ -13,6 +13,114 @@ flowchart LR
     E --> F(Expectations<br/>verify outcomes)
 ```
 
+## Crate Architecture
+
+```mermaid
+flowchart TB
+    subgraph Examples["Runner Examples"]
+        LocalBin[local_runner.rs]
+        ComposeBin[compose_runner.rs]
+        K8sBin[k8s_runner.rs]
+        CucumberBin[cucumber_*.rs]
+    end
+    
+    subgraph Workflows["Workflows (Batteries Included)"]
+        DSL[ScenarioBuilderExt<br/>Fluent API]
+        TxWorkload[Transaction Workload]
+        DAWorkload[DA Workload]
+        ChaosWorkload[Chaos Workload]
+        Expectations[Built-in Expectations]
+    end
+    
+    subgraph Core["Core Framework"]
+        ScenarioModel[Scenario Model]
+        Traits[Deployer + Runner Traits]
+        BlockFeed[BlockFeed]
+        NodeClients[Node Clients]
+        Topology[Topology Generation]
+    end
+    
+    subgraph Deployers["Runner Implementations"]
+        LocalDeployer[LocalDeployer]
+        ComposeDeployer[ComposeDeployer]
+        K8sDeployer[K8sDeployer]
+    end
+    
+    subgraph Support["Supporting Crates"]
+        Configs[Configs & Topology]
+        Nodes[Node API Clients]
+        Cucumber[Cucumber Extensions]
+    end
+    
+    Examples --> Workflows
+    Examples --> Deployers
+    Workflows --> Core
+    Deployers --> Core
+    Deployers --> Support
+    Core --> Support
+    Workflows --> Support
+    
+    style Examples fill:#e1f5ff
+    style Workflows fill:#e1ffe1
+    style Core fill:#fff4e1
+    style Deployers fill:#ffe1f5
+    style Support fill:#f0f0f0
+```
+
+### Layer Responsibilities
+
+**Runner Examples (Entry Points)**
+- Executable binaries that demonstrate framework usage
+- Wire together deployers, scenarios, and execution
+- Provide CLI interfaces for different modes
+
+**Workflows (High-Level API)**
+- `ScenarioBuilderExt` trait provides fluent DSL
+- Built-in workloads (transactions, DA, chaos)
+- Common expectations (liveness, inclusion)
+- Simplifies scenario authoring
+
+**Core Framework (Foundation)**
+- `Scenario` model and lifecycle orchestration
+- `Deployer` and `Runner` traits (extension points)
+- `BlockFeed` for real-time block observation
+- `RunContext` providing node clients and metrics
+- Topology generation and validation
+
+**Runner Implementations**
+- `LocalDeployer` - spawns processes on host
+- `ComposeDeployer` - orchestrates Docker Compose
+- `K8sDeployer` - deploys to Kubernetes cluster
+- Each implements `Deployer` trait
+
+**Supporting Crates**
+- `configs` - Topology configuration and generation
+- `nodes` - HTTP/RPC client for node APIs
+- `cucumber` - BDD/Gherkin integration
+
+### Extension Points
+
+```mermaid
+flowchart LR
+    Custom[Your Code] -.implements.-> Workload[Workload Trait]
+    Custom -.implements.-> Expectation[Expectation Trait]
+    Custom -.implements.-> Deployer[Deployer Trait]
+    
+    Workload --> Core[Core Framework]
+    Expectation --> Core
+    Deployer --> Core
+    
+    style Custom fill:#ffe1f5
+    style Core fill:#fff4e1
+```
+
+**Extend by implementing:**
+- `Workload` - Custom traffic generation patterns
+- `Expectation` - Custom success criteria
+- `Deployer` - Support for new deployment targets
+
+See [Extending the Framework](extending.md) for details.
+
 ### Components
 
 - **Topology** describes the cluster: how many nodes, their roles, and the high-level network and data-availability parameters they should follow.

@@ -44,10 +44,106 @@ environment and operational considerations, see [Operations Overview](operations
 - Environment flags can relax timeouts or increase tracing when diagnostics are
   needed.
 
+## Runner Comparison
+
+```mermaid
+flowchart TB
+    subgraph Host["Host Runner (Local)"]
+        H1["Speed: Fast"]
+        H2["Isolation: Shared host"]
+        H3["Setup: Minimal"]
+        H4["Chaos: Not supported"]
+        H5["CI: Quick smoke tests"]
+    end
+    
+    subgraph Compose["Compose Runner (Docker)"]
+        C1["Speed: Medium"]
+        C2["Isolation: Containerized"]
+        C3["Setup: Image build required"]
+        C4["Chaos: Supported"]
+        C5["CI: Recommended"]
+    end
+    
+    subgraph K8s["K8s Runner (Cluster)"]
+        K1["Speed: Slower"]
+        K2["Isolation: Pod-level"]
+        K3["Setup: Cluster + image"]
+        K4["Chaos: Not yet supported"]
+        K5["CI: Large-scale tests"]
+    end
+    
+    Decision{Choose Based On}
+    Decision -->|Fast iteration| Host
+    Decision -->|Reproducibility| Compose
+    Decision -->|Production-like| K8s
+    
+    style Host fill:#e1f5ff
+    style Compose fill:#e1ffe1
+    style K8s fill:#ffe1f5
+```
+
+## Detailed Feature Matrix
+
+| Feature | Host | Compose | K8s |
+|---------|------|---------|-----|
+| **Speed** | Fastest | Medium | Slowest |
+| **Setup Time** | < 1 min | 2-5 min | 5-10 min |
+| **Isolation** | Process-level | Container | Pod + namespace |
+| **Node Control** | No | Yes | Not yet |
+| **Observability** | Basic | External stack | Cluster-wide |
+| **CI Integration** | Smoke tests | Recommended | Heavy tests |
+| **Resource Usage** | Low | Medium | High |
+| **Reproducibility** | Environment-dependent | High | Highest |
+| **Network Fidelity** | Localhost only | Virtual network | Real cluster |
+| **Parallel Runs** | Port conflicts | Isolated | Namespace isolation |
+
+## Decision Guide
+
 ```mermaid
 flowchart TD
-    Plan[Scenario Plan] --> RunSel[Runner<br/>host, compose, or k8s]
-    RunSel --> Provision[Provision & readiness]
-    Provision --> Runtime[Runtime + observability]
-    Runtime --> Exec[Workloads & Expectations execute]
+    Start[Need to run tests?] --> Q1{Local development?}
+    Q1 -->|Yes| Q2{Testing chaos?}
+    Q1 -->|No| Q5{Have cluster access?}
+    
+    Q2 -->|Yes| UseCompose[Use Compose]
+    Q2 -->|No| Q3{Need isolation?}
+    
+    Q3 -->|Yes| UseCompose
+    Q3 -->|No| UseHost[Use Host]
+    
+    Q5 -->|Yes| Q6{Large topology?}
+    Q5 -->|No| Q7{CI pipeline?}
+    
+    Q6 -->|Yes| UseK8s[Use K8s]
+    Q6 -->|No| UseCompose
+    
+    Q7 -->|Yes| Q8{Docker available?}
+    Q7 -->|No| UseHost
+    
+    Q8 -->|Yes| UseCompose
+    Q8 -->|No| UseHost
+    
+    style UseHost fill:#e1f5ff
+    style UseCompose fill:#e1ffe1
+    style UseK8s fill:#ffe1f5
 ```
+
+### Quick Recommendations
+
+**Use Host Runner when:**
+- Iterating rapidly during development
+- Running quick smoke tests
+- Testing on a laptop with limited resources
+- Don't need chaos testing
+
+**Use Compose Runner when:**
+- Need reproducible test environments
+- Testing chaos scenarios (node restarts)
+- Running in CI pipelines
+- Want containerized isolation
+
+**Use K8s Runner when:**
+- Testing large-scale topologies (10+ nodes)
+- Need production-like environment
+- Have cluster access in CI
+- Testing cluster-specific behaviors
