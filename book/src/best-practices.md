@@ -65,7 +65,7 @@ pub const LONG_RUN_DURATION: Duration = Duration::from_secs(300);
 - Use block statistics (`block_feed.stats().total_transactions()`) to verify inclusion
 
 **Collect metrics**
-- Set up Prometheus/Grafana via `scripts/observability/compose/up.sh` for visualizing node behavior
+- Set up Prometheus/Grafana via `scripts/observability/deploy.sh -t compose -a up` for visualizing node behavior
 - Use metrics to identify bottlenecks before adding more load
 - Monitor mempool size, block size, and consensus timing
 
