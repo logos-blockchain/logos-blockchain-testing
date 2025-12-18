@@ -55,6 +55,8 @@ pub enum ComposeRunnerError {
         #[source]
         source: anyhow::Error,
     },
+    #[error("internal invariant violated: {message}")]
+    InternalInvariant { message: &'static str },
 }
 
 #[derive(Debug, thiserror::Error)]

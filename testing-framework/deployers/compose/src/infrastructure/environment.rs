@@ -84,28 +84,38 @@ impl StackEnvironment {
     }
 
     /// Convert into a cleanup guard while keeping the environment borrowed.
-    pub fn take_cleanup(&mut self) -> RunnerCleanup {
-        RunnerCleanup::new(
+    pub fn take_cleanup(&mut self) -> Result<RunnerCleanup, ComposeRunnerError> {
+        let workspace = self
+            .workspace
+            .take()
+            .ok_or(ComposeRunnerError::InternalInvariant {
+                message: "workspace must be available while cleaning up",
+            })?;
+
+        Ok(RunnerCleanup::new(
             self.compose_path.clone(),
             self.project_name.clone(),
             self.root.clone(),
-            self.workspace
-                .take()
-                .expect("workspace must be available while cleaning up"),
+            workspace,
             self.cfgsync_handle.take(),
-        )
+        ))
     }
 
     /// Convert into a cleanup guard, consuming the environment.
-    pub fn into_cleanup(self) -> RunnerCleanup {
-        RunnerCleanup::new(
+    pub fn into_cleanup(self) -> Result<RunnerCleanup, ComposeRunnerError> {
+        let workspace = self
+            .workspace
+            .ok_or(ComposeRunnerError::InternalInvariant {
+                message: "workspace must be available while cleaning up",
+            })?;
+
+        Ok(RunnerCleanup::new(
             self.compose_path,
             self.project_name,
             self.root,
-            self.workspace
-                .expect("workspace must be available while cleaning up"),
+            workspace,
             self.cfgsync_handle,
-        )
+        ))
     }
 
     /// Dump compose logs and trigger cleanup after a failure.
@@ -115,7 +125,10 @@ impl StackEnvironment {
             "compose stack failure; dumping docker logs"
         );
         dump_compose_logs(self.compose_path(), self.project_name(), self.root()).await;
-        Box::new(self.take_cleanup()).cleanup();
+        match self.take_cleanup() {
+            Ok(cleanup) => Box::new(cleanup).cleanup(),
+            Err(err) => error!(error = %err, "failed to acquire cleanup guard"),
+        }
     }
 }
 

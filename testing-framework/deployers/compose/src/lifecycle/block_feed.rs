@@ -49,5 +49,7 @@ pub async fn spawn_block_feed_with_retry(
         }
     }
 
-    Err(last_err.expect("block feed retry should capture an error"))
+    Err(last_err.unwrap_or(ComposeRunnerError::InternalInvariant {
+        message: "block feed retry exhausted without capturing an error",
+    }))
 }

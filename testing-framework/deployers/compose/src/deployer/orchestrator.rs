@@ -118,7 +118,7 @@ impl DeploymentOrchestrator {
         let (block_feed, block_feed_guard) = client_builder
             .start_block_feed(&node_clients, &mut environment)
             .await?;
-        let cleanup_guard = make_cleanup_guard(environment.into_cleanup(), block_feed_guard);
+        let cleanup_guard = make_cleanup_guard(environment.into_cleanup()?, block_feed_guard);
 
         let context = RunContext::new(
             descriptors,
