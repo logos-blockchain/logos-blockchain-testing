@@ -39,7 +39,7 @@ const CRYPTARCHIA_GOSSIPSUB_PROTOCOL: &str = "/cryptarchia/proto";
 const MEMPOOL_PUBSUB_TOPIC: &str = "mantle";
 const STATE_RECORDING_INTERVAL_SECS: u64 = 60;
 const IBD_DOWNLOAD_DELAY_SECS: u64 = 10;
-const MAX_ORPHAN_CACHE_SIZE: usize = 5;
+const MAX_ORPHAN_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
 const DA_PUBLISH_THRESHOLD: f64 = 0.8;
 const API_RATE_LIMIT_PER_SECOND: u64 = 10000;
 const API_RATE_LIMIT_BURST: u32 = 10000;
@@ -103,8 +103,7 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
             },
             sync: SyncConfig {
                 orphan: OrphanConfig {
-                    max_orphan_cache_size: NonZeroUsize::new(MAX_ORPHAN_CACHE_SIZE)
-                        .expect("Max orphan cache size must be non-zero"),
+                    max_orphan_cache_size: MAX_ORPHAN_CACHE_SIZE,
                 },
             },
         },
@@ -128,6 +127,13 @@ fn kzg_params_path(raw: &str) -> String {
 pub(crate) fn da_verifier_config(
     config: &GeneralConfig,
 ) -> DaVerifierServiceSettings<KzgrsDaVerifierSettings, (), (), VerifierStorageAdapterSettings> {
+    let publish_threshold = match NonNegativeF64::try_from(DA_PUBLISH_THRESHOLD) {
+        Ok(value) => value,
+        Err(_) => unsafe {
+            // Safety: `DA_PUBLISH_THRESHOLD` is a finite non-negative constant.
+            std::hint::unreachable_unchecked()
+        },
+    };
     DaVerifierServiceSettings {
         share_verifier_settings: KzgrsDaVerifierSettings {
             global_params_path: kzg_params_path(&config.da_config.global_params_path),
@@ -139,7 +145,7 @@ pub(crate) fn da_verifier_config(
             blob_storage_directory: BLOB_STORAGE_DIR.into(),
         },
         mempool_trigger_settings: MempoolPublishTriggerConfig {
-            publish_threshold: NonNegativeF64::try_from(DA_PUBLISH_THRESHOLD).unwrap(),
+            publish_threshold,
             share_duration: timeouts::share_duration(),
             prune_duration: timeouts::prune_duration(),
             prune_interval: timeouts::prune_interval(),

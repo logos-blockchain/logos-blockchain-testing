@@ -40,6 +40,13 @@ pub(crate) fn build_blend_service_config(
     BlendDeploymentSettings,
     NetworkDeploymentSettings,
 ) {
+    let message_frequency_per_round = match NonNegativeF64::try_from(MESSAGE_FREQUENCY_PER_ROUND) {
+        Ok(value) => value,
+        Err(_) => unsafe {
+            // Safety: `MESSAGE_FREQUENCY_PER_ROUND` is a finite non-negative constant.
+            std::hint::unreachable_unchecked()
+        },
+    };
     let zk_key_id = key_id_for_preload_backend(&Key::from(config.secret_zk_key.clone()));
 
     let backend_core = &config.backend_core;
@@ -73,20 +80,21 @@ pub(crate) fn build_blend_service_config(
 
     let deployment_settings = BlendDeploymentSettings {
         common: blend_deployment::CommonSettings {
-            num_blend_layers: NonZeroU64::try_from(BLEND_LAYERS_COUNT).unwrap(),
-            minimum_network_size: NonZeroU64::try_from(MINIMUM_NETWORK_SIZE).unwrap(),
+            num_blend_layers: unsafe { NonZeroU64::new_unchecked(BLEND_LAYERS_COUNT) },
+            minimum_network_size: unsafe { NonZeroU64::new_unchecked(MINIMUM_NETWORK_SIZE) },
             timing: TimingSettings {
                 round_duration: Duration::from_secs(ROUND_DURATION_SECS),
-                rounds_per_interval: NonZeroU64::try_from(ROUNDS_PER_INTERVAL).unwrap(),
-                rounds_per_session: NonZeroU64::try_from(ROUNDS_PER_SESSION).unwrap(),
-                rounds_per_observation_window: NonZeroU64::try_from(ROUNDS_PER_OBSERVATION_WINDOW)
-                    .unwrap(),
-                rounds_per_session_transition_period: NonZeroU64::try_from(
-                    ROUNDS_PER_SESSION_TRANSITION,
-                )
-                .unwrap(),
-                epoch_transition_period_in_slots: NonZeroU64::try_from(EPOCH_TRANSITION_SLOTS)
-                    .unwrap(),
+                rounds_per_interval: unsafe { NonZeroU64::new_unchecked(ROUNDS_PER_INTERVAL) },
+                rounds_per_session: unsafe { NonZeroU64::new_unchecked(ROUNDS_PER_SESSION) },
+                rounds_per_observation_window: unsafe {
+                    NonZeroU64::new_unchecked(ROUNDS_PER_OBSERVATION_WINDOW)
+                },
+                rounds_per_session_transition_period: unsafe {
+                    NonZeroU64::new_unchecked(ROUNDS_PER_SESSION_TRANSITION)
+                },
+                epoch_transition_period_in_slots: unsafe {
+                    NonZeroU64::new_unchecked(EPOCH_TRANSITION_SLOTS)
+                },
             },
             protocol_name: backend_core.protocol_name.clone(),
         },
@@ -94,14 +102,12 @@ pub(crate) fn build_blend_service_config(
             scheduler: SchedulerSettings {
                 cover: CoverTrafficSettings {
                     intervals_for_safety_buffer: SAFETY_BUFFER_INTERVALS,
-                    message_frequency_per_round: NonNegativeF64::try_from(
-                        MESSAGE_FREQUENCY_PER_ROUND,
-                    )
-                    .unwrap(),
+                    message_frequency_per_round,
                 },
                 delayer: MessageDelayerSettings {
-                    maximum_release_delay_in_rounds: NonZeroU64::try_from(MAX_RELEASE_DELAY_ROUNDS)
-                        .unwrap(),
+                    maximum_release_delay_in_rounds: unsafe {
+                        NonZeroU64::new_unchecked(MAX_RELEASE_DELAY_ROUNDS)
+                    },
                 },
             },
             minimum_messages_coefficient: backend_core.minimum_messages_coefficient,

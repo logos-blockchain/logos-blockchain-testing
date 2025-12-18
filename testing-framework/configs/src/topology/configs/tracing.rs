@@ -50,7 +50,10 @@ impl GeneralTracingConfig {
         Self {
             tracing_settings: TracingSettings {
                 logger: LoggerLayer::Loki(LokiConfig {
-                    endpoint: "http://localhost:3100".try_into().unwrap(),
+                    endpoint: "http://localhost:3100".parse().unwrap_or_else(|_| unsafe {
+                        // Safety: the URL is a valid constant.
+                        std::hint::unreachable_unchecked()
+                    }),
                     host_identifier: host_identifier.clone(),
                 }),
                 tracing: otlp_tracing,
