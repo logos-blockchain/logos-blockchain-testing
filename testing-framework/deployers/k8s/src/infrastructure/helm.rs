@@ -15,6 +15,8 @@ pub enum HelmError {
         #[source]
         source: io::Error,
     },
+    #[error("kzg_path must be present for HostPath mode")]
+    MissingKzgPath,
     #[error("{command} exited with status {status:?}\nstderr:\n{stderr}\nstdout:\n{stdout}")]
     Failed {
         command: String,
@@ -34,10 +36,7 @@ pub async fn install_release(
 ) -> Result<(), HelmError> {
     let (host_path_type, host_path) = match assets.kzg_mode {
         KzgMode::HostPath => {
-            let host_path = assets
-                .kzg_path
-                .as_ref()
-                .expect("kzg_path must be present for HostPath mode");
+            let host_path = assets.kzg_path.as_ref().ok_or(HelmError::MissingKzgPath)?;
             let host_path_type = if host_path.is_dir() {
                 "Directory"
             } else {

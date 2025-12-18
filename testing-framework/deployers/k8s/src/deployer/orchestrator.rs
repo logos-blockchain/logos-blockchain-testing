@@ -14,9 +14,9 @@ use crate::{
     infrastructure::{
         assets::{AssetsError, prepare_assets},
         cluster::{
-            ClusterEnvironment, NodeClientError, PortSpecs, RemoteReadinessError,
-            build_node_clients, cluster_identifiers, collect_port_specs, ensure_cluster_readiness,
-            install_stack, kill_port_forwards, wait_for_ports_or_cleanup,
+            ClusterEnvironment, ClusterEnvironmentError, NodeClientError, PortSpecs,
+            RemoteReadinessError, build_node_clients, cluster_identifiers, collect_port_specs,
+            ensure_cluster_readiness, install_stack, kill_port_forwards, wait_for_ports_or_cleanup,
         },
         helm::HelmError,
     },
@@ -70,6 +70,8 @@ pub enum K8sRunnerError {
     #[error(transparent)]
     Helm(#[from] HelmError),
     #[error(transparent)]
+    ClusterEnvironment(#[from] ClusterEnvironmentError),
+    #[error(transparent)]
     Cluster(#[from] Box<ClusterWaitError>),
     #[error(transparent)]
     Readiness(#[from] RemoteReadinessError),
@@ -77,6 +79,8 @@ pub enum K8sRunnerError {
     NodeClients(#[from] NodeClientError),
     #[error(transparent)]
     Telemetry(#[from] MetricsError),
+    #[error("internal invariant violated: {message}")]
+    InternalInvariant { message: String },
     #[error("k8s runner requires at least one node client to follow blocks")]
     BlockFeedMissing,
     #[error("failed to initialize block feed: {source}")]
@@ -178,11 +182,12 @@ async fn deploy_with_observability<Caps>(
     );
 
     info!("building node clients");
-    let node_clients = match build_node_clients(
-        cluster
-            .as_ref()
-            .expect("cluster must be available while building clients"),
-    ) {
+    let environment = cluster
+        .as_ref()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "cluster must be available while building clients".to_owned(),
+        })?;
+    let node_clients = match build_node_clients(environment) {
         Ok(clients) => clients,
         Err(err) => {
             fail_cluster(&mut cluster, "failed to construct node api clients").await;
@@ -252,10 +257,12 @@ async fn deploy_with_observability<Caps>(
         }
     }
 
-    let (cleanup, port_forwards) = cluster
+    let environment = cluster
         .take()
-        .expect("cluster should still be available")
-        .into_cleanup();
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "cluster should still be available".to_owned(),
+        })?;
+    let (cleanup, port_forwards) = environment.into_cleanup()?;
     let cleanup_guard: Box<dyn CleanupGuard> = Box::new(K8sCleanupGuard::new(
         cleanup,
         block_feed_guard,
@@ -309,7 +316,9 @@ async fn setup_cluster(
         release,
         cleanup_guard
             .take()
-            .expect("cleanup guard must exist after successful cluster startup"),
+            .ok_or_else(|| K8sRunnerError::InternalInvariant {
+                message: "cleanup guard must exist after successful cluster startup".to_owned(),
+            })?,
         &cluster_ready.ports,
         cluster_ready.port_forwards,
     );

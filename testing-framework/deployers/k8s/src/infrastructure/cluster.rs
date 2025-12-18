@@ -40,6 +40,12 @@ pub struct ClusterEnvironment {
     port_forwards: Vec<PortForwardHandle>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ClusterEnvironmentError {
+    #[error("cleanup guard is missing (it may have already been consumed)")]
+    MissingCleanupGuard,
+}
+
 impl ClusterEnvironment {
     pub fn new(
         client: Client,
@@ -83,11 +89,13 @@ impl ClusterEnvironment {
         }
     }
 
-    pub fn into_cleanup(self) -> (RunnerCleanup, Vec<PortForwardHandle>) {
-        (
-            self.cleanup.expect("cleanup guard should be available"),
-            self.port_forwards,
-        )
+    pub fn into_cleanup(
+        self,
+    ) -> Result<(RunnerCleanup, Vec<PortForwardHandle>), ClusterEnvironmentError> {
+        let cleanup = self
+            .cleanup
+            .ok_or(ClusterEnvironmentError::MissingCleanupGuard)?;
+        Ok((cleanup, self.port_forwards))
     }
 
     #[allow(dead_code)]
