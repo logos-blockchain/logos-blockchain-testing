@@ -17,7 +17,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use subnetworks_assignations::{MembershipCreator, MembershipHandler, SubnetworkId};
 use testing_framework_core::{
     constants::cfgsync_port as default_cfgsync_port,
-    nodes::common::config::injection::normalize_ed25519_sigs,
+    nodes::common::config::injection::{inject_ibd_into_cryptarchia, normalize_ed25519_sigs},
 };
 
 fn parse_ip(ip_str: &str) -> Ipv4Addr {
@@ -77,6 +77,7 @@ where
 
     let mut yaml_value = serde_yaml::to_value(&config)
         .map_err(|err| format!("Failed to serialize config to YAML value: {err}"))?;
+    inject_ibd_into_cryptarchia(&mut yaml_value);
     normalize_ed25519_sigs(&mut yaml_value);
     let yaml = serde_yaml::to_string(&yaml_value)
         .map_err(|err| format!("Failed to serialize config to YAML: {err}"))?;
