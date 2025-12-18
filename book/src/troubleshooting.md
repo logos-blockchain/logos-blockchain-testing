@@ -676,6 +676,8 @@ NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug" \
 cargo run -p runner-examples --bin local_runner
 ```
 
+If metric updates are polluting your logs (fields like `counter.*` / `gauge.*`), move those events to a dedicated `tracing` target (e.g. `target: "nomos_metrics"`) and set `NOMOS_LOG_FILTER="nomos_metrics=off,..."` so they don’t get formatted into log output.
+
 ### 5. Verify Observability Endpoints
 
 If expectations report observability issues:
