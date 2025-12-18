@@ -156,8 +156,10 @@ impl GeneratedTopology {
         let client = Client::new();
 
         let make_testing_base_url = |port: u16| -> Url {
-            Url::parse(&format!("http://127.0.0.1:{port}/"))
-                .expect("failed to construct local testing base url")
+            Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap_or_else(|_| unsafe {
+                // Safety: `port` is a valid u16 port.
+                std::hint::unreachable_unchecked()
+            })
         };
 
         if endpoints.len() > 1 {
