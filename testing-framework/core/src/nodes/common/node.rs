@@ -160,41 +160,18 @@ where
 {
     let (dir, config, addr, testing_addr) =
         prepare_node_config(config, log_prefix, enable_logging)?;
+
     let config_path = dir.path().join(config_filename);
-    super::lifecycle::spawn::write_config_with_injection(&config, &config_path, |yaml| {
-        crate::nodes::common::config::injection::inject_ibd_into_cryptarchia(yaml)
-    })
-    .map_err(|source| SpawnNodeError::WriteConfig {
-        path: config_path.clone(),
-        source,
-    })?;
+    write_node_config(&config, &config_path)?;
 
     debug!(config_file = %config_path.display(), binary = %binary_path.display(), "spawning node process");
 
-    let child = Command::new(&binary_path)
-        .arg(&config_path)
-        .current_dir(dir.path())
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|source| SpawnNodeError::Spawn {
-            binary: binary_path.clone(),
-            source,
-        })?;
+    let child = spawn_node_process(&binary_path, &config_path, dir.path())?;
 
     let mut handle = NodeHandle::new(child, dir, config, ApiClient::new(addr, testing_addr));
 
     // Wait for readiness via consensus_info
-    let ready = time::timeout(STARTUP_TIMEOUT, async {
-        loop {
-            if handle.api.consensus_info().await.is_ok() {
-                break;
-            }
-            time::sleep(STARTUP_POLL_INTERVAL).await;
-        }
-    })
-    .await;
+    let ready = wait_for_consensus_readiness(&handle.api).await;
 
     if let Err(err) = ready {
         // Persist tempdir to aid debugging if readiness fails.
@@ -204,4 +181,44 @@ where
 
     info!("node readiness confirmed via consensus_info");
     Ok(handle)
+}
+
+fn write_node_config<C: Serialize>(config: &C, config_path: &Path) -> Result<(), SpawnNodeError> {
+    super::lifecycle::spawn::write_config_with_injection(config, config_path, |yaml| {
+        crate::nodes::common::config::injection::inject_ibd_into_cryptarchia(yaml)
+    })
+    .map_err(|source| SpawnNodeError::WriteConfig {
+        path: config_path.to_path_buf(),
+        source,
+    })
+}
+
+fn spawn_node_process(
+    binary_path: &Path,
+    config_path: &Path,
+    workdir: &Path,
+) -> Result<Child, SpawnNodeError> {
+    Command::new(binary_path)
+        .arg(config_path)
+        .current_dir(workdir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|source| SpawnNodeError::Spawn {
+            binary: binary_path.to_path_buf(),
+            source,
+        })
+}
+
+async fn wait_for_consensus_readiness(api: &ApiClient) -> Result<(), time::error::Elapsed> {
+    time::timeout(STARTUP_TIMEOUT, async {
+        loop {
+            if api.consensus_info().await.is_ok() {
+                break;
+            }
+            time::sleep(STARTUP_POLL_INTERVAL).await;
+        }
+    })
+    .await
 }

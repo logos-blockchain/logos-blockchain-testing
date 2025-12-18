@@ -38,52 +38,9 @@ impl<'a> ReadinessCheck<'a> for MembershipReadiness<'a> {
     type Data = Vec<NodeMembershipStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        let validator_futures = self
-            .topology
-            .validators
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| {
-                let label = self
-                    .labels
-                    .get(idx)
-                    .cloned()
-                    .unwrap_or_else(|| format!("validator#{idx}"));
-                async move {
-                    let result = node
-                        .api()
-                        .da_get_membership_checked(&self.session)
-                        .await
-                        .map_err(MembershipError::from);
-                    NodeMembershipStatus { label, result }
-                }
-            });
-        let offset = self.topology.validators.len();
-        let executor_futures = self
-            .topology
-            .executors
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| {
-                let global_idx = offset + idx;
-                let label = self
-                    .labels
-                    .get(global_idx)
-                    .cloned()
-                    .unwrap_or_else(|| format!("executor#{idx}"));
-                async move {
-                    let result = node
-                        .api()
-                        .da_get_membership_checked(&self.session)
-                        .await
-                        .map_err(MembershipError::from);
-                    NodeMembershipStatus { label, result }
-                }
-            });
-
         let (validator_statuses, executor_statuses) = tokio::join!(
-            futures::future::join_all(validator_futures),
-            futures::future::join_all(executor_futures)
+            collect_validator_statuses(self),
+            collect_executor_statuses(self)
         );
         validator_statuses
             .into_iter()
@@ -148,6 +105,62 @@ impl<'a> ReadinessCheck<'a> for HttpMembershipReadiness<'a> {
         let summary = build_membership_status_summary(&data, description, self.expect_non_empty);
         format!("timed out waiting for DA membership readiness ({description}): {summary}")
     }
+}
+
+async fn collect_validator_statuses(
+    readiness: &MembershipReadiness<'_>,
+) -> Vec<NodeMembershipStatus> {
+    let validator_futures = readiness
+        .topology
+        .validators
+        .iter()
+        .enumerate()
+        .map(|(idx, node)| {
+            let label = readiness
+                .labels
+                .get(idx)
+                .cloned()
+                .unwrap_or_else(|| format!("validator#{idx}"));
+            async move {
+                let result = node
+                    .api()
+                    .da_get_membership_checked(&readiness.session)
+                    .await
+                    .map_err(MembershipError::from);
+                NodeMembershipStatus { label, result }
+            }
+        });
+
+    futures::future::join_all(validator_futures).await
+}
+
+async fn collect_executor_statuses(
+    readiness: &MembershipReadiness<'_>,
+) -> Vec<NodeMembershipStatus> {
+    let offset = readiness.topology.validators.len();
+    let executor_futures = readiness
+        .topology
+        .executors
+        .iter()
+        .enumerate()
+        .map(|(idx, node)| {
+            let global_idx = offset + idx;
+            let label = readiness
+                .labels
+                .get(global_idx)
+                .cloned()
+                .unwrap_or_else(|| format!("executor#{idx}"));
+            async move {
+                let result = node
+                    .api()
+                    .da_get_membership_checked(&readiness.session)
+                    .await
+                    .map_err(MembershipError::from);
+                NodeMembershipStatus { label, result }
+            }
+        });
+
+    futures::future::join_all(executor_futures).await
 }
 
 pub async fn try_fetch_membership(

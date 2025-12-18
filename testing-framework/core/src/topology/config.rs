@@ -276,16 +276,10 @@ impl TopologyBuilder {
             blend_ports,
         } = self;
 
-        let n_participants = config.n_validators + config.n_executors;
-        if n_participants == 0 {
-            return Err(TopologyBuildError::EmptyParticipants);
-        }
+        let n_participants = participant_count(&config)?;
 
-        let ids = resolve_ids(ids, n_participants)?;
-        let da_ports = resolve_ports(da_ports, n_participants, "DA")?;
-        let blend_ports = resolve_ports(blend_ports, n_participants, "Blend")?;
-
-        validate_generated_vectors(n_participants, &ids, &da_ports, &blend_ports)?;
+        let (ids, da_ports, blend_ports) =
+            resolve_and_validate_vectors(ids, da_ports, blend_ports, n_participants)?;
 
         let BaseConfigs {
             mut consensus_configs,
@@ -302,6 +296,7 @@ impl TopologyBuilder {
             &da_ports,
             &blend_ports,
         )?;
+
         let api_configs = create_api_configs(&ids)?;
         let tracing_configs = create_tracing_configs(&ids);
         let time_config = default_time_config();
@@ -309,177 +304,30 @@ impl TopologyBuilder {
         let first_consensus = consensus_configs
             .first()
             .ok_or(TopologyBuildError::MissingConsensusConfig)?;
-        let mut providers = Vec::with_capacity(da_configs.len() + blend_configs.len());
-        for (i, da_conf) in da_configs.iter().enumerate() {
-            let note = first_consensus
-                .da_notes
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "da_notes",
-                    expected: da_configs.len(),
-                    actual: first_consensus.da_notes.len(),
-                })?
-                .clone();
-            providers.push(ProviderInfo {
-                service_type: ServiceType::DataAvailability,
-                provider_sk: da_conf.signer.clone(),
-                zk_sk: da_conf.secret_zk_key.clone(),
-                locator: Locator(da_conf.listening_address.clone()),
-                note,
-            });
-        }
-        for (i, blend_conf) in blend_configs.iter().enumerate() {
-            let note = first_consensus
-                .blend_notes
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "blend_notes",
-                    expected: blend_configs.len(),
-                    actual: first_consensus.blend_notes.len(),
-                })?
-                .clone();
-            providers.push(ProviderInfo {
-                service_type: ServiceType::BlendNetwork,
-                provider_sk: blend_conf.signer.clone(),
-                zk_sk: blend_conf.secret_zk_key.clone(),
-                locator: Locator(blend_conf.backend_core.listening_address.clone()),
-                note,
-            });
-        }
+        let providers = collect_provider_infos(first_consensus, &da_configs, &blend_configs)?;
 
-        let ledger_tx = first_consensus.genesis_tx.mantle_tx().ledger_tx.clone();
-        let genesis_tx = create_genesis_tx_with_declarations(ledger_tx, providers)?;
-        for c in &mut consensus_configs {
-            c.genesis_tx = genesis_tx.clone();
-        }
+        let genesis_tx = create_consensus_genesis_tx(first_consensus, providers)?;
+        apply_consensus_genesis_tx(&mut consensus_configs, &genesis_tx);
 
         let kms_configs =
             create_kms_configs(&blend_configs, &da_configs, &config.wallet_config.accounts);
 
-        let mut validators = Vec::with_capacity(config.n_validators);
-        let mut executors = Vec::with_capacity(config.n_executors);
-
-        for i in 0..n_participants {
-            let consensus_config = consensus_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "consensus_configs",
-                    expected: n_participants,
-                    actual: consensus_configs.len(),
-                })?
-                .clone();
-            let bootstrapping_config = bootstrapping_config
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "bootstrap_configs",
-                    expected: n_participants,
-                    actual: bootstrapping_config.len(),
-                })?
-                .clone();
-            let da_config = da_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "da_configs",
-                    expected: n_participants,
-                    actual: da_configs.len(),
-                })?
-                .clone();
-            let network_config = network_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "network_configs",
-                    expected: n_participants,
-                    actual: network_configs.len(),
-                })?
-                .clone();
-            let blend_config = blend_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "blend_configs",
-                    expected: n_participants,
-                    actual: blend_configs.len(),
-                })?
-                .clone();
-            let api_config = api_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "api_configs",
-                    expected: n_participants,
-                    actual: api_configs.len(),
-                })?
-                .clone();
-            let tracing_config = tracing_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "tracing_configs",
-                    expected: n_participants,
-                    actual: tracing_configs.len(),
-                })?
-                .clone();
-            let kms_config = kms_configs
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "kms_configs",
-                    expected: n_participants,
-                    actual: kms_configs.len(),
-                })?
-                .clone();
-            let id = *ids.get(i).ok_or(TopologyBuildError::VectorLenMismatch {
-                label: "ids",
-                expected: n_participants,
-                actual: ids.len(),
-            })?;
-            let da_port = *da_ports
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "da_ports",
-                    expected: n_participants,
-                    actual: da_ports.len(),
-                })?;
-            let blend_port = *blend_ports
-                .get(i)
-                .ok_or(TopologyBuildError::VectorLenMismatch {
-                    label: "blend_ports",
-                    expected: n_participants,
-                    actual: blend_ports.len(),
-                })?;
-
-            let general = GeneralConfig {
-                consensus_config,
-                bootstrapping_config,
-                da_config,
-                network_config,
-                blend_config,
-                api_config,
-                tracing_config,
-                time_config: time_config.clone(),
-                kms_config,
-            };
-
-            let role = if i < config.n_validators {
-                NodeRole::Validator
-            } else {
-                NodeRole::Executor
-            };
-            let index = match role {
-                NodeRole::Validator => i,
-                NodeRole::Executor => i - config.n_validators,
-            };
-
-            let descriptor = GeneratedNodeConfig {
-                role,
-                index,
-                id,
-                general,
-                da_port,
-                blend_port,
-            };
-
-            match role {
-                NodeRole::Validator => validators.push(descriptor),
-                NodeRole::Executor => executors.push(descriptor),
-            }
-        }
+        let (validators, executors) = build_node_descriptors(
+            &config,
+            n_participants,
+            &ids,
+            &da_ports,
+            &blend_ports,
+            &consensus_configs,
+            &bootstrapping_config,
+            &da_configs,
+            &network_configs,
+            &blend_configs,
+            &api_configs,
+            &tracing_configs,
+            &kms_configs,
+            &time_config,
+        )?;
 
         Ok(GeneratedTopology {
             config,
@@ -492,4 +340,189 @@ impl TopologyBuilder {
     pub const fn config(&self) -> &TopologyConfig {
         &self.config
     }
+}
+
+fn participant_count(config: &TopologyConfig) -> Result<usize, TopologyBuildError> {
+    let n_participants = config.n_validators + config.n_executors;
+    if n_participants == 0 {
+        return Err(TopologyBuildError::EmptyParticipants);
+    }
+
+    Ok(n_participants)
+}
+
+fn resolve_and_validate_vectors(
+    ids: Option<Vec<[u8; 32]>>,
+    da_ports: Option<Vec<u16>>,
+    blend_ports: Option<Vec<u16>>,
+    n_participants: usize,
+) -> Result<(Vec<[u8; 32]>, Vec<u16>, Vec<u16>), TopologyBuildError> {
+    let ids = resolve_ids(ids, n_participants)?;
+    let da_ports = resolve_ports(da_ports, n_participants, "DA")?;
+    let blend_ports = resolve_ports(blend_ports, n_participants, "Blend")?;
+
+    validate_generated_vectors(n_participants, &ids, &da_ports, &blend_ports)?;
+
+    Ok((ids, da_ports, blend_ports))
+}
+
+fn collect_provider_infos(
+    first_consensus: &testing_framework_config::topology::configs::consensus::GeneralConsensusConfig,
+    da_configs: &[testing_framework_config::topology::configs::da::GeneralDaConfig],
+    blend_configs: &[testing_framework_config::topology::configs::blend::GeneralBlendConfig],
+) -> Result<Vec<ProviderInfo>, TopologyBuildError> {
+    let mut providers = Vec::with_capacity(da_configs.len() + blend_configs.len());
+
+    for (i, da_conf) in da_configs.iter().enumerate() {
+        let note = get_cloned("da_notes", &first_consensus.da_notes, i, da_configs.len())?;
+        providers.push(ProviderInfo {
+            service_type: ServiceType::DataAvailability,
+            provider_sk: da_conf.signer.clone(),
+            zk_sk: da_conf.secret_zk_key.clone(),
+            locator: Locator(da_conf.listening_address.clone()),
+            note,
+        });
+    }
+
+    for (i, blend_conf) in blend_configs.iter().enumerate() {
+        let note = get_cloned(
+            "blend_notes",
+            &first_consensus.blend_notes,
+            i,
+            blend_configs.len(),
+        )?;
+        providers.push(ProviderInfo {
+            service_type: ServiceType::BlendNetwork,
+            provider_sk: blend_conf.signer.clone(),
+            zk_sk: blend_conf.secret_zk_key.clone(),
+            locator: Locator(blend_conf.backend_core.listening_address.clone()),
+            note,
+        });
+    }
+
+    Ok(providers)
+}
+
+fn create_consensus_genesis_tx(
+    first_consensus: &testing_framework_config::topology::configs::consensus::GeneralConsensusConfig,
+    providers: Vec<ProviderInfo>,
+) -> Result<nomos_core::mantle::genesis_tx::GenesisTx, TopologyBuildError> {
+    let ledger_tx = first_consensus.genesis_tx.mantle_tx().ledger_tx.clone();
+    Ok(create_genesis_tx_with_declarations(ledger_tx, providers)?)
+}
+
+fn apply_consensus_genesis_tx(
+    consensus_configs: &mut [testing_framework_config::topology::configs::consensus::GeneralConsensusConfig],
+    genesis_tx: &nomos_core::mantle::genesis_tx::GenesisTx,
+) {
+    for c in consensus_configs {
+        c.genesis_tx = genesis_tx.clone();
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_node_descriptors(
+    config: &TopologyConfig,
+    n_participants: usize,
+    ids: &[[u8; 32]],
+    da_ports: &[u16],
+    blend_ports: &[u16],
+    consensus_configs: &[testing_framework_config::topology::configs::consensus::GeneralConsensusConfig],
+    bootstrapping_config: &[testing_framework_config::topology::configs::bootstrap::GeneralBootstrapConfig],
+    da_configs: &[testing_framework_config::topology::configs::da::GeneralDaConfig],
+    network_configs: &[testing_framework_config::topology::configs::network::GeneralNetworkConfig],
+    blend_configs: &[testing_framework_config::topology::configs::blend::GeneralBlendConfig],
+    api_configs: &[testing_framework_config::topology::configs::api::GeneralApiConfig],
+    tracing_configs: &[testing_framework_config::topology::configs::tracing::GeneralTracingConfig],
+    kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
+    time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
+) -> Result<(Vec<GeneratedNodeConfig>, Vec<GeneratedNodeConfig>), TopologyBuildError> {
+    let mut validators = Vec::with_capacity(config.n_validators);
+    let mut executors = Vec::with_capacity(config.n_executors);
+
+    for i in 0..n_participants {
+        let consensus_config =
+            get_cloned("consensus_configs", consensus_configs, i, n_participants)?;
+        let bootstrapping_config =
+            get_cloned("bootstrap_configs", bootstrapping_config, i, n_participants)?;
+        let da_config = get_cloned("da_configs", da_configs, i, n_participants)?;
+        let network_config = get_cloned("network_configs", network_configs, i, n_participants)?;
+        let blend_config = get_cloned("blend_configs", blend_configs, i, n_participants)?;
+        let api_config = get_cloned("api_configs", api_configs, i, n_participants)?;
+        let tracing_config = get_cloned("tracing_configs", tracing_configs, i, n_participants)?;
+        let kms_config = get_cloned("kms_configs", kms_configs, i, n_participants)?;
+
+        let id = get_copied("ids", ids, i, n_participants)?;
+        let da_port = get_copied("da_ports", da_ports, i, n_participants)?;
+        let blend_port = get_copied("blend_ports", blend_ports, i, n_participants)?;
+
+        let general = GeneralConfig {
+            consensus_config,
+            bootstrapping_config,
+            da_config,
+            network_config,
+            blend_config,
+            api_config,
+            tracing_config,
+            time_config: time_config.clone(),
+            kms_config,
+        };
+
+        let (role, index) = node_role_and_index(i, config.n_validators);
+        let descriptor = GeneratedNodeConfig {
+            role,
+            index,
+            id,
+            general,
+            da_port,
+            blend_port,
+        };
+
+        match role {
+            NodeRole::Validator => validators.push(descriptor),
+            NodeRole::Executor => executors.push(descriptor),
+        }
+    }
+
+    Ok((validators, executors))
+}
+
+fn node_role_and_index(i: usize, n_validators: usize) -> (NodeRole, usize) {
+    if i < n_validators {
+        (NodeRole::Validator, i)
+    } else {
+        (NodeRole::Executor, i - n_validators)
+    }
+}
+
+fn get_cloned<T: Clone>(
+    label: &'static str,
+    items: &[T],
+    index: usize,
+    expected: usize,
+) -> Result<T, TopologyBuildError> {
+    items
+        .get(index)
+        .cloned()
+        .ok_or(TopologyBuildError::VectorLenMismatch {
+            label,
+            expected,
+            actual: items.len(),
+        })
+}
+
+fn get_copied<T: Copy>(
+    label: &'static str,
+    items: &[T],
+    index: usize,
+    expected: usize,
+) -> Result<T, TopologyBuildError> {
+    items
+        .get(index)
+        .copied()
+        .ok_or(TopologyBuildError::VectorLenMismatch {
+            label,
+            expected,
+            actual: items.len(),
+        })
 }

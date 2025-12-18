@@ -36,62 +36,9 @@ impl<'a> ReadinessCheck<'a> for NetworkReadiness<'a> {
     type Data = Vec<NodeNetworkStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        let validator_futures = self
-            .topology
-            .validators
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| {
-                let label = self
-                    .labels
-                    .get(idx)
-                    .cloned()
-                    .unwrap_or_else(|| format!("validator#{idx}"));
-                let expected_peers = self.expected_peer_counts.get(idx).copied();
-                async move {
-                    let result = node
-                        .api()
-                        .network_info()
-                        .await
-                        .map_err(NetworkInfoError::from);
-                    NodeNetworkStatus {
-                        label,
-                        expected_peers,
-                        result,
-                    }
-                }
-            });
-        let offset = self.topology.validators.len();
-        let executor_futures = self
-            .topology
-            .executors
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| {
-                let global_idx = offset + idx;
-                let label = self
-                    .labels
-                    .get(global_idx)
-                    .cloned()
-                    .unwrap_or_else(|| format!("executor#{idx}"));
-                let expected_peers = self.expected_peer_counts.get(global_idx).copied();
-                async move {
-                    let result = node
-                        .api()
-                        .network_info()
-                        .await
-                        .map_err(NetworkInfoError::from);
-                    NodeNetworkStatus {
-                        label,
-                        expected_peers,
-                        result,
-                    }
-                }
-            });
-
         let (validator_statuses, executor_statuses) = tokio::join!(
-            futures::future::join_all(validator_futures),
-            futures::future::join_all(executor_futures)
+            collect_validator_statuses(self),
+            collect_executor_statuses(self)
         );
         validator_statuses
             .into_iter()
@@ -158,6 +105,68 @@ impl<'a> ReadinessCheck<'a> for HttpNetworkReadiness<'a> {
         let summary = build_timeout_summary(&data);
         format!("timed out waiting for network readiness: {summary}")
     }
+}
+
+async fn collect_validator_statuses(readiness: &NetworkReadiness<'_>) -> Vec<NodeNetworkStatus> {
+    let validator_futures = readiness
+        .topology
+        .validators
+        .iter()
+        .enumerate()
+        .map(|(idx, node)| {
+            let label = readiness
+                .labels
+                .get(idx)
+                .cloned()
+                .unwrap_or_else(|| format!("validator#{idx}"));
+            let expected_peers = readiness.expected_peer_counts.get(idx).copied();
+            async move {
+                let result = node
+                    .api()
+                    .network_info()
+                    .await
+                    .map_err(NetworkInfoError::from);
+                NodeNetworkStatus {
+                    label,
+                    expected_peers,
+                    result,
+                }
+            }
+        });
+
+    futures::future::join_all(validator_futures).await
+}
+
+async fn collect_executor_statuses(readiness: &NetworkReadiness<'_>) -> Vec<NodeNetworkStatus> {
+    let offset = readiness.topology.validators.len();
+    let executor_futures = readiness
+        .topology
+        .executors
+        .iter()
+        .enumerate()
+        .map(|(idx, node)| {
+            let global_idx = offset + idx;
+            let label = readiness
+                .labels
+                .get(global_idx)
+                .cloned()
+                .unwrap_or_else(|| format!("executor#{idx}"));
+            let expected_peers = readiness.expected_peer_counts.get(global_idx).copied();
+            async move {
+                let result = node
+                    .api()
+                    .network_info()
+                    .await
+                    .map_err(NetworkInfoError::from);
+                NodeNetworkStatus {
+                    label,
+                    expected_peers,
+                    result,
+                }
+            }
+        });
+
+    futures::future::join_all(executor_futures).await
 }
 
 pub async fn try_fetch_network_info(

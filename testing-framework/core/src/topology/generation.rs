@@ -137,81 +137,20 @@ impl GeneratedTopology {
             return Ok(());
         }
 
-        assert_eq!(
-            self.validators.len(),
-            validator_endpoints.len(),
-            "validator endpoints must match topology"
-        );
-        assert_eq!(
-            self.executors.len(),
-            executor_endpoints.len(),
-            "executor endpoints must match topology"
-        );
-
-        let mut endpoints = Vec::with_capacity(total_nodes);
-        endpoints.extend_from_slice(validator_endpoints);
-        endpoints.extend_from_slice(executor_endpoints);
-
         let labels = self.labels();
         let client = Client::new();
 
-        let make_testing_base_url = |port: u16| -> Url {
-            Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap_or_else(|_| unsafe {
-                // Safety: `port` is a valid u16 port.
-                std::hint::unreachable_unchecked()
-            })
-        };
+        let endpoints =
+            collect_node_endpoints(self, validator_endpoints, executor_endpoints, total_nodes);
 
-        if endpoints.len() > 1 {
-            let listen_ports = self.listen_ports();
-            let initial_peer_ports = self.initial_peer_ports();
-            let expected_peer_counts = crate::topology::generation::find_expected_peer_counts(
-                &listen_ports,
-                &initial_peer_ports,
-            );
+        wait_for_network_readiness(self, &client, &endpoints, &labels).await?;
 
-            let network_check = HttpNetworkReadiness {
-                client: &client,
-                endpoints: &endpoints,
-                expected_peer_counts: &expected_peer_counts,
-                labels: &labels,
-            };
-
-            network_check.wait().await?;
-        }
-
-        let mut membership_endpoints = Vec::with_capacity(total_nodes);
-        if let Some(urls) = validator_membership_endpoints {
-            assert_eq!(
-                self.validators.len(),
-                urls.len(),
-                "validator membership endpoints must match topology"
-            );
-
-            membership_endpoints.extend_from_slice(urls);
-        } else {
-            membership_endpoints.extend(
-                self.validators
-                    .iter()
-                    .map(|node| make_testing_base_url(node.testing_http_port())),
-            );
-        }
-
-        if let Some(urls) = executor_membership_endpoints {
-            assert_eq!(
-                self.executors.len(),
-                urls.len(),
-                "executor membership endpoints must match topology"
-            );
-
-            membership_endpoints.extend_from_slice(urls);
-        } else {
-            membership_endpoints.extend(
-                self.executors
-                    .iter()
-                    .map(|node| make_testing_base_url(node.testing_http_port())),
-            );
-        }
+        let membership_endpoints = collect_membership_endpoints(
+            self,
+            total_nodes,
+            validator_membership_endpoints,
+            executor_membership_endpoints,
+        );
 
         let membership_check = HttpMembershipReadiness {
             client: &client,
@@ -278,6 +217,100 @@ impl GeneratedTopology {
             }))
             .collect()
     }
+}
+
+fn collect_node_endpoints(
+    topology: &GeneratedTopology,
+    validator_endpoints: &[Url],
+    executor_endpoints: &[Url],
+    total_nodes: usize,
+) -> Vec<Url> {
+    assert_eq!(
+        topology.validators.len(),
+        validator_endpoints.len(),
+        "validator endpoints must match topology"
+    );
+    assert_eq!(
+        topology.executors.len(),
+        executor_endpoints.len(),
+        "executor endpoints must match topology"
+    );
+
+    let mut endpoints = Vec::with_capacity(total_nodes);
+    endpoints.extend_from_slice(validator_endpoints);
+    endpoints.extend_from_slice(executor_endpoints);
+    endpoints
+}
+
+async fn wait_for_network_readiness(
+    topology: &GeneratedTopology,
+    client: &Client,
+    endpoints: &[Url],
+    labels: &[String],
+) -> Result<(), ReadinessError> {
+    if endpoints.len() <= 1 {
+        return Ok(());
+    }
+
+    let listen_ports = topology.listen_ports();
+    let initial_peer_ports = topology.initial_peer_ports();
+    let expected_peer_counts =
+        crate::topology::generation::find_expected_peer_counts(&listen_ports, &initial_peer_ports);
+
+    let network_check = HttpNetworkReadiness {
+        client,
+        endpoints,
+        expected_peer_counts: &expected_peer_counts,
+        labels,
+    };
+
+    network_check.wait().await
+}
+
+fn collect_membership_endpoints(
+    topology: &GeneratedTopology,
+    total_nodes: usize,
+    validator_membership_endpoints: Option<&[Url]>,
+    executor_membership_endpoints: Option<&[Url]>,
+) -> Vec<Url> {
+    let mut membership_endpoints = Vec::with_capacity(total_nodes);
+
+    membership_endpoints.extend(collect_role_membership_endpoints(
+        &topology.validators,
+        validator_membership_endpoints,
+        "validator membership endpoints must match topology",
+    ));
+    membership_endpoints.extend(collect_role_membership_endpoints(
+        &topology.executors,
+        executor_membership_endpoints,
+        "executor membership endpoints must match topology",
+    ));
+
+    membership_endpoints
+}
+
+fn collect_role_membership_endpoints(
+    nodes: &[GeneratedNodeConfig],
+    membership_endpoints: Option<&[Url]>,
+    mismatch_message: &'static str,
+) -> Vec<Url> {
+    match membership_endpoints {
+        Some(urls) => {
+            assert_eq!(nodes.len(), urls.len(), "{mismatch_message}");
+            urls.to_vec()
+        }
+        None => nodes
+            .iter()
+            .map(|node| testing_base_url(node.testing_http_port()))
+            .collect(),
+    }
+}
+
+fn testing_base_url(port: u16) -> Url {
+    Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap_or_else(|_| unsafe {
+        // Safety: `port` is a valid u16 port.
+        std::hint::unreachable_unchecked()
+    })
 }
 
 pub fn find_expected_peer_counts(
