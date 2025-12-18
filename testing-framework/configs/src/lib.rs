@@ -40,10 +40,16 @@ pub fn secret_key_to_peer_id(node_key: nomos_libp2p::ed25519::SecretKey) -> Peer
 
 #[must_use]
 pub fn secret_key_to_provider_id(node_key: nomos_libp2p::ed25519::SecretKey) -> ProviderId {
-    ProviderId::try_from(
-        nomos_libp2p::ed25519::Keypair::from(node_key)
-            .public()
-            .to_bytes(),
-    )
-    .unwrap()
+    let bytes = nomos_libp2p::ed25519::Keypair::from(node_key)
+        .public()
+        .to_bytes();
+    match ProviderId::try_from(bytes) {
+        Ok(value) => value,
+        Err(_) => unsafe {
+            // Safety: `bytes` is a 32-byte ed25519 public key, matching `ProviderId`'s
+            // expected width; failure would indicate a broken invariant in the
+            // dependency.
+            std::hint::unreachable_unchecked()
+        },
+    }
 }
