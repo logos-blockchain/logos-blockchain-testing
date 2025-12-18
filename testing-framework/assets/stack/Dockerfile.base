@@ -1,0 +1,88 @@
+# syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
+# Ignore warnings about sensitive information as this is test data.
+
+ARG VERSION
+ARG CIRCUITS_OVERRIDE
+ARG NOMOS_NODE_REV
+ARG CIRCUITS_PLATFORM
+
+# ===========================
+# BUILD IMAGE
+# ===========================
+
+FROM rust:1.91.0-slim-bookworm AS builder
+
+ARG VERSION
+ARG CIRCUITS_OVERRIDE
+ARG NOMOS_NODE_REV
+ARG CIRCUITS_PLATFORM
+
+LABEL maintainer="augustinas@status.im" \
+    source="https://github.com/logos-co/nomos-node" \
+    description="Nomos testnet build image"
+
+WORKDIR /workspace
+COPY . .
+
+# Reduce debug artifact size.
+ENV CARGO_PROFILE_DEV_DEBUG=0
+ENV NOMOS_NODE_REV=${NOMOS_NODE_REV}
+
+# Install dependencies needed for building RocksDB and for circuit tooling.
+RUN apt-get update && apt-get install -yq \
+    git gcc g++ clang make cmake m4 xz-utils libgmp-dev libssl-dev pkg-config ca-certificates curl wget file \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN chmod +x \
+      /workspace/testing-framework/assets/stack/scripts/docker/prepare_circuits.sh \
+      /workspace/testing-framework/assets/stack/scripts/docker/prepare_binaries.sh \
+      /workspace/testing-framework/assets/stack/scripts/docker/build_cfgsync.sh \
+      /workspace/scripts/build-rapidsnark.sh \
+      /workspace/scripts/setup-nomos-circuits.sh \
+    || true
+
+RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_circuits.sh
+
+ENV NOMOS_CIRCUITS=/opt/circuits
+
+RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_binaries.sh
+
+# Strip local path patches so container builds use git sources.
+RUN sed -i '/^\[patch\."https:\/\/github.com\/logos-co\/nomos-node"\]/,/^$/d' /workspace/Cargo.toml
+
+RUN /workspace/testing-framework/assets/stack/scripts/docker/build_cfgsync.sh
+
+# ===========================
+# BASE RUNTIME IMAGE
+# ===========================
+
+FROM ubuntu:24.04 AS base
+
+LABEL maintainer="augustinas@status.im" \
+    source="https://github.com/logos-co/nomos-node" \
+    description="Nomos base runtime image (testing)"
+
+RUN apt-get update && apt-get install -yq \
+    libstdc++6 \
+    libgmp10 \
+    libgomp1 \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/circuits /opt/circuits
+
+# Provide a stable in-image location for the KZG test parameters so EKS runs do
+# not rely on hostPath volumes.
+COPY --from=builder /workspace/testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params /opt/nomos/kzg-params/kzgrs_test_params
+
+COPY --from=builder /workspace/artifacts/nomos-node /usr/bin/nomos-node
+COPY --from=builder /workspace/artifacts/nomos-executor /usr/bin/nomos-executor
+COPY --from=builder /workspace/artifacts/nomos-cli /usr/bin/nomos-cli
+COPY --from=builder /workspace/artifacts/cfgsync-server /usr/bin/cfgsync-server
+COPY --from=builder /workspace/artifacts/cfgsync-client /usr/bin/cfgsync-client
+
+ENV NOMOS_CIRCUITS=/opt/circuits
+
+EXPOSE 3000 8080 9000 60000

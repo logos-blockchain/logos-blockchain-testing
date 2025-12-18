@@ -17,7 +17,8 @@ Builds the compose/k8s test image (bakes in binaries + circuit assets).
 Options:
   --tag TAG                 Docker image tag (default: logos-blockchain-testing:local; or env IMAGE_TAG)
   --version VERSION         Circuits release tag (default: versions.env VERSION)
-  --dockerfile PATH         Dockerfile path (default: testing-framework/assets/stack/Dockerfile)
+  --dockerfile PATH         Dockerfile path (default: testing-framework/assets/stack/Dockerfile.runtime)
+  --base-tag TAG            Base image tag (default: logos-blockchain-testing:base)
   --circuits-override PATH  Relative path (within repo) to circuits dir/file to bake (default: testing-framework/assets/stack/kzgrs_test_params)
   --circuits-platform NAME  Circuits platform identifier for downloads (default: auto; linux-x86_64 or linux-aarch64)
   --bundle-tar PATH         Bundle tar containing artifacts/{nomos-*,circuits} (default: .tmp/nomos-binaries-linux-<version>.tar.gz; or env NOMOS_BINARIES_TAR)
@@ -48,8 +49,10 @@ build_test_image::load_env() {
   . "${ROOT_DIR}/versions.env"
   common::maybe_source "${ROOT_DIR}/paths.env"
 
-  DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile"
+  DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile.runtime"
+  BASE_DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile.base"
   IMAGE_TAG_DEFAULT="logos-blockchain-testing:local"
+  BASE_IMAGE_TAG_DEFAULT="logos-blockchain-testing:base"
 
   VERSION_DEFAULT="${VERSION:?Missing VERSION in versions.env}"
   NOMOS_NODE_REV="${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV in versions.env}"
@@ -67,6 +70,8 @@ build_test_image::parse_args() {
   IMAGE_TAG="${IMAGE_TAG:-${IMAGE_TAG_DEFAULT}}"
   VERSION_OVERRIDE=""
   DOCKERFILE_PATH="${DOCKERFILE_PATH_DEFAULT}"
+  BASE_DOCKERFILE_PATH="${BASE_DOCKERFILE_PATH_DEFAULT}"
+  BASE_IMAGE_TAG="${BASE_IMAGE_TAG:-${BASE_IMAGE_TAG_DEFAULT}}"
   KZG_DIR_REL_DEFAULT="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
   CIRCUITS_OVERRIDE="${CIRCUITS_OVERRIDE:-${KZG_DIR_REL_DEFAULT}}"
   CIRCUITS_PLATFORM="${CIRCUITS_PLATFORM:-${COMPOSE_CIRCUITS_PLATFORM:-}}"
@@ -83,6 +88,8 @@ build_test_image::parse_args() {
       --version) VERSION_OVERRIDE="${2:-}"; shift 2 ;;
       --dockerfile=*) DOCKERFILE_PATH="${1#*=}"; shift ;;
       --dockerfile) DOCKERFILE_PATH="${2:-}"; shift 2 ;;
+      --base-tag=*) BASE_IMAGE_TAG="${1#*=}"; shift ;;
+      --base-tag) BASE_IMAGE_TAG="${2:-}"; shift 2 ;;
       --circuits-override=*) CIRCUITS_OVERRIDE="${1#*=}"; shift ;;
       --circuits-override) CIRCUITS_OVERRIDE="${2:-}"; shift 2 ;;
       --circuits-platform=*) CIRCUITS_PLATFORM="${1#*=}"; shift ;;
@@ -117,6 +124,8 @@ build_test_image::print_config() {
   echo "Workspace root: ${ROOT_DIR}"
   echo "Image tag: ${IMAGE_TAG}"
   echo "Dockerfile: ${DOCKERFILE_PATH}"
+  echo "Base image tag: ${BASE_IMAGE_TAG}"
+  echo "Base Dockerfile: ${BASE_DOCKERFILE_PATH}"
   echo "Nomos node rev: ${NOMOS_NODE_REV}"
   echo "Circuits override: ${CIRCUITS_OVERRIDE:-<none>}"
   echo "Circuits version (download fallback): ${VERSION}"
@@ -176,9 +185,11 @@ build_test_image::docker_build() {
   command -v docker >/dev/null 2>&1 || build_test_image::fail "docker not found in PATH"
   [ -f "${DOCKERFILE_PATH}" ] || build_test_image::fail "Dockerfile not found: ${DOCKERFILE_PATH}"
 
-  local -a build_args=(
-    -f "${DOCKERFILE_PATH}"
-    -t "${IMAGE_TAG}"
+  [ -f "${BASE_DOCKERFILE_PATH}" ] || build_test_image::fail "Base Dockerfile not found: ${BASE_DOCKERFILE_PATH}"
+
+  local -a base_build_args=(
+    -f "${BASE_DOCKERFILE_PATH}"
+    -t "${BASE_IMAGE_TAG}"
     --build-arg "NOMOS_NODE_REV=${NOMOS_NODE_REV}"
     --build-arg "CIRCUITS_PLATFORM=${CIRCUITS_PLATFORM}"
     --build-arg "VERSION=${VERSION}"
@@ -186,13 +197,25 @@ build_test_image::docker_build() {
   )
 
   if [ -n "${CIRCUITS_OVERRIDE}" ]; then
-    build_args+=(--build-arg "CIRCUITS_OVERRIDE=${CIRCUITS_OVERRIDE}")
+    base_build_args+=(--build-arg "CIRCUITS_OVERRIDE=${CIRCUITS_OVERRIDE}")
   fi
 
   printf "Running:"
-  printf " %q" docker build "${build_args[@]}"
+  printf " %q" docker build "${base_build_args[@]}"
   echo
-  docker build "${build_args[@]}"
+  docker build "${base_build_args[@]}"
+
+  local -a final_build_args=(
+    -f "${DOCKERFILE_PATH}"
+    -t "${IMAGE_TAG}"
+    --build-arg "BASE_IMAGE=${BASE_IMAGE_TAG}"
+    "${ROOT_DIR}"
+  )
+
+  printf "Running:"
+  printf " %q" docker build "${final_build_args[@]}"
+  echo
+  docker build "${final_build_args[@]}"
 }
 
 build_test_image::main() {

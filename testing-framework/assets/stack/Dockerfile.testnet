@@ -1,0 +1,9 @@
+# syntax=docker/dockerfile:1
+
+ARG BASE_IMAGE=logos-blockchain-testing:base
+
+FROM ${BASE_IMAGE}
+
+LABEL description="Nomos testnet image (publishable)"
+
+ENTRYPOINT ["/usr/bin/nomos-node"]
