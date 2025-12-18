@@ -37,7 +37,7 @@ Both **LocalDeployer** and **ComposeDeployer** work in CI environments:
 **ComposeDeployer in CI (recommended):**
 - Better isolation (containerized)
 - Reproducible environment
-- Includes Prometheus/observability
+- Can integrate with external Prometheus/Grafana (optional)
 - **Trade-off:** Slower startup (Docker image build)
 - **Trade-off:** Requires Docker daemon
 
@@ -60,7 +60,21 @@ scripts/run-examples.sh -t 60 -v 1 -e 1 compose
 scripts/run-examples.sh -t 60 -v 1 -e 1 k8s
 ```
 
-This script handles circuit setup, binary building/bundling, image building, and execution.
+This script handles circuit setup, binary building/bundling, (local) image building, and execution.
+
+Note: for `k8s` runs against non-local clusters (e.g. EKS), the cluster pulls images from a registry,
+so a local `docker build` is not used. In that case, build + push your image separately (see
+`scripts/build_test_image.sh`) and set `NOMOS_TESTNET_IMAGE` to the pushed reference.
+
+### Quick Smoke Matrix (Host/Compose/K8s)
+
+For a small “does everything still run?” matrix (including `--no-image-build` variants where relevant), use:
+
+```bash
+scripts/run-test-matrix.sh -t 120 -v 1 -e 1
+```
+
+This is useful after making runner/image/script changes, and it forwards `--metrics-*` options through to `scripts/run-examples.sh`.
 
 **Environment overrides:**
 - `VERSION=v0.3.1` — Circuit version
@@ -192,6 +206,7 @@ cargo run -p runner-examples --bin compose_runner
 **Compose-specific features:**
 - **Node control support**: Only runner that supports chaos testing (`.enable_node_control()` + chaos workloads)
 - **Observability is external**: Set `NOMOS_METRICS_*` / `NOMOS_GRAFANA_URL` to enable telemetry links and querying
+  - Quickstart: `scripts/setup-observability.sh compose up` then `scripts/setup-observability.sh compose env`
 
 **Important:** 
 - Containers expect KZG parameters at `/kzgrs_test_params/kzgrs_test_params` (note the repeated filename)
@@ -248,13 +263,13 @@ cargo run -p runner-examples --bin k8s_runner
 Notes:
 - `NOMOS_METRICS_QUERY_URL` must be reachable from the runner process (often via `kubectl port-forward`).
 - `NOMOS_METRICS_OTLP_INGEST_URL` must be reachable from nodes (pods/containers) and is backend-specific (Prometheus vs VictoriaMetrics paths differ).
+  - Quickstart installer: `scripts/setup-observability.sh k8s install` then `scripts/setup-observability.sh k8s env` (optional dashboards: `scripts/setup-observability.sh k8s dashboards`)
 
 **Via `scripts/run-examples.sh` (optional):**
 ```bash
 scripts/run-examples.sh -t 60 -v 1 -e 1 k8s \
   --metrics-query-url http://your-prometheus:9090 \
-  --metrics-otlp-ingest-url http://your-prometheus:9090/api/v1/otlp/v1/metrics \
-  --grafana-url http://your-grafana:3000
+  --metrics-otlp-ingest-url http://your-prometheus:9090/api/v1/otlp/v1/metrics
 ```
 
 **In code (optional):**
@@ -565,12 +580,15 @@ cargo run -p runner-examples --bin local_runner
 Runners expose metrics and node HTTP endpoints for expectation code and debugging:
 
 **Prometheus-compatible metrics querying (optional):**
-- The framework does **not** deploy Prometheus.
+- Runners do **not** provision Prometheus automatically.
+- For a ready-to-run stack, use `scripts/setup-observability.sh`:
+  - Compose: `scripts/setup-observability.sh compose up` then `scripts/setup-observability.sh compose env`
+  - K8s: `scripts/setup-observability.sh k8s install` then `scripts/setup-observability.sh k8s env`
 - Provide `NOMOS_METRICS_QUERY_URL` (PromQL base URL) to enable `ctx.telemetry()` queries.
 - Access from expectations when configured: `ctx.telemetry().prometheus().map(|p| p.base_url())`
 
 **Grafana (optional):**
-- The framework does **not** deploy Grafana.
+- Runners do **not** provision Grafana automatically (but `scripts/setup-observability.sh` can).
 - If you set `NOMOS_GRAFANA_URL`, the deployer prints it in `TESTNET_ENDPOINTS`.
 - Dashboards live in `testing-framework/assets/stack/monitoring/grafana/dashboards/` for import into your Grafana.
 

@@ -1,0 +1,19 @@
+prometheus:
+  prometheusSpec:
+    enableOTLPReceiver: true
+    additionalArgs:
+      - name: web.enable-admin-api
+    # Basic OTLP → Prometheus translation defaults are fine for most setups.
+    # See: https://prometheus.io/docs/guides/opentelemetry/
+    otlp: {}
+
+grafana:
+  adminUser: admin
+  adminPassword: admin
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+    datasources:
+      enabled: true

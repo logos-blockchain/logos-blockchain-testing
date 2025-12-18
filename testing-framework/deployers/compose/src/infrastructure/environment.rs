@@ -311,6 +311,7 @@ pub fn write_compose_artifacts(
     let compose_path = workspace.root.join("compose.generated.yml");
     write_compose_file(&descriptor, &compose_path)
         .map_err(|source| ConfigError::Template { source })?;
+
     debug!(compose_file = %compose_path.display(), "rendered compose file");
     Ok(compose_path)
 }

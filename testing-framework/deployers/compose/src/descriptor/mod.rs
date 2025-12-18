@@ -1,3 +1,8 @@
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
+
 use serde::Serialize;
 use testing_framework_core::{
     constants::{DEFAULT_CFGSYNC_PORT, kzg_container_path},
@@ -150,7 +155,24 @@ fn base_volumes(use_kzg_mount: bool) -> Vec<String> {
     if use_kzg_mount {
         volumes.push("./kzgrs_test_params:/kzgrs_test_params:z".into());
     }
+    if let Some(host_log_dir) = repo_root()
+        .map(|root| root.join("tmp").join("node-logs"))
+        .map(|dir| dir.display().to_string())
+    {
+        volumes.push(format!("{host_log_dir}:/tmp/node-logs"));
+    }
     volumes
+}
+
+fn repo_root() -> Option<PathBuf> {
+    if let Ok(root) = env::var("CARGO_WORKSPACE_DIR") {
+        return Some(PathBuf::from(root));
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
 }
 
 fn default_extra_hosts() -> Vec<String> {

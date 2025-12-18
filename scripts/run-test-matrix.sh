@@ -25,7 +25,6 @@ Options:
   --force-k8s-image-build Allow the k8s "rebuild image" run even on non-docker-desktop clusters
   --metrics-query-url URL       Forwarded to scripts/run-examples.sh (optional)
   --metrics-otlp-ingest-url URL Forwarded to scripts/run-examples.sh (optional)
-  --grafana-url URL             Forwarded to scripts/run-examples.sh (optional)
   -h, --help              Show this help
 
 Notes:
@@ -51,7 +50,6 @@ matrix::parse_args() {
   FORCE_K8S_IMAGE_BUILD=0
   METRICS_QUERY_URL=""
   METRICS_OTLP_INGEST_URL=""
-  GRAFANA_URL=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -71,8 +69,6 @@ matrix::parse_args() {
       --metrics-query-url=*) METRICS_QUERY_URL="${1#*=}"; shift ;;
       --metrics-otlp-ingest-url) METRICS_OTLP_INGEST_URL="${2:-}"; shift 2 ;;
       --metrics-otlp-ingest-url=*) METRICS_OTLP_INGEST_URL="${1#*=}"; shift ;;
-      --grafana-url) GRAFANA_URL="${2:-}"; shift 2 ;;
-      --grafana-url=*) GRAFANA_URL="${1#*=}"; shift ;;
       *) matrix::die "Unknown argument: $1" ;;
     esac
   done
@@ -103,9 +99,6 @@ matrix::forwarded_args() {
   fi
   if [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
     args+=(--metrics-otlp-ingest-url "${METRICS_OTLP_INGEST_URL}")
-  fi
-  if [ -n "${GRAFANA_URL}" ]; then
-    args+=(--grafana-url "${GRAFANA_URL}")
   fi
   printf '%s\0' "${args[@]}"
 }
@@ -148,6 +141,7 @@ matrix::k8s_context() {
 matrix::main() {
   ROOT_DIR="$(common::repo_root)"
   export ROOT_DIR
+  export RUST_LOG="${RUST_LOG:-info}"
 
   matrix::parse_args "$@"
   matrix::split_modes
@@ -211,11 +205,17 @@ matrix::main() {
         fi
 
         if [ "${ctx}" = "docker-desktop" ] || [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
+          # On non-docker-desktop clusters, run-examples.sh defaults to skipping local image builds
+          # since the cluster can't see them. Honor the matrix "force" option by overriding.
+          if [ "${ctx}" != "docker-desktop" ] && [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
+            export NOMOS_FORCE_IMAGE_BUILD=1
+          fi
           matrix::run_case "k8s.image_build" \
             "${ROOT_DIR}/scripts/run-examples.sh" \
               -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
               "${forward[@]}" \
               k8s
+          unset NOMOS_FORCE_IMAGE_BUILD || true
         else
           echo "==> [k8s] Detected context '${ctx}'; skipping image-build variant (use --force-k8s-image-build to override)"
         fi
@@ -259,4 +259,3 @@ matrix::main() {
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   matrix::main "$@"
 fi
-

@@ -26,6 +26,7 @@
   - [Operations](operations.md)
 - [Part III — Developer Reference](part-iii.md)
   - [Scenario Model (Developer Level)](scenario-model.md)
+  - [API Levels: Builder DSL vs. Direct](api-levels.md)
   - [Extending the Framework](extending.md)
   - [Example: New Workload & Expectation (Rust)](custom-workload-example.md)
   - [Internal Crate Reference](internal-crate-reference.md)

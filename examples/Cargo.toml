@@ -12,7 +12,7 @@ version               = "0.1.0"
 [dependencies]
 anyhow                           = "1"
 cucumber                         = { version = "0.22.0" }
-cucumber_ext                     = { path = "../testing-framework/cucumber_ext" }
+cucumber_ext                     = { path = "../testing-framework/cucumber" }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 testing-framework-runner-k8s     = { workspace = true }

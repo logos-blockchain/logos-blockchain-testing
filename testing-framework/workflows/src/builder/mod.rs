@@ -302,6 +302,7 @@ impl<Caps> TransactionFlowBuilder<Caps> {
         let workload = transaction::Workload::with_rate(self.rate.get())
             .expect("transaction rate must be non-zero")
             .with_user_limit(self.users);
+
         tracing::info!(
             rate = self.rate.get(),
             users = self.users.map(|u| u.get()),

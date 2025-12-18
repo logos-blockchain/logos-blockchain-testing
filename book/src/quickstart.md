@@ -163,7 +163,7 @@ pub fn step_5_run_duration() -> testing_framework_core::scenario::Builder<()> {
 }
 ```
 
-Run for 60 seconds (~27 blocks with default 2s slots, 0.9 coefficient). Framework ensures this is at least 2× the consensus slot duration.
+Run for 60 seconds (~27 blocks with default 2s slots, 0.9 coefficient). Framework ensures this is at least 2× the consensus slot duration. Adjust consensus timing via `CONSENSUS_SLOT_TIME` and `CONSENSUS_ACTIVE_SLOT_COEFF`.
 
 ### 6. Deploy and Execute
 
@@ -239,7 +239,18 @@ POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 ```
 
-**Benefit:** Reproducible containerized environment with Prometheus at `http://localhost:9090`.
+**Benefit:** Reproducible containerized environment (Dockerized nodes, repeatable deployments).
+
+**Optional: Prometheus + Grafana**
+
+The runner can integrate with external observability endpoints. For a ready-to-run local stack:
+
+```bash
+scripts/setup-observability.sh compose up
+eval "$(scripts/setup-observability.sh compose env)"
+```
+
+Then run your compose scenario as usual (the environment variables enable PromQL querying and node OTLP metrics export).
 
 **Note:** Compose expects KZG parameters at `/kzgrs_test_params/kzgrs_test_params` inside containers (the directory name is repeated as the filename).
 

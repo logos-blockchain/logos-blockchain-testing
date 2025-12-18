@@ -36,7 +36,7 @@ Reason in **blocks** and **consensus intervals**, not wall-clock seconds.
 
 **Consensus defaults:**
 - Slot duration: 2 seconds (NTP-synchronized, configurable via `CONSENSUS_SLOT_TIME`)
-- Active slot coefficient: 0.9 (90% block probability per slot)
+- Active slot coefficient: 0.9 (90% block probability per slot, configurable via `CONSENSUS_ACTIVE_SLOT_COEFF`)
 - Expected rate: ~27 blocks per minute
 
 ```rust
@@ -159,7 +159,7 @@ pub fn minimum_run_windows() {
 
 **Note:** Block counts assume default consensus parameters:
 - Slot duration: 2 seconds (configurable via `CONSENSUS_SLOT_TIME`)
-- Active slot coefficient: 0.9 (90% block probability per slot)
+- Active slot coefficient: 0.9 (90% block probability per slot, configurable via `CONSENSUS_ACTIVE_SLOT_COEFF`)
 - Formula: `blocks ≈ (duration / slot_duration) × active_slot_coeff`
 
 If upstream changes these parameters, adjust your duration expectations accordingly.

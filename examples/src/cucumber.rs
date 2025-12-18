@@ -1,3 +1,8 @@
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
+
 use cucumber::World;
 use cucumber_ext::TestingFrameworkWorld;
 use tracing_subscriber::{EnvFilter, fmt};
@@ -31,9 +36,34 @@ fn is_compose(
 pub fn init_logging_defaults() {
     set_default_env("POL_PROOF_DEV_MODE", "true");
     set_default_env("NOMOS_TESTS_KEEP_LOGS", "1");
-    set_default_env("NOMOS_LOG_DIR", ".tmp/cucumber-logs");
     set_default_env("NOMOS_LOG_LEVEL", "info");
     set_default_env("RUST_LOG", "info");
+}
+
+pub fn init_node_log_dir_defaults(mode: Mode) {
+    if env::var_os("NOMOS_LOG_DIR").is_some() {
+        return;
+    }
+
+    let host_dir = repo_root().join("tmp").join("node-logs");
+    let _ = fs::create_dir_all(&host_dir);
+
+    match mode {
+        Mode::Host => set_default_env("NOMOS_LOG_DIR", &host_dir.display().to_string()),
+        Mode::Compose => set_default_env("NOMOS_LOG_DIR", "/tmp/node-logs"),
+    }
+}
+
+fn repo_root() -> PathBuf {
+    env::var("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .map(Path::to_path_buf)
+        })
+        .expect("repo root must be discoverable from CARGO_WORKSPACE_DIR or CARGO_MANIFEST_DIR")
 }
 
 pub fn init_tracing() {

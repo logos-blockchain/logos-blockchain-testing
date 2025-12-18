@@ -1,4 +1,9 @@
-use std::{env, process, time::Duration};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process,
+    time::Duration,
+};
 
 use anyhow::{Context as _, Result};
 use runner_examples::{ScenarioBuilderExt as _, read_env_any};
@@ -12,11 +17,13 @@ const DEFAULT_RUN_SECS: u64 = 60;
 const MIXED_TXS_PER_BLOCK: u64 = 5;
 const TOTAL_WALLETS: usize = 1000;
 const TRANSACTION_WALLETS: usize = 500;
-const DA_BLOB_RATE: u64 = 1;
+const DA_BLOB_RATE: u64 = 3;
 const SMOKE_RUN_SECS_MAX: u64 = 30;
 
 #[tokio::main]
 async fn main() {
+    init_node_log_dir_defaults();
+
     tracing_subscriber::fmt::init();
 
     if env::var("POL_PROOF_DEV_MODE").is_err() {
@@ -37,6 +44,30 @@ async fn main() {
         warn!("local runner demo failed: {err:#}");
         process::exit(1);
     }
+}
+
+fn init_node_log_dir_defaults() {
+    if env::var_os("NOMOS_LOG_DIR").is_some() {
+        return;
+    }
+
+    let host_dir = repo_root().join("tmp").join("node-logs");
+    let _ = fs::create_dir_all(&host_dir);
+    unsafe {
+        env::set_var("NOMOS_LOG_DIR", host_dir);
+    }
+}
+
+fn repo_root() -> PathBuf {
+    env::var("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .map(Path::to_path_buf)
+        })
+        .expect("repo root must be discoverable from CARGO_WORKSPACE_DIR or CARGO_MANIFEST_DIR")
 }
 
 async fn run_local_case(validators: usize, executors: usize, run_duration: Duration) -> Result<()> {

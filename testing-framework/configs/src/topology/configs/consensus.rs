@@ -1,5 +1,7 @@
 use std::{
+    env,
     num::{NonZero, NonZeroU64},
+    str::FromStr as _,
     sync::Arc,
 };
 
@@ -35,8 +37,30 @@ pub struct ConsensusParams {
 }
 
 impl ConsensusParams {
+    const DEFAULT_ACTIVE_SLOT_COEFF: f64 = 0.9;
+    const CONSENSUS_ACTIVE_SLOT_COEFF_VAR: &str = "CONSENSUS_ACTIVE_SLOT_COEFF";
+
     #[must_use]
-    pub const fn default_for_participants(n_participants: usize) -> Self {
+    pub fn default_for_participants(n_participants: usize) -> Self {
+        let active_slot_coeff = env::var(Self::CONSENSUS_ACTIVE_SLOT_COEFF_VAR)
+            .map(|s| {
+                f64::from_str(&s).unwrap_or_else(|err| {
+                    panic!(
+                        "invalid {}='{}' (expected a float in (0.0, 1.0]): {err}",
+                        Self::CONSENSUS_ACTIVE_SLOT_COEFF_VAR,
+                        s
+                    )
+                })
+            })
+            .unwrap_or(Self::DEFAULT_ACTIVE_SLOT_COEFF);
+
+        assert!(
+            (0.0..=1.0).contains(&active_slot_coeff) && active_slot_coeff > 0.0,
+            "{} must be in (0.0, 1.0], got {}",
+            Self::CONSENSUS_ACTIVE_SLOT_COEFF_VAR,
+            active_slot_coeff
+        );
+
         Self {
             n_participants,
             // by setting the slot coeff to 1, we also increase the probability of multiple blocks
@@ -45,7 +69,7 @@ impl ConsensusParams {
             // deciding on the longest chain.
             security_param: NonZero::new(10).unwrap(),
             // a block should be produced (on average) every slot
-            active_slot_coeff: 0.9,
+            active_slot_coeff,
         }
     }
 }

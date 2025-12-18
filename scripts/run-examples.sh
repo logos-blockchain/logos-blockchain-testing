@@ -23,6 +23,15 @@ readonly DEFAULT_PRIVATE_AWS_REGION="ap-southeast-2"
 readonly DEFAULT_PULL_POLICY_LOCAL="IfNotPresent"
 readonly DEFAULT_PULL_POLICY_ECR="Always"
 readonly DOCKER_DESKTOP_CONTEXT="docker-desktop"
+readonly DEFAULT_K8S_ECR_SKIP_IMAGE_BUILD="1"
+
+run_examples::cleanup() {
+  rm -f "${SETUP_OUT:-}" 2>/dev/null || true
+}
+
+# Avoid inheriting environment-provided EXIT traps (e.g., from BASH_ENV) that can
+# reference missing functions and fail at script termination.
+trap run_examples::cleanup EXIT
 
 run_examples::usage() {
   cat <<EOF
@@ -40,7 +49,6 @@ Options:
   --bundle PATH           Convenience alias for setting NOMOS_BINARIES_TAR=PATH
   --metrics-query-url URL         PromQL base URL the runner process can query (optional)
   --metrics-otlp-ingest-url URL   Full OTLP HTTP ingest URL for node metrics export (optional)
-  --grafana-url URL               Grafana base URL for printing/logging (optional)
   --external-prometheus URL            Alias for --metrics-query-url
   --external-otlp-metrics-endpoint URL  Alias for --metrics-otlp-ingest-url
   --local                 Use a local Docker image tag (default for docker-desktop k8s)
@@ -48,6 +56,8 @@ Options:
 
 Environment:
   VERSION                          Circuits version (default from versions.env)
+  CONSENSUS_SLOT_TIME              Consensus slot duration in seconds (default 2)
+  CONSENSUS_ACTIVE_SLOT_COEFF      Probability a slot is active (default 0.9); expected block interval ≈ slot_time / coeff
   NOMOS_TESTNET_IMAGE              Image reference (overridden by --local/--ecr selection)
   ECR_IMAGE                        Full image reference for --ecr (overrides ECR_REGISTRY/ECR_REPO/TAG)
   ECR_REGISTRY                     Registry hostname for --ecr (default ${DEFAULT_PUBLIC_ECR_REGISTRY})
@@ -56,9 +66,16 @@ Environment:
   NOMOS_TESTNET_IMAGE_PULL_POLICY  K8s imagePullPolicy (default ${DEFAULT_PULL_POLICY_LOCAL}; set to ${DEFAULT_PULL_POLICY_ECR} for --ecr)
   NOMOS_BINARIES_TAR               Path to prebuilt binaries/circuits tarball (default .tmp/nomos-binaries-<platform>-<version>.tar.gz)
   NOMOS_SKIP_IMAGE_BUILD           Set to 1 to skip rebuilding the compose/k8s image
+  NOMOS_FORCE_IMAGE_BUILD          Set to 1 to force image rebuild even for k8s ECR mode
   NOMOS_METRICS_QUERY_URL           PromQL base URL for the runner process (optional)
   NOMOS_METRICS_OTLP_INGEST_URL     Full OTLP HTTP ingest URL for node metrics export (optional)
   NOMOS_GRAFANA_URL                 Grafana base URL for printing/logging (optional)
+
+Notes:
+  - For k8s runs on non-docker-desktop clusters (e.g. EKS), a locally built Docker image is not
+    visible to the cluster. By default, this script skips local image rebuilds in that case.
+    If you need a custom image, run scripts/build_test_image.sh and push it to a registry the
+    cluster can pull from, then set NOMOS_TESTNET_IMAGE accordingly.
 EOF
 }
 
@@ -104,7 +121,6 @@ run_examples::parse_args() {
   IMAGE_SELECTION_MODE="auto"
   METRICS_QUERY_URL=""
   METRICS_OTLP_INGEST_URL=""
-  GRAFANA_URL=""
 
   RUN_SECS_RAW_SPECIFIED=""
 
@@ -164,14 +180,6 @@ run_examples::parse_args() {
         ;;
       --metrics-otlp-ingest-url=*)
         METRICS_OTLP_INGEST_URL="${1#*=}"
-        shift
-        ;;
-      --grafana-url)
-        GRAFANA_URL="${2:-}"
-        shift 2
-        ;;
-      --grafana-url=*)
-        GRAFANA_URL="${1#*=}"
         shift
         ;;
       --external-prometheus)
@@ -279,12 +287,20 @@ run_examples::select_image() {
     run_examples::fail_with_usage "Unknown image selection mode: ${selection}"
   fi
 
+  export NOMOS_IMAGE_SELECTION="${selection}"
   export IMAGE_TAG="${IMAGE}"
   export NOMOS_TESTNET_IMAGE="${IMAGE}"
 
   if [ "${MODE}" = "k8s" ]; then
     if [ "${selection}" = "ecr" ]; then
       export NOMOS_KZG_MODE="${NOMOS_KZG_MODE:-inImage}"
+      # A locally built Docker image isn't visible to remote clusters (e.g. EKS). Default to
+      # skipping the local rebuild, unless the user explicitly set NOMOS_SKIP_IMAGE_BUILD or
+      # overrides via NOMOS_FORCE_IMAGE_BUILD=1.
+      if [ "${NOMOS_FORCE_IMAGE_BUILD:-0}" != "1" ]; then
+        NOMOS_SKIP_IMAGE_BUILD="${NOMOS_SKIP_IMAGE_BUILD:-${DEFAULT_K8S_ECR_SKIP_IMAGE_BUILD}}"
+        export NOMOS_SKIP_IMAGE_BUILD
+      fi
     else
       export NOMOS_KZG_MODE="${NOMOS_KZG_MODE:-hostPath}"
     fi
@@ -548,9 +564,6 @@ run_examples::run() {
   if [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
     export NOMOS_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
   fi
-  if [ -n "${GRAFANA_URL}" ]; then
-    export NOMOS_GRAFANA_URL="${GRAFANA_URL}"
-  fi
 
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"
   cd "${ROOT_DIR}"
@@ -576,8 +589,6 @@ run_examples::main() {
   echo "==> Using restored circuits/binaries bundle"
 
   SETUP_OUT="$(common::tmpfile nomos-setup-output.XXXXXX)"
-  cleanup() { rm -f "${SETUP_OUT}" 2>/dev/null || true; }
-  trap cleanup EXIT
 
   run_examples::maybe_rebuild_image
   run_examples::maybe_restore_host_after_image

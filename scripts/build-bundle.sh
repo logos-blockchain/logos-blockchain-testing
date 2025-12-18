@@ -196,6 +196,24 @@ build_bundle::clean_cargo_linux_cache() {
   rm -rf "${ROOT_DIR}/.tmp/cargo-linux/registry" "${ROOT_DIR}/.tmp/cargo-linux/git"
 }
 
+build_bundle::docker_platform_suffix() {
+  # Map a docker platform string (e.g. linux/amd64) to a filesystem-safe suffix
+  # used for arch-specific target dirs, to avoid mixing build artifacts between
+  # different container architectures.
+  local platform="${1:-}"
+  if [ -z "${platform}" ]; then
+    echo ""
+    return 0
+  fi
+  platform="${platform#linux/}"
+  platform="${platform//\//-}"
+  if [ -z "${platform}" ] || [ "${platform}" = "linux" ]; then
+    echo ""
+    return 0
+  fi
+  echo "-${platform}"
+}
+
 build_bundle::maybe_run_linux_build_in_docker() {
   # With `set -e`, this function must return 0 when no Docker cross-build is needed.
   if [ "${PLATFORM}" != "linux" ] || [ "$(uname -s)" = "Linux" ] || [ -n "${BUNDLE_IN_CONTAINER:-}" ]; then
@@ -224,7 +242,10 @@ build_bundle::maybe_run_linux_build_in_docker() {
 
   echo "==> Building Linux bundle inside Docker"
   local container_output="/workspace${OUTPUT#"${ROOT_DIR}"}"
-  mkdir -p "${ROOT_DIR}/.tmp/cargo-linux" "${ROOT_DIR}/.tmp/nomos-node-linux-target"
+  local target_suffix
+  target_suffix="$(build_bundle::docker_platform_suffix "${DOCKER_PLATFORM}")"
+  local host_target_dir="${ROOT_DIR}/.tmp/nomos-node-linux-target${target_suffix}"
+  mkdir -p "${ROOT_DIR}/.tmp/cargo-linux" "${host_target_dir}"
 
   local -a features_args=()
   if [ -n "${NOMOS_EXTRA_FEATURES:-}" ]; then
@@ -242,15 +263,16 @@ build_bundle::maybe_run_linux_build_in_docker() {
     -e VERSION="${VERSION}" \
     -e NOMOS_NODE_REV="${NOMOS_NODE_REV}" \
     -e NOMOS_NODE_PATH="${node_path_env}" \
+    -e NOMOS_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
     -e NOMOS_CIRCUITS="/workspace/.tmp/nomos-circuits-linux" \
     -e STACK_DIR="/workspace/.tmp/nomos-circuits-linux" \
     -e HOST_DIR="/workspace/.tmp/nomos-circuits-linux" \
     -e NOMOS_EXTRA_FEATURES="${NOMOS_EXTRA_FEATURES:-}" \
     -e BUNDLE_IN_CONTAINER=1 \
     -e CARGO_HOME=/workspace/.tmp/cargo-linux \
-    -e CARGO_TARGET_DIR=/workspace/.tmp/nomos-node-linux-target \
+    -e CARGO_TARGET_DIR="/workspace/.tmp/nomos-node-linux-target${target_suffix}" \
     -v "${ROOT_DIR}/.tmp/cargo-linux":/workspace/.tmp/cargo-linux \
-    -v "${ROOT_DIR}/.tmp/nomos-node-linux-target":/workspace/.tmp/nomos-node-linux-target \
+    -v "${host_target_dir}:/workspace/.tmp/nomos-node-linux-target${target_suffix}" \
     -v "${ROOT_DIR}:/workspace" \
     "${extra_mounts[@]}" \
     -w /workspace \
@@ -267,7 +289,14 @@ build_bundle::prepare_circuits() {
     NODE_TARGET="${ROOT_DIR}/.tmp/nomos-node-host-target"
   else
     CIRCUITS_DIR="${ROOT_DIR}/.tmp/nomos-circuits-linux"
-    NODE_TARGET="${ROOT_DIR}/.tmp/nomos-node-linux-target"
+    # When building Linux bundles in Docker, avoid reusing the same target dir
+    # across different container architectures (e.g. linux/arm64 vs linux/amd64),
+    # as the native-host `target/debug` layout would otherwise get mixed.
+    local target_suffix=""
+    if [ -n "${BUNDLE_IN_CONTAINER:-}" ]; then
+      target_suffix="$(build_bundle::docker_platform_suffix "${NOMOS_BUNDLE_DOCKER_PLATFORM:-}")"
+    fi
+    NODE_TARGET="${ROOT_DIR}/.tmp/nomos-node-linux-target${target_suffix}"
   fi
 
   NODE_SRC_DEFAULT="${ROOT_DIR}/.tmp/nomos-node-${PLATFORM}-src"

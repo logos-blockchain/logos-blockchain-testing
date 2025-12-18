@@ -1,4 +1,9 @@
-use std::{env, process, time::Duration};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process,
+    time::Duration,
+};
 
 use anyhow::{Context as _, Result};
 use runner_examples::{ChaosBuilderExt as _, ScenarioBuilderExt as _, read_env_any};
@@ -25,6 +30,8 @@ const DA_BLOB_RATE: u64 = 1;
 
 #[tokio::main]
 async fn main() {
+    init_node_log_dir_defaults();
+
     // Compose containers mount KZG params at /kzgrs_test_params; ensure the
     // generated configs point there unless the caller overrides explicitly.
     if env::var("NOMOS_KZGRS_PARAMS_PATH").is_err() {
@@ -55,6 +62,35 @@ async fn main() {
         warn!("compose runner demo failed: {err:#}");
         process::exit(1);
     }
+}
+
+fn init_node_log_dir_defaults() {
+    if env::var_os("NOMOS_LOG_DIR").is_some() {
+        return;
+    }
+
+    let repo_root = repo_root();
+    let host_dir = repo_root.join("tmp").join("node-logs");
+    let _ = fs::create_dir_all(&host_dir);
+
+    // In compose mode, node processes run inside containers; configs should
+    // point to the container path, while the compose deployer mounts the host
+    // repo's `tmp/node-logs` there.
+    unsafe {
+        env::set_var("NOMOS_LOG_DIR", "/tmp/node-logs");
+    }
+}
+
+fn repo_root() -> PathBuf {
+    env::var("CARGO_WORKSPACE_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .map(Path::to_path_buf)
+        })
+        .expect("repo root must be discoverable from CARGO_WORKSPACE_DIR or CARGO_MANIFEST_DIR")
 }
 
 async fn run_compose_case(

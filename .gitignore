@@ -3,6 +3,7 @@
 .tmp/
 /.tmp*/
 tmp-local-logs/
+tmp/node-logs/
 # IDE / OS cruft
 .idea/
 .DS_Store
