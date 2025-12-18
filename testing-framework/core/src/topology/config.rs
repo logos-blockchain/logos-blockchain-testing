@@ -5,18 +5,21 @@ use nomos_core::{
     sdp::{Locator, ServiceType},
 };
 use nomos_da_network_core::swarm::DAConnectionPolicySettings;
-use testing_framework_config::topology::configs::{
-    api::create_api_configs,
-    blend::create_blend_configs,
-    bootstrap::{SHORT_PROLONGED_BOOTSTRAP_PERIOD, create_bootstrap_configs},
-    consensus::{
-        ConsensusParams, ProviderInfo, create_consensus_configs,
-        create_genesis_tx_with_declarations,
+use testing_framework_config::topology::{
+    configs::{
+        api::create_api_configs,
+        blend::create_blend_configs,
+        bootstrap::{SHORT_PROLONGED_BOOTSTRAP_PERIOD, create_bootstrap_configs},
+        consensus::{
+            ConsensusParams, ProviderInfo, create_consensus_configs,
+            create_genesis_tx_with_declarations,
+        },
+        da::{DaParams, create_da_configs},
+        network::{Libp2pNetworkLayout, NetworkParams, create_network_configs},
+        tracing::create_tracing_configs,
+        wallet::WalletConfig,
     },
-    da::{DaParams, create_da_configs},
-    network::{Libp2pNetworkLayout, NetworkParams, create_network_configs},
-    tracing::create_tracing_configs,
-    wallet::WalletConfig,
+    invariants::validate_generated_vectors,
 };
 
 use crate::topology::{
@@ -257,6 +260,9 @@ impl TopologyBuilder {
         let ids = resolve_ids(ids, n_participants);
         let da_ports = resolve_ports(da_ports, n_participants, "DA");
         let blend_ports = resolve_ports(blend_ports, n_participants, "Blend");
+
+        validate_generated_vectors(n_participants, &ids, &da_ports, &blend_ports)
+            .expect("invalid generated topology inputs");
 
         let mut consensus_configs =
             create_consensus_configs(&ids, &config.consensus_params, &config.wallet_config);

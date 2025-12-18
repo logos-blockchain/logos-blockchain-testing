@@ -24,13 +24,16 @@ use wallet::WalletConfig;
 
 use crate::{
     nodes::kms::key_id_for_preload_backend,
-    topology::configs::{
-        api::GeneralApiConfig,
-        bootstrap::{GeneralBootstrapConfig, SHORT_PROLONGED_BOOTSTRAP_PERIOD},
-        consensus::ConsensusParams,
-        da::DaParams,
-        network::NetworkParams,
-        time::GeneralTimeConfig,
+    topology::{
+        configs::{
+            api::GeneralApiConfig,
+            bootstrap::{GeneralBootstrapConfig, SHORT_PROLONGED_BOOTSTRAP_PERIOD},
+            consensus::ConsensusParams,
+            da::DaParams,
+            network::NetworkParams,
+            time::GeneralTimeConfig,
+        },
+        invariants::validate_generated_vectors,
     },
 };
 
@@ -84,6 +87,9 @@ pub fn create_general_configs_with_blend_core_subset(
         da_ports.push(get_available_udp_port().unwrap());
         blend_ports.push(get_available_udp_port().unwrap());
     }
+
+    validate_generated_vectors(n_nodes, &ids, &da_ports, &blend_ports)
+        .expect("invalid generated test topology inputs");
 
     let consensus_params = ConsensusParams::default_for_participants(n_nodes);
     let mut consensus_configs =
