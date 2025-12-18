@@ -23,6 +23,7 @@ serde                  = { workspace = true, features = ["derive"] }
 tempfile               = { workspace = true }
 tera                   = "1.19"
 testing-framework-core = { path = "../../core" }
+testing-framework-env  = { workspace = true }
 thiserror              = { workspace = true }
 tokio                  = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 tracing                = { workspace = true }

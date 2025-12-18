@@ -1,10 +1,11 @@
-use std::{env, time::Duration};
+use std::time::Duration;
 
 use nomos_libp2p::{
     IdentifySettings, KademliaSettings, Multiaddr, NatSettings, ed25519, gossipsub,
 };
 use nomos_node::config::network::serde::{BackendSettings, Config, SwarmConfig};
 use nomos_utils::net::get_available_udp_port;
+use testing_framework_env as tf_env;
 use thiserror::Error;
 
 use crate::node_address_from_port;
@@ -46,7 +47,7 @@ fn default_swarm_config() -> SwarmConfig {
 }
 
 fn nat_settings(port: u16) -> NatSettings {
-    if env::var("NOMOS_USE_AUTONAT").is_ok() {
+    if tf_env::nomos_use_autonat() {
         return NatSettings::default();
     }
 

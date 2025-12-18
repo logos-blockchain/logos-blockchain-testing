@@ -15,6 +15,7 @@ use testing_framework_core::{
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, render_cfgsync_yaml},
     topology::generation::GeneratedTopology,
 };
+use testing_framework_env as tf_env;
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
@@ -81,7 +82,7 @@ pub enum KzgMode {
 }
 
 fn kzg_mode() -> KzgMode {
-    match env::var("NOMOS_KZG_MODE").ok().as_deref() {
+    match tf_env::nomos_kzg_mode().as_deref() {
         Some("hostPath") => KzgMode::HostPath,
         Some("inImage") => KzgMode::InImage,
         None => KzgMode::InImage,
@@ -125,8 +126,8 @@ pub fn prepare_assets(
     let chart_path = helm_chart_path()?;
     let values_yaml = render_values_yaml(topology)?;
     let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
-    let image = env::var("NOMOS_TESTNET_IMAGE")
-        .unwrap_or_else(|_| String::from("public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"));
+    let image = tf_env::nomos_testnet_image()
+        .unwrap_or_else(|| String::from("public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"));
 
     let kzg_display = kzg_path
         .as_ref()
@@ -175,8 +176,7 @@ fn render_cfgsync_config(
     apply_topology_overrides(&mut cfg, topology, kzg_mode == KzgMode::HostPath);
 
     if kzg_mode == KzgMode::InImage {
-        cfg.global_params_path = env::var("NOMOS_KZGRS_PARAMS_PATH")
-            .ok()
+        cfg.global_params_path = tf_env::nomos_kzgrs_params_path()
             .unwrap_or_else(|| DEFAULT_IN_IMAGE_KZG_PARAMS_PATH.to_string());
     }
 
@@ -229,8 +229,7 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
 }
 
 fn validate_kzg_params(root: &Path) -> Result<PathBuf, AssetsError> {
-    let rel = env::var("NOMOS_KZG_DIR_REL")
-        .ok()
+    let rel = tf_env::nomos_kzg_dir_rel()
         .unwrap_or_else(|| testing_framework_core::constants::DEFAULT_KZG_HOST_DIR.to_string());
     let path = root.join(rel);
     if path.exists() {
@@ -334,7 +333,7 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     };
     let pol_mode = pol_proof_mode();
     let image_pull_policy =
-        env::var("NOMOS_TESTNET_IMAGE_PULL_POLICY").unwrap_or_else(|_| "IfNotPresent".into());
+        tf_env::nomos_testnet_image_pull_policy().unwrap_or_else(|| "IfNotPresent".into());
     debug!(pol_mode, "rendering Helm values for k8s stack");
     let validators = topology
         .validators()
@@ -425,5 +424,5 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
 }
 
 fn pol_proof_mode() -> String {
-    env::var("POL_PROOF_DEV_MODE").unwrap_or_else(|_| "true".to_string())
+    tf_env::pol_proof_dev_mode().unwrap_or_else(|| "true".to_string())
 }

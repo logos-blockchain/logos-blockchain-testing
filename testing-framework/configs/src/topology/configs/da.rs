@@ -18,6 +18,7 @@ use nomos_node::NomosDaMembership;
 use num_bigint::BigUint;
 use rand::random;
 use subnetworks_assignations::{MembershipCreator as _, MembershipHandler as _};
+use testing_framework_env as tf_env;
 use thiserror::Error;
 use tracing::warn;
 
@@ -50,7 +51,7 @@ fn canonicalize_params_path(mut path: PathBuf) -> PathBuf {
 }
 
 fn resolve_global_params_path() -> String {
-    if let Ok(path) = env::var("NOMOS_KZGRS_PARAMS_PATH") {
+    if let Some(path) = tf_env::nomos_kzgrs_params_path() {
         return canonicalize_params_path(PathBuf::from(path))
             .to_string_lossy()
             .to_string();

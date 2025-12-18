@@ -7,10 +7,10 @@ use std::sync::LazyLock;
 
 pub use api_client::{ApiClient, ApiClientError};
 use tempfile::TempDir;
+use testing_framework_env as tf_env;
 
 pub(crate) const LOGS_PREFIX: &str = "__logs";
-static KEEP_NODE_TEMPDIRS: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("NOMOS_TESTS_KEEP_LOGS").is_ok());
+static KEEP_NODE_TEMPDIRS: LazyLock<bool> = LazyLock::new(tf_env::nomos_tests_keep_logs);
 
 pub(crate) fn create_tempdir() -> std::io::Result<TempDir> {
     // It's easier to use the current location instead of OS-default tempfile

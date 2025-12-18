@@ -41,6 +41,7 @@ num-bigint                    = { version = "0.4", default-features = false }
 rand                          = { workspace = true }
 serde                         = { workspace = true, features = ["derive"] }
 subnetworks-assignations      = { workspace = true }
+testing-framework-env         = { workspace = true }
 thiserror                     = { workspace = true }
 time                          = { version = "0.3", default-features = true }
 tracing                       = { workspace = true }

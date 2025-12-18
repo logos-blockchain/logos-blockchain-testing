@@ -1,13 +1,13 @@
 use std::{
-    env,
     fs::{self, File},
     io,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use nomos_tracing::logging::local::FileConfig;
 use serde::Serialize;
 use serde_yaml::Value;
+use testing_framework_env as tf_env;
 use tracing::debug;
 
 use crate::nodes::common::config::injection::normalize_ed25519_sigs;
@@ -20,8 +20,7 @@ where
 {
     debug!(prefix, base_dir = %base_dir.display(), "configuring node logging");
 
-    if let Ok(env_dir) = env::var("NOMOS_LOG_DIR") {
-        let log_dir = PathBuf::from(env_dir);
+    if let Some(log_dir) = tf_env::nomos_log_dir() {
         let _ = fs::create_dir_all(&log_dir);
 
         set_logger(FileConfig {

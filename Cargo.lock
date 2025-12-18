@@ -7215,6 +7215,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "subnetworks-assignations",
+ "testing-framework-env",
  "thiserror 2.0.17",
  "time",
  "tracing",
@@ -7252,10 +7253,15 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "testing-framework-config",
+ "testing-framework-env",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
+
+[[package]]
+name = "testing-framework-env"
+version = "0.1.0"
 
 [[package]]
 name = "testing-framework-runner-compose"
@@ -7275,6 +7281,7 @@ dependencies = [
  "tempfile",
  "tera",
  "testing-framework-core",
+ "testing-framework-env",
  "tests",
  "thiserror 2.0.17",
  "tokio",
@@ -7299,6 +7306,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "testing-framework-core",
+ "testing-framework-env",
  "thiserror 2.0.17",
  "tokio",
  "tracing",

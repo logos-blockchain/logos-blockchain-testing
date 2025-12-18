@@ -8,6 +8,7 @@ use testing_framework_core::{
     constants::{DEFAULT_CFGSYNC_PORT, kzg_container_path},
     topology::generation::{GeneratedNodeConfig, GeneratedTopology},
 };
+use testing_framework_env as tf_env;
 
 use crate::docker::platform::{host_gateway_entry, resolve_image};
 
@@ -180,12 +181,11 @@ fn default_extra_hosts() -> Vec<String> {
 }
 
 fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
-    let pol_mode = std::env::var("POL_PROOF_DEV_MODE").unwrap_or_else(|_| "true".to_string());
-    let rust_log = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
-    let nomos_log_level = std::env::var("NOMOS_LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
-    let time_backend = std::env::var("NOMOS_TIME_BACKEND").unwrap_or_else(|_| "monotonic".into());
-    let kzg_path =
-        std::env::var("NOMOS_KZGRS_PARAMS_PATH").unwrap_or_else(|_| kzg_container_path());
+    let pol_mode = tf_env::pol_proof_dev_mode().unwrap_or_else(|| "true".to_string());
+    let rust_log = tf_env::rust_log().unwrap_or_else(|| "info".to_string());
+    let nomos_log_level = tf_env::nomos_log_level().unwrap_or_else(|| "info".to_string());
+    let time_backend = tf_env::nomos_time_backend().unwrap_or_else(|| "monotonic".into());
+    let kzg_path = tf_env::nomos_kzgrs_params_path().unwrap_or_else(kzg_container_path);
     vec![
         EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),

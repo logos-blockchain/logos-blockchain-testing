@@ -1,5 +1,3 @@
-use std::{env, path::PathBuf};
-
 use nomos_tracing::{
     logging::{local::FileConfig, loki::LokiConfig},
     metrics::otlp::OtlpMetricsConfig,
@@ -8,6 +6,7 @@ use nomos_tracing::{
 use nomos_tracing_service::{
     ConsoleLayer, FilterLayer, LoggerLayer, MetricsLayer, TracingLayer, TracingSettings,
 };
+use testing_framework_env as tf_env;
 use tracing::Level;
 
 use crate::IS_DEBUG_TRACING;
@@ -65,11 +64,11 @@ impl GeneralTracingConfig {
 }
 
 fn otlp_tracing_endpoint() -> Option<String> {
-    env::var("NOMOS_OTLP_ENDPOINT").ok()
+    tf_env::nomos_otlp_endpoint()
 }
 
 fn otlp_metrics_endpoint() -> Option<String> {
-    env::var("NOMOS_OTLP_METRICS_ENDPOINT").ok()
+    tf_env::nomos_otlp_metrics_endpoint()
 }
 
 #[must_use]
@@ -103,8 +102,7 @@ fn apply_file_logger_override(
     mut cfg: GeneralTracingConfig,
     node_index: usize,
 ) -> GeneralTracingConfig {
-    if let Ok(dir) = std::env::var("NOMOS_LOG_DIR") {
-        let directory = PathBuf::from(dir);
+    if let Some(directory) = tf_env::nomos_log_dir() {
         cfg.tracing_settings.logger = LoggerLayer::File(FileConfig {
             directory,
             prefix: Some(format!("nomos-node-{node_index}").into()),
@@ -115,26 +113,23 @@ fn apply_file_logger_override(
 }
 
 fn file_log_level() -> Level {
-    env::var("NOMOS_LOG_LEVEL")
-        .ok()
+    tf_env::nomos_log_level()
         .and_then(|raw| raw.parse::<Level>().ok())
         .unwrap_or(Level::INFO)
 }
 
 fn file_filter_override() -> Option<nomos_tracing::filter::envfilter::EnvFilterConfig> {
-    env::var("NOMOS_LOG_FILTER")
-        .ok()
-        .map(|raw| nomos_tracing::filter::envfilter::EnvFilterConfig {
-            filters: raw
-                .split(',')
-                .filter_map(|pair| {
-                    let mut parts = pair.splitn(2, '=');
-                    let target = parts.next()?.trim().to_string();
-                    let level = parts.next()?.trim().to_string();
-                    (!target.is_empty() && !level.is_empty()).then_some((target, level))
-                })
-                .collect(),
-        })
+    tf_env::nomos_log_filter().map(|raw| nomos_tracing::filter::envfilter::EnvFilterConfig {
+        filters: raw
+            .split(',')
+            .filter_map(|pair| {
+                let mut parts = pair.splitn(2, '=');
+                let target = parts.next()?.trim().to_string();
+                let level = parts.next()?.trim().to_string();
+                (!target.is_empty() && !level.is_empty()).then_some((target, level))
+            })
+            .collect(),
+    })
 }
 
 fn maybe_disable_otlp_layers(mut cfg: GeneralTracingConfig) -> GeneralTracingConfig {

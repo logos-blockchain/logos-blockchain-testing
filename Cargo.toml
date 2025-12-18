@@ -8,6 +8,7 @@ members = [
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
   "testing-framework/deployers/local",
+  "testing-framework/env",
   "testing-framework/tools/cfgsync",
   "testing-framework/workflows",
 ]
@@ -33,6 +34,7 @@ all = "allow"
 # Local testing framework crates
 testing-framework-config         = { default-features = false, path = "testing-framework/configs" }
 testing-framework-core           = { default-features = false, path = "testing-framework/core" }
+testing-framework-env            = { default-features = false, path = "testing-framework/env" }
 testing-framework-runner-compose = { default-features = false, path = "testing-framework/deployers/compose" }
 testing-framework-runner-k8s     = { default-features = false, path = "testing-framework/deployers/k8s" }
 testing-framework-runner-local   = { default-features = false, path = "testing-framework/deployers/local" }

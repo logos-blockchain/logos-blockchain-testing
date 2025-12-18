@@ -24,6 +24,7 @@ serde                  = { version = "1", features = ["derive"] }
 serde_yaml             = { workspace = true }
 tempfile               = { workspace = true }
 testing-framework-core = { path = "../../core" }
+testing-framework-env  = { workspace = true }
 thiserror              = { workspace = true }
 tokio                  = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 tracing                = { workspace = true }

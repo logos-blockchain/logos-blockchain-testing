@@ -1,12 +1,13 @@
 use std::env;
 
+use testing_framework_env as tf_env;
 use tracing::debug;
 
 /// Select the compose image and optional platform, honoring
 /// NOMOS_TESTNET_IMAGE.
 pub fn resolve_image() -> (String, Option<String>) {
-    let image = env::var("NOMOS_TESTNET_IMAGE")
-        .unwrap_or_else(|_| String::from("logos-blockchain-testing:local"));
+    let image = tf_env::nomos_testnet_image()
+        .unwrap_or_else(|| String::from("logos-blockchain-testing:local"));
     let platform = (image == "ghcr.io/logos-co/nomos:testnet").then(|| "linux/amd64".to_owned());
     debug!(image, platform = ?platform, "resolved compose image");
     (image, platform)

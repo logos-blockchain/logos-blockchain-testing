@@ -1,18 +1,16 @@
-use std::{env, net::Ipv4Addr, ops::Mul as _, sync::LazyLock, time::Duration};
+use std::{net::Ipv4Addr, ops::Mul as _, sync::LazyLock, time::Duration};
 
 use nomos_core::sdp::ProviderId;
 use nomos_libp2p::{Multiaddr, PeerId, multiaddr};
+use testing_framework_env as tf_env;
 
 pub mod nodes;
 pub mod timeouts;
 pub mod topology;
 
-static IS_SLOW_TEST_ENV: LazyLock<bool> =
-    LazyLock::new(|| env::var("SLOW_TEST_ENV").is_ok_and(|s| s == "true"));
+static IS_SLOW_TEST_ENV: LazyLock<bool> = LazyLock::new(tf_env::slow_test_env);
 
-pub static IS_DEBUG_TRACING: LazyLock<bool> = LazyLock::new(|| {
-    env::var("NOMOS_TESTS_TRACING").is_ok_and(|val| val.eq_ignore_ascii_case("true"))
-});
+pub static IS_DEBUG_TRACING: LazyLock<bool> = LazyLock::new(tf_env::debug_tracing);
 
 const SLOW_ENV_TIMEOUT_MULTIPLIER: u32 = 2;
 
