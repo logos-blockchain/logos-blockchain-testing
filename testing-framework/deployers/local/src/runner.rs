@@ -4,7 +4,10 @@ use testing_framework_core::{
         BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, RunContext, Runner,
         Scenario, ScenarioError, spawn_block_feed,
     },
-    topology::{deployment::Topology, readiness::ReadinessError},
+    topology::{
+        deployment::{SpawnTopologyError, Topology},
+        readiness::ReadinessError,
+    },
 };
 use thiserror::Error;
 use tracing::{debug, info};
@@ -19,6 +22,11 @@ pub struct LocalDeployer {
 /// Errors surfaced by the local deployer while driving a scenario.
 #[derive(Debug, Error)]
 pub enum LocalDeployerError {
+    #[error("failed to spawn local topology: {source}")]
+    Spawn {
+        #[source]
+        source: SpawnTopologyError,
+    },
     #[error("readiness probe failed: {source}")]
     ReadinessFailed {
         #[source]
@@ -101,7 +109,11 @@ impl LocalDeployer {
             executors = descriptors.executors().len(),
             "spawning local validators/executors"
         );
-        let topology = descriptors.clone().spawn_local().await;
+        let topology = descriptors
+            .clone()
+            .spawn_local()
+            .await
+            .map_err(|source| LocalDeployerError::Spawn { source })?;
 
         let skip_membership = !membership_check;
         wait_for_readiness(&topology, skip_membership)

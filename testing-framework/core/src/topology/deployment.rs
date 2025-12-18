@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 
 use nomos_core::sdp::SessionNumber;
+use thiserror::Error;
 
 use crate::{
     nodes::{
+        common::node::SpawnNodeError,
         executor::{Executor, create_executor_config},
         validator::{Validator, create_validator_config},
     },
@@ -27,8 +29,14 @@ pub struct Topology {
 
 pub type DeployedNodes = (Vec<Validator>, Vec<Executor>);
 
+#[derive(Debug, Error)]
+pub enum SpawnTopologyError {
+    #[error(transparent)]
+    Node(#[from] SpawnNodeError),
+}
+
 impl Topology {
-    pub async fn spawn(config: TopologyConfig) -> Self {
+    pub async fn spawn(config: TopologyConfig) -> Result<Self, SpawnTopologyError> {
         let generated = TopologyBuilder::new(config.clone()).build();
         let n_validators = config.n_validators;
         let n_executors = config.n_executors;
@@ -38,12 +46,12 @@ impl Topology {
             .collect::<Vec<_>>();
 
         let (validators, executors) =
-            Self::spawn_validators_executors(node_configs, n_validators, n_executors).await;
+            Self::spawn_validators_executors(node_configs, n_validators, n_executors).await?;
 
-        Self {
+        Ok(Self {
             validators,
             executors,
-        }
+        })
     }
 
     pub async fn spawn_with_empty_membership(
@@ -51,7 +59,7 @@ impl Topology {
         ids: &[[u8; 32]],
         da_ports: &[u16],
         blend_ports: &[u16],
-    ) -> Self {
+    ) -> Result<Self, SpawnTopologyError> {
         let generated = TopologyBuilder::new(config.clone())
             .with_ids(ids.to_vec())
             .with_da_ports(da_ports.to_vec())
@@ -65,32 +73,32 @@ impl Topology {
 
         let (validators, executors) =
             Self::spawn_validators_executors(node_configs, config.n_validators, config.n_executors)
-                .await;
+                .await?;
 
-        Self {
+        Ok(Self {
             validators,
             executors,
-        }
+        })
     }
 
     pub(crate) async fn spawn_validators_executors(
         config: Vec<GeneralConfig>,
         n_validators: usize,
         n_executors: usize,
-    ) -> DeployedNodes {
+    ) -> Result<DeployedNodes, SpawnTopologyError> {
         let mut validators = Vec::new();
         for i in 0..n_validators {
             let config = create_validator_config(config[i].clone());
-            validators.push(Validator::spawn(config).await.unwrap());
+            validators.push(Validator::spawn(config).await?);
         }
 
         let mut executors = Vec::new();
         for i in 0..n_executors {
             let config = create_executor_config(config[n_validators + i].clone());
-            executors.push(Executor::spawn(config).await);
+            executors.push(Executor::spawn(config).await?);
         }
 
-        (validators, executors)
+        Ok((validators, executors))
     }
 
     #[must_use]

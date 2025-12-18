@@ -3,7 +3,6 @@ use std::{ops::Deref, path::PathBuf, time::Duration};
 use nomos_node::Config;
 use nomos_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::validator::create_validator_config;
-use tokio::time::error::Elapsed;
 use tracing::{debug, info};
 
 use super::{persist_tempdir, should_persist_tempdir};
@@ -14,7 +13,7 @@ use crate::{
         common::{
             binary::{BinaryConfig, BinaryResolver},
             lifecycle::{kill::kill_child, monitor::is_running},
-            node::{NodeAddresses, NodeConfigCommon, NodeHandle, spawn_node},
+            node::{NodeAddresses, NodeConfigCommon, NodeHandle, SpawnNodeError, spawn_node},
         },
     },
 };
@@ -73,7 +72,7 @@ impl Validator {
         self.handle.wait_for_exit(timeout).await
     }
 
-    pub async fn spawn(config: Config) -> Result<Self, Elapsed> {
+    pub async fn spawn(config: Config) -> Result<Self, SpawnNodeError> {
         let handle = spawn_node(
             config,
             LOGS_PREFIX,

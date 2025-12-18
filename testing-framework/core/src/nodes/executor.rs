@@ -17,7 +17,7 @@ use crate::{
         common::{
             binary::{BinaryConfig, BinaryResolver},
             lifecycle::{kill::kill_child, monitor::is_running},
-            node::{NodeAddresses, NodeConfigCommon, NodeHandle, spawn_node},
+            node::{NodeAddresses, NodeConfigCommon, NodeHandle, SpawnNodeError, spawn_node},
         },
     },
 };
@@ -60,7 +60,7 @@ impl Drop for Executor {
 }
 
 impl Executor {
-    pub async fn spawn(config: Config) -> Self {
+    pub async fn spawn(config: Config) -> Result<Self, SpawnNodeError> {
         let handle = spawn_node(
             config,
             LOGS_PREFIX,
@@ -68,12 +68,11 @@ impl Executor {
             binary_path(),
             !*IS_DEBUG_TRACING,
         )
-        .await
-        .expect("executor did not become ready");
+        .await?;
 
         info!("executor spawned and ready");
 
-        Self { handle }
+        Ok(Self { handle })
     }
 
     /// Check if the executor process is still running
