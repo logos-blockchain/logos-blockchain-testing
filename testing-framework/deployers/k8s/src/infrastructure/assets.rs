@@ -16,7 +16,7 @@ use testing_framework_core::{
     topology::generation::GeneratedTopology,
 };
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Paths and image metadata required to deploy the Helm chart.
 pub struct RunnerAssets {
@@ -82,8 +82,16 @@ pub enum KzgMode {
 
 fn kzg_mode() -> KzgMode {
     match env::var("NOMOS_KZG_MODE").ok().as_deref() {
+        Some("hostPath") => KzgMode::HostPath,
         Some("inImage") => KzgMode::InImage,
-        _ => KzgMode::HostPath,
+        None => KzgMode::InImage,
+        Some(other) => {
+            warn!(
+                value = other,
+                "unknown NOMOS_KZG_MODE; defaulting to inImage"
+            );
+            KzgMode::InImage
+        }
     }
 }
 
