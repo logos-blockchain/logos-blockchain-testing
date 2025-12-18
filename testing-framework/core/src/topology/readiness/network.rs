@@ -1,9 +1,29 @@
 use nomos_network::backends::libp2p::Libp2pInfo;
 use reqwest::{Client, Url};
+use thiserror::Error;
 use tracing::warn;
 
 use super::ReadinessCheck;
 use crate::topology::deployment::Topology;
+
+#[derive(Debug, Error)]
+pub enum NetworkInfoError {
+    #[error("failed to join url {base} with path {path}: {message}")]
+    JoinUrl {
+        base: Url,
+        path: &'static str,
+        message: String,
+    },
+    #[error(transparent)]
+    Request(#[from] reqwest::Error),
+}
+
+#[derive(Debug)]
+pub struct NodeNetworkStatus {
+    label: String,
+    expected_peers: Option<usize>,
+    result: Result<Libp2pInfo, NetworkInfoError>,
+}
 
 pub struct NetworkReadiness<'a> {
     pub(crate) topology: &'a Topology,
@@ -13,35 +33,83 @@ pub struct NetworkReadiness<'a> {
 
 #[async_trait::async_trait]
 impl<'a> ReadinessCheck<'a> for NetworkReadiness<'a> {
-    type Data = Vec<Libp2pInfo>;
+    type Data = Vec<NodeNetworkStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        let (validator_infos, executor_infos) = tokio::join!(
-            futures::future::join_all(
-                self.topology
-                    .validators
-                    .iter()
-                    .map(|node| async { node.api().network_info().await.unwrap() })
-            ),
-            futures::future::join_all(
-                self.topology
-                    .executors
-                    .iter()
-                    .map(|node| async { node.api().network_info().await.unwrap() })
-            )
-        );
+        let validator_futures = self
+            .topology
+            .validators
+            .iter()
+            .enumerate()
+            .map(|(idx, node)| {
+                let label = self
+                    .labels
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| format!("validator#{idx}"));
+                let expected_peers = self.expected_peer_counts.get(idx).copied();
+                async move {
+                    let result = node
+                        .api()
+                        .network_info()
+                        .await
+                        .map_err(NetworkInfoError::from);
+                    NodeNetworkStatus {
+                        label,
+                        expected_peers,
+                        result,
+                    }
+                }
+            });
+        let offset = self.topology.validators.len();
+        let executor_futures = self
+            .topology
+            .executors
+            .iter()
+            .enumerate()
+            .map(|(idx, node)| {
+                let global_idx = offset + idx;
+                let label = self
+                    .labels
+                    .get(global_idx)
+                    .cloned()
+                    .unwrap_or_else(|| format!("executor#{idx}"));
+                let expected_peers = self.expected_peer_counts.get(global_idx).copied();
+                async move {
+                    let result = node
+                        .api()
+                        .network_info()
+                        .await
+                        .map_err(NetworkInfoError::from);
+                    NodeNetworkStatus {
+                        label,
+                        expected_peers,
+                        result,
+                    }
+                }
+            });
 
-        validator_infos.into_iter().chain(executor_infos).collect()
+        let (validator_statuses, executor_statuses) = tokio::join!(
+            futures::future::join_all(validator_futures),
+            futures::future::join_all(executor_futures)
+        );
+        validator_statuses
+            .into_iter()
+            .chain(executor_statuses)
+            .collect()
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
-        data.iter()
-            .enumerate()
-            .all(|(idx, info)| info.n_peers >= self.expected_peer_counts[idx])
+        data.iter().all(
+            |status| match (status.expected_peers, status.result.as_ref()) {
+                (Some(expected), Ok(info)) => info.n_peers >= expected,
+                _ => false,
+            },
+        )
     }
 
     fn timeout_message(&self, data: Self::Data) -> String {
-        let summary = build_timeout_summary(self.labels, data, self.expected_peer_counts);
+        let summary = build_timeout_summary(&data);
         format!("timed out waiting for network readiness: {summary}")
     }
 }
@@ -55,59 +123,85 @@ pub struct HttpNetworkReadiness<'a> {
 
 #[async_trait::async_trait]
 impl<'a> ReadinessCheck<'a> for HttpNetworkReadiness<'a> {
-    type Data = Vec<Libp2pInfo>;
+    type Data = Vec<NodeNetworkStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        let futures = self
-            .endpoints
-            .iter()
-            .map(|endpoint| fetch_network_info(self.client, endpoint));
+        let futures = self.endpoints.iter().enumerate().map(|(idx, endpoint)| {
+            let label = self
+                .labels
+                .get(idx)
+                .cloned()
+                .unwrap_or_else(|| format!("endpoint#{idx}"));
+            let expected_peers = self.expected_peer_counts.get(idx).copied();
+            async move {
+                let result = try_fetch_network_info(self.client, endpoint).await;
+                NodeNetworkStatus {
+                    label,
+                    expected_peers,
+                    result,
+                }
+            }
+        });
         futures::future::join_all(futures).await
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
-        data.iter()
-            .enumerate()
-            .all(|(idx, info)| info.n_peers >= self.expected_peer_counts[idx])
+        data.iter().all(
+            |status| match (status.expected_peers, status.result.as_ref()) {
+                (Some(expected), Ok(info)) => info.n_peers >= expected,
+                _ => false,
+            },
+        )
     }
 
     fn timeout_message(&self, data: Self::Data) -> String {
-        let summary = build_timeout_summary(self.labels, data, self.expected_peer_counts);
+        let summary = build_timeout_summary(&data);
         format!("timed out waiting for network readiness: {summary}")
     }
 }
 
-async fn fetch_network_info(client: &Client, base: &Url) -> Libp2pInfo {
+pub async fn try_fetch_network_info(
+    client: &Client,
+    base: &Url,
+) -> Result<Libp2pInfo, NetworkInfoError> {
+    let path = nomos_http_api_common::paths::NETWORK_INFO.trim_start_matches('/');
     let url = base
-        .join(nomos_http_api_common::paths::NETWORK_INFO.trim_start_matches('/'))
-        .unwrap_or_else(|err| {
-            panic!(
-                "failed to join url {base} with path {}: {err}",
-                nomos_http_api_common::paths::NETWORK_INFO
-            )
-        });
-    let response = match client.get(url).send().await {
-        Ok(resp) => resp,
-        Err(err) => {
-            return log_network_warning(base, err, "failed to reach network info endpoint");
-        }
-    };
+        .join(path)
+        .map_err(|source| NetworkInfoError::JoinUrl {
+            base: base.clone(),
+            path: nomos_http_api_common::paths::NETWORK_INFO,
+            message: source.to_string(),
+        })?;
 
-    let response = match response.error_for_status() {
-        Ok(resp) => resp,
-        Err(err) => {
-            return log_network_warning(base, err, "network info endpoint returned error");
-        }
-    };
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(NetworkInfoError::Request)?
+        .error_for_status()
+        .map_err(NetworkInfoError::Request)?;
 
-    match response.json::<Libp2pInfo>().await {
+    response
+        .json::<Libp2pInfo>()
+        .await
+        .map_err(NetworkInfoError::Request)
+}
+
+#[deprecated(note = "use try_fetch_network_info to avoid panics and preserve error details")]
+pub async fn fetch_network_info(client: &Client, base: &Url) -> Libp2pInfo {
+    match try_fetch_network_info(client, base).await {
         Ok(info) => info,
-        Err(err) => log_network_warning(base, err, "failed to decode network info response"),
+        Err(err) => log_network_warning(base, &err),
     }
 }
 
-fn log_network_warning(base: &Url, err: impl std::fmt::Display, message: &str) -> Libp2pInfo {
-    warn!(target: "readiness", url = %base, error = %err, "{message}");
+fn log_network_warning(base: &Url, err: &NetworkInfoError) -> Libp2pInfo {
+    warn!(
+        target: "readiness",
+        url = %base,
+        error = %err,
+        "network readiness: failed to fetch network info"
+    );
     empty_libp2p_info()
 }
 
@@ -120,18 +214,23 @@ fn empty_libp2p_info() -> Libp2pInfo {
     }
 }
 
-fn build_timeout_summary(
-    labels: &[String],
-    infos: Vec<Libp2pInfo>,
-    expected_counts: &[usize],
-) -> String {
-    infos
-        .into_iter()
-        .zip(expected_counts.iter())
-        .zip(labels.iter())
-        .map(|((info, expected), label)| {
-            format!("{}: peers={}, expected={}", label, info.n_peers, expected)
-        })
+fn build_timeout_summary(statuses: &[NodeNetworkStatus]) -> String {
+    statuses
+        .iter()
+        .map(
+            |status| match (status.expected_peers, status.result.as_ref()) {
+                (None, _) => format!("{}: missing expected peer count", status.label),
+                (Some(expected), Ok(info)) => {
+                    format!(
+                        "{}: peers={}, expected={}",
+                        status.label, info.n_peers, expected
+                    )
+                }
+                (Some(expected), Err(err)) => {
+                    format!("{}: error={err}, expected_peers={expected}", status.label)
+                }
+            },
+        )
         .collect::<Vec<_>>()
         .join(", ")
 }
