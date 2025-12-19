@@ -1,4 +1,4 @@
-use std::{io, process::Stdio};
+use std::{io, path::Path, process::Stdio};
 
 use thiserror::Error;
 use tokio::process::Command;
@@ -34,18 +34,7 @@ pub async fn install_release(
     validators: usize,
     executors: usize,
 ) -> Result<(), HelmError> {
-    let (host_path_type, host_path) = match assets.kzg_mode {
-        KzgMode::HostPath => {
-            let host_path = assets.kzg_path.as_ref().ok_or(HelmError::MissingKzgPath)?;
-            let host_path_type = if host_path.is_dir() {
-                "Directory"
-            } else {
-                "File"
-            };
-            (Some(host_path_type), Some(host_path))
-        }
-        KzgMode::InImage => (None, None),
-    };
+    let kzg = resolve_kzg_install_args(assets)?;
     info!(
         release,
         namespace,
@@ -54,14 +43,69 @@ pub async fn install_release(
         image = %assets.image,
         cfgsync_port = cfgsync_port_value(),
         kzg_mode = ?assets.kzg_mode,
-        kzg = %host_path
-            .as_ref()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<in-image>".to_string()),
+        kzg = %kzg.display(),
         values = %assets.values_file.display(),
         "installing helm release"
     );
 
+    let command = format!("helm install {release}");
+    let cmd = build_install_command(
+        assets, release, namespace, validators, executors, &kzg, &command,
+    );
+    let output = run_helm_command(cmd, &command).await?;
+
+    maybe_log_install_output(&command, &output);
+
+    info!(release, namespace, "helm install completed");
+    Ok(())
+}
+
+struct KzgInstallArgs<'a> {
+    mode: &'static str,
+    host_path: Option<&'a Path>,
+    host_path_type: Option<&'static str>,
+}
+
+impl KzgInstallArgs<'_> {
+    fn display(&self) -> String {
+        self.host_path
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "<in-image>".to_string())
+    }
+}
+
+fn resolve_kzg_install_args(assets: &RunnerAssets) -> Result<KzgInstallArgs<'_>, HelmError> {
+    match assets.kzg_mode {
+        KzgMode::HostPath => {
+            let host_path = assets.kzg_path.as_ref().ok_or(HelmError::MissingKzgPath)?;
+            let host_path_type = if host_path.is_dir() {
+                "Directory"
+            } else {
+                "File"
+            };
+            Ok(KzgInstallArgs {
+                mode: "kzg.mode=hostPath",
+                host_path: Some(host_path),
+                host_path_type: Some(host_path_type),
+            })
+        }
+        KzgMode::InImage => Ok(KzgInstallArgs {
+            mode: "kzg.mode=inImage",
+            host_path: None,
+            host_path_type: None,
+        }),
+    }
+}
+
+fn build_install_command(
+    assets: &RunnerAssets,
+    release: &str,
+    namespace: &str,
+    validators: usize,
+    executors: usize,
+    kzg: &KzgInstallArgs<'_>,
+    command: &str,
+) -> Command {
     let mut cmd = Command::new("helm");
     cmd.arg("install")
         .arg(release)
@@ -83,10 +127,7 @@ pub async fn install_release(
         .arg("-f")
         .arg(&assets.values_file)
         .arg("--set")
-        .arg(match assets.kzg_mode {
-            KzgMode::HostPath => "kzg.mode=hostPath",
-            KzgMode::InImage => "kzg.mode=inImage",
-        })
+        .arg(kzg.mode)
         .arg("--set-file")
         .arg(format!("cfgsync.config={}", assets.cfgsync_file.display()))
         .arg("--set-file")
@@ -112,7 +153,7 @@ pub async fn install_release(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    if let (Some(host_path), Some(host_path_type)) = (host_path, host_path_type) {
+    if let (Some(host_path), Some(host_path_type)) = (kzg.host_path, kzg.host_path_type) {
         cmd.arg("--set")
             .arg(format!("kzg.hostPath={}", host_path.display()))
             .arg("--set")
@@ -123,16 +164,26 @@ pub async fn install_release(
         cmd.current_dir(root);
     }
 
-    let command = format!("helm install {release}");
-    let output = run_helm_command(cmd, &command).await?;
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    debug!(command, "prepared helm install command");
+    cmd
+}
 
-    if std::env::var("K8S_RUNNER_DEBUG").is_ok() {
-        debug!(command, stdout = %String::from_utf8_lossy(&output.stdout), "helm install stdout");
-        debug!(command, stderr = %String::from_utf8_lossy(&output.stderr), "helm install stderr");
+fn maybe_log_install_output(command: &str, output: &std::process::Output) {
+    if std::env::var("K8S_RUNNER_DEBUG").is_err() {
+        return;
     }
 
-    info!(release, namespace, "helm install completed");
-    Ok(())
+    debug!(
+        command,
+        stdout = %String::from_utf8_lossy(&output.stdout),
+        "helm install stdout"
+    );
+    debug!(
+        command,
+        stderr = %String::from_utf8_lossy(&output.stderr),
+        "helm install stderr"
+    );
 }
 
 /// Uninstall the release and namespace resources.

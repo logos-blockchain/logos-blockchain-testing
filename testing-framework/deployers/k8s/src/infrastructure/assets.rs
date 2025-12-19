@@ -91,24 +91,21 @@ pub fn prepare_assets(
 
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
     let kzg_spec = KzgParamsSpec::for_k8s(&root);
-    let cfgsync_yaml = render_cfgsync_config(&root, topology, &kzg_spec, metrics_otlp_ingest_url)?;
 
-    let tempdir = tempfile::Builder::new()
-        .prefix("nomos-helm-")
-        .tempdir()
-        .map_err(|source| AssetsError::TempDir { source })?;
+    let tempdir = create_assets_tempdir()?;
 
-    let cfgsync_file = write_temp_file(tempdir.path(), "cfgsync.yaml", cfgsync_yaml)?;
+    let cfgsync_file = render_and_write_cfgsync(
+        &root,
+        topology,
+        &kzg_spec,
+        metrics_otlp_ingest_url,
+        &tempdir,
+    )?;
     let scripts = validate_scripts(&root)?;
-    let kzg_path = match kzg_spec.mode {
-        KzgMode::HostPath => Some(validate_kzg_params(&root, &kzg_spec)?),
-        KzgMode::InImage => None,
-    };
+    let kzg_path = resolve_kzg_path(&root, &kzg_spec)?;
     let chart_path = helm_chart_path()?;
-    let values_yaml = render_values_yaml(topology)?;
-    let values_file = write_temp_file(tempdir.path(), "values.yaml", values_yaml)?;
-    let image = tf_env::nomos_testnet_image()
-        .unwrap_or_else(|| String::from("public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"));
+    let values_file = render_and_write_values(topology, &tempdir)?;
+    let image = testnet_image();
 
     let kzg_display = kzg_path
         .as_ref()
@@ -137,6 +134,44 @@ pub fn prepare_assets(
         values_file,
         _tempdir: tempdir,
     })
+}
+
+fn create_assets_tempdir() -> Result<TempDir, AssetsError> {
+    tempfile::Builder::new()
+        .prefix("nomos-helm-")
+        .tempdir()
+        .map_err(|source| AssetsError::TempDir { source })
+}
+
+fn render_and_write_cfgsync(
+    root: &Path,
+    topology: &GeneratedTopology,
+    kzg_spec: &KzgParamsSpec,
+    metrics_otlp_ingest_url: Option<&Url>,
+    tempdir: &TempDir,
+) -> Result<PathBuf, AssetsError> {
+    let cfgsync_yaml = render_cfgsync_config(root, topology, kzg_spec, metrics_otlp_ingest_url)?;
+    write_temp_file(tempdir.path(), "cfgsync.yaml", cfgsync_yaml)
+}
+
+fn resolve_kzg_path(root: &Path, kzg_spec: &KzgParamsSpec) -> Result<Option<PathBuf>, AssetsError> {
+    match kzg_spec.mode {
+        KzgMode::HostPath => Ok(Some(validate_kzg_params(root, kzg_spec)?)),
+        KzgMode::InImage => Ok(None),
+    }
+}
+
+fn render_and_write_values(
+    topology: &GeneratedTopology,
+    tempdir: &TempDir,
+) -> Result<PathBuf, AssetsError> {
+    let values_yaml = render_values_yaml(topology)?;
+    write_temp_file(tempdir.path(), "values.yaml", values_yaml)
+}
+
+fn testnet_image() -> String {
+    tf_env::nomos_testnet_image()
+        .unwrap_or_else(|| String::from("public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"))
 }
 
 const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
@@ -313,91 +348,64 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let image_pull_policy =
         tf_env::nomos_testnet_image_pull_policy().unwrap_or_else(|| "IfNotPresent".into());
     debug!(pol_mode, "rendering Helm values for k8s stack");
-    let validators = topology
-        .validators()
-        .iter()
-        .enumerate()
-        .map(|(index, validator)| {
-            let mut env = BTreeMap::new();
-            env.insert("POL_PROOF_DEV_MODE".into(), pol_mode.clone());
-            env.insert(
-                "CFG_NETWORK_PORT".into(),
-                validator.network_port().to_string(),
-            );
-            env.insert("CFG_DA_PORT".into(), validator.da_port.to_string());
-            env.insert("CFG_BLEND_PORT".into(), validator.blend_port.to_string());
-            env.insert(
-                "CFG_API_PORT".into(),
-                validator.general.api_config.address.port().to_string(),
-            );
-            env.insert(
-                "CFG_TESTING_HTTP_PORT".into(),
-                validator
-                    .general
-                    .api_config
-                    .testing_http_address
-                    .port()
-                    .to_string(),
-            );
-            env.insert("CFG_HOST_KIND".into(), "validator".into());
-            env.insert("CFG_HOST_IDENTIFIER".into(), format!("validator-{index}"));
-
-            NodeValues {
-                api_port: validator.general.api_config.address.port(),
-                testing_http_port: validator.general.api_config.testing_http_address.port(),
-                env,
-            }
-        })
-        .collect();
-
-    let executors = topology
-        .executors()
-        .iter()
-        .enumerate()
-        .map(|(index, executor)| {
-            let mut env = BTreeMap::new();
-            env.insert("POL_PROOF_DEV_MODE".into(), pol_mode.clone());
-            env.insert(
-                "CFG_NETWORK_PORT".into(),
-                executor.network_port().to_string(),
-            );
-            env.insert("CFG_DA_PORT".into(), executor.da_port.to_string());
-            env.insert("CFG_BLEND_PORT".into(), executor.blend_port.to_string());
-            env.insert(
-                "CFG_API_PORT".into(),
-                executor.general.api_config.address.port().to_string(),
-            );
-            env.insert(
-                "CFG_TESTING_HTTP_PORT".into(),
-                executor
-                    .general
-                    .api_config
-                    .testing_http_address
-                    .port()
-                    .to_string(),
-            );
-            env.insert("CFG_HOST_KIND".into(), "executor".into());
-            env.insert("CFG_HOST_IDENTIFIER".into(), format!("executor-{index}"));
-
-            NodeValues {
-                api_port: executor.general.api_config.address.port(),
-                testing_http_port: executor.general.api_config.testing_http_address.port(),
-                env,
-            }
-        })
-        .collect();
+    let validators = build_node_group("validator", topology.validators(), &pol_mode);
+    let executors = build_node_group("executor", topology.executors(), &pol_mode);
 
     HelmValues {
         image_pull_policy,
         cfgsync,
-        validators: NodeGroup {
-            count: topology.validators().len(),
-            nodes: validators,
-        },
-        executors: NodeGroup {
-            count: topology.executors().len(),
-            nodes: executors,
-        },
+        validators,
+        executors,
+    }
+}
+
+fn build_node_group(
+    kind: &'static str,
+    nodes: &[testing_framework_core::topology::generation::GeneratedNodeConfig],
+    pol_mode: &str,
+) -> NodeGroup {
+    let node_values = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| build_node_values(kind, index, node, pol_mode))
+        .collect();
+
+    NodeGroup {
+        count: nodes.len(),
+        nodes: node_values,
+    }
+}
+
+fn build_node_values(
+    kind: &'static str,
+    index: usize,
+    node: &testing_framework_core::topology::generation::GeneratedNodeConfig,
+    pol_mode: &str,
+) -> NodeValues {
+    let mut env = BTreeMap::new();
+    env.insert("POL_PROOF_DEV_MODE".into(), pol_mode.to_string());
+    env.insert("CFG_NETWORK_PORT".into(), node.network_port().to_string());
+    env.insert("CFG_DA_PORT".into(), node.da_port.to_string());
+    env.insert("CFG_BLEND_PORT".into(), node.blend_port.to_string());
+    env.insert(
+        "CFG_API_PORT".into(),
+        node.general.api_config.address.port().to_string(),
+    );
+    env.insert(
+        "CFG_TESTING_HTTP_PORT".into(),
+        node.general
+            .api_config
+            .testing_http_address
+            .port()
+            .to_string(),
+    );
+    env.insert("CFG_HOST_KIND".into(), kind.to_string());
+    env.insert("CFG_HOST_IDENTIFIER".into(), format!("{kind}-{index}"));
+
+    NodeValues {
+        api_port: node.general.api_config.address.port(),
+        testing_http_port: node.general.api_config.testing_http_address.port(),
+        env,
     }
 }
 

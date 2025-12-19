@@ -42,13 +42,7 @@ impl DeploymentOrchestrator {
         let setup = DeploymentSetup::new(scenario.topology());
         setup.validate_environment().await?;
 
-        let env_inputs = ObservabilityInputs::from_env()?;
-        let cap_inputs = scenario
-            .capabilities()
-            .observability_capability()
-            .map(ObservabilityInputs::from_capability)
-            .unwrap_or_default();
-        let observability = env_inputs.with_overrides(cap_inputs);
+        let observability = resolve_observability_inputs(scenario)?;
 
         let DeploymentContext {
             mut environment,
@@ -73,12 +67,13 @@ impl DeploymentOrchestrator {
         let executor_count = descriptors.executors().len();
         let host_ports = PortManager::prepare(&mut environment, &descriptors).await?;
 
-        if self.deployer.readiness_checks {
-            ReadinessChecker::wait_all(&descriptors, &host_ports, &mut environment).await?;
-        } else {
-            info!("readiness checks disabled; giving the stack a short grace period");
-            crate::lifecycle::readiness::maybe_sleep_for_disabled_readiness(false).await;
-        }
+        wait_for_readiness_or_grace_period(
+            self.deployer.readiness_checks,
+            &descriptors,
+            &host_ports,
+            &mut environment,
+        )
+        .await?;
 
         let host = compose_runner_host();
         let client_builder = ClientBuilder::new();
@@ -88,32 +83,10 @@ impl DeploymentOrchestrator {
         let telemetry = observability.telemetry_handle()?;
         let node_control = self.maybe_node_control::<Caps>(&environment);
 
-        if let Some(url) = observability.metrics_query_url.as_ref() {
-            info!(metrics_query_url = %url.as_str(), "metrics query endpoint configured");
-        }
-        if let Some(url) = observability.grafana_url.as_ref() {
-            info!(grafana_url = %url.as_str(), "grafana url configured");
-        }
+        log_observability_endpoints(&observability);
         log_profiling_urls(&host, &host_ports);
 
-        if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
-            let prometheus = observability
-                .metrics_query_url
-                .as_ref()
-                .map(|u| u.as_str().to_string())
-                .unwrap_or_else(|| "<disabled>".to_string());
-            let grafana = observability
-                .grafana_url
-                .as_ref()
-                .map(|u| u.as_str().to_string())
-                .unwrap_or_else(|| "<disabled>".to_string());
-            println!(
-                "TESTNET_ENDPOINTS prometheus={} grafana={}",
-                prometheus, grafana
-            );
-
-            print_profiling_urls(&host, &host_ports);
-        }
+        maybe_print_endpoints(&observability, &host, &host_ports);
 
         let (block_feed, block_feed_guard) = client_builder
             .start_block_feed(&node_clients, &mut environment)
@@ -156,6 +129,72 @@ impl DeploymentOrchestrator {
             }) as Arc<dyn NodeControlHandle>
         })
     }
+}
+
+fn resolve_observability_inputs<Caps>(
+    scenario: &Scenario<Caps>,
+) -> Result<ObservabilityInputs, ComposeRunnerError>
+where
+    Caps: ObservabilityCapabilityProvider,
+{
+    let env_inputs = ObservabilityInputs::from_env()?;
+    let cap_inputs = scenario
+        .capabilities()
+        .observability_capability()
+        .map(ObservabilityInputs::from_capability)
+        .unwrap_or_default();
+    Ok(env_inputs.with_overrides(cap_inputs))
+}
+
+async fn wait_for_readiness_or_grace_period(
+    readiness_checks: bool,
+    descriptors: &testing_framework_core::topology::generation::GeneratedTopology,
+    host_ports: &HostPortMapping,
+    environment: &mut StackEnvironment,
+) -> Result<(), ComposeRunnerError> {
+    if readiness_checks {
+        ReadinessChecker::wait_all(descriptors, host_ports, environment).await?;
+        return Ok(());
+    }
+
+    info!("readiness checks disabled; giving the stack a short grace period");
+    crate::lifecycle::readiness::maybe_sleep_for_disabled_readiness(false).await;
+    Ok(())
+}
+
+fn log_observability_endpoints(observability: &ObservabilityInputs) {
+    if let Some(url) = observability.metrics_query_url.as_ref() {
+        info!(
+            metrics_query_url = %url.as_str(),
+            "metrics query endpoint configured"
+        );
+    }
+    if let Some(url) = observability.grafana_url.as_ref() {
+        info!(grafana_url = %url.as_str(), "grafana url configured");
+    }
+}
+
+fn maybe_print_endpoints(observability: &ObservabilityInputs, host: &str, ports: &HostPortMapping) {
+    if std::env::var("TESTNET_PRINT_ENDPOINTS").is_err() {
+        return;
+    }
+
+    let prometheus = observability
+        .metrics_query_url
+        .as_ref()
+        .map(|u| u.as_str().to_string())
+        .unwrap_or_else(|| "<disabled>".to_string());
+    let grafana = observability
+        .grafana_url
+        .as_ref()
+        .map(|u| u.as_str().to_string())
+        .unwrap_or_else(|| "<disabled>".to_string());
+
+    println!(
+        "TESTNET_ENDPOINTS prometheus={} grafana={}",
+        prometheus, grafana
+    );
+    print_profiling_urls(host, ports);
 }
 
 fn log_profiling_urls(host: &str, ports: &HostPortMapping) {

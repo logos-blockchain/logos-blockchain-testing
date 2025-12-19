@@ -140,20 +140,14 @@ async fn deploy_with_observability<Caps>(
     scenario: &Scenario<Caps>,
     observability: Option<&ObservabilityCapability>,
 ) -> Result<Runner, K8sRunnerError> {
-    let env_inputs = ObservabilityInputs::from_env()?;
-    let cap_inputs = observability
-        .map(ObservabilityInputs::from_capability)
-        .unwrap_or_default();
-    let observability = env_inputs.with_overrides(cap_inputs);
+    let observability = resolve_observability_inputs(observability)?;
 
     let descriptors = scenario.topology().clone();
     let validator_count = descriptors.validators().len();
     let executor_count = descriptors.executors().len();
     ensure_supported_topology(&descriptors)?;
 
-    let client = Client::try_default()
-        .await
-        .map_err(|source| K8sRunnerError::ClientInit { source })?;
+    let client = init_kube_client().await?;
 
     info!(
         validators = validator_count,
@@ -182,37 +176,12 @@ async fn deploy_with_observability<Caps>(
     );
 
     info!("building node clients");
-    let environment = cluster
-        .as_ref()
-        .ok_or_else(|| K8sRunnerError::InternalInvariant {
-            message: "cluster must be available while building clients".to_owned(),
-        })?;
-    let node_clients = match build_node_clients(environment) {
-        Ok(clients) => clients,
-        Err(err) => {
-            fail_cluster(&mut cluster, "failed to construct node api clients").await;
-            error!(error = ?err, "failed to build k8s node clients");
-            return Err(err.into());
-        }
-    };
+    let node_clients = build_node_clients_or_fail(&mut cluster).await?;
 
-    let telemetry = match observability.telemetry_handle() {
-        Ok(handle) => handle,
-        Err(err) => {
-            fail_cluster(&mut cluster, "failed to configure metrics telemetry handle").await;
-            error!(error = ?err, "failed to configure metrics telemetry handle");
-            return Err(err.into());
-        }
-    };
+    let telemetry = build_telemetry_or_fail(&mut cluster, &observability).await?;
 
-    let (block_feed, block_feed_guard) = match spawn_block_feed_with(&node_clients).await {
-        Ok(pair) => pair,
-        Err(err) => {
-            fail_cluster(&mut cluster, "failed to initialize block feed").await;
-            error!(error = ?err, "failed to initialize block feed");
-            return Err(err);
-        }
-    };
+    let (block_feed, block_feed_guard) =
+        spawn_block_feed_or_fail(&mut cluster, &node_clients).await?;
 
     if let Some(url) = observability.metrics_query_url.as_ref() {
         info!(
@@ -224,69 +193,19 @@ async fn deploy_with_observability<Caps>(
         info!(grafana_url = %url.as_str(), "grafana url configured");
     }
 
-    if std::env::var("TESTNET_PRINT_ENDPOINTS").is_ok() {
-        let prometheus = observability
-            .metrics_query_url
-            .as_ref()
-            .map(|u| u.as_str().to_string())
-            .unwrap_or_else(|| "<disabled>".to_string());
-        println!(
-            "TESTNET_ENDPOINTS prometheus={} grafana={}",
-            prometheus,
-            observability
-                .grafana_url
-                .as_ref()
-                .map(|u| u.as_str().to_string())
-                .unwrap_or_else(|| "<disabled>".to_string())
-        );
+    maybe_print_endpoints(&observability, &node_clients);
 
-        for (idx, client) in node_clients.validator_clients().iter().enumerate() {
-            println!(
-                "TESTNET_PPROF validator_{}={}/debug/pprof/profile?seconds=15&format=proto",
-                idx,
-                client.base_url()
-            );
-        }
-
-        for (idx, client) in node_clients.executor_clients().iter().enumerate() {
-            println!(
-                "TESTNET_PPROF executor_{}={}/debug/pprof/profile?seconds=15&format=proto",
-                idx,
-                client.base_url()
-            );
-        }
-    }
-
-    let environment = cluster
-        .take()
-        .ok_or_else(|| K8sRunnerError::InternalInvariant {
-            message: "cluster should still be available".to_owned(),
-        })?;
-    let (cleanup, port_forwards) = environment.into_cleanup()?;
-    let cleanup_guard: Box<dyn CleanupGuard> = Box::new(K8sCleanupGuard::new(
-        cleanup,
-        block_feed_guard,
-        port_forwards,
-    ));
-
-    let context = RunContext::new(
+    finalize_runner(
+        &mut cluster,
         descriptors,
-        None,
         node_clients,
         scenario.duration(),
         telemetry,
         block_feed,
-        None,
-    );
-
-    info!(
-        validators = validator_count,
-        executors = executor_count,
-        duration_secs = scenario.duration().as_secs(),
-        "k8s deployment ready; handing control to scenario runner"
-    );
-
-    Ok(Runner::new(context, Some(cleanup_guard)))
+        block_feed_guard,
+        validator_count,
+        executor_count,
+    )
 }
 
 async fn setup_cluster(
@@ -330,6 +249,155 @@ async fn setup_cluster(
     }
 
     Ok(environment)
+}
+
+fn resolve_observability_inputs(
+    observability: Option<&ObservabilityCapability>,
+) -> Result<ObservabilityInputs, K8sRunnerError> {
+    let env_inputs = ObservabilityInputs::from_env()?;
+    let cap_inputs = observability
+        .map(ObservabilityInputs::from_capability)
+        .unwrap_or_default();
+    Ok(env_inputs.with_overrides(cap_inputs))
+}
+
+async fn init_kube_client() -> Result<Client, K8sRunnerError> {
+    Client::try_default()
+        .await
+        .map_err(|source| K8sRunnerError::ClientInit { source })
+}
+
+async fn build_node_clients_or_fail(
+    cluster: &mut Option<ClusterEnvironment>,
+) -> Result<testing_framework_core::scenario::NodeClients, K8sRunnerError> {
+    let environment = cluster
+        .as_ref()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "cluster must be available while building clients".to_owned(),
+        })?;
+
+    match build_node_clients(environment) {
+        Ok(clients) => Ok(clients),
+        Err(err) => {
+            fail_cluster(cluster, "failed to construct node api clients").await;
+            error!(error = ?err, "failed to build k8s node clients");
+            Err(err.into())
+        }
+    }
+}
+
+async fn build_telemetry_or_fail(
+    cluster: &mut Option<ClusterEnvironment>,
+    observability: &ObservabilityInputs,
+) -> Result<testing_framework_core::scenario::Metrics, K8sRunnerError> {
+    match observability.telemetry_handle() {
+        Ok(handle) => Ok(handle),
+        Err(err) => {
+            fail_cluster(cluster, "failed to configure metrics telemetry handle").await;
+            error!(error = ?err, "failed to configure metrics telemetry handle");
+            Err(err.into())
+        }
+    }
+}
+
+async fn spawn_block_feed_or_fail(
+    cluster: &mut Option<ClusterEnvironment>,
+    node_clients: &testing_framework_core::scenario::NodeClients,
+) -> Result<(testing_framework_core::scenario::BlockFeed, BlockFeedTask), K8sRunnerError> {
+    match spawn_block_feed_with(node_clients).await {
+        Ok(pair) => Ok(pair),
+        Err(err) => {
+            fail_cluster(cluster, "failed to initialize block feed").await;
+            error!(error = ?err, "failed to initialize block feed");
+            Err(err)
+        }
+    }
+}
+
+fn maybe_print_endpoints(
+    observability: &ObservabilityInputs,
+    node_clients: &testing_framework_core::scenario::NodeClients,
+) {
+    if std::env::var("TESTNET_PRINT_ENDPOINTS").is_err() {
+        return;
+    }
+
+    let prometheus = observability
+        .metrics_query_url
+        .as_ref()
+        .map(|u| u.as_str().to_string())
+        .unwrap_or_else(|| "<disabled>".to_string());
+
+    println!(
+        "TESTNET_ENDPOINTS prometheus={} grafana={}",
+        prometheus,
+        observability
+            .grafana_url
+            .as_ref()
+            .map(|u| u.as_str().to_string())
+            .unwrap_or_else(|| "<disabled>".to_string())
+    );
+
+    for (idx, client) in node_clients.validator_clients().iter().enumerate() {
+        println!(
+            "TESTNET_PPROF validator_{}={}/debug/pprof/profile?seconds=15&format=proto",
+            idx,
+            client.base_url()
+        );
+    }
+
+    for (idx, client) in node_clients.executor_clients().iter().enumerate() {
+        println!(
+            "TESTNET_PPROF executor_{}={}/debug/pprof/profile?seconds=15&format=proto",
+            idx,
+            client.base_url()
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finalize_runner(
+    cluster: &mut Option<ClusterEnvironment>,
+    descriptors: GeneratedTopology,
+    node_clients: testing_framework_core::scenario::NodeClients,
+    duration: std::time::Duration,
+    telemetry: testing_framework_core::scenario::Metrics,
+    block_feed: testing_framework_core::scenario::BlockFeed,
+    block_feed_guard: BlockFeedTask,
+    validator_count: usize,
+    executor_count: usize,
+) -> Result<Runner, K8sRunnerError> {
+    let environment = cluster
+        .take()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "cluster should still be available".to_owned(),
+        })?;
+    let (cleanup, port_forwards) = environment.into_cleanup()?;
+
+    let cleanup_guard: Box<dyn CleanupGuard> = Box::new(K8sCleanupGuard::new(
+        cleanup,
+        block_feed_guard,
+        port_forwards,
+    ));
+
+    let context = RunContext::new(
+        descriptors,
+        None,
+        node_clients,
+        duration,
+        telemetry,
+        block_feed,
+        None,
+    );
+
+    info!(
+        validators = validator_count,
+        executors = executor_count,
+        duration_secs = duration.as_secs(),
+        "k8s deployment ready; handing control to scenario runner"
+    );
+
+    Ok(Runner::new(context, Some(cleanup_guard)))
 }
 
 struct K8sCleanupGuard {
