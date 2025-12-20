@@ -2,10 +2,34 @@
 
 Get a working example running quickly.
 
+## From Scratch (Complete Setup)
+
+If you're starting from zero, here's everything you need:
+
+```bash
+# 1. Install Rust nightly
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default nightly
+
+# 2. Clone the repository
+git clone https://github.com/logos-blockchain/logos-blockchain-testing.git
+cd logos-blockchain-testing
+
+# 3. Run your first scenario (downloads dependencies automatically)
+POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+```
+
+**First run takes 5-10 minutes** (downloads ~120MB circuit assets, builds binaries).
+
+**Windows users:** Use WSL2 (Windows Subsystem for Linux). Native Windows is not supported.
+
+---
+
 ## Prerequisites
 
+If you already have the repository cloned:
+
 - Rust toolchain (nightly)
-- This repository cloned
 - Unix-like system (tested on Linux and macOS)
 - For Docker Compose examples: Docker daemon running
 - For Docker Desktop on Apple silicon (compose/k8s): set `NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64` to avoid slow/fragile amd64 emulation builds
@@ -27,6 +51,8 @@ scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
 ```
 
 This handles circuit setup, binary building, and runs a complete scenario: 1 validator + 1 executor, mixed transaction + DA workload (5 tx/block + 1 channel + 1 blob), 60s duration.
+
+**Note:** The DA workload attaches `DaWorkloadExpectation`, and channel/blob publishing is slower than tx submission. If you see `DaWorkloadExpectation` failures, rerun with a longer duration (e.g., `-t 120`), especially on CI or slower machines.
 
 **Alternative:** Direct cargo run (requires manual setup):
 

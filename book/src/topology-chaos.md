@@ -4,15 +4,18 @@ This page focuses on cluster manipulation: node control, chaos patterns, and
 what the tooling supports today.
 
 ## Node control availability
-- **Supported**: restart/peer control via `NodeControlHandle` (compose runner).
+- **Supported**: restart control via `NodeControlHandle` (compose runner).
 - **Not supported**: local runner does not expose node control; k8s runner does
   not support it yet.
+- **Not yet supported**: peer blocking/unblocking and network partitions.
+
+See also: [RunContext: BlockFeed & Node Control](node-control.md) for the current node-control API surface and limitations.
 
 ## Chaos patterns to consider
 - **Restarts**: random restarts with minimum delay/cooldown to test recovery.
-- **Partitions**: block/unblock peers to simulate partial isolation, then assert
+- **Partitions (planned)**: block/unblock peers to simulate partial isolation, then assert
   height convergence after healing.
-- **Validator churn**: stop one validator and start another (new key) mid-run to
+- **Validator churn (planned)**: stop one validator and start another (new key) mid-run to
   test membership changes; expect convergence.
 - **Load SLOs**: push tx/DA rates and assert inclusion/availability budgets
   instead of only liveness.

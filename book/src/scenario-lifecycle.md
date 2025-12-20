@@ -100,9 +100,11 @@ The runner starts traffic and behaviors for the planned duration.
 **Key actions:**
 - Submit transactions at configured rates
 - Disperse and sample DA blobs
-- Trigger chaos events (node restarts, network partitions)
+- Trigger chaos events (node restarts)
 - Run concurrently for the specified duration
 - Observe blocks and metrics in real-time
+
+**Note:** Network partitions/peer blocking are not yet supported by node control; today chaos is restart-based. See [RunContext: BlockFeed & Node Control](node-control.md).
 
 **Duration:** Controlled by `with_run_duration()`
 
