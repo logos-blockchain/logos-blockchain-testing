@@ -37,7 +37,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -78,7 +78,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -119,7 +119,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -154,7 +154,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -167,7 +167,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.2
+        run: cargo install cargo-deny --locked --version 0.18.9
       - run: cargo deny check --hide-inclusion-graph -c .cargo-deny.toml --show-stats -D warnings
 
   taplo:
@@ -220,7 +220,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -318,7 +318,7 @@ jobs:
             --jq '.artifacts[] | select(.name=="'"${ARTIFACT_NAME}"'") | .id' | head -n1)
           if [ -z "$artifact_id" ]; then
             echo "Nomos binaries artifact ${ARTIFACT_NAME} not found; building host bundle locally."
-            ./scripts/build-bundle.sh --platform host --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
+            ./scripts/build/build-bundle.sh --platform host --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
             exit 0
           fi
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${TMPDIR}/nomos-binaries.zip"
@@ -349,7 +349,7 @@ jobs:
           RUST_LOG: "info"
           NOMOS_LOG_DIR: "${{ runner.temp }}/local-logs"
         run: |
-          scripts/run-examples.sh -t 120 -v 1 -e 1 host
+          scripts/run/run-examples.sh -t 120 -v 1 -e 1 host
       - name: Collect host demo logs (on failure)
         if: failure()
         run: |
@@ -429,7 +429,7 @@ jobs:
             --jq '.artifacts[] | select(.name=="'"${ARTIFACT_NAME}"'") | .id' | head -n1)
           if [ -z "$artifact_id" ]; then
             echo "Nomos binaries artifact ${ARTIFACT_NAME} not found; building linux bundle locally."
-            ./scripts/build-bundle.sh --platform linux --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
+            ./scripts/build/build-bundle.sh --platform linux --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
             exit 0
           fi
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${download_dir}/nomos-binaries.zip"
@@ -505,7 +505,7 @@ jobs:
           NOMOS_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
         run: |
           mkdir -p "$TMPDIR"
-          scripts/run-examples.sh -t 120 -v 1 -e 1 compose
+          scripts/run/run-examples.sh -t 120 -v 1 -e 1 compose
 
       - name: Show compose runner log
         env:

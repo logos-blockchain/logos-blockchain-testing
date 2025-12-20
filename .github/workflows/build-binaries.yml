@@ -45,7 +45,7 @@ jobs:
           sudo apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm
       - name: Install nomos circuits
         run: |
-          ./scripts/setup-nomos-circuits.sh "${VERSION}" "$NOMOS_CIRCUITS"
+          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$NOMOS_CIRCUITS"
           echo "NOMOS_CIRCUITS=$NOMOS_CIRCUITS" >> "$GITHUB_ENV"
       - name: Add top-level KZG params file
         run: |
@@ -63,9 +63,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
       - name: Build nomos binaries bundle
         run: |
-          chmod +x scripts/build-bundle.sh
+          chmod +x scripts/build/build-bundle.sh
           DEST=".tmp/nomos-binaries-linux-${VERSION}.tar.gz"
-          scripts/build-bundle.sh --platform linux --output "$DEST"
+          scripts/build/build-bundle.sh --platform linux --output "$DEST"
           echo "NOMOS_BINARIES_TAR=$DEST" >> "$GITHUB_ENV"
       - name: Save nomos binaries cache
         uses: actions/cache@v4
