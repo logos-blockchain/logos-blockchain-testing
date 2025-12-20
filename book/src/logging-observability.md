@@ -290,7 +290,7 @@ POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
 
 **Example usage in expectations:**
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {

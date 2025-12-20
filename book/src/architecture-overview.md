@@ -165,7 +165,7 @@ These binaries use the framework API (`ScenarioBuilder`) to construct and execut
 
 Scenarios are defined using a fluent builder pattern:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;

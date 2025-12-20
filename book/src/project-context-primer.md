@@ -69,7 +69,7 @@ flowchart LR
 
 ## Quick Example
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;

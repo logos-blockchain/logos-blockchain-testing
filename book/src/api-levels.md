@@ -11,7 +11,7 @@ Both styles produce the same runtime behavior because they ultimately call the s
 
 The DSL is implemented as extension traits (primarily `testing_framework_workflows::ScenarioBuilderExt`) on the core scenario builder.
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
@@ -34,7 +34,7 @@ let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).exe
 
 Direct instantiation gives you explicit control over the concrete types you attach:
 
-```rust
+```rust,ignore
 use std::{
     num::{NonZeroU64, NonZeroUsize},
     time::Duration,
@@ -88,7 +88,7 @@ These bundled expectations are attached automatically whenever you call `.with_w
 
 Mixing is common: use the DSL for built-ins, and direct instantiation for custom pieces.
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;

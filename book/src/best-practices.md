@@ -33,7 +33,7 @@ This page collects proven patterns for authoring, running, and maintaining test 
 
 **Example: Topology preset**
 
-```rust
+```rust,ignore
 pub fn standard_da_topology() -> GeneratedTopology {
     TopologyBuilder::new()
         .network_star()
@@ -45,7 +45,7 @@ pub fn standard_da_topology() -> GeneratedTopology {
 
 **Example: Shared constants**
 
-```rust
+```rust,ignore
 pub const STANDARD_TX_RATE: f64 = 10.0;
 pub const STANDARD_DA_CHANNEL_RATE: f64 = 2.0;
 pub const SHORT_RUN_DURATION: Duration = Duration::from_secs(60);
@@ -140,7 +140,7 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 ```
 
 **DON'T: Use tiny durations**
-```rust
+```rust,ignore
 // BAD: Not enough time for blocks to propagate
 .with_run_duration(Duration::from_secs(5))
 
@@ -149,7 +149,7 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 ```
 
 **DON'T: Ignore cleanup failures**
-```rust
+```rust,ignore
 // BAD: Next run inherits leaked state
 runner.run(&mut scenario).await?;
 // forgot to call cleanup or use CleanupGuard
@@ -160,7 +160,7 @@ runner.run(&mut scenario).await?;
 ```
 
 **DON'T: Mix concerns in one scenario**
-```rust
+```rust,ignore
 // BAD: Hard to debug when it fails
 .transactions_with(|tx| tx.rate(50).users(100))  // high load
 .chaos_with(|c| c.restart().min_delay(...))        // AND chaos
@@ -173,7 +173,7 @@ runner.run(&mut scenario).await?;
 ```
 
 **DON'T: Hardcode paths or ports**
-```rust
+```rust,ignore
 // BAD: Breaks on different machines
 let path = PathBuf::from("/home/user/circuits/kzgrs_test_params");
 let port = 9000; // might conflict

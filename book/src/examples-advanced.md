@@ -21,7 +21,7 @@ Realistic advanced scenarios demonstrating framework capabilities for production
 
 Test consensus under progressively increasing transaction load:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;
@@ -56,7 +56,7 @@ pub async fn load_progression_test() -> Result<()> {
 
 Run high transaction and DA load for extended duration:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;
@@ -87,7 +87,7 @@ pub async fn sustained_load_test() -> Result<()> {
 
 Frequent node restarts with active traffic:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;

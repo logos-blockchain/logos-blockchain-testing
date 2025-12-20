@@ -38,7 +38,7 @@ This section shows what you'll actually see when common issues occur. Each examp
 
 **What you'll see:**
 
-```
+```text
 $ cargo run -p runner-examples --bin local_runner
     Finished dev [unoptimized + debuginfo] target(s) in 0.48s
      Running `target/debug/local_runner`
@@ -70,7 +70,7 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 
 **What you'll see:**
 
-```
+```text
 $ scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
 ERROR: versions.env not found at repository root
 This file is required and should define:
@@ -102,7 +102,7 @@ cat versions.env
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_runner_local] Starting DA workload
 [ERROR nomos_da_dispersal] Failed to load KZG parameters
@@ -144,7 +144,7 @@ ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_runner_local] Spawning validator 0
 Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }
@@ -187,7 +187,7 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 
 **What you'll see:**
 
-```
+```text
 $ scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
 [INFO  runner_examples::compose_runner] Starting compose deployment
 Error: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
@@ -224,7 +224,7 @@ sudo usermod -aG docker $USER
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin compose_runner
 [INFO  testing_framework_runner_compose] Starting compose deployment
 Error: Failed to pull image 'logos-blockchain-testing:local': No such image
@@ -271,7 +271,7 @@ kind load docker-image logos-blockchain-testing:local
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_runner_local] Launching validator 0 on port 18080
 Error: Os { code: 48, kind: AddrInUse, message: "Address already in use" }
@@ -322,7 +322,7 @@ vim scripts/observability/compose/docker-compose.yml
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_workflows] Starting transaction workload with 10 users
 [ERROR testing_framework_workflows] Wallet seeding failed: requested 10 users but only 3 wallets available
@@ -333,7 +333,7 @@ thread 'main' panicked at 'workload init failed: insufficient wallets'
 
 **Fix:**
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -358,7 +358,7 @@ let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3)
 
 **What you'll see:**
 
-```
+```text
 $ docker ps --filter "name=nomos-compose-"
 CONTAINER ID   STATUS
 abc123def456   Restarting (137) 30 seconds ago  # 137 = OOM killed
@@ -402,7 +402,7 @@ ulimit -n 4096
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 [INFO  runner_examples] Test complete, cleaning up
 [INFO  testing_framework_runner_local] Removing temporary directories
@@ -439,7 +439,7 @@ ls /tmp/test-logs/
 
 **What you'll see:**
 
-```
+```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_core] Starting workloads
 [INFO  testing_framework_core] Run window: 10 seconds
@@ -452,7 +452,7 @@ thread 'main' panicked at 'expectations failed'
 
 **Fix:**
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
@@ -743,7 +743,7 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
 
 - **Cause**: Helper scripts (`run-examples.sh`, `build-bundle.sh`, `setup-circuits-stack.sh`) require `versions.env` file at repository root.
 - **Fix**: Ensure you're running from the repository root directory. The `versions.env` file should already exist and contains:
-  ```
+```text
   VERSION=<circuit release tag>
   NOMOS_NODE_REV=<nomos-node git revision>
   NOMOS_BUNDLE_VERSION=<bundle schema version>

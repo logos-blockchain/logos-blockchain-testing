@@ -32,7 +32,7 @@ The `BlockFeed` is a broadcast stream of block observations that allows workload
 
 BlockFeed is available through `RunContext`:
 
-```rust
+```rust,ignore
 let block_feed = ctx.block_feed();
 ```
 
@@ -42,7 +42,7 @@ Expectations typically use BlockFeed to verify block production and inclusion of
 
 **Example: Counting blocks during a run**
 
-```rust
+```rust,ignore
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -112,7 +112,7 @@ impl Expectation for MinimumBlocksExpectation {
 
 **Example: Inspecting block contents**
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn start_capture(ctx: &RunContext) -> Result<(), DynError> {
@@ -152,7 +152,7 @@ Workloads can use BlockFeed to coordinate timing or wait for specific conditions
 
 **Example: Wait for N blocks before starting**
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, RunContext, Workload};
 
@@ -196,7 +196,7 @@ impl Workload for DelayedWorkload {
 
 **Example: Rate limiting based on block production**
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn generate_request() -> Option<()> {
@@ -245,7 +245,7 @@ async fn start(ctx: &RunContext) -> Result<(), DynError> {
 
 Example direct polling in expectations:
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {
@@ -264,7 +264,7 @@ async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {
 
 Access aggregated statistics without subscribing to the feed:
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn evaluate(ctx: &RunContext, expected_min: u64) -> Result<(), DynError> {
@@ -341,7 +341,7 @@ which describes the proposed `block_peer`/`unblock_peer` API (not yet implemente
 
 Check for control support and use it conditionally:
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, RunContext, Workload};
 
@@ -370,7 +370,7 @@ scenario builder and deploy with a runner that supports it.
 
 The `NodeControlHandle` trait currently provides:
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::DynError;
 

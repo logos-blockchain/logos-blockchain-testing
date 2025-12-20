@@ -37,7 +37,7 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 
 **Core API Pattern** (simplified example):
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;
@@ -88,7 +88,7 @@ Let's unpack the code:
 
 ### 1. Topology Configuration
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 
 pub fn step_1_topology() -> testing_framework_core::scenario::Builder<()> {
@@ -104,7 +104,7 @@ This defines **what** your test network looks like.
 
 ### 2. Wallet Seeding
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -117,7 +117,7 @@ Provides funded accounts for transaction submission.
 
 ### 3. Workloads
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -140,7 +140,7 @@ Generates both transaction and DA traffic to stress both subsystems.
 
 ### 4. Expectation
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -153,7 +153,7 @@ This says **what success means**: blocks must be produced continuously.
 
 ### 5. Run Duration
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
@@ -167,7 +167,7 @@ Run for 60 seconds (~27 blocks with default 2s slots, 0.9 coefficient). Framewor
 
 ### 6. Deploy and Execute
 
-```rust
+```rust,ignore
 use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
@@ -256,7 +256,7 @@ Then run your compose scenario as usual (the environment variables enable PromQL
 
 **In code:** Just swap the deployer:
 
-```rust
+```rust,ignore
 use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_compose::ComposeDeployer;

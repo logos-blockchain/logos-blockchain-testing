@@ -8,7 +8,7 @@ interpret results correctly.
 
 Describe **what** you want to test, not **how** to orchestrate it:
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -39,7 +39,7 @@ Reason in **blocks** and **consensus intervals**, not wall-clock seconds.
 - Active slot coefficient: 0.9 (90% block probability per slot, configurable via `CONSENSUS_ACTIVE_SLOT_COEFF`)
 - Expected rate: ~27 blocks per minute
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
@@ -76,7 +76,7 @@ not "blocks produced in exact wall-clock seconds".
 - Deterministic checks
 
 **Chaos is opt-in:**
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
@@ -135,7 +135,7 @@ perspective.
 
 Always run long enough for **meaningful block production**:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;

@@ -25,7 +25,7 @@ and expectations.
 
 Minimal test that validates basic block production:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;
@@ -53,7 +53,7 @@ pub async fn simple_consensus() -> Result<()> {
 
 Test consensus under transaction load:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;
@@ -83,7 +83,7 @@ pub async fn transaction_workload() -> Result<()> {
 
 Combined test stressing both transaction and DA layers:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;
@@ -114,7 +114,7 @@ pub async fn da_and_transactions() -> Result<()> {
 
 Test system resilience under node restarts:
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;

@@ -4,7 +4,7 @@ Quick reference for the scenario builder DSL. All methods are chainable.
 
 ## Imports
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
@@ -16,7 +16,7 @@ use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 ## Topology
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::{Builder, ScenarioBuilder};
 
 pub fn topology() -> Builder<()> {
@@ -30,7 +30,7 @@ pub fn topology() -> Builder<()> {
 
 ## Wallets
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -43,7 +43,7 @@ pub fn wallets_plan() -> testing_framework_core::scenario::Scenario<()> {
 
 ## Transaction Workload
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -60,7 +60,7 @@ pub fn transactions_plan() -> testing_framework_core::scenario::Scenario<()> {
 
 ## DA Workload
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -78,7 +78,7 @@ pub fn da_plan() -> testing_framework_core::scenario::Scenario<()> {
 
 ## Chaos Workload (Requires `enable_node_control()`)
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::{NodeControlCapability, ScenarioBuilder};
@@ -100,7 +100,7 @@ pub fn chaos_plan() -> testing_framework_core::scenario::Scenario<NodeControlCap
 
 ## Expectations
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -113,7 +113,7 @@ pub fn expectations_plan() -> testing_framework_core::scenario::Scenario<()> {
 
 ## Run Duration
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use testing_framework_core::scenario::ScenarioBuilder;
@@ -128,7 +128,7 @@ pub fn run_duration_plan() -> testing_framework_core::scenario::Scenario<()> {
 
 ## Build
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
@@ -139,7 +139,7 @@ pub fn build_plan() -> testing_framework_core::scenario::Scenario<()> {
 
 ## Deployers
 
-```rust
+```rust,ignore
 use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_runner_k8s::K8sDeployer;
 use testing_framework_runner_local::LocalDeployer;
@@ -158,7 +158,7 @@ pub fn deployers() {
 
 ## Execution
 
-```rust
+```rust,ignore
 use anyhow::Result;
 use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
@@ -179,7 +179,7 @@ pub async fn execution() -> Result<()> {
 
 ## Complete Example
 
-```rust
+```rust,ignore
 use std::time::Duration;
 
 use anyhow::Result;

@@ -42,11 +42,19 @@ scripts/run/run-test-matrix.sh -t 120 -v 1 -e 1
 
 This runs host, compose, and k8s modes with various image-build configurations. Useful after making runner/image/script changes. Forwards `--metrics-*` options through to `scripts/run/run-examples.sh`.
 
+**Common options:**
+- `--modes host,compose,k8s` — Restrict which modes run
+- `--no-clean` — Skip `scripts/ops/clean.sh` step
+- `--no-bundles` — Skip `scripts/build/build-bundle.sh` (reuses existing `.tmp` tarballs)
+- `--no-image-build` — Skip the “rebuild image” variants in the matrix (compose/k8s)
+- `--allow-nonzero-progress` — Soft-pass expectation failures if logs show non-zero progress (local iteration only)
+- `--force-k8s-image-build` — Allow the k8s image-build variant even on non-docker-desktop clusters
+
 **Environment overrides:**
 - `VERSION=v0.3.1` — Circuit version
 - `NOMOS_NODE_REV=<commit>` — nomos-node git revision
 - `NOMOS_BINARIES_TAR=path/to/bundle.tar.gz` — Use prebuilt bundle
-- `NOMOS_SKIP_IMAGE_BUILD=1` — Skip image rebuild (compose/k8s)
+- `NOMOS_SKIP_IMAGE_BUILD=1` — Skip image rebuild inside `run-examples.sh` (compose/k8s)
 - `NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64|linux/amd64` — Docker platform for bundle builds (macOS/Windows)
 - `COMPOSE_CIRCUITS_PLATFORM=linux-aarch64|linux-x86_64` — Circuits platform for image builds
 - `SLOW_TEST_ENV=true` — Doubles built-in readiness timeouts (useful in CI / constrained laptops)
@@ -279,7 +287,7 @@ scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s \
 
 ### In Code (Optional)
 
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ObservabilityBuilderExt as _;
 
@@ -304,4 +312,3 @@ let plan = ScenarioBuilder::with_node_counts(1, 1)
 - [Environment Variables](environment-variables.md) — Full variable reference
 - [Logging & Observability](logging-observability.md) — Log collection and metrics
 - [Troubleshooting](troubleshooting.md) — Common issues and fixes
-

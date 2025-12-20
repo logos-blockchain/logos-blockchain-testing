@@ -77,8 +77,10 @@ Required for compose and k8s runners:
 | Variable | Required | Default | Effect |
 |----------|----------|---------|--------|
 | `NOMOS_TESTNET_IMAGE` | Yes (compose/k8s) | `logos-blockchain-testing:local` | Docker image tag for node containers |
+| `NOMOS_TESTNET_IMAGE_PULL_POLICY` | No | `IfNotPresent` (local) / `Always` (ECR) | K8s `imagePullPolicy` used by the runner |
 | `NOMOS_BINARIES_TAR` | No | — | Path to prebuilt bundle (`.tar.gz`) for image build |
 | `NOMOS_SKIP_IMAGE_BUILD` | No | 0 | Skip image rebuild (compose/k8s); assumes image already exists |
+| `NOMOS_FORCE_IMAGE_BUILD` | No | 0 | Force rebuilding the image even when the script would normally skip it (e.g. non-local k8s) |
 
 **Example:**
 
@@ -103,7 +105,18 @@ Circuit asset configuration for DA workloads:
 |----------|---------|--------|
 | `NOMOS_KZGRS_PARAMS_PATH` | `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` | Path to KZG proving key file |
 | `NOMOS_KZG_DIR_REL` | `testing-framework/assets/stack/kzgrs_test_params` | Directory containing KZG assets (relative to workspace root) |
+| `NOMOS_KZG_FILE` | `kzgrs_test_params` | Filename of the proving key within `NOMOS_KZG_DIR_REL` |
+| `NOMOS_KZG_CONTAINER_PATH` | `/kzgrs_test_params/kzgrs_test_params` | File path where the node expects KZG params inside containers |
+| `NOMOS_KZG_MODE` | Runner-specific | K8s only: `hostPath` (mount from host) or `inImage` (embed into image) |
+| `NOMOS_KZG_IN_IMAGE_PARAMS_PATH` | `/opt/nomos/kzg-params/kzgrs_test_params` | K8s `inImage` mode: where the proving key is stored inside the image |
 | `VERSION` | From `versions.env` | Circuit release tag (used by helper scripts) |
+| `NOMOS_CIRCUITS` | — | Directory containing fetched circuit bundles (set by `scripts/setup/setup-circuits-stack.sh`) |
+| `NOMOS_CIRCUITS_VERSION` | — | Legacy alias for `VERSION` (supported by some build scripts) |
+| `NOMOS_CIRCUITS_PLATFORM` | Auto-detected | Override circuits platform (e.g. `linux-x86_64`, `macos-aarch64`) |
+| `NOMOS_CIRCUITS_HOST_DIR_REL` | `.tmp/nomos-circuits-host` | Output dir for host circuits bundle (relative to repo root) |
+| `NOMOS_CIRCUITS_LINUX_DIR_REL` | `.tmp/nomos-circuits-linux` | Output dir for linux circuits bundle (relative to repo root) |
+| `NOMOS_CIRCUITS_NONINTERACTIVE` | 0 | Set to `1` to overwrite outputs without prompting in setup scripts |
+| `NOMOS_CIRCUITS_REBUILD_RAPIDSNARK` | 0 | Set to `1` to force rebuilding rapidsnark (host bundle only) |
 
 **Example:**
 
@@ -127,7 +140,7 @@ Control node log output (not framework runner logs):
 | `NOMOS_TESTS_KEEP_LOGS` | 0 | Keep per-run temporary directories (useful for debugging/CI artifacts) |
 | `NOMOS_TESTS_TRACING` | false | Enable debug tracing preset (combine with `NOMOS_LOG_DIR` unless external tracing backends configured) |
 
-**Important:** Nodes ignore `RUST_LOG` and only respond to `NOMOS_*` variables.
+**Important:** Node logging ignores `RUST_LOG`; use `NOMOS_LOG_LEVEL` and `NOMOS_LOG_FILTER` for node logs.
 
 **Example:**
 
@@ -251,7 +264,9 @@ Platform-specific build configuration:
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `NOMOS_BUNDLE_DOCKER_PLATFORM` | Host arch | Docker platform for bundle builds: `linux/arm64` or `linux/amd64` (macOS/Windows hosts) |
+| `NOMOS_BIN_PLATFORM` | — | Legacy alias for `NOMOS_BUNDLE_DOCKER_PLATFORM` |
 | `COMPOSE_CIRCUITS_PLATFORM` | Host arch | Circuits platform for image builds: `linux-aarch64` or `linux-x86_64` |
+| `NOMOS_EXTRA_FEATURES` | — | Extra cargo features to enable when building bundles (used by `scripts/build/build-bundle.sh`) |
 
 **macOS / Apple Silicon:**
 
@@ -273,6 +288,14 @@ Timeout and performance tuning:
 |----------|---------|--------|
 | `SLOW_TEST_ENV` | false | Doubles built-in readiness timeouts (useful in CI / constrained laptops) |
 | `TESTNET_PRINT_ENDPOINTS` | 0 | Print `TESTNET_ENDPOINTS` / `TESTNET_PPROF` lines during deploy (set automatically by `scripts/run/run-examples.sh`) |
+| `NOMOS_DISPERSAL_TIMEOUT_SECS` | 20 | DA dispersal timeout (seconds) |
+| `NOMOS_RETRY_COOLDOWN_SECS` | 3 | Cooldown between retries (seconds) |
+| `NOMOS_GRACE_PERIOD_SECS` | 1200 | Grace period before enforcing strict time-based expectations (seconds) |
+| `NOMOS_PRUNE_DURATION_SECS` | 30 | Prune step duration (seconds) |
+| `NOMOS_PRUNE_INTERVAL_SECS` | 5 | Interval between prune cycles (seconds) |
+| `NOMOS_SHARE_DURATION_SECS` | 5 | Share duration (seconds) |
+| `NOMOS_COMMITMENTS_WAIT_SECS` | 1 | Commitments wait duration (seconds) |
+| `NOMOS_SDP_TRIGGER_DELAY_SECS` | 5 | SDP trigger delay (seconds) |
 
 **Example:**
 
@@ -292,6 +315,9 @@ Node-level configuration passed through to nomos-node/nomos-executor:
 |----------|---------|--------|
 | `CONSENSUS_SLOT_TIME` | — | Consensus slot time (seconds) |
 | `CONSENSUS_ACTIVE_SLOT_COEFF` | — | Active slot coefficient (0.0-1.0) |
+| `NOMOS_USE_AUTONAT` | Unset | If set, use AutoNAT instead of a static loopback address for libp2p NAT settings |
+| `NOMOS_CFGSYNC_PORT` | 4400 | Port used for cfgsync service inside the stack |
+| `NOMOS_TIME_BACKEND` | `monotonic` | Select time backend (used by compose/k8s stack scripts and deployers) |
 
 **Example:**
 
@@ -334,6 +360,10 @@ Variables used by helper scripts (`scripts/run/run-examples.sh`, etc.):
 |----------|---------|--------|
 | `NOMOS_NODE_REV` | From `versions.env` | nomos-node git revision to build/fetch |
 | `NOMOS_BUNDLE_VERSION` | From `versions.env` | Bundle schema version |
+| `NOMOS_IMAGE_SELECTION` | — | Internal: image selection mode set by `run-examples.sh` (`local`/`ecr`/`auto`) |
+| `NOMOS_NODE_APPLY_PATCHES` | 1 | Set to `0` to disable applying local patches when building bundles |
+| `NOMOS_NODE_PATCH_DIR` | `patches/nomos-node` | Patch directory applied to nomos-node checkout during bundle builds |
+| `NOMOS_NODE_PATCH_LEVEL` | — | Patch application level (`all` or an integer) for bundle builds |
 
 ---
 

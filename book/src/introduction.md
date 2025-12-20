@@ -18,7 +18,7 @@ declarative, observable, and portable across environments.
 
 Here's the conceptual shape of every test you'll write:
 
-```rust
+```rust,ignore
 // 1. Define the cluster
 let scenario = ScenarioBuilder::topology_with(|t| {
     t.network_star()

@@ -30,7 +30,7 @@ High-level roles of the crates that make up the framework:
 ### Adding a New Workload
 
 1. **Define the workload** in `testing-framework/workflows/src/workloads/your_workload.rs`:
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, RunContext, Workload};
 
@@ -50,7 +50,7 @@ impl Workload for YourWorkload {
 ```
 
 2. **Add builder extension** in `testing-framework/workflows/src/builder/mod.rs`:
-```rust
+```rust,ignore
 pub struct YourWorkloadBuilder;
 
 impl YourWorkloadBuilder {
@@ -65,7 +65,7 @@ pub trait ScenarioBuilderExt: Sized {
 ```
 
 3. **Use in examples** in `examples/src/bin/your_scenario.rs`:
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 
 pub struct YourWorkloadBuilder;
@@ -102,7 +102,7 @@ pub fn use_in_examples() {
 ### Adding a New Expectation
 
 1. **Define the expectation** in `testing-framework/workflows/src/expectations/your_expectation.rs`:
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
 
@@ -122,7 +122,7 @@ impl Expectation for YourExpectation {
 ```
 
 2. **Add builder extension** in `testing-framework/workflows/src/builder/mod.rs`:
-```rust
+```rust,ignore
 use testing_framework_core::scenario::ScenarioBuilder;
 
 pub trait YourExpectationDslExt: Sized {
@@ -145,7 +145,7 @@ pub fn use_in_examples() {
 ### Adding a New Deployer
 
 1. **Implement `Deployer` trait** in `testing-framework/runners/your_runner/src/deployer.rs`:
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{Deployer, Runner, Scenario};
 

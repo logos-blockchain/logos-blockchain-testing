@@ -12,7 +12,7 @@ Key ideas:
 - **init**: derive inputs from the generated topology (e.g., pick a target node).
 - **start**: drive async activity using the shared `RunContext`.
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{DynError, Expectation, RunContext, RunMetrics, Workload},
@@ -85,7 +85,7 @@ Key ideas:
 - **start_capture**: snapshot baseline if needed (not used here).
 - **evaluate**: assert the condition after workloads finish.
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
 

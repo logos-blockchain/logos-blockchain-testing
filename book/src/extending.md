@@ -13,7 +13,7 @@ This guide shows how to extend the framework with custom workloads, expectations
 
 **Trait outline:**
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
     DynError, Expectation, RunContext, RunMetrics, Workload,
@@ -100,7 +100,7 @@ See [Example: New Workload & Expectation](custom-workload-example.md) for a comp
 
 **Trait outline:**
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
 
@@ -176,7 +176,7 @@ impl Expectation for MyExpectation {
 
 **Trait outline:**
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
     CleanupGuard, Deployer, DynError, Metrics, NodeClients, RunContext, Runner, Scenario,
@@ -253,7 +253,7 @@ impl Deployer<()> for MyDeployer {
 
 **Example:**
 
-```rust
+```rust,ignore
 use testing_framework_core::topology::{
     config::TopologyBuilder,
     configs::network::Libp2pNetworkLayout,
@@ -279,7 +279,7 @@ impl TopologyBuilderExt for TopologyBuilder {
 
 To expose your custom workload through the high-level DSL, add a trait extension:
 
-```rust
+```rust,ignore
 use async_trait::async_trait;
 use testing_framework_core::scenario::{DynError, RunContext, ScenarioBuilder, Workload};
 
@@ -344,7 +344,7 @@ impl MyWorkloadDsl for ScenarioBuilder {
 
 Users can then call:
 
-```rust
+```rust,ignore
 ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(1))
     .my_workload_with(|w| {
         w.target_rate(10)

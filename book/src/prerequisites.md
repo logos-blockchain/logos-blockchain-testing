@@ -26,7 +26,7 @@ NOMOS_BUNDLE_VERSION=v1
 - CI workflows
 
 **Error if missing:**
-```
+```text
 ERROR: versions.env not found at repository root
 This file is required and should define:
   VERSION=<circuit release tag>
@@ -140,7 +140,7 @@ cargo run -p runner-examples --bin local_runner
 
 **Error without assets:**
 
-```
+```text
 Error: Custom { kind: NotFound, error: "Circuit file not found at: testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params" }
 ```
 
@@ -283,4 +283,3 @@ These scripts:
 - [Running Examples](running-examples.md) — Learn how to run scenarios
 - [Environment Variables](environment-variables.md) — Full variable reference
 - [Troubleshooting](troubleshooting.md) — Common issues and fixes
-

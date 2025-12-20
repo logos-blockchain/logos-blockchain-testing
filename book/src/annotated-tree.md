@@ -2,7 +2,7 @@
 
 Directory structure with key paths annotated:
 
-```
+```text
 logos-blockchain-testing/
 ├─ testing-framework/           # Core library crates
 │  ├─ configs/                  # Node config builders, topology generation, tracing/logging config
