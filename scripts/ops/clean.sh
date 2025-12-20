@@ -62,6 +62,29 @@ clean::rm_path() {
   local path="$1"
   if [ -e "${path}" ]; then
     echo "==> Removing ${path}"
+    # On macOS, IDE tooling (rust-analyzer) or background cargo processes can
+    # repopulate `target/` while we're deleting it, leading to "Directory not
+    # empty" failures. Be resilient with a short retry loop and best-effort
+    # permission/flag cleanup.
+    local attempt=1
+    local max_attempts=5
+    while [ "${attempt}" -le "${max_attempts}" ]; do
+      rm -rf "${path}" 2>/dev/null || true
+
+      if [ ! -e "${path}" ]; then
+        return 0
+      fi
+
+      if [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] && clean::have chflags; then
+        chflags -R nouchg,noschg "${path}" 2>/dev/null || true
+      fi
+      chmod -R u+w "${path}" 2>/dev/null || true
+
+      sleep "0.${attempt}"
+      attempt=$((attempt + 1))
+    done
+
+    # Final attempt with stderr so the failure mode is visible.
     rm -rf "${path}"
   else
     echo "==> Skipping missing ${path}"
