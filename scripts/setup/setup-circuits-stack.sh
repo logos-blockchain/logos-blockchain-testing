@@ -68,12 +68,22 @@ setup_circuits_stack::fetch_bundle() {
   local dest="$2"
   local rebuild="${3:-0}"
 
-  rm -rf "${dest}"
-  mkdir -p "${dest}"
+  # Install into a temporary directory first and only replace `${dest}` once we
+  # have a complete bundle. This avoids deleting a working install if GitHub
+  # returns transient errors (e.g. 502/504).
+  local temp_dest
+  temp_dest="$(mktemp -d)"
 
-  NOMOS_CIRCUITS_PLATFORM="${platform}" \
-  NOMOS_CIRCUITS_REBUILD_RAPIDSNARK="${rebuild}" \
-    "${ROOT_DIR}/scripts/setup/setup-nomos-circuits.sh" "${VERSION}" "${dest}"
+  if ! NOMOS_CIRCUITS_PLATFORM="${platform}" \
+    NOMOS_CIRCUITS_REBUILD_RAPIDSNARK="${rebuild}" \
+    "${ROOT_DIR}/scripts/setup/setup-nomos-circuits.sh" "${VERSION}" "${temp_dest}"; then
+    rm -rf "${temp_dest}"
+    return 1
+  fi
+
+  rm -rf "${dest}"
+  mkdir -p "$(dirname "${dest}")"
+  mv "${temp_dest}" "${dest}"
 }
 
 setup_circuits_stack::fetch_kzg_params() {
