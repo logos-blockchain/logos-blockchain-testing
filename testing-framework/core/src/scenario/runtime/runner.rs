@@ -107,6 +107,21 @@ impl Runner {
     where
         Caps: Send + Sync,
     {
+        if scenario.workloads().is_empty() {
+            let duration = scenario.duration();
+            if !duration.is_zero() {
+                sleep(duration).await;
+            }
+
+            if let Some(cooldown) = Self::cooldown_duration(context.as_ref()) {
+                if !cooldown.is_zero() {
+                    sleep(cooldown).await;
+                }
+            }
+
+            return Ok(());
+        }
+
         let mut workloads = Self::spawn_workloads(scenario, context);
         let _ = Self::drive_until_timer(&mut workloads, scenario.duration()).await?;
 
