@@ -1,6 +1,6 @@
+@local
 Feature: Testing Framework - Local Runner
 
-  @local
   Scenario: Run a local smoke scenario (tx + DA + liveness)
     Given deployer is "local"
     And topology has 1 validators and 1 executors

@@ -1,7 +1,8 @@
 use std::{env, process, time::Duration};
 
 use anyhow::{Context as _, Result};
-use runner_examples::{ScenarioBuilderExt as _, defaults::Mode, demo, read_env_any};
+use cucumber_ext::DeployerKind;
+use runner_examples::{ScenarioBuilderExt as _, demo, read_env_any};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use tracing::{info, warn};
@@ -14,7 +15,7 @@ const SMOKE_RUN_SECS_MAX: u64 = 30;
 
 #[tokio::main]
 async fn main() {
-    runner_examples::defaults::init_node_log_dir_defaults(Mode::Host);
+    runner_examples::defaults::init_node_log_dir_defaults(DeployerKind::Local);
 
     tracing_subscriber::fmt::init();
 

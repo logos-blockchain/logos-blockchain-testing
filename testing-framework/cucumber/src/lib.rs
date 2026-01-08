@@ -1,4 +1,4 @@
 mod steps;
 mod world;
 
-pub use world::TestingFrameworkWorld;
+pub use world::{DeployerKind, TestingFrameworkWorld};

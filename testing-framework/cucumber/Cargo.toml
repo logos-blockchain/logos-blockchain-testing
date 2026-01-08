@@ -10,7 +10,7 @@ repository.workspace  = true
 version.workspace     = true
 
 [dependencies]
-cucumber                         = { version = "0.22.0", features = ["default", "macros"] }
+cucumber                         = { version = "0.22.0", features = ["default", "macros", "output-junit"] }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 testing-framework-runner-local   = { workspace = true }

@@ -3,13 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use cucumber_ext::DeployerKind;
 use tracing_subscriber::{EnvFilter, fmt};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Mode {
-    Host,
-    Compose,
-}
 
 const DEFAULT_NODE_LOG_DIR_REL: &str = ".tmp/node-logs";
 const DEFAULT_CONTAINER_NODE_LOG_DIR: &str = "/tmp/node-logs";
@@ -31,7 +26,7 @@ pub fn init_logging_defaults() {
     set_default_env("RUST_LOG", "info");
 }
 
-pub fn init_node_log_dir_defaults(mode: Mode) {
+pub fn init_node_log_dir_defaults(deployer: DeployerKind) {
     if env::var_os("NOMOS_LOG_DIR").is_some() {
         return;
     }
@@ -39,9 +34,9 @@ pub fn init_node_log_dir_defaults(mode: Mode) {
     let host_dir = repo_root().join(DEFAULT_NODE_LOG_DIR_REL);
     let _ = fs::create_dir_all(&host_dir);
 
-    match mode {
-        Mode::Host => set_default_env("NOMOS_LOG_DIR", &host_dir.display().to_string()),
-        Mode::Compose => set_default_env("NOMOS_LOG_DIR", DEFAULT_CONTAINER_NODE_LOG_DIR),
+    match deployer {
+        DeployerKind::Local => set_default_env("NOMOS_LOG_DIR", &host_dir.display().to_string()),
+        DeployerKind::Compose => set_default_env("NOMOS_LOG_DIR", DEFAULT_CONTAINER_NODE_LOG_DIR),
     }
 }
 

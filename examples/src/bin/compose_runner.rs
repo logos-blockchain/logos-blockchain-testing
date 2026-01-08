@@ -1,9 +1,8 @@
 use std::{process, time::Duration};
 
 use anyhow::{Context as _, Result};
-use runner_examples::{
-    ChaosBuilderExt as _, ScenarioBuilderExt as _, defaults::Mode, demo, read_env_any,
-};
+use cucumber_ext::DeployerKind;
+use runner_examples::{ChaosBuilderExt as _, ScenarioBuilderExt as _, demo, read_env_any};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_compose::{ComposeDeployer, ComposeRunnerError};
 use tracing::{info, warn};
@@ -24,7 +23,7 @@ const DA_BLOB_RATE: u64 = 1;
 
 #[tokio::main]
 async fn main() {
-    runner_examples::defaults::init_node_log_dir_defaults(Mode::Compose);
+    runner_examples::defaults::init_node_log_dir_defaults(DeployerKind::Compose);
 
     tracing_subscriber::fmt::init();
 
