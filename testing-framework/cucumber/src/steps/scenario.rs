@@ -1,8 +1,6 @@
 use cucumber::given;
 
-use crate::world::{
-    NetworkKind, StepError, StepResult, TestingFrameworkWorld, parse_deployer,
-};
+use crate::world::{NetworkKind, StepError, StepResult, TestingFrameworkWorld, parse_deployer};
 
 #[given(expr = "deployer is {string}")]
 async fn deployer_is(world: &mut TestingFrameworkWorld, deployer: String) -> StepResult {

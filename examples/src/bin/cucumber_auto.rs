@@ -1,3 +1,14 @@
+/// Usage: Set the environment variable CUCUMBER_DEPLOYER_COMPOSE to use the
+/// Compose deployer. Otherwise, the Local deployer is used by default.
+///
+/// Example using docker compose deployer:
+/// ```sh
+/// CUCUMBER_DEPLOYER_COMPOSE=1 cargo run -p runner-examples --bin cucumber_auto -- --name "Run auto deployer smoke scenario"
+/// ```
+/// Example using local deployer:
+/// ```sh
+/// cargo run -p runner-examples --bin cucumber_auto --  --name "Run auto deployer smoke scenario"
+/// ```
 use std::{fs, io};
 
 use cucumber::{World, WriterExt, writer, writer::Verbosity};
@@ -6,51 +17,14 @@ use runner_examples::defaults::{init_logging_defaults, init_node_log_dir_default
 
 #[tokio::main]
 async fn main() {
-    println!(
-        "CUCUMBER_DEPLOYER_KIND: {:?}",
-        std::env::var("CUCUMBER_DEPLOYER_KIND")
-    );
     println!("args: {:?}", std::env::args());
 
-    // Check if deployer is already set in the environment
-    let deployer_env = std::env::var("CUCUMBER_DEPLOYER_KIND").ok();
-    let mut deployer = deployer_env.clone().map(|m| match m.as_str() {
-        "compose" => DeployerKind::Compose,
-        _ => DeployerKind::Local,
-    });
-
-    let mut filtered_args = Vec::new();
-    for arg in std::env::args() {
-        if arg == "--deployer=compose" {
-            deployer = Some(DeployerKind::Compose);
-        } else if arg == "--deployer=local" {
-            deployer = Some(DeployerKind::Local);
-        } else {
-            filtered_args.push(arg);
-        }
-    }
-
-    // If deployer was set by arg, re-exec with env var set and without the deployer arg
-    if deployer_env.is_none() && filtered_args.len() != std::env::args().count() {
-        let mut cmd = std::process::Command::new(&filtered_args[0]);
-        cmd.args(&filtered_args[1..]);
-        cmd.env(
-            "CUCUMBER_DEPLOYER_KIND",
-            match deployer.unwrap() {
-                DeployerKind::Compose => "compose",
-                DeployerKind::Local => "local",
-            },
-        );
-        let status = cmd.status().expect("Failed to re-exec");
-        std::process::exit(status.code().unwrap_or(1));
-    }
-
-    let deployer = deployer.unwrap_or_else(|| {
-        println!(
-            "'--deployer' not specified, defaulting to `--deployer=local` (specify with '--deployer=compose' or '--deployer=local')"
-        );
+    let deployer = if std::env::var("CUCUMBER_DEPLOYER_COMPOSE").ok().is_some() {
+        DeployerKind::Compose
+    } else {
         DeployerKind::Local
-    });
+    };
+    println!("Running with '{:?}'", deployer);
 
     init_logging_defaults();
     init_node_log_dir_defaults(deployer);
