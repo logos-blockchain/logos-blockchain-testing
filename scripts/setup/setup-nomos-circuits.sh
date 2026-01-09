@@ -119,7 +119,18 @@ setup_nomos_circuits::download_release() {
   setup_nomos_circuits::print_info "Downloading nomos-circuits ${VERSION} for ${platform}..."
   setup_nomos_circuits::print_info "URL: ${url}"
 
-  local -a curl_args=(curl -fL --retry "${CURL_RETRY_COUNT}" --retry-delay "${CURL_RETRY_DELAY_SECONDS}" --retry-all-errors)
+  local -a curl_args=(
+    curl
+    -fL
+    --retry "${CURL_RETRY_COUNT}"
+    --retry-delay "${CURL_RETRY_DELAY_SECONDS}"
+  )
+  # `curl` is not guaranteed to support `--retry-all-errors`, so check before using it
+  # `curl --help` may be abbreviated on some platforms
+  if (curl --help all 2>/dev/null || curl --help 2>/dev/null) | grep -q -- '--retry-all-errors'; then
+    curl_args+=(--retry-all-errors)
+  fi
+
   if [ -n "${GITHUB_TOKEN:-}" ]; then
     curl_args+=(--header "authorization: Bearer ${GITHUB_TOKEN}")
   fi
