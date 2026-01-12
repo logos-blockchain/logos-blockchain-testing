@@ -1,0 +1,347 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "mappings": [],
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(sdp_subscriptions_total[5m])",
+          "legendFormat": "subscriptions/sec - {{job}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(sdp_subscription_errors_total[5m])",
+          "legendFormat": "subscription errors/sec - {{job}}",
+          "refId": "B"
+        }
+      ],
+      "title": "SDP Subscriptions \u2014 events/sec",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "mappings": [],
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(sdp_activity_posts_total[5m])",
+          "legendFormat": "activity posts/sec - {{job}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(sdp_activity_success_total[5m])",
+          "legendFormat": "activity success/sec - {{job}}",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(sdp_activity_tx_failures_total[5m])",
+          "legendFormat": "activity tx failures/sec - {{job}}",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(sdp_activity_mempool_failures_total[5m])",
+          "legendFormat": "activity mempool failures/sec - {{job}}",
+          "refId": "D"
+        }
+      ],
+      "title": "SDP Activity \u2014 events/sec",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "mappings": [],
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(sdp_declarations_total[5m])",
+          "legendFormat": "declarations/sec - {{job}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(sdp_declaration_success_total[5m])",
+          "legendFormat": "declaration success/sec - {{job}}",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(sdp_declaration_tx_failures_total[5m])",
+          "legendFormat": "declaration tx failures/sec - {{job}}",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(sdp_declaration_mempool_failures_total[5m])",
+          "legendFormat": "declaration mempool failures/sec - {{job}}",
+          "refId": "D"
+        }
+      ],
+      "title": "SDP Declarations \u2014 events/sec",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false
+          },
+          "mappings": [],
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(sdp_withdrawals_total[5m])",
+          "legendFormat": "withdrawals/sec - {{job}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(sdp_withdrawal_success_total[5m])",
+          "legendFormat": "withdrawal success/sec - {{job}}",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(sdp_withdrawal_validation_failures_total[5m])",
+          "legendFormat": "withdrawal validation failures/sec - {{job}}",
+          "refId": "C"
+        },
+        {
+          "expr": "rate(sdp_withdrawal_tx_failures_total[5m])",
+          "legendFormat": "withdrawal tx failures/sec - {{job}}",
+          "refId": "D"
+        },
+        {
+          "expr": "rate(sdp_withdrawal_mempool_failures_total[5m])",
+          "legendFormat": "withdrawal mempool failures/sec - {{job}}",
+          "refId": "E"
+        }
+      ],
+      "title": "SDP Withdrawals \u2014 events/sec",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 40,
+  "tags": [
+    "nomos",
+    "sdp"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "SDP Dashboard",
+  "uid": "sdp-dashboard",
+  "version": 1,
+  "weekStart": ""
+}
