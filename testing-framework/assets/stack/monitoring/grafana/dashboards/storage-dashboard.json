@@ -65,7 +65,7 @@
             }
           },
           "mappings": [],
-          "unit": "ops"
+          "unit": "s"
         }
       },
       "gridPos": {
@@ -89,12 +89,12 @@
       },
       "targets": [
         {
-          "expr": "rate(storage_api_operations_total{api=\"da\"}[5m])",
-          "legendFormat": "DA Operations/sec - {{operation}} - {{job}}",
+          "expr": "rate(storage_request_duration_seconds_count[5m])",
+          "legendFormat": "OK Requests/sec - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "DA Storage Operations Rate \u2014 events/sec",
+      "title": "Storage OK Request Rate \u2014 req/sec",
       "type": "timeseries"
     },
     {
@@ -141,7 +141,7 @@
             }
           },
           "mappings": [],
-          "unit": "ops"
+          "unit": "s"
         }
       },
       "gridPos": {
@@ -165,12 +165,12 @@
       },
       "targets": [
         {
-          "expr": "rate(storage_api_operations_total{api=\"chain\"}[5m])",
-          "legendFormat": "Chain Operations/sec - {{operation}} - {{job}}",
+          "expr": "rate(storage_request_failed_total[5m])",
+          "legendFormat": "Failed Requests/sec - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "Chain Storage Operations Rate \u2014 events/sec",
+      "title": "Storage Failed Request Rate \u2014 req/sec",
       "type": "timeseries"
     },
     {
@@ -241,12 +241,12 @@
       },
       "targets": [
         {
-          "expr": "rate(storage_api_operations_failed_total{api=\"da\"}[5m])",
-          "legendFormat": "DA Failures/sec - {{operation}} - {{job}}",
+          "expr": "histogram_quantile(0.95, rate(storage_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 latency - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "DA Storage Failures Rate \u2014 events/sec",
+      "title": "Storage Request Latency (p95) \u2014 seconds",
       "type": "timeseries"
     },
     {
@@ -317,12 +317,12 @@
       },
       "targets": [
         {
-          "expr": "rate(storage_api_operations_failed_total{api=\"chain\"}[5m])",
-          "legendFormat": "Chain Failures/sec - {{operation}} - {{job}}",
+          "expr": "histogram_quantile(0.50, rate(storage_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50 latency - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "Chain Storage Failures Rate \u2014 events/sec",
+      "title": "Storage Request Latency (p50) \u2014 seconds",
       "type": "timeseries"
     },
     {
@@ -369,12 +369,12 @@
       },
       "targets": [
         {
-          "expr": "storage_api_operations_total{api=\"da\"}",
-          "legendFormat": "DA Total - {{operation}} - {{job}}",
+          "expr": "storage_request_duration_seconds_count",
+          "legendFormat": "OK Total - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "DA Storage Operations Total \u2014 current",
+      "title": "Storage OK Requests Total \u2014 current",
       "type": "stat"
     },
     {
@@ -421,12 +421,12 @@
       },
       "targets": [
         {
-          "expr": "storage_api_operations_total{api=\"chain\"}",
-          "legendFormat": "Chain Total - {{operation}} - {{job}}",
+          "expr": "storage_request_failed_total",
+          "legendFormat": "Failed Total - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "Chain Storage Operations Total \u2014 current",
+      "title": "Storage Failed Requests Total \u2014 current",
       "type": "stat"
     }
   ],

@@ -87,7 +87,7 @@
           "refId": "A"
         },
         {
-          "expr": "rate(storage_api_operations_failed_total[5m]) * 60",
+          "expr": "rate(storage_request_failed_total[5m]) * 60",
           "legendFormat": "Storage Failures/min",
           "refId": "B"
         },
@@ -188,7 +188,7 @@
           "refId": "A"
         },
         {
-          "expr": "rate(storage_api_operations_failed_total[5m]) / rate(storage_api_operations_total[5m]) * 100",
+          "expr": "rate(storage_request_failed_total[5m]) / (rate(storage_request_failed_total[5m]) + rate(storage_request_duration_seconds_count[5m])) * 100",
           "legendFormat": "Storage Failure Rate % - {{job}}",
           "refId": "B"
         },
@@ -449,24 +449,9 @@
           "expr": "rate(time_broadcast_errors_total[5m])",
           "legendFormat": "Time Broadcast Errors - {{job}}",
           "refId": "A"
-        },
-        {
-          "expr": "rate(time_lagging_errors_total[5m])",
-          "legendFormat": "Time Lagging Errors - {{job}}",
-          "refId": "B"
-        },
-        {
-          "expr": "rate(time_subscription_errors_total[5m])",
-          "legendFormat": "Time Subscription Errors - {{job}}",
-          "refId": "C"
-        },
-        {
-          "expr": "rate(time_current_slot_errors_total[5m])",
-          "legendFormat": "Time Current Slot Errors - {{job}}",
-          "refId": "D"
         }
       ],
-      "title": "\u23f0 Timing/Synchronization Issues \u2014 events/sec",
+      "title": "\u23f0 Time Broadcast Errors \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -537,13 +522,13 @@
       },
       "targets": [
         {
-          "expr": "rate(network_pubsub_subscription_errors_total[5m])",
-          "legendFormat": "PubSub Subscription Errors - {{job}}",
+          "expr": "rate(network_dial_failures_total[5m])",
+          "legendFormat": "Dial Failures - {{job}}",
           "refId": "A"
         },
         {
-          "expr": "rate(network_chainsync_subscription_errors_total[5m])",
-          "legendFormat": "ChainSync Subscription Errors - {{job}}",
+          "expr": "rate(chainsync_requests_total{result=\"err\"}[5m])",
+          "legendFormat": "ChainSync Errors - {{job}}",
           "refId": "B"
         },
         {
@@ -702,12 +687,12 @@
       },
       "targets": [
         {
-          "expr": "topk(10, rate(storage_api_operations_failed_total[5m]))",
-          "legendFormat": "{{operation}} ({{api}}) - {{job}}",
+          "expr": "topk(10, rate(storage_request_failed_total[5m]))",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
-      "title": "\ud83d\uddc4\ufe0f Top Storage Operation Failures \u2014 events/sec",
+      "title": "\ud83d\uddc4\ufe0f Top Storage Failures \u2014 events/sec",
       "type": "timeseries"
     },
     {

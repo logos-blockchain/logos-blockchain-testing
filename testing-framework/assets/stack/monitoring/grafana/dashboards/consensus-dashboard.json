@@ -459,7 +459,7 @@
           "refId": "A"
         },
         {
-          "expr": "consensus_connections_total",
+          "expr": "consensus_connections",
           "legendFormat": "Total Connections - {{job}}",
           "refId": "B"
         }
@@ -511,12 +511,12 @@
       },
       "targets": [
         {
-          "expr": "consensus_branches_count",
+          "expr": "consensus_forks_count",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
-      "title": "Active Branches \u2014 current",
+      "title": "Active Forks \u2014 current",
       "type": "stat"
     },
     {
@@ -563,12 +563,12 @@
       },
       "targets": [
         {
-          "expr": "consensus_block_tx_count",
+          "expr": "increase(consensus_block_transactions_total[5m]) / clamp_min(increase(consensus_blocks_imported_total[5m]), 1)",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
-      "title": "Txs in Last Block \u2014 current",
+      "title": "Txs per Block (avg, 5m) \u2014 current",
       "type": "stat"
     },
     {
@@ -748,12 +748,12 @@
       },
       "targets": [
         {
-          "expr": "consensus_block_tx_count",
+          "expr": "increase(consensus_block_transactions_total[5m]) / clamp_min(increase(consensus_blocks_imported_total[5m]), 1)",
           "legendFormat": "Txs per Block - {{job}}",
           "refId": "A"
         }
       ],
-      "title": "Transactions per Block \u2014 current",
+      "title": "Transactions per Block (avg, 5m) \u2014 current",
       "type": "timeseries"
     },
     {
@@ -900,17 +900,12 @@
       },
       "targets": [
         {
-          "expr": "rate(time_slot_ticks_generated_total[5m])",
-          "legendFormat": "Slot Ticks/sec - {{job}}",
-          "refId": "A"
-        },
-        {
           "expr": "rate(time_broadcast_errors_total[5m])",
           "legendFormat": "Time Broadcast Errors/sec - {{job}}",
-          "refId": "B"
+          "refId": "A"
         }
       ],
-      "title": "Consensus Timing Health \u2014 events/sec",
+      "title": "Consensus Timing Health (Broadcast) \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -1038,22 +1033,22 @@
       },
       "targets": [
         {
-          "expr": "rate(network_messages_processed_total[5m])",
-          "legendFormat": "Network Messages/sec - {{job}}",
+          "expr": "rate(chainsync_requests_total{result=\"ok\"}[5m])",
+          "legendFormat": "ChainSync OK/sec - {{job}}",
           "refId": "A"
         },
         {
-          "expr": "rate(network_pubsub_subscriptions_total[5m])",
-          "legendFormat": "PubSub Subscriptions/sec - {{job}}",
+          "expr": "rate(chainsync_requests_total{result=\"err\"}[5m])",
+          "legendFormat": "ChainSync Err/sec - {{job}}",
           "refId": "B"
         },
         {
-          "expr": "rate(network_chainsync_subscriptions_total[5m])",
-          "legendFormat": "ChainSync Subscriptions/sec - {{job}}",
+          "expr": "rate(network_dial_failures_total[5m])",
+          "legendFormat": "Dial Failures/sec - {{job}}",
           "refId": "C"
         }
       ],
-      "title": "Network Message Processing \u2014 events/sec",
+      "title": "Network (ChainSync & Dials) \u2014 events/sec",
       "type": "timeseries"
     },
     {
@@ -1100,17 +1095,17 @@
       },
       "targets": [
         {
-          "expr": "rate(network_pubsub_subscription_errors_total[5m])",
-          "legendFormat": "PubSub Errors/sec - {{job}}",
+          "expr": "rate(chainsync_requests_total{result=\"err\"}[5m])",
+          "legendFormat": "ChainSync Errors/sec - {{job}}",
           "refId": "A"
         },
         {
-          "expr": "rate(network_chainsync_subscription_errors_total[5m])",
-          "legendFormat": "ChainSync Errors/sec - {{job}}",
+          "expr": "rate(network_dial_failures_total[5m])",
+          "legendFormat": "Dial Failures/sec - {{job}}",
           "refId": "B"
         }
       ],
-      "title": "Network Subscription Errors \u2014 events/sec",
+      "title": "Network Errors \u2014 events/sec",
       "type": "stat"
     },
     {
@@ -1186,8 +1181,8 @@
           "refId": "A"
         },
         {
-          "expr": "rate(orphan_blocks_completed_total[5m])",
-          "legendFormat": "Completed/sec - {{job}}",
+          "expr": "rate(orphan_blocks_removed_total[5m])",
+          "legendFormat": "Removed/sec - {{job}}",
           "refId": "B"
         },
         {

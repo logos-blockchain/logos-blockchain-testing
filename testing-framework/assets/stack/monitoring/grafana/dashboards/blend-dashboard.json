@@ -606,17 +606,17 @@
       },
       "targets": [
         {
-          "expr": "rate(failed_inbound_messages[5m])",
+          "expr": "rate(blend_inbound_messages_failed_total[5m])",
           "legendFormat": "Failed Inbound/sec - {{job}}",
           "refId": "A"
         },
         {
-          "expr": "rate(blend_connection_events_total[5m])",
-          "legendFormat": "Connection Events/sec - {{job}}",
+          "expr": "rate(blend_outbound_messages_failed_total[5m])",
+          "legendFormat": "Failed Outbound/sec - {{job}}",
           "refId": "B"
         }
       ],
-      "title": "Connection & Error Events \u2014 events/sec",
+      "title": "Blend Error Events \u2014 events/sec",
       "type": "timeseries"
     },
     {

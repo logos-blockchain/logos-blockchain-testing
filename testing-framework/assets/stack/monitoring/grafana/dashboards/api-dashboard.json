@@ -350,22 +350,22 @@
       },
       "targets": [
         {
-          "expr": "rate(http_requests_total{status_class=\"2xx\"}[5m])",
-          "legendFormat": "2xx - {{method}} {{endpoint}}",
+          "expr": "rate(http_requests_total[5m])",
+          "legendFormat": "Total - {{method}} {{endpoint}}",
           "refId": "A"
         },
         {
-          "expr": "rate(http_requests_total{status_class=\"4xx\"}[5m])",
-          "legendFormat": "4xx - {{method}} {{endpoint}}",
+          "expr": "rate(http_request_duration_seconds_count[5m])",
+          "legendFormat": "OK (200) - {{method}} {{endpoint}}",
           "refId": "B"
         },
         {
-          "expr": "rate(http_requests_total{status_class=\"5xx\"}[5m])",
-          "legendFormat": "5xx - {{method}} {{endpoint}}",
+          "expr": "rate(http_requests_failed_total[5m])",
+          "legendFormat": "Failed (!=200) - {{method}} {{endpoint}}",
           "refId": "C"
         }
       ],
-      "title": "HTTP Status Codes \u2014 events/sec",
+      "title": "HTTP Outcomes \u2014 events/sec",
       "type": "timeseries"
     },
     {

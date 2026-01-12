@@ -896,8 +896,8 @@
       },
       "targets": [
         {
-          "expr": "rate(time_slot_ticks_generated_total[5m])",
-          "legendFormat": "Slot Ticks/sec - {{job}}",
+          "expr": "rate(consensus_blocks_imported_total[5m])",
+          "legendFormat": "Blocks Imported/sec - {{job}}",
           "refId": "A"
         },
         {
@@ -906,8 +906,8 @@
           "refId": "B"
         },
         {
-          "expr": "rate(network_messages_processed_total[5m])",
-          "legendFormat": "Network Msgs/sec - {{job}}",
+          "expr": "rate(chainsync_requests_total[5m])",
+          "legendFormat": "ChainSync Requests/sec - {{job}}",
           "refId": "C"
         }
       ],
@@ -994,7 +994,7 @@
       },
       "targets": [
         {
-          "expr": "clamp_max(rate(da_samples_failed_total[5m]) + rate(storage_api_operations_failed_total[5m]) + rate(kms_register_failures_total[5m]) + rate(kms_sign_failures_total[5m]) + rate(time_broadcast_errors_total[5m]) + rate(network_pubsub_subscription_errors_total[5m]) + rate(sdp_declaration_tx_failures_total[5m]), 1)",
+          "expr": "clamp_max(rate(da_samples_failed_total[5m]) + rate(storage_request_failed_total[5m]) + rate(kms_register_failures_total[5m]) + rate(kms_sign_failures_total[5m]) + rate(time_broadcast_errors_total[5m]) + rate(network_dial_failures_total[5m]) + rate(chainsync_requests_total{result=\"err\"}[5m]) + rate(sdp_declaration_tx_failures_total[5m]), 1)",
           "legendFormat": "System Health Status",
           "refId": "A"
         }

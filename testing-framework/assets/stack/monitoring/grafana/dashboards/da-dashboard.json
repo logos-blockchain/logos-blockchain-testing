@@ -407,22 +407,22 @@
       },
       "targets": [
         {
-          "expr": "da_inbound_connections",
-          "legendFormat": "Inbound - {{job}}",
+          "expr": "rate(da_dispersal_requests_total[5m])",
+          "legendFormat": "Dispersal Requests/sec - {{job}}",
           "refId": "A"
         },
         {
-          "expr": "da_outbound_connections",
-          "legendFormat": "Outbound - {{job}}",
+          "expr": "rate(da_dispersal_requests_failed_total[5m])",
+          "legendFormat": "Dispersal Failures/sec - {{job}}",
           "refId": "B"
         },
         {
-          "expr": "da_subnetwork_connections_total",
-          "legendFormat": "Total - {{job}}",
+          "expr": "rate(da_verifier_share_failed_total[5m])",
+          "legendFormat": "Verifier Share Failures/sec - {{job}}",
           "refId": "C"
         }
       ],
-      "title": "DA Network Connections \u2014 conn count",
+      "title": "DA Dispersal & Verification \u2014 events/sec",
       "type": "timeseries"
     },
     {
