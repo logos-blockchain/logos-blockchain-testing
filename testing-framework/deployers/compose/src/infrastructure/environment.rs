@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::anyhow;
 use reqwest::Url;
+use testing_framework_config::constants::KZG_PARAMS_FILENAME;
 use testing_framework_core::{
     adjust_timeout, scenario::CleanupGuard, topology::generation::GeneratedTopology,
 };
@@ -151,7 +152,7 @@ pub fn prepare_workspace_state() -> Result<WorkspaceState, WorkspaceError> {
     let workspace = ComposeWorkspace::create().map_err(WorkspaceError::new)?;
     let root = workspace.root_path().to_path_buf();
     let cfgsync_path = workspace.stack_dir().join("cfgsync.yaml");
-    let use_kzg = workspace.root_path().join("kzgrs_test_params").exists();
+    let use_kzg = workspace.root_path().join(KZG_PARAMS_FILENAME).exists();
 
     let state = WorkspaceState {
         workspace,

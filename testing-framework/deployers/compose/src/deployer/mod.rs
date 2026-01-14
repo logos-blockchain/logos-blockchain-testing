@@ -87,7 +87,7 @@ pub(super) fn make_cleanup_guard(
 mod tests {
     use std::{collections::HashMap, net::Ipv4Addr};
 
-    use cfgsync::{
+    use cfgsync_tf::{
         config::builder::create_node_configs,
         host::{Host, PortOverrides},
     };

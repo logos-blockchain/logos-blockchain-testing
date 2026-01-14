@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context as _;
-use cfgsync::server::{CfgSyncConfig, cfgsync_app};
+use cfgsync_tf::server::{CfgSyncConfig, cfgsync_app};
 use clap::Parser;
 use tokio::net::TcpListener;
 

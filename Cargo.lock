@@ -1012,7 +1012,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cfgsync"
+name = "cfgsync_tf"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -7312,7 +7312,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "cfgsync",
+ "cfgsync_tf",
  "groth16",
  "key-management-system-service",
  "nomos-core",
@@ -7323,6 +7323,7 @@ dependencies = [
  "serde",
  "tempfile",
  "tera",
+ "testing-framework-config",
  "testing-framework-core",
  "testing-framework-env",
  "tests",
@@ -7348,6 +7349,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tempfile",
+ "testing-framework-config",
  "testing-framework-core",
  "testing-framework-env",
  "thiserror 2.0.17",

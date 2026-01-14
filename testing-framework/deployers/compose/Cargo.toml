@@ -13,22 +13,23 @@ version               = "0.1.0"
 workspace = true
 
 [dependencies]
-anyhow                 = "1"
-async-trait            = { workspace = true }
-cfgsync                = { workspace = true }
-nomos-tracing          = { workspace = true }
-nomos-tracing-service  = { workspace = true }
-reqwest                = { workspace = true, features = ["json"] }
-serde                  = { workspace = true, features = ["derive"] }
-tempfile               = { workspace = true }
-tera                   = "1.19"
-testing-framework-core = { path = "../../core" }
-testing-framework-env  = { workspace = true }
-thiserror              = { workspace = true }
-tokio                  = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"] }
-tracing                = { workspace = true }
-url                    = { version = "2" }
-uuid                   = { version = "1", features = ["v4"] }
+anyhow                   = "1"
+async-trait              = { workspace = true }
+cfgsync_tf               = { workspace = true }
+nomos-tracing            = { workspace = true }
+nomos-tracing-service    = { workspace = true }
+reqwest                  = { workspace = true, features = ["json"] }
+serde                    = { workspace = true, features = ["derive"] }
+tempfile                 = { workspace = true }
+tera                     = "1.19"
+testing-framework-config = { workspace = true }
+testing-framework-core   = { path = "../../core" }
+testing-framework-env    = { workspace = true }
+thiserror                = { workspace = true }
+tokio                    = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tracing                  = { workspace = true }
+url                      = { version = "2" }
+uuid                     = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 groth16                       = { workspace = true }

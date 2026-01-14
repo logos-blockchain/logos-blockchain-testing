@@ -6,12 +6,10 @@ use nomos_tracing_service::TracingSettings;
 use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use testing_framework_config::constants::kzg_container_path;
 use tracing::debug;
 
-use crate::{
-    constants::kzg_container_path,
-    topology::{configs::wallet::WalletConfig, generation::GeneratedTopology},
-};
+use crate::topology::{configs::wallet::WalletConfig, generation::GeneratedTopology};
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -5,6 +5,7 @@ pub mod workspace;
 
 use std::{env, process::Stdio, time::Duration};
 
+use testing_framework_config::constants::DEFAULT_ASSETS_STACK_DIR;
 use tokio::{process::Command, time::timeout};
 use tracing::{debug, info, warn};
 
@@ -104,7 +105,9 @@ pub async fn build_local_image(
 ) -> Result<(), ComposeRunnerError> {
     let repo_root =
         repository_root().map_err(|source| ComposeRunnerError::ImageBuild { source })?;
-    let runtime_dockerfile = repo_root.join("testing-framework/assets/stack/Dockerfile.runtime");
+    let runtime_dockerfile = repo_root
+        .join(DEFAULT_ASSETS_STACK_DIR)
+        .join("Dockerfile.runtime");
 
     tracing::info!(
         image,

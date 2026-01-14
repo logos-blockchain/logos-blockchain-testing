@@ -10,9 +10,9 @@ use nomos_tracing_service::MetricsLayer;
 use reqwest::Url;
 use serde::Serialize;
 use tempfile::TempDir;
+use testing_framework_config::constants::{DEFAULT_ASSETS_STACK_DIR, cfgsync_port};
 pub use testing_framework_core::kzg::KzgMode;
 use testing_framework_core::{
-    constants::cfgsync_port,
     kzg::KzgParamsSpec,
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, render_cfgsync_yaml},
     topology::generation::GeneratedTopology,
@@ -242,7 +242,7 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
 fn validate_kzg_params(root: &Path, spec: &KzgParamsSpec) -> Result<PathBuf, AssetsError> {
     let Some(path) = spec.host_params_dir.clone() else {
         return Err(AssetsError::MissingKzg {
-            path: root.join(testing_framework_core::constants::DEFAULT_KZG_HOST_DIR),
+            path: root.join(testing_framework_config::constants::DEFAULT_KZG_HOST_DIR),
         });
     };
     if path.exists() {
@@ -294,7 +294,7 @@ pub fn workspace_root() -> AnyResult<PathBuf> {
 }
 
 fn stack_assets_root(root: &Path) -> PathBuf {
-    let new_layout = root.join("testing-framework/assets/stack");
+    let new_layout = root.join(DEFAULT_ASSETS_STACK_DIR);
     if new_layout.exists() {
         new_layout
     } else {
@@ -303,7 +303,7 @@ fn stack_assets_root(root: &Path) -> PathBuf {
 }
 
 fn stack_scripts_root(root: &Path) -> PathBuf {
-    let new_layout = root.join("testing-framework/assets/stack/scripts");
+    let new_layout = root.join(DEFAULT_ASSETS_STACK_DIR).join("scripts");
     if new_layout.exists() {
         new_layout
     } else {
