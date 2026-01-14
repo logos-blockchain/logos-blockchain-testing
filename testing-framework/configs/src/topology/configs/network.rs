@@ -108,6 +108,36 @@ pub fn create_network_configs(
         .collect())
 }
 
+pub fn build_network_config_for_node(
+    id: [u8; 32],
+    port: u16,
+    initial_peers: Vec<Multiaddr>,
+) -> Result<GeneralNetworkConfig, NetworkConfigError> {
+    let mut node_key_bytes = id;
+    let node_key = ed25519::SecretKey::try_from_bytes(&mut node_key_bytes).map_err(|err| {
+        NetworkConfigError::NodeKeyFromBytes {
+            message: err.to_string(),
+        }
+    })?;
+
+    let swarm_config = SwarmConfig {
+        node_key,
+        port,
+        chain_sync_config: cryptarchia_sync::Config {
+            peer_response_timeout: PEER_RESPONSE_TIMEOUT,
+        },
+        nat_config: nat_settings(port)?,
+        ..default_swarm_config()
+    };
+
+    Ok(GeneralNetworkConfig {
+        backend: BackendSettings {
+            initial_peers,
+            swarm: swarm_config,
+        },
+    })
+}
+
 fn initial_peers_by_network_layout(
     swarm_configs: &[SwarmConfig],
     network_params: &NetworkParams,

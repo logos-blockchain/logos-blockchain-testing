@@ -338,7 +338,8 @@ fn maybe_print_endpoints(
             .unwrap_or_else(|| "<disabled>".to_string())
     );
 
-    for (idx, client) in node_clients.validator_clients().iter().enumerate() {
+    let validator_clients = node_clients.validator_clients();
+    for (idx, client) in validator_clients.iter().enumerate() {
         println!(
             "TESTNET_PPROF validator_{}={}/debug/pprof/profile?seconds=15&format=proto",
             idx,
@@ -346,7 +347,8 @@ fn maybe_print_endpoints(
         );
     }
 
-    for (idx, client) in node_clients.executor_clients().iter().enumerate() {
+    let executor_clients = node_clients.executor_clients();
+    for (idx, client) in executor_clients.iter().enumerate() {
         println!(
             "TESTNET_PPROF executor_{}={}/debug/pprof/profile?seconds=15&format=proto",
             idx,
