@@ -6188,6 +6188,7 @@ name = "runner-examples"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -7091,6 +7092,9 @@ name = "testing-framework-runner-local"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "logos-blockchain-utils",
+ "rand 0.8.5",
+ "testing-framework-config",
  "testing-framework-core",
  "thiserror 2.0.18",
  "tracing",
