@@ -304,13 +304,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.tmp/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
 
       - name: Download nomos binaries artifact (fallback)
         if: steps.restore-nomos-bins-host.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}
+          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
         run: |
           set -euo pipefail
           mkdir -p "${TMPDIR}"
@@ -413,13 +413,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.tmp/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
 
       - name: Download nomos binaries artifact (fallback)
         if: steps.restore-nomos-bins.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}
+          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
         run: |
           set -euo pipefail
           download_dir="${TMPDIR}/nomos-binaries-download"
