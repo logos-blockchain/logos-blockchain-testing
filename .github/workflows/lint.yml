@@ -237,7 +237,7 @@ jobs:
       - run: cargo machete
 
   host_smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     env:
       POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
@@ -377,7 +377,7 @@ jobs:
             --jq '.artifacts[] | select(.name=="host-smoke-logs") | "host-smoke-logs: \(.archive_download_url)"' || true
 
   compose_smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux]
     env:
       TMPDIR: ${{ github.workspace }}/.tmp
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
