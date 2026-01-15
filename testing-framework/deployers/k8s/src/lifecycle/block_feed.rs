@@ -14,9 +14,9 @@ pub async fn spawn_block_feed_with(
 
     let block_source_client = node_clients
         .validator_clients()
-        .first()
+        .into_iter()
+        .next()
         .or_else(|| node_clients.any_client())
-        .cloned()
         .ok_or(K8sRunnerError::BlockFeedMissing)?;
 
     info!("starting block feed");

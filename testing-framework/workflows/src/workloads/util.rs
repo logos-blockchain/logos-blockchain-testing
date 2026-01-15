@@ -48,8 +48,8 @@ pub async fn submit_transaction_via_cluster(
     );
 
     let node_clients = ctx.node_clients();
-    let mut validator_clients: Vec<_> = node_clients.validator_clients().iter().collect();
-    let mut executor_clients: Vec<_> = node_clients.executor_clients().iter().collect();
+    let mut validator_clients = node_clients.validator_clients();
+    let mut executor_clients = node_clients.executor_clients();
     validator_clients.shuffle(&mut thread_rng());
     executor_clients.shuffle(&mut thread_rng());
 

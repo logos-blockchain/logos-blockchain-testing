@@ -5,6 +5,7 @@ pub mod bootstrap;
 pub mod consensus;
 pub mod da;
 pub mod network;
+pub mod runtime;
 pub mod time;
 pub mod tracing;
 pub mod wallet;

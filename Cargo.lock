@@ -6353,6 +6353,7 @@ name = "runner-examples"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cucumber",
  "cucumber_ext",
  "testing-framework-core",
@@ -7362,6 +7363,9 @@ name = "testing-framework-runner-local"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "nomos-utils",
+ "rand 0.8.5",
+ "testing-framework-config",
  "testing-framework-core",
  "thiserror 2.0.17",
  "tracing",

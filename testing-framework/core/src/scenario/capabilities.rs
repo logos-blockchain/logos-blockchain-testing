@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use reqwest::Url;
 
 use super::DynError;
+use crate::{nodes::ApiClient, topology::generation::NodeRole};
 
 /// Marker type used by scenario builders to request node control support.
 #[derive(Clone, Copy, Debug, Default)]
@@ -45,4 +46,19 @@ pub trait NodeControlHandle: Send + Sync {
     async fn restart_validator(&self, index: usize) -> Result<(), DynError>;
 
     async fn restart_executor(&self, index: usize) -> Result<(), DynError>;
+
+    async fn start_validator(&self, _name: &str) -> Result<StartedNode, DynError> {
+        Err("start_validator not supported by this deployer".into())
+    }
+
+    async fn start_executor(&self, _name: &str) -> Result<StartedNode, DynError> {
+        Err("start_executor not supported by this deployer".into())
+    }
+}
+
+#[derive(Clone)]
+pub struct StartedNode {
+    pub name: String,
+    pub role: NodeRole,
+    pub api: ApiClient,
 }

@@ -72,10 +72,11 @@ impl Validator {
         self.handle.wait_for_exit(timeout).await
     }
 
-    pub async fn spawn(config: Config) -> Result<Self, SpawnNodeError> {
+    pub async fn spawn(config: Config, label: &str) -> Result<Self, SpawnNodeError> {
+        let log_prefix = format!("{LOGS_PREFIX}-{label}");
         let handle = spawn_node(
             config,
-            LOGS_PREFIX,
+            &log_prefix,
             "validator.yaml",
             binary_path(),
             !*IS_DEBUG_TRACING,

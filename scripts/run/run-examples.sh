@@ -402,6 +402,9 @@ run_examples::restore_binaries_from_tar() {
   if [ "${copy_bins}" -eq 1 ]; then
     mkdir -p "${bin_dst}"
     cp "${src}/nomos-node" "${src}/nomos-executor" "${src}/nomos-cli" "${bin_dst}/"
+    if [ "$(uname -s)" = "Darwin" ]; then
+      codesign --force --sign - "${bin_dst}/nomos-node" "${bin_dst}/nomos-executor" "${bin_dst}/nomos-cli" >/dev/null 2>&1 || true
+    fi
   fi
 
   if [ -d "${circuits_src}" ] && [ -f "${circuits_src}/${KZG_FILE}" ]; then
