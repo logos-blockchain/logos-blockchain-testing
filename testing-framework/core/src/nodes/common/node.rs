@@ -187,6 +187,7 @@ fn write_node_config<C: Serialize>(config: &C, config_path: &Path) -> Result<(),
     super::lifecycle::spawn::write_config_with_injection(config, config_path, |yaml| {
         crate::nodes::common::config::injection::inject_ibd_into_cryptarchia(yaml);
         crate::nodes::common::config::injection::inject_blend_non_ephemeral_signing_key_id(yaml);
+        crate::nodes::common::config::injection::inject_chain_sync_protocol_name(yaml);
     })
     .map_err(|source| SpawnNodeError::WriteConfig {
         path: config_path.to_path_buf(),

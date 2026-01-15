@@ -329,7 +329,6 @@ build_bundle::build_binaries() {
   if [ -n "${NOMOS_EXTRA_FEATURES:-}" ]; then
     FEATURES="${FEATURES},${NOMOS_EXTRA_FEATURES}"
   fi
-
   echo "==> Building binaries (platform=${PLATFORM})"
   mkdir -p "${NODE_SRC}"
   (
@@ -349,7 +348,14 @@ build_bundle::build_binaries() {
     if [ -z "${NOMOS_NODE_PATH}" ]; then
       build_bundle::apply_nomos_node_patches "${NODE_SRC}"
     fi
-
+    if [ -f "${CIRCUITS_DIR}/zksign/verification_key.json" ] \
+      || [ -f "${CIRCUITS_DIR}/pol/verification_key.json" ] \
+      || [ -f "${CIRCUITS_DIR}/poq/verification_key.json" ] \
+      || [ -f "${CIRCUITS_DIR}/poc/verification_key.json" ]; then
+      export CARGO_FEATURE_BUILD_VERIFICATION_KEY=1
+    else
+      unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
+    fi
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
       RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \

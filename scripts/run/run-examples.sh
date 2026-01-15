@@ -342,9 +342,11 @@ run_examples::bundle_matches_expected() {
     echo "Bundle ${tar_path} is for nomos-node rev ${tar_rev}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
     return 1
   fi
-  if [ -n "${tar_head}" ] && [ "${tar_head}" != "${NOMOS_NODE_REV}" ]; then
-    echo "Bundle ${tar_path} is for nomos-node git head ${tar_head}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
-    return 1
+  if [ -n "${tar_head}" ] && echo "${NOMOS_NODE_REV}" | grep -Eq '^[0-9a-f]{7,40}$'; then
+    if [ "${tar_head}" != "${NOMOS_NODE_REV}" ]; then
+      echo "Bundle ${tar_path} is for nomos-node git head ${tar_head}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+      return 1
+    fi
   fi
   return 0
 }

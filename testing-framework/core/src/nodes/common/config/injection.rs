@@ -44,6 +44,23 @@ pub fn inject_blend_non_ephemeral_signing_key_id(yaml_value: &mut Value) {
     blend.insert(key_id_key, Value::String(key_id));
 }
 
+/// Inject deployment chain sync protocol name when missing.
+pub fn inject_chain_sync_protocol_name(yaml_value: &mut Value) {
+    let Some(network) = deployment_network_section(yaml_value) else {
+        return;
+    };
+
+    let key = Value::String("chain_sync_protocol_name".into());
+    if network.contains_key(&key) {
+        return;
+    }
+
+    network.insert(
+        key,
+        Value::String("/integration/nomos/cryptarchia/sync/1.0.0".into()),
+    );
+}
+
 fn cryptarchia_section(yaml_value: &mut Value) -> Option<&mut Mapping> {
     yaml_value
         .as_mapping_mut()
@@ -55,6 +72,15 @@ fn blend_section(yaml_value: &mut Value) -> Option<&mut Mapping> {
     yaml_value
         .as_mapping_mut()
         .and_then(|root| root.get_mut(&Value::String("blend".into())))
+        .and_then(Value::as_mapping_mut)
+}
+
+fn deployment_network_section(yaml_value: &mut Value) -> Option<&mut Mapping> {
+    yaml_value
+        .as_mapping_mut()
+        .and_then(|root| root.get_mut(&Value::String("deployment".into())))
+        .and_then(Value::as_mapping_mut)
+        .and_then(|deployment| deployment.get_mut(&Value::String("network".into())))
         .and_then(Value::as_mapping_mut)
 }
 
