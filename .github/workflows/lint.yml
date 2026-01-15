@@ -319,6 +319,7 @@ jobs:
           if [ -z "$artifact_id" ]; then
             echo "Nomos binaries artifact ${ARTIFACT_NAME} not found; building host bundle locally."
             ./scripts/build/build-bundle.sh --platform host --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
+            cp "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-host-${VERSION}.tar.gz" "${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
             exit 0
           fi
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${TMPDIR}/nomos-binaries.zip"
@@ -430,6 +431,7 @@ jobs:
           if [ -z "$artifact_id" ]; then
             echo "Nomos binaries artifact ${ARTIFACT_NAME} not found; building linux bundle locally."
             ./scripts/build/build-bundle.sh --platform linux --output "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
+            cp "${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz" "${GITHUB_WORKSPACE}/.tmp/nomos-binaries.tar.gz"
             exit 0
           fi
           gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${download_dir}/nomos-binaries.zip"
