@@ -13,7 +13,7 @@ pub type DynError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub use capabilities::{
     NodeControlCapability, NodeControlHandle, ObservabilityCapability, RequiresNodeControl,
-    StartedNode,
+    StartNodeOptions, StartedNode,
 };
 pub use definition::{
     Builder, Scenario, ScenarioBuildError, ScenarioBuilder, TopologyConfigurator,

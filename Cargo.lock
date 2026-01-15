@@ -7363,6 +7363,7 @@ name = "testing-framework-runner-local"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "nomos-libp2p",
  "nomos-utils",
  "rand 0.8.5",
  "testing-framework-config",

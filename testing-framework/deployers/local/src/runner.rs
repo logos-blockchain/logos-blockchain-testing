@@ -1,18 +1,25 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use async_trait::async_trait;
+use nomos_libp2p::Multiaddr;
 use nomos_utils::net::get_available_udp_port;
 use rand::Rng as _;
-use testing_framework_config::topology::configs::{
-    consensus,
-    runtime::{build_general_config_for_node, build_initial_peers},
+use testing_framework_config::{
+    node_address_from_port,
+    topology::configs::{
+        consensus,
+        runtime::{build_general_config_for_node, build_initial_peers},
+    },
 };
 use testing_framework_core::{
     nodes::{ApiClient, executor::Executor, validator::Validator},
     scenario::{
         BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, NodeControlCapability,
-        NodeControlHandle, RunContext, Runner, Scenario, ScenarioError, StartedNode,
-        spawn_block_feed,
+        NodeControlHandle, RunContext, Runner, Scenario, ScenarioError, StartNodeOptions,
+        StartedNode, spawn_block_feed,
     },
     topology::{
         deployment::{SpawnTopologyError, Topology},
@@ -241,6 +248,7 @@ struct LocalNodeControlState {
     validator_count: usize,
     executor_count: usize,
     peer_ports: Vec<u16>,
+    peer_ports_by_name: HashMap<String, u16>,
     validators: Vec<Validator>,
     executors: Vec<Executor>,
 }
@@ -256,11 +264,29 @@ impl NodeControlHandle for LocalNodeControl {
     }
 
     async fn start_validator(&self, name: &str) -> Result<StartedNode, DynError> {
-        self.start_node(NodeRole::Validator, name).await
+        self.start_node(NodeRole::Validator, name, StartNodeOptions::default())
+            .await
     }
 
     async fn start_executor(&self, name: &str) -> Result<StartedNode, DynError> {
-        self.start_node(NodeRole::Executor, name).await
+        self.start_node(NodeRole::Executor, name, StartNodeOptions::default())
+            .await
+    }
+
+    async fn start_validator_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        self.start_node(NodeRole::Validator, name, options).await
+    }
+
+    async fn start_executor_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        self.start_node(NodeRole::Executor, name, options).await
     }
 }
 
@@ -278,10 +304,23 @@ impl LocalNodeControl {
             .map(|node| node.network_port())
             .collect::<Vec<_>>();
 
+        let peer_ports_by_name = descriptors
+            .validators()
+            .iter()
+            .map(|node| (format!("validator-{}", node.index()), node.network_port()))
+            .chain(
+                descriptors
+                    .executors()
+                    .iter()
+                    .map(|node| (format!("executor-{}", node.index()), node.network_port())),
+            )
+            .collect();
+
         let state = LocalNodeControlState {
             validator_count: descriptors.validators().len(),
             executor_count: descriptors.executors().len(),
             peer_ports,
+            peer_ports_by_name,
             validators: Vec::new(),
             executors: Vec::new(),
         };
@@ -294,8 +333,13 @@ impl LocalNodeControl {
         }
     }
 
-    async fn start_node(&self, role: NodeRole, name: &str) -> Result<StartedNode, DynError> {
-        let (peer_ports, node_name) = {
+    async fn start_node(
+        &self,
+        role: NodeRole,
+        name: &str,
+        options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        let (peer_ports, peer_ports_by_name, node_name) = {
             let state = self.state.lock().expect("local node control lock poisoned");
             let index = match role {
                 NodeRole::Validator => state.validator_count,
@@ -313,7 +357,15 @@ impl LocalNodeControl {
                 format!("{role_label}-{name}")
             };
 
-            (state.peer_ports.clone(), label)
+            if state.peer_ports_by_name.contains_key(&label) {
+                return Err(format!("node name '{label}' already exists").into());
+            }
+
+            (
+                state.peer_ports.clone(),
+                state.peer_ports_by_name.clone(),
+                label,
+            )
         };
 
         let id = random_node_id();
@@ -322,7 +374,11 @@ impl LocalNodeControl {
         let blend_port = allocate_udp_port("Blend port")?;
 
         let topology = self.descriptors.config();
-        let initial_peers = build_initial_peers(&topology.network_params, &peer_ports);
+        let initial_peers = if options.peer_names.is_empty() {
+            build_initial_peers(&topology.network_params, &peer_ports)
+        } else {
+            resolve_peer_names(&peer_ports_by_name, &options.peer_names)?
+        };
 
         let general_config = build_general_config_for_node(
             id,
@@ -350,6 +406,9 @@ impl LocalNodeControl {
                 let mut state = self.state.lock().expect("local node control lock poisoned");
 
                 state.peer_ports.push(network_port);
+                state
+                    .peer_ports_by_name
+                    .insert(node_name.clone(), network_port);
                 state.validator_count += 1;
                 state.validators.push(node);
 
@@ -367,6 +426,9 @@ impl LocalNodeControl {
                 let mut state = self.state.lock().expect("local node control lock poisoned");
 
                 state.peer_ports.push(network_port);
+                state
+                    .peer_ports_by_name
+                    .insert(node_name.clone(), network_port);
                 state.executor_count += 1;
                 state.executors.push(node);
 
@@ -380,6 +442,20 @@ impl LocalNodeControl {
             api: api_client,
         })
     }
+}
+
+fn resolve_peer_names(
+    peer_ports_by_name: &HashMap<String, u16>,
+    peer_names: &[String],
+) -> Result<Vec<Multiaddr>, DynError> {
+    let mut peers = Vec::with_capacity(peer_names.len());
+    for name in peer_names {
+        let port = peer_ports_by_name
+            .get(name)
+            .ok_or_else(|| format!("unknown peer name '{name}'"))?;
+        peers.push(node_address_from_port(*port));
+    }
+    Ok(peers)
 }
 
 fn random_node_id() -> [u8; 32] {

@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 async-trait              = "0.1"
+nomos-libp2p             = { workspace = true }
 nomos-utils              = { workspace = true }
 rand                     = { workspace = true }
 testing-framework-config = { workspace = true }

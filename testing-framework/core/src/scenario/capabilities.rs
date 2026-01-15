@@ -22,6 +22,13 @@ pub struct ObservabilityCapability {
     pub grafana_url: Option<Url>,
 }
 
+/// Options for dynamically starting a node.
+#[derive(Clone, Debug, Default)]
+pub struct StartNodeOptions {
+    /// Names of nodes to connect to on startup (implementation-defined).
+    pub peer_names: Vec<String>,
+}
+
 /// Trait implemented by scenario capability markers to signal whether node
 /// control is required.
 pub trait RequiresNodeControl {
@@ -53,6 +60,22 @@ pub trait NodeControlHandle: Send + Sync {
 
     async fn start_executor(&self, _name: &str) -> Result<StartedNode, DynError> {
         Err("start_executor not supported by this deployer".into())
+    }
+
+    async fn start_validator_with(
+        &self,
+        _name: &str,
+        _options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        Err("start_validator_with not supported by this deployer".into())
+    }
+
+    async fn start_executor_with(
+        &self,
+        _name: &str,
+        _options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        Err("start_executor_with not supported by this deployer".into())
     }
 }
 
