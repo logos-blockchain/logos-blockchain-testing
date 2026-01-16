@@ -32,7 +32,7 @@ use nomos_node::{
 use nomos_utils::math::NonNegativeF64;
 use nomos_wallet::WalletServiceSettings;
 
-use crate::{timeouts, topology::configs::GeneralConfig};
+use crate::{constants::KZG_PARAMS_FILENAME, timeouts, topology::configs::GeneralConfig};
 
 // Configuration constants
 const CRYPTARCHIA_GOSSIPSUB_PROTOCOL: &str = "/cryptarchia/proto";
@@ -45,7 +45,6 @@ const API_RATE_LIMIT_PER_SECOND: u64 = 10000;
 const API_RATE_LIMIT_BURST: u32 = 10000;
 const API_MAX_CONCURRENT_REQUESTS: usize = 1000;
 const BLOB_STORAGE_DIR: &str = "./";
-const KZG_PARAMS_FILENAME: &str = "kzgrs_test_params";
 
 pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeploymentSettings {
     CryptarchiaDeploymentSettings {

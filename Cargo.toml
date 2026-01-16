@@ -4,12 +4,11 @@ members = [
   "examples/doc-snippets",
   "testing-framework/configs",
   "testing-framework/core",
-  "testing-framework/cucumber",
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
   "testing-framework/deployers/local",
   "testing-framework/env",
-  "testing-framework/tools/cfgsync",
+  "testing-framework/tools/cfgsync_tf",
   "testing-framework/workflows",
 ]
 resolver = "2"
@@ -42,7 +41,7 @@ testing-framework-workflows      = { default-features = false, path = "testing-f
 
 # Logos git dependencies (pinned to latest master)
 broadcast-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917" }
-cfgsync = { default-features = false, path = "testing-framework/tools/cfgsync" }
+cfgsync_tf = { default-features = false, path = "testing-framework/tools/cfgsync_tf" }
 chain-leader = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "1fce2dc3f482c16361316eb2a1b6ccd1206aa917", features = [
   "pol-dev-mode",
 ] }

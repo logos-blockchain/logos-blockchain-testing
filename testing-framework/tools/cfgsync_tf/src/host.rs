@@ -1,9 +1,9 @@
 use std::net::Ipv4Addr;
 
-pub const DEFAULT_LIBP2P_NETWORK_PORT: u16 = 3000;
-pub const DEFAULT_DA_NETWORK_PORT: u16 = 3300;
-pub const DEFAULT_BLEND_PORT: u16 = 3400;
-pub const DEFAULT_API_PORT: u16 = 18080;
+use testing_framework_config::constants::{
+    DEFAULT_API_PORT, DEFAULT_BLEND_NETWORK_PORT, DEFAULT_DA_NETWORK_PORT,
+    DEFAULT_LIBP2P_NETWORK_PORT,
+};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub enum HostKind {
@@ -40,7 +40,7 @@ impl Host {
             identifier,
             network_port: ports.network_port.unwrap_or(DEFAULT_LIBP2P_NETWORK_PORT),
             da_network_port: ports.da_network_port.unwrap_or(DEFAULT_DA_NETWORK_PORT),
-            blend_port: ports.blend_port.unwrap_or(DEFAULT_BLEND_PORT),
+            blend_port: ports.blend_port.unwrap_or(DEFAULT_BLEND_NETWORK_PORT),
             api_port: ports.api_port.unwrap_or(DEFAULT_API_PORT),
             testing_http_port: ports.testing_http_port.unwrap_or(DEFAULT_API_PORT + 1),
         }

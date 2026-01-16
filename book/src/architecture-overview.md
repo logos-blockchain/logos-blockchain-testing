@@ -21,7 +21,6 @@ flowchart TB
         LocalBin[local_runner.rs]
         ComposeBin[compose_runner.rs]
         K8sBin[k8s_runner.rs]
-        CucumberBin[cucumber_*.rs]
     end
     
     subgraph Workflows["Workflows (Batteries Included)"]
@@ -49,7 +48,6 @@ flowchart TB
     subgraph Support["Supporting Crates"]
         Configs[Configs & Topology]
         Nodes[Node API Clients]
-        Cucumber[Cucumber Extensions]
     end
     
     Examples --> Workflows
@@ -96,7 +94,6 @@ flowchart TB
 **Supporting Crates**
 - `configs` - Topology configuration and generation
 - `nodes` - HTTP/RPC client for node APIs
-- `cucumber` - BDD/Gherkin integration
 
 ### Extension Points
 

@@ -5,6 +5,10 @@ use std::{
 
 use anyhow::{Context as _, Result};
 use tempfile::TempDir;
+use testing_framework_config::constants::{
+    DEFAULT_ASSETS_STACK_DIR, DEFAULT_KZG_HOST_DIR, KZG_PARAMS_FILENAME,
+};
+use testing_framework_env;
 use tracing::{debug, info};
 
 /// Copy the repository stack assets into a scenario-specific temp dir.
@@ -16,7 +20,8 @@ pub struct ComposeWorkspace {
 impl ComposeWorkspace {
     /// Clone the stack assets into a temporary directory.
     pub fn create() -> Result<Self> {
-        let repo_root = env::var("CARGO_WORKSPACE_DIR")
+        let repo_root = env::var("REPO_ROOT_OVERRIDE_DIR")
+            .or_else(|_| env::var("CARGO_WORKSPACE_DIR"))
             .map(PathBuf::from)
             .or_else(|_| {
                 Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -49,8 +54,11 @@ impl ComposeWorkspace {
             copy_dir_recursive(&scripts_source, &temp.path().join("stack/scripts"))?;
         }
 
-        let kzg_source = repo_root.join("testing-framework/assets/stack/kzgrs_test_params");
-        let target = temp.path().join("kzgrs_test_params");
+        let kzg_source = repo_root.join(
+            testing_framework_env::nomos_kzg_dir_rel()
+                .unwrap_or_else(|| DEFAULT_KZG_HOST_DIR.to_string()),
+        );
+        let target = temp.path().join(KZG_PARAMS_FILENAME);
         if kzg_source.exists() {
             if kzg_source.is_dir() {
                 copy_dir_recursive(&kzg_source, &target)?;
@@ -69,8 +77,14 @@ impl ComposeWorkspace {
                 .unwrap_or(true)
         {
             anyhow::bail!(
-                "KZG params missing in stack assets (expected files in {})",
-                kzg_source.display()
+                "\nKZG params missing in stack assets (expected files in {})\
+                \nrepo_root: {}\
+                \ntarget: {}\
+                \nnomos_kzg_dir_rel(): {:?}\n",
+                kzg_source.display(),
+                repo_root.display(),
+                target.display(),
+                testing_framework_env::nomos_kzg_dir_rel(),
             );
         }
 
@@ -98,7 +112,11 @@ impl ComposeWorkspace {
 }
 
 fn stack_assets_root(repo_root: &Path) -> PathBuf {
-    let new_layout = repo_root.join("testing-framework/assets/stack");
+    let new_layout = if let Some(rel_stack_dir) = env::var("REL_ASSETS_STACK_DIR").ok() {
+        repo_root.join(rel_stack_dir)
+    } else {
+        repo_root.join(DEFAULT_ASSETS_STACK_DIR)
+    };
     if new_layout.exists() {
         new_layout
     } else {
@@ -107,7 +125,7 @@ fn stack_assets_root(repo_root: &Path) -> PathBuf {
 }
 
 fn stack_scripts_root(repo_root: &Path) -> PathBuf {
-    let new_layout = repo_root.join("testing-framework/assets/stack/scripts");
+    let new_layout = repo_root.join(DEFAULT_ASSETS_STACK_DIR).join("scripts");
     if new_layout.exists() {
         new_layout
     } else {

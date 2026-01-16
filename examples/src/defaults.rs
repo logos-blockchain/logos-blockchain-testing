@@ -3,8 +3,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use cucumber_ext::DeployerKind;
 use tracing_subscriber::{EnvFilter, fmt};
+
+use crate::DeployerKind;
 
 const DEFAULT_NODE_LOG_DIR_REL: &str = ".tmp/node-logs";
 const DEFAULT_CONTAINER_NODE_LOG_DIR: &str = "/tmp/node-logs";

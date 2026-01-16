@@ -1,13 +1,7 @@
 use std::{env, sync::LazyLock, time::Duration};
 
 use kube::Error as KubeError;
-use testing_framework_core::{
-    constants::{
-        DEFAULT_HTTP_POLL_INTERVAL, DEFAULT_K8S_DEPLOYMENT_TIMEOUT,
-        DEFAULT_NODE_HTTP_PROBE_TIMEOUT, DEFAULT_NODE_HTTP_TIMEOUT,
-    },
-    scenario::http_probe::NodeRole,
-};
+use testing_framework_core::scenario::http_probe::NodeRole;
 use thiserror::Error;
 
 mod deployment;
@@ -18,6 +12,10 @@ mod ports;
 
 pub use forwarding::PortForwardHandle;
 pub use orchestrator::wait_for_cluster_ready;
+use testing_framework_config::constants::{
+    DEFAULT_HTTP_POLL_INTERVAL, DEFAULT_K8S_DEPLOYMENT_TIMEOUT, DEFAULT_NODE_HTTP_PROBE_TIMEOUT,
+    DEFAULT_NODE_HTTP_TIMEOUT,
+};
 
 /// Container and host-side HTTP ports for a node in the Helm chart values.
 #[derive(Clone, Copy, Debug)]
