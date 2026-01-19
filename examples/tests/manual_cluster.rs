@@ -5,7 +5,7 @@ use testing_framework_core::{
     scenario::{PeerSelection, StartNodeOptions},
     topology::config::TopologyConfig,
 };
-use testing_framework_runner_local::ManualClusterGuard;
+use testing_framework_runner_local::ManualCluster;
 use tokio::time::sleep;
 use tracing_subscriber::fmt::try_init;
 
@@ -26,8 +26,8 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
     // - `POL_PROOF_DEV_MODE=true`
     // - `RUST_LOG=info` (optional)
     let config = TopologyConfig::with_node_numbers(2, 0);
-    let cluster = ManualClusterGuard::from_config(config)?;
-    // Nodes are stopped automatically when the guard is dropped.
+    let cluster = ManualCluster::from_config(config)?;
+    // Nodes are stopped automatically when the cluster is dropped.
 
     println!("starting validator a");
 

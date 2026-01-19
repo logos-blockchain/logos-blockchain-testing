@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use testing_framework_core::{
     nodes::ApiClient,
     scenario::{StartNodeOptions, StartedNode},
@@ -30,32 +28,6 @@ pub enum ManualClusterError {
 /// Imperative, in-process cluster that can start nodes on demand.
 pub struct ManualCluster {
     nodes: LocalDynamicNodes,
-}
-
-pub struct ManualClusterGuard {
-    cluster: ManualCluster,
-}
-
-impl ManualClusterGuard {
-    pub fn from_config(config: TopologyConfig) -> Result<Self, ManualClusterError> {
-        Ok(Self {
-            cluster: ManualCluster::from_config(config)?,
-        })
-    }
-}
-
-impl Deref for ManualClusterGuard {
-    type Target = ManualCluster;
-
-    fn deref(&self) -> &Self::Target {
-        &self.cluster
-    }
-}
-
-impl Drop for ManualClusterGuard {
-    fn drop(&mut self) {
-        self.cluster.stop_all();
-    }
 }
 
 impl ManualCluster {
@@ -125,5 +97,11 @@ impl ManualCluster {
 
     async fn wait_nodes_ready(&self, nodes: Vec<ReadinessNode>) -> Result<(), ReadinessError> {
         ManualNetworkReadiness::new(nodes).wait().await
+    }
+}
+
+impl Drop for ManualCluster {
+    fn drop(&mut self) {
+        self.stop_all();
     }
 }
