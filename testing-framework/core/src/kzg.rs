@@ -1,8 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use testing_framework_config::constants::{DEFAULT_KZG_CONTAINER_PATH, DEFAULT_KZG_HOST_DIR};
 use testing_framework_env as tf_env;
-
-use crate::constants::{DEFAULT_KZG_CONTAINER_PATH, DEFAULT_KZG_HOST_DIR};
 
 /// Default in-image path for KZG params used by testnet images.
 pub const DEFAULT_IN_IMAGE_KZG_PARAMS_PATH: &str = "/opt/nomos/kzg-params/kzgrs_test_params";

@@ -4,6 +4,7 @@ use nomos_core::sdp::ProviderId;
 use nomos_libp2p::{Multiaddr, PeerId, multiaddr};
 use testing_framework_env as tf_env;
 
+pub mod constants;
 pub mod nodes;
 pub mod timeouts;
 pub mod topology;

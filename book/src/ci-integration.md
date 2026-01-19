@@ -178,58 +178,10 @@ jobs:
           docker compose down -v 2>/dev/null || true
           docker ps -a --filter "name=nomos-compose-" -q | xargs -r docker rm -f
 
-  # Cucumber/BDD integration tests (if enabled)
-  cucumber_tests:
-    name: Cucumber BDD Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Set up Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-      
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-cucumber-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-cucumber-
-      
-      - name: Run Cucumber tests
-        run: |
-          # Build prerequisites
-          scripts/build/build-bundle.sh --platform linux
-          export NOMOS_BINARIES_TAR=$(ls -t .tmp/nomos-binaries-linux-*.tar.gz | head -1)
-          
-          # Run Cucumber tests (host runner)
-          cargo test -p runner-examples --bin cucumber_host
-      
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: cucumber-report
-          path: |
-            target/cucumber-reports/
-          retention-days: 14
-
   # Summary job (requires all tests to pass)
   ci_success:
     name: CI Success
-    needs: [host_smoke, compose_matrix, cucumber_tests]
+    needs: [host_smoke, compose_matrix]
     runs-on: ubuntu-latest
     if: always()
     
@@ -237,8 +189,7 @@ jobs:
       - name: Check all jobs
         run: |
           if [[ "${{ needs.host_smoke.result }}" != "success" ]] || \
-             [[ "${{ needs.compose_matrix.result }}" != "success" ]] || \
-             [[ "${{ needs.cucumber_tests.result }}" != "success" ]]; then
+             [[ "${{ needs.compose_matrix.result }}" != "success" ]]; then
             echo "One or more CI jobs failed"
             exit 1
           fi
@@ -251,7 +202,6 @@ jobs:
 2. **Caching:** Caches Rust dependencies, Docker layers, and nomos-node builds for faster runs
 3. **Log Collection:** Automatically uploads logs and artifacts when tests fail
 4. **Timeout Protection:** Reasonable timeouts prevent jobs from hanging indefinitely
-5. **Cucumber Integration:** Shows how to integrate BDD tests into CI
 6. **Clean Teardown:** Ensures Docker resources are cleaned up even on failure
 
 ## Customization Points

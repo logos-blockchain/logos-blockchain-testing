@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use cfgsync::{
+use cfgsync_tf::{
     client::{FetchedConfig, get_config},
     server::ClientIp,
 };
@@ -15,9 +15,9 @@ use nomos_libp2p::PeerId;
 use nomos_node::Config as ValidatorConfig;
 use serde::{Serialize, de::DeserializeOwned};
 use subnetworks_assignations::{MembershipCreator, MembershipHandler, SubnetworkId};
-use testing_framework_core::{
-    constants::cfgsync_port as default_cfgsync_port,
-    nodes::common::config::injection::{inject_ibd_into_cryptarchia, normalize_ed25519_sigs},
+use testing_framework_config::constants::cfgsync_port as default_cfgsync_port;
+use testing_framework_core::nodes::common::config::injection::{
+    inject_ibd_into_cryptarchia, normalize_ed25519_sigs,
 };
 
 fn parse_ip(ip_str: &str) -> Ipv4Addr {

@@ -5,7 +5,6 @@ use std::{
 
 use serde::Serialize;
 use testing_framework_core::{
-    constants::DEFAULT_CFGSYNC_PORT,
     kzg::KzgParamsSpec,
     topology::generation::{GeneratedNodeConfig, GeneratedTopology},
 };
@@ -16,6 +15,7 @@ use crate::docker::platform::{host_gateway_entry, resolve_image};
 mod node;
 
 pub use node::{EnvEntry, NodeDescriptor};
+use testing_framework_config::constants::DEFAULT_CFGSYNC_PORT;
 
 /// Top-level docker-compose descriptor built from a GeneratedTopology.
 #[derive(Clone, Debug, Serialize)]

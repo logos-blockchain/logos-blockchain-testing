@@ -1,8 +1,9 @@
 use std::{process, time::Duration};
 
 use anyhow::{Context as _, Result};
-use cucumber_ext::DeployerKind;
-use runner_examples::{ChaosBuilderExt as _, ScenarioBuilderExt as _, demo, read_env_any};
+use runner_examples::{
+    ChaosBuilderExt as _, DeployerKind, ScenarioBuilderExt as _, demo, read_env_any,
+};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_compose::{ComposeDeployer, ComposeRunnerError};
 use tracing::{info, warn};

@@ -22,7 +22,7 @@ use testing_framework_env as tf_env;
 use thiserror::Error;
 use tracing::warn;
 
-use crate::secret_key_to_peer_id;
+use crate::{constants::DEFAULT_KZG_HOST_DIR, secret_key_to_peer_id};
 
 pub static GLOBAL_PARAMS_PATH: LazyLock<String> = LazyLock::new(resolve_global_params_path);
 
@@ -69,7 +69,10 @@ fn resolve_global_params_path() -> String {
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
     let params_path = canonicalize_params_path(
-        workspace_root.join("testing-framework/assets/stack/kzgrs_test_params"),
+        workspace_root.join(
+            testing_framework_env::nomos_kzg_dir_rel()
+                .unwrap_or_else(|| DEFAULT_KZG_HOST_DIR.to_string()),
+        ),
     );
     match params_path.canonicalize() {
         Ok(path) => path.to_string_lossy().to_string(),

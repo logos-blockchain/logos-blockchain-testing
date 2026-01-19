@@ -1,8 +1,7 @@
 use std::{env, process, time::Duration};
 
 use anyhow::{Context as _, Result};
-use cucumber_ext::DeployerKind;
-use runner_examples::{ScenarioBuilderExt as _, demo, read_env_any};
+use runner_examples::{DeployerKind, ScenarioBuilderExt as _, demo, read_env_any};
 use testing_framework_core::scenario::{Deployer as _, Runner, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use tracing::{info, warn};
