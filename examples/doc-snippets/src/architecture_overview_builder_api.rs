@@ -9,7 +9,6 @@ pub fn scenario_plan() -> SnippetResult<Scenario<()>> {
     ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
         .wallets(50)
         .transactions_with(|txs| txs.rate(5).users(20))
-        .da_with(|da| da.channel_rate(1).blob_rate(2))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(90))
         .build()

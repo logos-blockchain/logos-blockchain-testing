@@ -7101,10 +7101,8 @@ name = "testing-framework-workflows"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "futures",
  "logos-blockchain-chain-service",
  "logos-blockchain-core",
- "logos-blockchain-executor-http-client",
  "logos-blockchain-key-management-system-service",
  "rand 0.8.5",
  "reqwest",

@@ -145,6 +145,10 @@ impl GeneratedTopology {
 
         wait_for_network_readiness(self, &client, &endpoints, &labels).await?;
 
+        if validator_membership_endpoints.is_none() && executor_membership_endpoints.is_none() {
+            return Ok(());
+        }
+
         let membership_endpoints = collect_membership_endpoints(
             self,
             total_nodes,

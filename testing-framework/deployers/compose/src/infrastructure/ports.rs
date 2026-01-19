@@ -160,24 +160,8 @@ pub async fn ensure_remote_readiness_with_ports(
         .map(|ports| readiness_url(HttpNodeRole::Executor, ports.api))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let validator_membership_urls = mapping
-        .validators
-        .iter()
-        .map(|ports| readiness_url(HttpNodeRole::Validator, ports.testing))
-        .collect::<Result<Vec<_>, _>>()?;
-    let executor_membership_urls = mapping
-        .executors
-        .iter()
-        .map(|ports| readiness_url(HttpNodeRole::Executor, ports.testing))
-        .collect::<Result<Vec<_>, _>>()?;
-
     descriptors
-        .wait_remote_readiness(
-            &validator_urls,
-            &executor_urls,
-            Some(&validator_membership_urls),
-            Some(&executor_membership_urls),
-        )
+        .wait_remote_readiness(&validator_urls, &executor_urls, None, None)
         .await
         .map_err(|source| StackReadinessError::Remote { source })
 }
