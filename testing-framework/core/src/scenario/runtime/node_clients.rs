@@ -56,7 +56,7 @@ impl NodeClients {
     pub fn validator_clients(&self) -> Vec<ApiClient> {
         self.inner
             .read()
-            .expect("node clients lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .validators
             .clone()
     }
@@ -66,7 +66,7 @@ impl NodeClients {
     pub fn executor_clients(&self) -> Vec<ApiClient> {
         self.inner
             .read()
-            .expect("node clients lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .executors
             .clone()
     }
@@ -97,7 +97,11 @@ impl NodeClients {
 
     /// Iterator over all clients.
     pub fn all_clients(&self) -> Vec<ApiClient> {
-        let guard = self.inner.read().expect("node clients lock poisoned");
+        let guard = self
+            .inner
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
         guard
             .validators
             .iter()
@@ -109,7 +113,11 @@ impl NodeClients {
     #[must_use]
     /// Choose any random client from validators+executors.
     pub fn any_client(&self) -> Option<ApiClient> {
-        let guard = self.inner.read().expect("node clients lock poisoned");
+        let guard = self
+            .inner
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
         let validator_count = guard.validators.len();
         let executor_count = guard.executors.len();
         let total = validator_count + executor_count;
@@ -132,12 +140,20 @@ impl NodeClients {
     }
 
     pub fn add_validator(&self, client: ApiClient) {
-        let mut guard = self.inner.write().expect("node clients lock poisoned");
+        let mut guard = self
+            .inner
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
         guard.validators.push(client);
     }
 
     pub fn add_executor(&self, client: ApiClient) {
-        let mut guard = self.inner.write().expect("node clients lock poisoned");
+        let mut guard = self
+            .inner
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
         guard.executors.push(client);
     }
 }
