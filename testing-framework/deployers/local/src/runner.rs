@@ -1,13 +1,10 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, NodeControlCapability,
-        RunContext, Runner, Scenario, ScenarioError, spawn_block_feed,
+        BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, RunContext, Runner,
+        Scenario, ScenarioError, spawn_block_feed,
     },
     topology::{
-        config::TopologyConfig,
         deployment::{SpawnTopologyError, Topology},
         readiness::ReadinessError,
     },
@@ -15,10 +12,6 @@ use testing_framework_core::{
 use thiserror::Error;
 use tracing::{debug, info};
 
-use crate::{
-    manual::{LocalManualCluster, ManualClusterError},
-    node_control::{LocalDynamicNodes, LocalDynamicSeed},
-};
 /// Spawns validators and executors as local processes, reusing the existing
 /// integration harness.
 #[derive(Clone)]
@@ -89,44 +82,6 @@ impl Deployer<()> for LocalDeployer {
     }
 }
 
-#[async_trait]
-impl Deployer<NodeControlCapability> for LocalDeployer {
-    type Error = LocalDeployerError;
-
-    async fn deploy(
-        &self,
-        scenario: &Scenario<NodeControlCapability>,
-    ) -> Result<Runner, Self::Error> {
-        info!(
-            validators = scenario.topology().validators().len(),
-            executors = scenario.topology().executors().len(),
-            "starting local deployment with node control"
-        );
-
-        let topology = Self::prepare_topology(scenario).await?;
-        let node_clients = NodeClients::from_topology(scenario.topology(), &topology);
-        let node_control = Arc::new(LocalDynamicNodes::new_with_seed(
-            scenario.topology().clone(),
-            node_clients.clone(),
-            LocalDynamicSeed::from_topology(scenario.topology()),
-        ));
-
-        let (block_feed, block_feed_guard) = spawn_block_feed_with(&node_clients).await?;
-
-        let context = RunContext::new(
-            scenario.topology().clone(),
-            Some(topology),
-            node_clients,
-            scenario.duration(),
-            Metrics::empty(),
-            block_feed,
-            Some(node_control),
-        );
-
-        Ok(Runner::new(context, Some(Box::new(block_feed_guard))))
-    }
-}
-
 impl LocalDeployer {
     #[must_use]
     /// Construct a local deployer.
@@ -134,25 +89,13 @@ impl LocalDeployer {
         Self::default()
     }
 
-    /// Build a manual cluster using this deployer's local implementation.
-    pub fn manual_cluster(
-        &self,
-        config: TopologyConfig,
-    ) -> Result<LocalManualCluster, ManualClusterError> {
-        LocalManualCluster::from_config(config)
-    }
-
-    async fn prepare_topology<Caps>(
-        scenario: &Scenario<Caps>,
-    ) -> Result<Topology, LocalDeployerError> {
+    async fn prepare_topology(scenario: &Scenario<()>) -> Result<Topology, LocalDeployerError> {
         let descriptors = scenario.topology();
-
         info!(
             validators = descriptors.validators().len(),
             executors = descriptors.executors().len(),
             "spawning local validators/executors"
         );
-
         let topology = descriptors
             .clone()
             .spawn_local()
@@ -165,7 +108,6 @@ impl LocalDeployer {
         })?;
 
         info!("local nodes are ready");
-
         Ok(topology)
     }
 }
@@ -178,7 +120,6 @@ impl Default for LocalDeployer {
 
 async fn wait_for_readiness(topology: &Topology) -> Result<(), ReadinessError> {
     info!("waiting for local network readiness");
-
     topology.wait_network_ready().await?;
     Ok(())
 }
@@ -192,7 +133,7 @@ async fn spawn_block_feed_with(
         "selecting validator client for local block feed"
     );
 
-    let Some(block_source_client) = node_clients.random_validator() else {
+    let Some(block_source_client) = node_clients.random_validator().cloned() else {
         return Err(LocalDeployerError::WorkloadFailed {
             source: "block feed requires at least one validator".into(),
         });
