@@ -63,7 +63,7 @@ impl RunContext {
     }
 
     #[must_use]
-    pub fn random_node_client(&self) -> Option<&ApiClient> {
+    pub fn random_node_client(&self) -> Option<ApiClient> {
         self.node_clients.any_client()
     }
 

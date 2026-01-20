@@ -91,13 +91,15 @@ impl Topology {
         let mut validators = Vec::new();
         for i in 0..n_validators {
             let config = create_validator_config(config[i].clone());
-            validators.push(Validator::spawn(config).await?);
+            let label = format!("validator-{i}");
+            validators.push(Validator::spawn(config, &label).await?);
         }
 
         let mut executors = Vec::new();
         for i in 0..n_executors {
             let config = create_executor_config(config[n_validators + i].clone());
-            executors.push(Executor::spawn(config).await?);
+            let label = format!("executor-{i}");
+            executors.push(Executor::spawn(config, &label).await?);
         }
 
         Ok((validators, executors))

@@ -20,7 +20,6 @@ async fn spawn_block_feed_with(
 
     let block_source_client = node_clients
         .random_validator()
-        .cloned()
         .ok_or(ComposeRunnerError::BlockFeedMissing)?;
 
     spawn_block_feed(block_source_client)

@@ -21,3 +21,4 @@ testing-framework/assets/stack/kzgrs_test_params/
 # Local test artifacts (kept when NOMOS_TESTS_KEEP_LOGS=1)
 tests/workflows/.tmp*
 tests/workflows/.tmp*/
+examples/.tmp*/

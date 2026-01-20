@@ -60,10 +60,11 @@ impl Drop for Executor {
 }
 
 impl Executor {
-    pub async fn spawn(config: Config) -> Result<Self, SpawnNodeError> {
+    pub async fn spawn(config: Config, label: &str) -> Result<Self, SpawnNodeError> {
+        let log_prefix = format!("{LOGS_PREFIX}-{label}");
         let handle = spawn_node(
             config,
-            LOGS_PREFIX,
+            &log_prefix,
             "executor.yaml",
             binary_path(),
             !*IS_DEBUG_TRACING,
