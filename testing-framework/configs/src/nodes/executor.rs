@@ -1,3 +1,4 @@
+use logos_blockchain_executor::config::Config as ExecutorConfig;
 use nomos_da_dispersal::{
     DispersalServiceSettings,
     backend::kzgrs::{DispersalKZGRSBackendSettings, EncoderSettings},
@@ -10,7 +11,6 @@ use nomos_da_network_service::{
         common::DaNetworkBackendSettings, executor::DaNetworkExecutorBackendSettings,
     },
 };
-use nomos_executor::config::Config as ExecutorConfig;
 use nomos_node::{RocksBackendSettings, config::deployment::DeploymentSettings};
 use nomos_sdp::SdpSettings;
 

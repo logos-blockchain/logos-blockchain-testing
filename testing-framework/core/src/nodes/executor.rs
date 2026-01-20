@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use nomos_executor::config::Config;
+use logos_blockchain_executor::config::Config;
 use nomos_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::executor::create_executor_config;
 use tracing::{debug, info};
@@ -22,14 +22,14 @@ use crate::{
     },
 };
 
-const BIN_PATH: &str = "target/debug/nomos-executor";
+const BIN_PATH: &str = "target/debug/logos-blockchain-executor";
 
 fn binary_path() -> PathBuf {
     let cfg = BinaryConfig {
         env_var: "NOMOS_EXECUTOR_BIN",
-        binary_name: "nomos-executor",
+        binary_name: "logos-blockchain-executor",
         fallback_path: BIN_PATH,
-        shared_bin_subpath: "../assets/stack/bin/nomos-executor",
+        shared_bin_subpath: "../assets/stack/bin/logos-blockchain-executor",
     };
     BinaryResolver::resolve_path(&cfg)
 }
@@ -49,7 +49,7 @@ impl Deref for Executor {
 impl Drop for Executor {
     fn drop(&mut self) {
         if should_persist_tempdir()
-            && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "nomos-executor")
+            && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "logos-blockchain-executor")
         {
             debug!(error = ?e, "failed to persist executor tempdir");
         }

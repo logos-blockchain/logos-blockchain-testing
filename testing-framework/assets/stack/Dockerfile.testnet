@@ -6,4 +6,4 @@ FROM ${BASE_IMAGE}
 
 LABEL description="Logos testnet image (publishable)"
 
-ENTRYPOINT ["/usr/bin/nomos-node"]
+ENTRYPOINT ["/usr/bin/logos-blockchain-node"]

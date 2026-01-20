@@ -6,4 +6,4 @@ FROM ${BASE_IMAGE}
 
 LABEL description="Logos runtime image for compose/k8s testing"
 
-ENTRYPOINT ["/usr/bin/nomos-node"]
+ENTRYPOINT ["/usr/bin/logos-blockchain-node"]

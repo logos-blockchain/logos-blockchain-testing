@@ -17,8 +17,8 @@ Builds a Linux bundle via scripts/build/build-bundle.sh, then stages artifacts i
   - testing-framework/assets/stack/kzgrs_test_params (or NOMOS_KZG_DIR_REL)
 
 Options:
-  --rev REV              nomos-node git revision to build (overrides NOMOS_NODE_REV)
-  --path DIR             use local nomos-node checkout (skip fetch/checkout)
+  --rev REV              logos-blockchain-node git revision to build (overrides NOMOS_NODE_REV)
+  --path DIR             use local logos-blockchain-node checkout (skip fetch/checkout)
   --features LIST        extra cargo features (comma-separated); base includes "testing"
   --docker-platform PLAT docker platform for the Linux build (e.g. linux/amd64, linux/arm64)
   --tar PATH             stage from an existing bundle tarball (skip build)
@@ -28,7 +28,7 @@ Options:
 Environment:
   VERSION                circuits version (default from versions.env)
   NOMOS_CIRCUITS_VERSION legacy alias for VERSION (supported)
-  NOMOS_NODE_REV         default nomos-node revision (from versions.env)
+  NOMOS_NODE_REV         default logos-blockchain-node revision (from versions.env)
   NOMOS_KZG_DIR_REL      host path for staged circuits dir (default: testing-framework/assets/stack/kzgrs_test_params)
 EOF
 }
@@ -133,9 +133,9 @@ build_linux_binaries::stage_from_bundle() {
   tar -xzf "${tar_path}" -C "${extract_dir}"
 
   local artifacts="${extract_dir}/artifacts"
-  [ -f "${artifacts}/nomos-node" ] || common::die "Missing nomos-node in bundle: ${tar_path}"
-  [ -f "${artifacts}/nomos-executor" ] || common::die "Missing nomos-executor in bundle: ${tar_path}"
-  [ -f "${artifacts}/nomos-cli" ] || common::die "Missing nomos-cli in bundle: ${tar_path}"
+  [ -f "${artifacts}/logos-blockchain-node" ] || common::die "Missing logos-blockchain-node in bundle: ${tar_path}"
+  [ -f "${artifacts}/logos-blockchain-executor" ] || common::die "Missing logos-blockchain-executor in bundle: ${tar_path}"
+  [ -f "${artifacts}/logos-blockchain-cli" ] || common::die "Missing logos-blockchain-cli in bundle: ${tar_path}"
   [ -d "${artifacts}/circuits" ] || common::die "Missing circuits/ in bundle: ${tar_path}"
 
   local bin_out="${ROOT_DIR}/testing-framework/assets/stack/bin"
@@ -144,7 +144,7 @@ build_linux_binaries::stage_from_bundle() {
 
   echo "==> Staging binaries to ${bin_out}"
   mkdir -p "${bin_out}"
-  cp "${artifacts}/nomos-node" "${artifacts}/nomos-executor" "${artifacts}/nomos-cli" "${bin_out}/"
+  cp "${artifacts}/logos-blockchain-node" "${artifacts}/logos-blockchain-executor" "${artifacts}/logos-blockchain-cli" "${bin_out}/"
 
   echo "==> Staging circuits to ${circuits_out}"
   rm -rf "${circuits_out}"

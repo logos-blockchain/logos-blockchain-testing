@@ -339,12 +339,12 @@ run_examples::bundle_matches_expected() {
   tar_rev="$(echo "${meta}" | sed -n 's/^nomos_node_rev=//p' | head -n 1)"
   tar_head="$(echo "${meta}" | sed -n 's/^nomos_node_git_head=//p' | head -n 1)"
   if [ -n "${tar_rev}" ] && [ "${tar_rev}" != "${NOMOS_NODE_REV}" ]; then
-    echo "Bundle ${tar_path} is for nomos-node rev ${tar_rev}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+    echo "Bundle ${tar_path} is for logos-blockchain-node rev ${tar_rev}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
     return 1
   fi
   if [ -n "${tar_head}" ] && echo "${NOMOS_NODE_REV}" | grep -Eq '^[0-9a-f]{7,40}$'; then
     if [ "${tar_head}" != "${NOMOS_NODE_REV}" ]; then
-      echo "Bundle ${tar_path} is for nomos-node git head ${tar_head}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+      echo "Bundle ${tar_path} is for logos-blockchain-node git head ${tar_head}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
       return 1
     fi
   fi
@@ -388,20 +388,20 @@ run_examples::restore_binaries_from_tar() {
   RESTORED_BIN_DIR="${src}"
   export RESTORED_BIN_DIR
 
-  if [ ! -f "${src}/nomos-node" ] || [ ! -f "${src}/nomos-executor" ] || [ ! -f "${src}/nomos-cli" ]; then
+  if [ ! -f "${src}/logos-blockchain-node" ] || [ ! -f "${src}/logos-blockchain-executor" ] || [ ! -f "${src}/logos-blockchain-cli" ]; then
     echo "Binaries missing in ${tar_path}; provide a prebuilt binaries tarball." >&2
     return 1
   fi
 
   local copy_bins=1
-  if [ "${MODE}" != "host" ] && ! run_examples::host_bin_matches_arch "${src}/nomos-node"; then
+  if [ "${MODE}" != "host" ] && ! run_examples::host_bin_matches_arch "${src}/logos-blockchain-node"; then
     echo "Bundled binaries do not match host arch; skipping copy so containers rebuild from source."
     copy_bins=0
-    rm -f "${bin_dst}/nomos-node" "${bin_dst}/nomos-executor" "${bin_dst}/nomos-cli"
+    rm -f "${bin_dst}/logos-blockchain-node" "${bin_dst}/logos-blockchain-executor" "${bin_dst}/logos-blockchain-cli"
   fi
   if [ "${copy_bins}" -eq 1 ]; then
     mkdir -p "${bin_dst}"
-    cp "${src}/nomos-node" "${src}/nomos-executor" "${src}/nomos-cli" "${bin_dst}/"
+    cp "${src}/logos-blockchain-node" "${src}/logos-blockchain-executor" "${src}/logos-blockchain-cli" "${bin_dst}/"
   fi
 
   if [ -d "${circuits_src}" ] && [ -f "${circuits_src}/${KZG_FILE}" ]; then
@@ -510,8 +510,8 @@ run_examples::validate_restored_bundle() {
 
   if [ "${MODE}" = "host" ] && ! { [ -n "${NOMOS_NODE_BIN:-}" ] && [ -x "${NOMOS_NODE_BIN:-}" ] && [ -n "${NOMOS_EXECUTOR_BIN:-}" ] && [ -x "${NOMOS_EXECUTOR_BIN:-}" ]; }; then
     local tar_node tar_exec
-    tar_node="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/nomos-node"
-    tar_exec="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/nomos-executor"
+    tar_node="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/logos-blockchain-node"
+    tar_exec="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/logos-blockchain-executor"
 
     [ -x "${tar_node}" ] && [ -x "${tar_exec}" ] || common::die \
       "Restored tarball missing host executables; provide a host-compatible binaries tarball."
@@ -574,6 +574,7 @@ run_examples::run() {
   TESTNET_PRINT_ENDPOINTS=1 \
   NOMOS_TESTNET_IMAGE="${IMAGE}" \
   NOMOS_CIRCUITS="${HOST_BUNDLE_PATH}" \
+  LOGOS_BLOCKCHAIN_CIRCUITS="${HOST_BUNDLE_PATH}" \
   NOMOS_KZGRS_PARAMS_PATH="${kzg_path}" \
   NOMOS_NODE_BIN="${NOMOS_NODE_BIN:-}" \
   NOMOS_EXECUTOR_BIN="${NOMOS_EXECUTOR_BIN:-}" \

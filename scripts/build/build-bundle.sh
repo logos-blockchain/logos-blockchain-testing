@@ -30,8 +30,8 @@ Usage: scripts/build/build-bundle.sh [--platform host|linux] [--output PATH]
 Options:
   --platform        Target platform for binaries (default: host)
   --output          Output path for the tarball (default: .tmp/nomos-binaries-<platform>-<version>.tar.gz)
-  --rev             nomos-node git revision to build (overrides NOMOS_NODE_REV)
-  --path            Use local nomos-node checkout at DIR (skip fetch/checkout)
+  --rev             logos-blockchain-node git revision to build (overrides NOMOS_NODE_REV)
+  --path            Use local logos-blockchain-node checkout at DIR (skip fetch/checkout)
   --features        Extra cargo features to enable (comma-separated); base always includes "testing"
   --docker-platform Docker platform for Linux bundle when running on non-Linux host (default: auto; linux/arm64 on Apple silicon Docker Desktop, else linux/amd64)
 
@@ -57,7 +57,7 @@ build_bundle::apply_nomos_node_patches() {
     return 0
   fi
 
-  local patch_dir="${NOMOS_NODE_PATCH_DIR:-${ROOT_DIR}/patches/nomos-node}"
+  local patch_dir="${NOMOS_NODE_PATCH_DIR:-${ROOT_DIR}/patches/logos-blockchain-node}"
   if [ ! -d "${patch_dir}" ]; then
     return 0
   fi
@@ -74,7 +74,7 @@ build_bundle::apply_nomos_node_patches() {
     return 0
   fi
 
-  echo "==> Applying nomos-node patches from ${patch_dir} (level=${level})"
+  echo "==> Applying logos-blockchain-node patches from ${patch_dir} (level=${level})"
   local patch base phase
   for patch in "${patches[@]}"; do
     base="$(basename "${patch}")"
@@ -231,7 +231,7 @@ build_bundle::maybe_run_linux_build_in_docker() {
         node_path_env="/workspace${NOMOS_NODE_PATH#"${ROOT_DIR}"}"
         ;;
       /*)
-        node_path_env="/external/nomos-node"
+        node_path_env="/external/logos-blockchain-node"
         extra_mounts+=("-v" "${NOMOS_NODE_PATH}:${node_path_env}")
         ;;
       *)
@@ -244,7 +244,7 @@ build_bundle::maybe_run_linux_build_in_docker() {
   local container_output="/workspace${OUTPUT#"${ROOT_DIR}"}"
   local target_suffix
   target_suffix="$(build_bundle::docker_platform_suffix "${DOCKER_PLATFORM}")"
-  local host_target_dir="${ROOT_DIR}/.tmp/nomos-node-linux-target${target_suffix}"
+  local host_target_dir="${ROOT_DIR}/.tmp/logos-blockchain-node-linux-target${target_suffix}"
   mkdir -p "${ROOT_DIR}/.tmp/cargo-linux" "${host_target_dir}"
 
   local -a features_args=()
@@ -265,14 +265,15 @@ build_bundle::maybe_run_linux_build_in_docker() {
     -e NOMOS_NODE_PATH="${node_path_env}" \
     -e NOMOS_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
     -e NOMOS_CIRCUITS="/workspace/.tmp/nomos-circuits-linux" \
+    -e LOGOS_BLOCKCHAIN_CIRCUITS="/workspace/.tmp/nomos-circuits-linux" \
     -e STACK_DIR="/workspace/.tmp/nomos-circuits-linux" \
     -e HOST_DIR="/workspace/.tmp/nomos-circuits-linux" \
     -e NOMOS_EXTRA_FEATURES="${NOMOS_EXTRA_FEATURES:-}" \
     -e BUNDLE_IN_CONTAINER=1 \
     -e CARGO_HOME=/workspace/.tmp/cargo-linux \
-    -e CARGO_TARGET_DIR="/workspace/.tmp/nomos-node-linux-target${target_suffix}" \
+    -e CARGO_TARGET_DIR="/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}" \
     -v "${ROOT_DIR}/.tmp/cargo-linux":/workspace/.tmp/cargo-linux \
-    -v "${host_target_dir}:/workspace/.tmp/nomos-node-linux-target${target_suffix}" \
+    -v "${host_target_dir}:/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}" \
     -v "${ROOT_DIR}:/workspace" \
     "${extra_mounts[@]}" \
     -w /workspace \
@@ -286,7 +287,7 @@ build_bundle::prepare_circuits() {
   echo "==> Preparing circuits (version ${VERSION})"
   if [ "${PLATFORM}" = "host" ]; then
     CIRCUITS_DIR="${ROOT_DIR}/.tmp/nomos-circuits-host"
-    NODE_TARGET="${ROOT_DIR}/.tmp/nomos-node-host-target"
+    NODE_TARGET="${ROOT_DIR}/.tmp/logos-blockchain-node-host-target"
   else
     CIRCUITS_DIR="${ROOT_DIR}/.tmp/nomos-circuits-linux"
     # When building Linux bundles in Docker, avoid reusing the same target dir
@@ -296,10 +297,10 @@ build_bundle::prepare_circuits() {
     if [ -n "${BUNDLE_IN_CONTAINER:-}" ]; then
       target_suffix="$(build_bundle::docker_platform_suffix "${NOMOS_BUNDLE_DOCKER_PLATFORM:-}")"
     fi
-    NODE_TARGET="${ROOT_DIR}/.tmp/nomos-node-linux-target${target_suffix}"
+    NODE_TARGET="${ROOT_DIR}/.tmp/logos-blockchain-node-linux-target${target_suffix}"
   fi
 
-  NODE_SRC_DEFAULT="${ROOT_DIR}/.tmp/nomos-node-${PLATFORM}-src"
+  NODE_SRC_DEFAULT="${ROOT_DIR}/.tmp/logos-blockchain-node-${PLATFORM}-src"
   NODE_SRC="${NOMOS_NODE_PATH:-${NODE_SRC_DEFAULT}}"
   if [ -n "${NOMOS_NODE_PATH}" ]; then
     [ -d "${NODE_SRC}" ] || build_bundle::fail "NOMOS_NODE_PATH does not exist: ${NODE_SRC}"
@@ -311,6 +312,7 @@ build_bundle::prepare_circuits() {
   fi
 
   export NOMOS_CIRCUITS="${CIRCUITS_DIR}"
+  export LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}"
   mkdir -p "${ROOT_DIR}/.tmp" "${CIRCUITS_DIR}"
   if [ -f "${CIRCUITS_DIR}/${KZG_FILE:-kzgrs_test_params}" ]; then
     echo "Circuits already present at ${CIRCUITS_DIR}; skipping download"
@@ -319,9 +321,9 @@ build_bundle::prepare_circuits() {
       "${ROOT_DIR}/scripts/setup/setup-circuits-stack.sh" "${VERSION}" </dev/null
   fi
 
-  NODE_BIN="${NODE_TARGET}/debug/nomos-node"
-  EXEC_BIN="${NODE_TARGET}/debug/nomos-executor"
-  CLI_BIN="${NODE_TARGET}/debug/nomos-cli"
+  NODE_BIN="${NODE_TARGET}/debug/logos-blockchain-node"
+  EXEC_BIN="${NODE_TARGET}/debug/logos-blockchain-executor"
+  CLI_BIN="${NODE_TARGET}/debug/logos-blockchain-cli"
 }
 
 build_bundle::build_binaries() {
@@ -334,7 +336,7 @@ build_bundle::build_binaries() {
   (
     cd "${NODE_SRC}"
     if [ -n "${NOMOS_NODE_PATH}" ]; then
-      echo "Using local nomos-node checkout at ${NODE_SRC} (no fetch/checkout)"
+      echo "Using local logos-blockchain-node checkout at ${NODE_SRC} (no fetch/checkout)"
     else
       if [ ! -d "${NODE_SRC}/.git" ]; then
         git clone https://github.com/logos-co/nomos-node.git "${NODE_SRC}"
@@ -358,14 +360,16 @@ build_bundle::build_binaries() {
     fi
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
       RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
+        LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
         cargo build --features "${FEATURES}" \
-        -p nomos-node -p nomos-executor -p nomos-cli \
+        -p logos-blockchain-node -p logos-blockchain-executor -p logos-blockchain-cli \
         --target-dir "${NODE_TARGET}"
     else
       RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
+        LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
         cargo build --features "${FEATURES}" \
-        -p nomos-node -p nomos-executor -p nomos-cli \
+        -p logos-blockchain-node -p logos-blockchain-executor -p logos-blockchain-cli \
         --target-dir "${NODE_TARGET}"
     fi
   )
@@ -378,9 +382,9 @@ build_bundle::package_bundle() {
   mkdir -p "${bundle_dir}/artifacts/circuits"
   cp -a "${CIRCUITS_DIR}/." "${bundle_dir}/artifacts/circuits/"
   mkdir -p "${bundle_dir}/artifacts"
-  cp "${NODE_BIN}" "${bundle_dir}/artifacts/"
-  cp "${EXEC_BIN}" "${bundle_dir}/artifacts/"
-  cp "${CLI_BIN}" "${bundle_dir}/artifacts/"
+  cp "${NODE_BIN}" "${bundle_dir}/artifacts/logos-blockchain-node"
+  cp "${EXEC_BIN}" "${bundle_dir}/artifacts/logos-blockchain-executor"
+  cp "${CLI_BIN}" "${bundle_dir}/artifacts/logos-blockchain-cli"
   {
     echo "nomos_node_path=${NOMOS_NODE_PATH:-}"
     echo "nomos_node_rev=${NOMOS_NODE_REV:-}"

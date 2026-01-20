@@ -58,6 +58,9 @@ impl<'a> ReadinessCheck<'a> for DaBalancerReadiness<'a> {
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
+        if self.topology.validators.len() + self.topology.executors.len() <= 1 {
+            return true;
+        }
         data.iter().all(|entry| {
             if entry.threshold == 0 {
                 return true;

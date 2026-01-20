@@ -286,7 +286,10 @@ fn override_api_ports(config: &mut Value, ports: &PortOverrides) {
     }
 }
 
-fn inject_da_assignations(config: &mut Value, membership: &nomos_node::NomosDaMembership) {
+fn inject_da_assignations(
+    config: &mut Value,
+    membership: &nomos_node::LogosBlockchainDaMembership,
+) {
     struct SubnetAssignment {
         subnet_id: String,
         peers: Vec<String>,

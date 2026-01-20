@@ -41,9 +41,8 @@ impl BinaryResolver {
             );
             return shared_bin;
         }
-        let fallback = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../")
-            .join(config.fallback_path);
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../");
+        let fallback = root.join(config.fallback_path);
 
         debug!(
             binary = config.binary_name,

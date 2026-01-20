@@ -18,14 +18,14 @@ use crate::{
     },
 };
 
-const BIN_PATH: &str = "target/debug/nomos-node";
+const BIN_PATH: &str = "target/debug/logos-blockchain-node";
 
 fn binary_path() -> PathBuf {
     let cfg = BinaryConfig {
         env_var: "NOMOS_NODE_BIN",
-        binary_name: "nomos-node",
+        binary_name: "logos-blockchain-node",
         fallback_path: BIN_PATH,
-        shared_bin_subpath: "../assets/stack/bin/nomos-node",
+        shared_bin_subpath: "../assets/stack/bin/logos-blockchain-node",
     };
     BinaryResolver::resolve_path(&cfg)
 }
@@ -50,7 +50,7 @@ impl Deref for Validator {
 impl Drop for Validator {
     fn drop(&mut self) {
         if should_persist_tempdir()
-            && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "nomos-node")
+            && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "logos-blockchain-node")
         {
             debug!(error = ?e, "failed to persist validator tempdir");
         }

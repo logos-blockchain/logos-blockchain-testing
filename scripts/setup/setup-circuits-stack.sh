@@ -8,7 +8,7 @@ fi
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/common.sh"
 
-readonly DEFAULT_CIRCUITS_VERSION="v0.3.1"
+readonly DEFAULT_CIRCUITS_VERSION="v0.3.2"
 readonly DEFAULT_LINUX_PLATFORM="linux-x86_64"
 
 readonly DEFAULT_KZG_DIR_REL="testing-framework/assets/stack/kzgrs_test_params"
@@ -89,7 +89,7 @@ setup_circuits_stack::fetch_bundle() {
 setup_circuits_stack::fetch_kzg_params() {
   local dest_dir="$1"
   local dest_file="${dest_dir}/${KZG_FILE}"
-  local url="${RAW_GITHUB_BASE_URL}/logos-co/nomos-node/${NOMOS_NODE_REV}/${DEFAULT_KZG_PARAMS_RELPATH}"
+  local url="${RAW_GITHUB_BASE_URL}/logos-co/logos-blockchain-node/${NOMOS_NODE_REV}/${DEFAULT_KZG_PARAMS_RELPATH}"
 
   echo "Fetching KZG parameters from ${url}"
   curl -fsSL "${url}" -o "${dest_file}"

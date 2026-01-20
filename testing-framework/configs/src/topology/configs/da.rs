@@ -14,7 +14,7 @@ use nomos_da_network_core::swarm::{
     DAConnectionMonitorSettings, DAConnectionPolicySettings, ReplicationConfig,
 };
 use nomos_libp2p::{Multiaddr, PeerId, ed25519};
-use nomos_node::NomosDaMembership;
+use nomos_node::LogosBlockchainDaMembership;
 use num_bigint::BigUint;
 use rand::random;
 use subnetworks_assignations::{MembershipCreator as _, MembershipHandler as _};
@@ -146,7 +146,7 @@ pub struct GeneralDaConfig {
     pub node_key: ed25519::SecretKey,
     pub signer: Ed25519Key,
     pub peer_id: PeerId,
-    pub membership: NomosDaMembership,
+    pub membership: LogosBlockchainDaMembership,
     pub listening_address: Multiaddr,
     pub blob_storage_directory: PathBuf,
     pub global_params_path: String,
@@ -239,7 +239,7 @@ pub fn try_create_da_configs(
     }
 
     let membership = {
-        let template = NomosDaMembership::new(
+        let template = LogosBlockchainDaMembership::new(
             SessionNumber::default(),
             effective_subnetwork_size,
             da_params.dispersal_factor,

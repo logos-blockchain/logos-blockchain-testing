@@ -175,7 +175,7 @@ where
 
     if let Err(err) = ready {
         // Persist tempdir to aid debugging if readiness fails.
-        let _ = persist_tempdir(&mut handle.tempdir, "nomos-node");
+        let _ = persist_tempdir(&mut handle.tempdir, "logos-blockchain-node");
         return Err(SpawnNodeError::Readiness { source: err });
     }
 

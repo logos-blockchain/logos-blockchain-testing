@@ -45,6 +45,7 @@ RUN chmod +x \
 RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_circuits.sh
 
 ENV NOMOS_CIRCUITS=/opt/circuits
+ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
 
 RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_binaries.sh
 
@@ -77,12 +78,13 @@ COPY --from=builder /opt/circuits /opt/circuits
 # not rely on hostPath volumes.
 COPY --from=builder /workspace/testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params /opt/nomos/kzg-params/kzgrs_test_params
 
-COPY --from=builder /workspace/artifacts/nomos-node /usr/bin/nomos-node
-COPY --from=builder /workspace/artifacts/nomos-executor /usr/bin/nomos-executor
-COPY --from=builder /workspace/artifacts/nomos-cli /usr/bin/nomos-cli
+COPY --from=builder /workspace/artifacts/logos-blockchain-node /usr/bin/logos-blockchain-node
+COPY --from=builder /workspace/artifacts/logos-blockchain-executor /usr/bin/logos-blockchain-executor
+COPY --from=builder /workspace/artifacts/logos-blockchain-cli /usr/bin/logos-blockchain-cli
 COPY --from=builder /workspace/artifacts/cfgsync-server /usr/bin/cfgsync-server
 COPY --from=builder /workspace/artifacts/cfgsync-client /usr/bin/cfgsync-client
 
 ENV NOMOS_CIRCUITS=/opt/circuits
+ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
 
 EXPOSE 3000 8080 9000 60000

@@ -17,7 +17,7 @@ Usage:
 
 Notes:
   --rev   sets NOMOS_NODE_REV and updates Cargo.toml revs
-  --path  sets NOMOS_NODE_PATH (clears NOMOS_NODE_REV) and patches Cargo.toml to use a local nomos-node checkout
+  --path  sets NOMOS_NODE_PATH (clears NOMOS_NODE_REV) and patches Cargo.toml to use a local logos-blockchain-node checkout
   --unskip-worktree clears any skip-worktree flag for Cargo.toml
   Only one may be used at a time.
 EOF
@@ -85,7 +85,7 @@ update_nomos_rev::load_env() {
 
 update_nomos_rev::update_to_rev() {
   local rev="$1"
-  echo "Updating nomos-node rev to ${rev}"
+  echo "Updating logos-blockchain-node rev to ${rev}"
 
   sed -i.bak -E \
     -e "s/^#?[[:space:]]*NOMOS_NODE_REV=.*/NOMOS_NODE_REV=${rev}/" \
@@ -101,12 +101,12 @@ cargo_toml = root / "Cargo.toml"
 txt = cargo_toml.read_text()
 txt = txt.replace("\\n", "\n")
 txt = re.sub(
-    r'(?ms)^\[patch\."https://github\.com/logos-co/nomos-node"\].*?(?=^\[|\Z)',
+    r'(?ms)^\[patch\."https://github\.com/logos-co/logos-blockchain-node"\].*?(?=^\[|\Z)',
     "",
     txt,
 )
 txt = re.sub(
-    r'(git = "https://github\.com/logos-co/nomos-node\.git", rev = ")[^"]+(")',
+    r'(git = "https://github\.com/logos-co/logos-blockchain-node\.git", rev = ")[^"]+(")',
     r"\g<1>" + rev + r"\2",
     txt,
 )
@@ -118,7 +118,7 @@ PY
 
 update_nomos_rev::update_to_path() {
   local node_path="$1"
-  echo "Pointing to local nomos-node at ${node_path}"
+  echo "Pointing to local logos-blockchain-node at ${node_path}"
 
   [ -d "${node_path}" ] || common::die "path does not exist: ${node_path}"
 
@@ -146,17 +146,45 @@ root = pathlib.Path(sys.argv[1])
 node_path = pathlib.Path(sys.argv[2])
 
 targets = [
-    "broadcast-service", "chain-leader", "chain-network", "chain-service",
-    "common-http-client", "cryptarchia-engine", "cryptarchia-sync",
-    "executor-http-client", "groth16", "key-management-system-service",
-    "kzgrs", "kzgrs-backend", "nomos-api", "nomos-blend-message",
-    "nomos-blend-service", "nomos-core", "nomos-da-dispersal",
-    "nomos-da-network-core", "nomos-da-network-service", "nomos-da-sampling",
-    "nomos-da-verifier", "nomos-executor", "nomos-http-api-common",
-    "nomos-ledger", "nomos-libp2p", "nomos-network", "nomos-node",
-    "nomos-sdp", "nomos-time", "nomos-tracing", "nomos-tracing-service",
-    "nomos-utils", "nomos-wallet", "poc", "pol", "subnetworks-assignations",
-    "tests", "tx-service", "wallet", "zksign",
+    "logos-blockchain-api-service",
+    "logos-blockchain-blend-message",
+    "logos-blockchain-blend-service",
+    "logos-blockchain-chain-broadcast-service",
+    "logos-blockchain-chain-leader-service",
+    "logos-blockchain-chain-network-service",
+    "logos-blockchain-chain-service",
+    "logos-blockchain-common-http-client",
+    "logos-blockchain-cryptarchia-engine",
+    "logos-blockchain-cryptarchia-sync",
+    "logos-blockchain-da-dispersal-service",
+    "logos-blockchain-da-network-core",
+    "logos-blockchain-da-network-service",
+    "logos-blockchain-da-sampling-service",
+    "logos-blockchain-da-verifier-service",
+    "logos-blockchain-executor",
+    "logos-blockchain-executor-http-client",
+    "logos-blockchain-groth16",
+    "logos-blockchain-http-api-common",
+    "logos-blockchain-key-management-system-service",
+    "logos-blockchain-kzgrs",
+    "logos-blockchain-kzgrs-backend",
+    "logos-blockchain-ledger",
+    "logos-blockchain-libp2p",
+    "logos-blockchain-network-service",
+    "logos-blockchain-node",
+    "logos-blockchain-poc",
+    "logos-blockchain-pol",
+    "logos-blockchain-sdp-service",
+    "logos-blockchain-subnetworks-assignations",
+    "logos-blockchain-tests",
+    "logos-blockchain-time-service",
+    "logos-blockchain-tracing",
+    "logos-blockchain-tracing-service",
+    "logos-blockchain-tx-service",
+    "logos-blockchain-utils",
+    "logos-blockchain-wallet",
+    "logos-blockchain-wallet-service",
+    "logos-blockchain-zksign",
 ]
 
 try:
@@ -185,7 +213,7 @@ cargo_toml = root / "Cargo.toml"
 txt = cargo_toml.read_text()
 txt = txt.replace("\\n", "\n")
 txt = re.sub(
-    r'(?ms)^\[patch\."https://github\.com/logos-co/nomos-node"\].*?(?=^\[|\Z)',
+    r'(?ms)^\[patch\."https://github\.com/logos-co/logos-blockchain-node"\].*?(?=^\[|\Z)',
     "",
     txt,
 )
@@ -194,14 +222,14 @@ cargo_toml.write_text(txt)
 
 if missing:
     sys.stderr.write(
-        "Warning: missing crates in local nomos-node checkout: "
+        "Warning: missing crates in local logos-blockchain-node checkout: "
         + ", ".join(missing)
         + "\n"
     )
 PY
 
   update_nomos_rev::maybe_skip_worktree "Cargo.toml"
-  echo "Local nomos-node patch applied; Cargo.toml marked skip-worktree (run --unskip-worktree to clear)."
+  echo "Local logos-blockchain-node patch applied; Cargo.toml marked skip-worktree (run --unskip-worktree to clear)."
 }
 
 update_nomos_rev::main() {

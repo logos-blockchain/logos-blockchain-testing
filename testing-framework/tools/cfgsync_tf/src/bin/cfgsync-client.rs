@@ -10,7 +10,7 @@ use cfgsync_tf::{
     client::{FetchedConfig, get_config},
     server::ClientIp,
 };
-use nomos_executor::config::Config as ExecutorConfig;
+use logos_blockchain_executor::config::Config as ExecutorConfig;
 use nomos_libp2p::PeerId;
 use nomos_node::Config as ValidatorConfig;
 use serde::{Serialize, de::DeserializeOwned};

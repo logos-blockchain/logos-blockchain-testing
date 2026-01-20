@@ -108,7 +108,7 @@ fn apply_file_logger_override(
     if let Some(directory) = tf_env::nomos_log_dir() {
         cfg.tracing_settings.logger = LoggerLayer::File(FileConfig {
             directory,
-            prefix: Some(format!("nomos-node-{node_index}").into()),
+            prefix: Some(format!("logos-blockchain-node-{node_index}").into()),
         });
         cfg.tracing_settings.level = file_log_level();
     }
