@@ -1,28 +1,28 @@
 {{- $root := . -}}
-{{- $nodes := default (list) .Values.executors.nodes }}
+{{- $nodes := default (list) .Values.nodes.nodes }}
 {{- range $i, $node := $nodes }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nomos-runner.fullname" $root }}-executor-{{ $i }}
+  name: {{ include "nomos-runner.fullname" $root }}-node-{{ $i }}
   labels:
-    {{- include "nomos-runner.executorLabels" (dict "root" $root "index" $i) | nindent 4 }}
+    {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "nomos-runner.executorLabels" (dict "root" $root "index" $i) | nindent 6 }}
+      {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "nomos-runner.executorLabels" (dict "root" $root "index" $i) | nindent 8 }}
+        {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 8 }}
     spec:
       containers:
-        - name: executor
+        - name: node
           image: {{ $root.Values.image }}
           imagePullPolicy: {{ $root.Values.imagePullPolicy }}
-          command: ["/etc/nomos/scripts/run_nomos_executor.sh"]
+          command: ["/etc/nomos/scripts/run_nomos_node.sh"]
           ports:
             - name: http
               containerPort: {{ default 18080 $node.apiPort }}
@@ -60,8 +60,6 @@ spec:
                 path: scripts/run_cfgsync.sh
               - key: run_nomos.sh
                 path: scripts/run_nomos.sh
-              - key: run_nomos_executor.sh
-                path: scripts/run_nomos_executor.sh
               - key: run_nomos_node.sh
                 path: scripts/run_nomos_node.sh
         {{- if eq $root.Values.kzg.mode "hostPath" }}

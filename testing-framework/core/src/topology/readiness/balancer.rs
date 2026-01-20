@@ -23,33 +23,17 @@ impl<'a> ReadinessCheck<'a> for DaBalancerReadiness<'a> {
 
     async fn collect(&'a self) -> Self::Data {
         let mut data = Vec::new();
-        for (idx, validator) in self.topology.validators.iter().enumerate() {
+        for (idx, node) in self.topology.nodes.iter().enumerate() {
             let label = self
                 .labels
                 .get(idx)
                 .cloned()
-                .unwrap_or_else(|| format!("validator#{idx}"));
+                .unwrap_or_else(|| format!("node#{idx}"));
             data.push(
                 (
                     label,
-                    validator.config().da_network.subnet_threshold,
-                    validator.api().balancer_stats().await,
-                )
-                    .into(),
-            );
-        }
-        for (offset, executor) in self.topology.executors.iter().enumerate() {
-            let label_index = self.topology.validators.len() + offset;
-            let label = self
-                .labels
-                .get(label_index)
-                .cloned()
-                .unwrap_or_else(|| format!("executor#{offset}"));
-            data.push(
-                (
-                    label,
-                    executor.config().da_network.subnet_threshold,
-                    executor.api().balancer_stats().await,
+                    node.config().da_network.subnet_threshold,
+                    node.api().balancer_stats().await,
                 )
                     .into(),
             );
@@ -58,7 +42,7 @@ impl<'a> ReadinessCheck<'a> for DaBalancerReadiness<'a> {
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
-        if self.topology.validators.len() + self.topology.executors.len() <= 1 {
+        if self.topology.nodes.len() <= 1 {
             return true;
         }
         data.iter().all(|entry| {

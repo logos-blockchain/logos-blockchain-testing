@@ -226,10 +226,6 @@ pub(crate) fn wallet_settings(config: &GeneralConfig) -> WalletServiceSettings {
     wallet_settings_with_leader(config, true)
 }
 
-pub(crate) fn wallet_settings_for_executor(config: &GeneralConfig) -> WalletServiceSettings {
-    wallet_settings_with_leader(config, false)
-}
-
 fn wallet_settings_with_leader(
     config: &GeneralConfig,
     include_leader: bool,

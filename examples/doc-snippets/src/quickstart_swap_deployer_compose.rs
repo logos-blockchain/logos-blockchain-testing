@@ -4,7 +4,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 
 pub async fn run_with_compose_deployer() -> Result<()> {
     // ... same scenario definition ...
-    let mut plan = ScenarioBuilder::with_node_counts(1, 1).build()?;
+    let mut plan = ScenarioBuilder::with_node_count(2).build()?;
 
     let deployer = ComposeDeployer::default(); // Use Docker Compose
     let runner = deployer.deploy(&plan).await?;

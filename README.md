@@ -101,7 +101,7 @@ cd book && mdbook serve
 cargo test
 
 # Run integration examples
-scripts/run/run-examples.sh -t 60 -v 2 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
 ### Creating Prebuilt Bundles
@@ -125,8 +125,7 @@ Key environment variables for customization:
 |----------|---------|---------|
 | `POL_PROOF_DEV_MODE=true` | **Required** — Disable expensive proof generation (set automatically by `scripts/run/run-examples.sh`) | (none) |
 | `NOMOS_TESTNET_IMAGE` | Docker image tag for compose/k8s | `logos-blockchain-testing:local` |
-| `NOMOS_DEMO_VALIDATORS` | Number of validator nodes | Varies by example |
-| `NOMOS_DEMO_EXECUTORS` | Number of executor nodes | Varies by example |
+| `NOMOS_DEMO_NODES` | Number of nodes | Varies by example |
 | `NOMOS_LOG_DIR` | Directory for persistent log files | (temporary) |
 | `NOMOS_LOG_LEVEL` | Logging verbosity | `info` |
 

@@ -8,14 +8,13 @@ use tracing::info;
 
 const MIN_DELAY_SPREAD_FALLBACK: Duration = Duration::from_millis(1);
 
-/// Randomly restarts validators and executors during a run to introduce chaos.
+/// Randomly restarts nodes during a run to introduce chaos.
 #[derive(Debug)]
 pub struct RandomRestartWorkload {
     min_delay: Duration,
     max_delay: Duration,
     target_cooldown: Duration,
-    include_validators: bool,
-    include_executors: bool,
+    include_nodes: bool,
 }
 
 impl RandomRestartWorkload {
@@ -23,39 +22,32 @@ impl RandomRestartWorkload {
     ///
     /// `min_delay`/`max_delay` bound the sleep between restart attempts, while
     /// `target_cooldown` prevents repeatedly restarting the same node too
-    /// quickly. Validators or executors can be selectively included.
+    /// quickly. Nodes can be selectively included.
     #[must_use]
     pub const fn new(
         min_delay: Duration,
         max_delay: Duration,
         target_cooldown: Duration,
-        include_validators: bool,
-        include_executors: bool,
+        include_nodes: bool,
     ) -> Self {
         Self {
             min_delay,
             max_delay,
             target_cooldown,
-            include_validators,
-            include_executors,
+            include_nodes,
         }
     }
 
-    fn targets(&self, ctx: &RunContext) -> Vec<Target> {
+    fn targets(&self, ctx: &RunContext) -> Vec<usize> {
         let mut targets = Vec::new();
-        let validator_count = ctx.descriptors().validators().len();
-        if self.include_validators {
-            if validator_count > 1 {
-                for index in 0..validator_count {
-                    targets.push(Target::Validator(index));
+        let node_count = ctx.descriptors().nodes().len();
+        if self.include_nodes {
+            if node_count > 1 {
+                for index in 0..node_count {
+                    targets.push(index);
                 }
-            } else if validator_count == 1 {
-                info!("chaos restart skipping validators: only one validator configured");
-            }
-        }
-        if self.include_executors {
-            for index in 0..ctx.descriptors().executors().len() {
-                targets.push(Target::Executor(index));
+            } else if node_count == 1 {
+                info!("chaos restart skipping nodes: only one node configured");
             }
         }
         targets
@@ -79,7 +71,7 @@ impl RandomRestartWorkload {
         delay
     }
 
-    fn initialize_cooldowns(&self, targets: &[Target]) -> HashMap<Target, Instant> {
+    fn initialize_cooldowns(&self, targets: &[usize]) -> HashMap<usize, Instant> {
         let now = Instant::now();
         let ready = now.checked_sub(self.target_cooldown).unwrap_or(now);
         targets
@@ -91,9 +83,9 @@ impl RandomRestartWorkload {
 
     async fn pick_target(
         &self,
-        targets: &[Target],
-        cooldowns: &HashMap<Target, Instant>,
-    ) -> Result<Target, DynError> {
+        targets: &[usize],
+        cooldowns: &HashMap<usize, Instant>,
+    ) -> Result<usize, DynError> {
         if targets.is_empty() {
             return Err("chaos restart workload has no eligible targets".into());
         }
@@ -117,7 +109,7 @@ impl RandomRestartWorkload {
                 }
             }
 
-            let available: Vec<Target> = targets
+            let available: Vec<usize> = targets
                 .iter()
                 .copied()
                 .filter(|target| cooldowns.get(target).is_none_or(|ready| *ready <= now))
@@ -154,8 +146,7 @@ impl Workload for RandomRestartWorkload {
 
         tracing::info!(
             config = ?self,
-            validators = ctx.descriptors().validators().len(),
-            executors = ctx.descriptors().executors().len(),
+            nodes = ctx.descriptors().nodes().len(),
             target_count = targets.len(),
             "starting chaos restart workload"
         );
@@ -166,30 +157,13 @@ impl Workload for RandomRestartWorkload {
             sleep(self.random_delay()).await;
             let target = self.pick_target(&targets, &cooldowns).await?;
 
-            match target {
-                Target::Validator(index) => {
-                    tracing::info!(index, "chaos restarting validator");
-                    handle
-                        .restart_validator(index)
-                        .await
-                        .map_err(|err| format!("validator restart failed: {err}"))?
-                }
-                Target::Executor(index) => {
-                    tracing::info!(index, "chaos restarting executor");
-                    handle
-                        .restart_executor(index)
-                        .await
-                        .map_err(|err| format!("executor restart failed: {err}"))?
-                }
-            }
+            tracing::info!(index = target, "chaos restarting node");
+            handle
+                .restart_node(target)
+                .await
+                .map_err(|err| format!("node restart failed: {err}"))?;
 
             cooldowns.insert(target, Instant::now() + self.target_cooldown);
         }
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum Target {
-    Validator(usize),
-    Executor(usize),
 }

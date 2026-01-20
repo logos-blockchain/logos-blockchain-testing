@@ -37,7 +37,7 @@ impl Workload for JoinNodeWorkload {
 
         sleep(START_DELAY).await;
 
-        let node = handle.start_validator(&self.name).await?;
+        let node = handle.start_node(&self.name).await?;
         let client = node.api;
 
         timeout(READY_TIMEOUT, async {
@@ -86,7 +86,7 @@ impl Workload for JoinNodeWithPeersWorkload {
         let options = StartNodeOptions {
             peers: PeerSelection::Named(self.peers.clone()),
         };
-        let node = handle.start_validator_with(&self.name, options).await?;
+        let node = handle.start_node_with(&self.name, options).await?;
         let client = node.api;
 
         timeout(READY_TIMEOUT, async {
@@ -110,13 +110,12 @@ impl Workload for JoinNodeWithPeersWorkload {
 async fn dynamic_join_reaches_consensus_liveness() -> Result<()> {
     let _ = try_init();
 
-    let mut scenario =
-        ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(0))
-            .enable_node_control()
-            .with_workload(JoinNodeWorkload::new("joiner"))
-            .expect_consensus_liveness()
-            .with_run_duration(Duration::from_secs(60))
-            .build()?;
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
+        .enable_node_control()
+        .with_workload(JoinNodeWorkload::new("joiner"))
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(60))
+        .build()?;
 
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&scenario).await?;
@@ -128,16 +127,15 @@ async fn dynamic_join_reaches_consensus_liveness() -> Result<()> {
 #[tokio::test]
 #[ignore = "run manually with `cargo test -p runner-examples -- --ignored`"]
 async fn dynamic_join_with_peers_reaches_consensus_liveness() -> Result<()> {
-    let mut scenario =
-        ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(0))
-            .enable_node_control()
-            .with_workload(JoinNodeWithPeersWorkload::new(
-                "joiner",
-                vec!["validator-0".to_string()],
-            ))
-            .expect_consensus_liveness()
-            .with_run_duration(Duration::from_secs(60))
-            .build()?;
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
+        .enable_node_control()
+        .with_workload(JoinNodeWithPeersWorkload::new(
+            "joiner",
+            vec!["node-0".to_string()],
+        ))
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(60))
+        .build()?;
 
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&scenario).await?;

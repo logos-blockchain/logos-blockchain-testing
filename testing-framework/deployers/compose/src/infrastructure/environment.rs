@@ -133,16 +133,13 @@ impl StackEnvironment {
     }
 }
 
-/// Verifies the topology has at least one validator so compose can start.
+/// Verifies the topology has at least one node so compose can start.
 pub fn ensure_supported_topology(
     descriptors: &GeneratedTopology,
 ) -> Result<(), ComposeRunnerError> {
-    let validators = descriptors.validators().len();
-    if validators == 0 {
-        return Err(ComposeRunnerError::MissingValidator {
-            validators,
-            executors: descriptors.executors().len(),
-        });
+    let nodes = descriptors.nodes().len();
+    if nodes == 0 {
+        return Err(ComposeRunnerError::MissingNode { nodes });
     }
     Ok(())
 }

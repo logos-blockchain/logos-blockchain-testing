@@ -2,11 +2,7 @@ use std::time::Duration;
 
 use anyhow::{Context as _, anyhow};
 use reqwest::Url;
-use testing_framework_core::{
-    adjust_timeout,
-    scenario::http_probe::NodeRole as HttpNodeRole,
-    topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
-};
+use testing_framework_core::{adjust_timeout, topology::generation::GeneratedTopology};
 use tokio::{process::Command, time::timeout};
 use tracing::{debug, info};
 use url::ParseError;
@@ -25,22 +21,16 @@ pub struct NodeHostPorts {
     pub testing: u16,
 }
 
-/// All host port mappings for validators and executors.
+/// All host port mappings for nodes.
 #[derive(Clone, Debug)]
 pub struct HostPortMapping {
-    pub validators: Vec<NodeHostPorts>,
-    pub executors: Vec<NodeHostPorts>,
+    pub nodes: Vec<NodeHostPorts>,
 }
 
 impl HostPortMapping {
-    /// Returns API ports for all validators.
-    pub fn validator_api_ports(&self) -> Vec<u16> {
-        self.validators.iter().map(|ports| ports.api).collect()
-    }
-
-    /// Returns API ports for all executors.
-    pub fn executor_api_ports(&self) -> Vec<u16> {
-        self.executors.iter().map(|ports| ports.api).collect()
+    /// Returns API ports for all nodes.
+    pub fn node_api_ports(&self) -> Vec<u16> {
+        self.nodes.iter().map(|ports| ports.api).collect()
     }
 }
 
@@ -52,34 +42,21 @@ pub async fn discover_host_ports(
     debug!(
         compose_file = %environment.compose_path().display(),
         project = environment.project_name(),
-        validators = descriptors.validators().len(),
-        executors = descriptors.executors().len(),
+        nodes = descriptors.nodes().len(),
         "resolving compose host ports"
     );
-    let mut validators = Vec::new();
-    for node in descriptors.validators() {
-        let service = node_identifier(TopologyNodeRole::Validator, node.index());
+    let mut nodes = Vec::new();
+    for node in descriptors.nodes() {
+        let service = node_identifier(node.index());
         let api = resolve_service_port(environment, &service, node.api_port()).await?;
         let testing = resolve_service_port(environment, &service, node.testing_http_port()).await?;
-        validators.push(NodeHostPorts { api, testing });
+        nodes.push(NodeHostPorts { api, testing });
     }
 
-    let mut executors = Vec::new();
-    for node in descriptors.executors() {
-        let service = node_identifier(TopologyNodeRole::Executor, node.index());
-        let api = resolve_service_port(environment, &service, node.api_port()).await?;
-        let testing = resolve_service_port(environment, &service, node.testing_http_port()).await?;
-        executors.push(NodeHostPorts { api, testing });
-    }
-
-    let mapping = HostPortMapping {
-        validators,
-        executors,
-    };
+    let mapping = HostPortMapping { nodes };
 
     info!(
-        validator_ports = ?mapping.validators,
-        executor_ports = ?mapping.executors,
+        node_ports = ?mapping.nodes,
         "compose host ports resolved"
     );
 
@@ -149,36 +126,32 @@ pub async fn ensure_remote_readiness_with_ports(
     descriptors: &GeneratedTopology,
     mapping: &HostPortMapping,
 ) -> Result<(), StackReadinessError> {
-    let validator_urls = mapping
-        .validators
+    let node_urls = mapping
+        .nodes
         .iter()
-        .map(|ports| readiness_url(HttpNodeRole::Validator, ports.api))
-        .collect::<Result<Vec<_>, _>>()?;
-    let executor_urls = mapping
-        .executors
-        .iter()
-        .map(|ports| readiness_url(HttpNodeRole::Executor, ports.api))
+        .map(|ports| readiness_url(ports.api))
         .collect::<Result<Vec<_>, _>>()?;
 
     descriptors
-        .wait_remote_readiness(&validator_urls, &executor_urls, None, None)
+        .wait_remote_readiness(&node_urls, None)
         .await
         .map_err(|source| StackReadinessError::Remote { source })
 }
 
-fn readiness_url(role: HttpNodeRole, port: u16) -> Result<Url, StackReadinessError> {
-    localhost_url(port).map_err(|source| StackReadinessError::Endpoint { role, port, source })
+fn readiness_url(port: u16) -> Result<Url, StackReadinessError> {
+    localhost_url(port).map_err(|source| StackReadinessError::Endpoint {
+        role: "node",
+        port,
+        source,
+    })
 }
 
 fn localhost_url(port: u16) -> Result<Url, ParseError> {
     Url::parse(&format!("http://{}:{port}/", compose_runner_host()))
 }
 
-fn node_identifier(role: TopologyNodeRole, index: usize) -> String {
-    match role {
-        TopologyNodeRole::Validator => format!("validator-{index}"),
-        TopologyNodeRole::Executor => format!("executor-{index}"),
-    }
+fn node_identifier(index: usize) -> String {
+    format!("node-{index}")
 }
 
 pub(crate) fn compose_runner_host() -> String {

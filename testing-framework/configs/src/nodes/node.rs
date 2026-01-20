@@ -6,7 +6,7 @@ use nomos_da_network_service::{
     backends::libp2p::common::DaNetworkBackendSettings,
 };
 use nomos_node::{
-    Config as ValidatorConfig, RocksBackendSettings, config::deployment::DeploymentSettings,
+    Config as NodeConfig, RocksBackendSettings, config::deployment::DeploymentSettings,
 };
 use nomos_sdp::SdpSettings;
 
@@ -23,21 +23,21 @@ use crate::{
 };
 
 #[must_use]
-pub fn create_validator_config(config: GeneralConfig) -> ValidatorConfig {
+pub fn create_node_config(config: GeneralConfig) -> NodeConfig {
     let network_config = config.network_config.clone();
     let (blend_user_config, blend_deployment, network_deployment) =
         build_blend_service_config(&config.blend_config);
 
     let deployment_settings =
-        build_validator_deployment_settings(&config, blend_deployment, network_deployment);
+        build_node_deployment_settings(&config, blend_deployment, network_deployment);
 
-    ValidatorConfig {
+    NodeConfig {
         network: network_config,
         blend: blend_user_config,
         deployment: deployment_settings,
         cryptarchia: cryptarchia_config(&config),
         da_network: DaNetworkConfig {
-            backend: build_validator_da_network_backend_settings(&config),
+            backend: build_node_da_network_backend_settings(&config),
             membership: config.da_config.membership.clone(),
             api_adapter_settings: ApiAdapterSettings {
                 api_port: config.api_config.address.port(),
@@ -61,7 +61,7 @@ pub fn create_validator_config(config: GeneralConfig) -> ValidatorConfig {
     }
 }
 
-fn build_validator_deployment_settings(
+fn build_node_deployment_settings(
     config: &GeneralConfig,
     blend_deployment: nomos_node::config::blend::deployment::Settings,
     network_deployment: nomos_node::config::network::deployment::Settings,
@@ -75,7 +75,7 @@ fn build_validator_deployment_settings(
     )
 }
 
-fn build_validator_da_network_backend_settings(config: &GeneralConfig) -> DaNetworkBackendSettings {
+fn build_node_da_network_backend_settings(config: &GeneralConfig) -> DaNetworkBackendSettings {
     let da_policy_settings = config.da_config.policy_settings.clone();
 
     DaNetworkBackendSettings {

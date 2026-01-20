@@ -19,7 +19,6 @@ clap                          = { default-features = false, version = "4" }
 groth16                       = { workspace = true }
 hex                           = { workspace = true }
 key-management-system-service = { workspace = true }
-logos-blockchain-executor     = { workspace = true }
 nomos-core                    = { workspace = true }
 nomos-da-network-core         = { workspace = true }
 nomos-libp2p                  = { workspace = true }

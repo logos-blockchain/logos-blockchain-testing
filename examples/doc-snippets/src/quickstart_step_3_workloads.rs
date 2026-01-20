@@ -2,7 +2,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn step_3_workloads() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1, 1)
+    ScenarioBuilder::with_node_count(2)
         .wallets(1_000)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block

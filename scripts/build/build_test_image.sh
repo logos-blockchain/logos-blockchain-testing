@@ -137,9 +137,9 @@ build_test_image::print_config() {
 }
 
 build_test_image::have_host_binaries() {
-  # Preserve existing behavior: only require node+executor on the host.
+  # Preserve existing behavior: only require logos-blockchain-node on the host.
   # If logos-blockchain-cli is missing, the Dockerfile can still build it from source.
-  [ -x "${BIN_DST}/logos-blockchain-node" ] && [ -x "${BIN_DST}/logos-blockchain-executor" ]
+  [ -x "${BIN_DST}/logos-blockchain-node" ]
 }
 
 build_test_image::restore_from_bundle() {
@@ -153,13 +153,13 @@ build_test_image::restore_from_bundle() {
   tar -xzf "${TAR_PATH}" -C "${tmp_extract}"
   local artifacts="${tmp_extract}/artifacts"
 
-  for bin in logos-blockchain-node logos-blockchain-executor logos-blockchain-cli; do
+  for bin in logos-blockchain-node logos-blockchain-cli; do
     [ -f "${artifacts}/${bin}" ] || build_test_image::fail "Bundle ${TAR_PATH} missing artifacts/${bin}"
   done
 
   mkdir -p "${BIN_DST}"
-  cp "${artifacts}/logos-blockchain-node" "${artifacts}/logos-blockchain-executor" "${artifacts}/logos-blockchain-cli" "${BIN_DST}/"
-  chmod +x "${BIN_DST}/logos-blockchain-node" "${BIN_DST}/logos-blockchain-executor" "${BIN_DST}/logos-blockchain-cli" || true
+  cp "${artifacts}/logos-blockchain-node" "${artifacts}/logos-blockchain-cli" "${BIN_DST}/"
+  chmod +x "${BIN_DST}/logos-blockchain-node" "${BIN_DST}/logos-blockchain-cli" || true
 
   if [ -d "${artifacts}/circuits" ]; then
     mkdir -p "${CIRCUITS_DIR_HOST}"

@@ -1,7 +1,6 @@
 mod api_client;
 pub mod common;
-pub mod executor;
-pub mod validator;
+pub mod node;
 
 use std::sync::LazyLock;
 

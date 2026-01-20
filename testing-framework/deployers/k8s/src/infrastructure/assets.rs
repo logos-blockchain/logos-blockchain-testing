@@ -31,7 +31,6 @@ pub struct RunnerAssets {
     pub run_cfgsync_script: PathBuf,
     pub run_nomos_script: PathBuf,
     pub run_nomos_node_script: PathBuf,
-    pub run_nomos_executor_script: PathBuf,
     pub values_file: PathBuf,
     _tempdir: TempDir,
 }
@@ -84,8 +83,7 @@ pub fn prepare_assets(
     metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<RunnerAssets, AssetsError> {
     info!(
-        validators = topology.validators().len(),
-        executors = topology.executors().len(),
+        nodes = topology.nodes().len(),
         "preparing k8s runner assets"
     );
 
@@ -130,7 +128,6 @@ pub fn prepare_assets(
         run_nomos_script: scripts.run_shared,
         run_cfgsync_script: scripts.run_cfgsync,
         run_nomos_node_script: scripts.run_node,
-        run_nomos_executor_script: scripts.run_executor,
         values_file,
         _tempdir: tempdir,
     })
@@ -207,7 +204,6 @@ struct ScriptPaths {
     run_cfgsync: PathBuf,
     run_shared: PathBuf,
     run_node: PathBuf,
-    run_executor: PathBuf,
 }
 
 fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
@@ -215,9 +211,8 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
     let run_cfgsync = scripts_dir.join("run_cfgsync.sh");
     let run_shared = scripts_dir.join("run_nomos.sh");
     let run_node = scripts_dir.join("run_nomos_node.sh");
-    let run_executor = scripts_dir.join("run_nomos_executor.sh");
 
-    for path in [&run_cfgsync, &run_shared, &run_node, &run_executor] {
+    for path in [&run_cfgsync, &run_shared, &run_node] {
         if !path.exists() {
             return Err(AssetsError::MissingScript { path: path.clone() });
         }
@@ -227,7 +222,6 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
         run_cfgsync = %run_cfgsync.display(),
         run_shared = %run_shared.display(),
         run_node = %run_node.display(),
-        run_executor = %run_executor.display(),
         "validated runner scripts exist"
     );
 
@@ -235,7 +229,6 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
         run_cfgsync,
         run_shared,
         run_node,
-        run_executor,
     })
 }
 
@@ -316,8 +309,7 @@ struct HelmValues {
     #[serde(rename = "imagePullPolicy")]
     image_pull_policy: String,
     cfgsync: CfgsyncValues,
-    validators: NodeGroup,
-    executors: NodeGroup,
+    nodes: NodeGroup,
 }
 
 #[derive(Serialize)]
@@ -348,26 +340,23 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let image_pull_policy =
         tf_env::nomos_testnet_image_pull_policy().unwrap_or_else(|| "IfNotPresent".into());
     debug!(pol_mode, "rendering Helm values for k8s stack");
-    let validators = build_node_group("validator", topology.validators(), &pol_mode);
-    let executors = build_node_group("executor", topology.executors(), &pol_mode);
+    let nodes = build_node_group(topology.nodes(), &pol_mode);
 
     HelmValues {
         image_pull_policy,
         cfgsync,
-        validators,
-        executors,
+        nodes,
     }
 }
 
 fn build_node_group(
-    kind: &'static str,
     nodes: &[testing_framework_core::topology::generation::GeneratedNodeConfig],
     pol_mode: &str,
 ) -> NodeGroup {
     let node_values = nodes
         .iter()
         .enumerate()
-        .map(|(index, node)| build_node_values(kind, index, node, pol_mode))
+        .map(|(index, node)| build_node_values(index, node, pol_mode))
         .collect();
 
     NodeGroup {
@@ -377,7 +366,6 @@ fn build_node_group(
 }
 
 fn build_node_values(
-    kind: &'static str,
     index: usize,
     node: &testing_framework_core::topology::generation::GeneratedNodeConfig,
     pol_mode: &str,
@@ -399,8 +387,7 @@ fn build_node_values(
             .port()
             .to_string(),
     );
-    env.insert("CFG_HOST_KIND".into(), kind.to_string());
-    env.insert("CFG_HOST_IDENTIFIER".into(), format!("{kind}-{index}"));
+    env.insert("CFG_HOST_IDENTIFIER".into(), format!("node-{index}"));
 
     NodeValues {
         api_port: node.general.api_config.address.port(),

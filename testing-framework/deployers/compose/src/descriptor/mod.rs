@@ -20,8 +20,7 @@ use testing_framework_config::constants::DEFAULT_CFGSYNC_PORT;
 /// Top-level docker-compose descriptor built from a GeneratedTopology.
 #[derive(Clone, Debug, Serialize)]
 pub struct ComposeDescriptor {
-    validators: Vec<NodeDescriptor>,
-    executors: Vec<NodeDescriptor>,
+    nodes: Vec<NodeDescriptor>,
 }
 
 impl ComposeDescriptor {
@@ -32,13 +31,8 @@ impl ComposeDescriptor {
     }
 
     #[cfg(test)]
-    pub fn validators(&self) -> &[NodeDescriptor] {
-        &self.validators
-    }
-
-    #[cfg(test)]
-    pub fn executors(&self) -> &[NodeDescriptor] {
-        &self.executors
+    pub fn nodes(&self) -> &[NodeDescriptor] {
+        &self.nodes
     }
 }
 
@@ -80,56 +74,20 @@ impl<'a> ComposeDescriptorBuilder<'a> {
 
         let (image, platform) = resolve_image();
 
-        let validators = build_nodes(
-            self.topology.validators(),
-            ComposeNodeKind::Validator,
+        let nodes = build_nodes(
+            self.topology.nodes(),
             &image,
             platform.as_deref(),
             self.use_kzg_mount,
             cfgsync_port,
         );
 
-        let executors = build_nodes(
-            self.topology.executors(),
-            ComposeNodeKind::Executor,
-            &image,
-            platform.as_deref(),
-            self.use_kzg_mount,
-            cfgsync_port,
-        );
-
-        ComposeDescriptor {
-            validators,
-            executors,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum ComposeNodeKind {
-    Validator,
-    Executor,
-}
-
-impl ComposeNodeKind {
-    fn instance_name(self, index: usize) -> String {
-        match self {
-            Self::Validator => format!("validator-{index}"),
-            Self::Executor => format!("executor-{index}"),
-        }
-    }
-
-    const fn entrypoint(self) -> &'static str {
-        match self {
-            Self::Validator => "/etc/nomos/scripts/run_nomos_node.sh",
-            Self::Executor => "/etc/nomos/scripts/run_nomos_executor.sh",
-        }
+        ComposeDescriptor { nodes }
     }
 }
 
 fn build_nodes(
     nodes: &[GeneratedNodeConfig],
-    kind: ComposeNodeKind,
     image: &str,
     platform: Option<&str>,
     use_kzg_mount: bool,
@@ -139,15 +97,7 @@ fn build_nodes(
         .iter()
         .enumerate()
         .map(|(index, node)| {
-            NodeDescriptor::from_node(
-                kind,
-                index,
-                node,
-                image,
-                platform,
-                use_kzg_mount,
-                cfgsync_port,
-            )
+            NodeDescriptor::from_node(index, node, image, platform, use_kzg_mount, cfgsync_port)
         })
         .collect()
 }

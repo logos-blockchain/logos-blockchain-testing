@@ -24,7 +24,7 @@ use serde_json::{Value, json, to_value};
 use serde_with::serde_as;
 use subnetworks_assignations::MembershipHandler;
 use testing_framework_config::{
-    nodes::{executor::create_executor_config, validator::create_validator_config},
+    nodes::node::create_node_config,
     topology::configs::{consensus::ConsensusParams, da::DaParams, wallet::WalletConfig},
 };
 use tokio::sync::oneshot::channel;
@@ -151,7 +151,7 @@ pub struct ClientIp {
     pub testing_http_port: Option<u16>,
 }
 
-async fn validator_config(
+async fn node_config(
     State(config_repo): State<Arc<ConfigRepo>>,
     Json(payload): Json<ClientIp>,
 ) -> impl IntoResponse {
@@ -174,77 +174,20 @@ async fn validator_config(
 
     let (reply_tx, reply_rx) = channel();
     config_repo
-        .register(Host::validator_from_ip(ip, identifier, ports), reply_tx)
+        .register(Host::node_from_ip(ip, identifier, ports), reply_tx)
         .await;
 
     (reply_rx.await).map_or_else(
         |_| (StatusCode::INTERNAL_SERVER_ERROR, "Error receiving config").into_response(),
         |config_response| match config_response {
             RepoResponse::Config(config) => {
-                let config = create_validator_config(*config);
+                let config = create_node_config(*config);
                 let mut value = match to_value(&config) {
                     Ok(value) => value,
                     Err(err) => {
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("failed to serialize validator config: {err}"),
-                        )
-                            .into_response();
-                    }
-                };
-
-                inject_defaults(&mut value);
-                override_api_ports(&mut value, &ports);
-                inject_da_assignations(&mut value, &config.da_network.membership);
-                override_min_session_members(&mut value);
-
-                (StatusCode::OK, Json(value)).into_response()
-            }
-            RepoResponse::Timeout => (StatusCode::REQUEST_TIMEOUT).into_response(),
-            RepoResponse::Error(message) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, message).into_response()
-            }
-        },
-    )
-}
-
-async fn executor_config(
-    State(config_repo): State<Arc<ConfigRepo>>,
-    Json(payload): Json<ClientIp>,
-) -> impl IntoResponse {
-    let ClientIp {
-        ip,
-        identifier,
-        network_port,
-        da_port,
-        blend_port,
-        api_port,
-        testing_http_port,
-    } = payload;
-    let ports = PortOverrides {
-        network_port,
-        da_network_port: da_port,
-        blend_port,
-        api_port,
-        testing_http_port,
-    };
-
-    let (reply_tx, reply_rx) = channel();
-    config_repo
-        .register(Host::executor_from_ip(ip, identifier, ports), reply_tx)
-        .await;
-
-    (reply_rx.await).map_or_else(
-        |_| (StatusCode::INTERNAL_SERVER_ERROR, "Error receiving config").into_response(),
-        |config_response| match config_response {
-            RepoResponse::Config(config) => {
-                let config = create_executor_config(*config);
-                let mut value = match to_value(&config) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("failed to serialize executor config: {err}"),
+                            format!("failed to serialize node config: {err}"),
                         )
                             .into_response();
                     }
@@ -267,8 +210,7 @@ async fn executor_config(
 
 pub fn cfgsync_app(config_repo: Arc<ConfigRepo>) -> Router {
     Router::new()
-        .route("/validator", post(validator_config))
-        .route("/executor", post(executor_config))
+        .route("/node", post(node_config))
         .with_state(config_repo)
 }
 

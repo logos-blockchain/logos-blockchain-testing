@@ -10,9 +10,8 @@ use cfgsync_tf::{
     client::{FetchedConfig, get_config},
     server::ClientIp,
 };
-use logos_blockchain_executor::config::Config as ExecutorConfig;
 use nomos_libp2p::PeerId;
-use nomos_node::Config as ValidatorConfig;
+use nomos_node::Config as NodeConfig;
 use serde::{Serialize, de::DeserializeOwned};
 use subnetworks_assignations::{MembershipCreator, MembershipHandler, SubnetworkId};
 use testing_framework_config::constants::cfgsync_port as default_cfgsync_port;
@@ -97,8 +96,6 @@ async fn main() {
     let identifier =
         env::var("CFG_HOST_IDENTIFIER").unwrap_or_else(|_| "unidentified-node".to_owned());
 
-    let host_kind = env::var("CFG_HOST_KIND").unwrap_or_else(|_| "validator".to_owned());
-
     let network_port = env::var("CFG_NETWORK_PORT")
         .ok()
         .and_then(|v| v.parse().ok());
@@ -119,37 +116,17 @@ async fn main() {
         testing_http_port,
     };
 
-    let node_config_endpoint = match host_kind.as_str() {
-        "executor" => format!("{server_addr}/executor"),
-        _ => format!("{server_addr}/validator"),
-    };
-
-    let config_result = match host_kind.as_str() {
-        "executor" => {
-            pull_to_file::<ExecutorConfig, _>(
-                payload,
-                &node_config_endpoint,
-                &config_file_path,
-                |config, assignations| {
-                    config.da_network.membership =
-                        apply_da_assignations(&config.da_network.membership, assignations);
-                },
-            )
-            .await
-        }
-        _ => {
-            pull_to_file::<ValidatorConfig, _>(
-                payload,
-                &node_config_endpoint,
-                &config_file_path,
-                |config, assignations| {
-                    config.da_network.membership =
-                        apply_da_assignations(&config.da_network.membership, assignations);
-                },
-            )
-            .await
-        }
-    };
+    let node_config_endpoint = format!("{server_addr}/node");
+    let config_result = pull_to_file::<NodeConfig, _>(
+        payload,
+        &node_config_endpoint,
+        &config_file_path,
+        |config, assignations| {
+            config.da_network.membership =
+                apply_da_assignations(&config.da_network.membership, assignations);
+        },
+    )
+    .await;
 
     // Handle error if the config request fails
     if let Err(err) = config_result {

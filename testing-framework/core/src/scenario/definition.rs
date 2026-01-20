@@ -104,8 +104,7 @@ pub type ScenarioBuilder = Builder<()>;
 /// Builder for shaping the scenario topology.
 pub struct TopologyConfigurator<Caps> {
     builder: Builder<Caps>,
-    validators: usize,
-    executors: usize,
+    nodes: usize,
     network_star: bool,
 }
 
@@ -124,14 +123,12 @@ impl<Caps: Default> Builder<Caps> {
     }
 
     #[must_use]
-    pub fn with_node_counts(validators: usize, executors: usize) -> Self {
-        Self::new(TopologyBuilder::new(TopologyConfig::with_node_numbers(
-            validators, executors,
-        )))
+    pub fn with_node_count(nodes: usize) -> Self {
+        Self::new(TopologyBuilder::new(TopologyConfig::with_node_count(nodes)))
     }
 
     /// Convenience constructor that immediately enters topology configuration,
-    /// letting callers set counts via `validators`/`executors`.
+    /// letting callers set counts via `nodes`.
     pub fn topology() -> TopologyConfigurator<Caps> {
         TopologyConfigurator::new(Self::new(TopologyBuilder::new(TopologyConfig::empty())))
     }
@@ -263,8 +260,7 @@ impl<Caps> Builder<Caps> {
         let workloads: Vec<Arc<dyn Workload>> = workloads.into_iter().map(Arc::from).collect();
 
         info!(
-            validators = generated.validators().len(),
-            executors = generated.executors().len(),
+            nodes = generated.nodes().len(),
             duration_secs = duration.as_secs(),
             workloads = workloads.len(),
             expectations = expectations.len(),
@@ -285,23 +281,15 @@ impl<Caps> TopologyConfigurator<Caps> {
     const fn new(builder: Builder<Caps>) -> Self {
         Self {
             builder,
-            validators: 0,
-            executors: 0,
+            nodes: 0,
             network_star: false,
         }
     }
 
-    /// Set the number of validator nodes.
+    /// Set the number of nodes.
     #[must_use]
-    pub fn validators(mut self, count: usize) -> Self {
-        self.validators = count;
-        self
-    }
-
-    /// Set the number of executor nodes.
-    #[must_use]
-    pub fn executors(mut self, count: usize) -> Self {
-        self.executors = count;
+    pub fn nodes(mut self, count: usize) -> Self {
+        self.nodes = count;
         self
     }
 
@@ -315,7 +303,7 @@ impl<Caps> TopologyConfigurator<Caps> {
     /// Finalize and return the underlying scenario builder.
     #[must_use]
     pub fn apply(self) -> Builder<Caps> {
-        let mut config = TopologyConfig::with_node_numbers(self.validators, self.executors);
+        let mut config = TopologyConfig::with_node_count(self.nodes);
         if self.network_star {
             config.network_params.libp2p_network_layout = Libp2pNetworkLayout::Star;
         }

@@ -6,7 +6,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub async fn aggressive_chaos_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(6))
         .enable_node_control()
         .wallets(50)
         .transactions_with(|txs| txs.rate(10).users(20))

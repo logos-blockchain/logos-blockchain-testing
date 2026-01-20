@@ -35,8 +35,7 @@ pub struct ScenarioSpec {
 
 #[derive(Debug, Clone, Copy)]
 pub struct TopologySpec {
-    pub validators: usize,
-    pub executors: usize,
+    pub nodes: usize,
     pub network: NetworkKind,
 }
 
@@ -101,15 +100,9 @@ impl TestingFrameworkWorld {
         Ok(())
     }
 
-    pub fn set_topology(
-        &mut self,
-        validators: usize,
-        executors: usize,
-        network: NetworkKind,
-    ) -> StepResult {
+    pub fn set_topology(&mut self, nodes: usize, network: NetworkKind) -> StepResult {
         self.spec.topology = Some(TopologySpec {
-            validators: positive_usize("validators", validators)?,
-            executors,
+            nodes: positive_usize("nodes", nodes)?,
             network,
         });
         Ok(())
@@ -209,23 +202,9 @@ impl TestingFrameworkWorld {
                 .is_some_and(|p| p.is_file())
                 || shared_host_bin_path("nomos-node").is_file();
 
-            let requires_executor_bin = self
-                .spec
-                .topology
-                .is_some_and(|topology| topology.executors > 0);
-
-            let exec_ok = if requires_executor_bin {
-                env::var_os("NOMOS_EXECUTOR_BIN")
-                    .map(PathBuf::from)
-                    .is_some_and(|p| p.is_file())
-                    || shared_host_bin_path("nomos-executor").is_file()
-            } else {
-                true
-            };
-
-            if !(node_ok && exec_ok) {
+            if !node_ok {
                 return Err(StepError::Preflight {
-                    message: "Missing Logos host binaries. Set NOMOS_NODE_BIN (and NOMOS_EXECUTOR_BIN if your scenario uses executors), or run `scripts/run/run-examples.sh host` to restore them into `testing-framework/assets/stack/bin`.".to_owned(),
+                    message: "Missing Logos host binaries. Set NOMOS_NODE_BIN, or run `scripts/run/run-examples.sh host` to restore them into `testing-framework/assets/stack/bin`.".to_owned(),
                 });
             }
         }
@@ -284,8 +263,7 @@ fn make_builder(topology: TopologySpec) -> Builder<()> {
         let base = match topology.network {
             NetworkKind::Star => t.network_star(),
         };
-        base.validators(topology.validators)
-            .executors(topology.executors)
+        base.nodes(topology.nodes)
     })
 }
 

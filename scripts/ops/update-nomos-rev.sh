@@ -161,8 +161,6 @@ targets = [
     "logos-blockchain-da-network-service",
     "logos-blockchain-da-sampling-service",
     "logos-blockchain-da-verifier-service",
-    "logos-blockchain-executor",
-    "logos-blockchain-executor-http-client",
     "logos-blockchain-groth16",
     "logos-blockchain-http-api-common",
     "logos-blockchain-key-management-system-service",

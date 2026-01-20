@@ -6,7 +6,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn run_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(5))
         .wallets(50)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block

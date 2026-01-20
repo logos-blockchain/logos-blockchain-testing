@@ -44,8 +44,7 @@ Modes:
 
 Options:
   -t, --run-seconds N     Duration to run the demo (required)
-  -v, --validators N      Number of validators (required)
-  -e, --executors N       Number of executors (required)
+  -n, --nodes N           Number of nodes (required)
   --bundle PATH           Convenience alias for setting NOMOS_BINARIES_TAR=PATH
   --metrics-query-url URL         PromQL base URL the runner process can query (optional)
   --metrics-otlp-ingest-url URL   Full OTLP HTTP ingest URL for node metrics export (optional)
@@ -116,8 +115,7 @@ run_examples::select_bin() {
 run_examples::parse_args() {
   MODE="compose"
   RUN_SECS_RAW=""
-  DEMO_VALIDATORS=""
-  DEMO_EXECUTORS=""
+  DEMO_NODES=""
   IMAGE_SELECTION_MODE="auto"
   METRICS_QUERY_URL=""
   METRICS_OTLP_INGEST_URL=""
@@ -140,20 +138,12 @@ run_examples::parse_args() {
         RUN_SECS_RAW="${1#*=}"
         shift
         ;;
-      -v|--validators)
-        DEMO_VALIDATORS="${2:-}"
+      -n|--nodes)
+        DEMO_NODES="${2:-}"
         shift 2
         ;;
-      --validators=*)
-        DEMO_VALIDATORS="${1#*=}"
-        shift
-        ;;
-      -e|--executors)
-        DEMO_EXECUTORS="${2:-}"
-        shift 2
-        ;;
-      --executors=*)
-        DEMO_EXECUTORS="${1#*=}"
+      --nodes=*)
+        DEMO_NODES="${1#*=}"
         shift
         ;;
       --bundle)
@@ -232,14 +222,11 @@ run_examples::parse_args() {
   fi
   RUN_SECS="${RUN_SECS_RAW}"
 
-  if [ -z "${DEMO_VALIDATORS}" ] || [ -z "${DEMO_EXECUTORS}" ]; then
-    run_examples::fail_with_usage "validators and executors must be provided via -v/--validators and -e/--executors"
+  if [ -z "${DEMO_NODES}" ]; then
+    run_examples::fail_with_usage "nodes must be provided via -n/--nodes"
   fi
-  if ! common::is_uint "${DEMO_VALIDATORS}" ; then
-    run_examples::fail_with_usage "validators must be a non-negative integer (pass -v/--validators)"
-  fi
-  if ! common::is_uint "${DEMO_EXECUTORS}" ; then
-    run_examples::fail_with_usage "executors must be a non-negative integer (pass -e/--executors)"
+  if ! common::is_uint "${DEMO_NODES}" ; then
+    run_examples::fail_with_usage "nodes must be a non-negative integer (pass -n/--nodes)"
   fi
 
 }
@@ -388,7 +375,7 @@ run_examples::restore_binaries_from_tar() {
   RESTORED_BIN_DIR="${src}"
   export RESTORED_BIN_DIR
 
-  if [ ! -f "${src}/logos-blockchain-node" ] || [ ! -f "${src}/logos-blockchain-executor" ] || [ ! -f "${src}/logos-blockchain-cli" ]; then
+  if [ ! -f "${src}/logos-blockchain-node" ] || [ ! -f "${src}/logos-blockchain-cli" ]; then
     echo "Binaries missing in ${tar_path}; provide a prebuilt binaries tarball." >&2
     return 1
   fi
@@ -397,11 +384,12 @@ run_examples::restore_binaries_from_tar() {
   if [ "${MODE}" != "host" ] && ! run_examples::host_bin_matches_arch "${src}/logos-blockchain-node"; then
     echo "Bundled binaries do not match host arch; skipping copy so containers rebuild from source."
     copy_bins=0
-    rm -f "${bin_dst}/logos-blockchain-node" "${bin_dst}/logos-blockchain-executor" "${bin_dst}/logos-blockchain-cli"
+    rm -f "${bin_dst}/logos-blockchain-node" "${bin_dst}/logos-blockchain-cli"
   fi
   if [ "${copy_bins}" -eq 1 ]; then
     mkdir -p "${bin_dst}"
-    cp "${src}/logos-blockchain-node" "${src}/logos-blockchain-executor" "${src}/logos-blockchain-cli" "${bin_dst}/"
+    cp "${src}/logos-blockchain-node" "${src}/logos-blockchain-cli" "${bin_dst}/"
+  fi
   fi
 
   if [ -d "${circuits_src}" ] && [ -f "${circuits_src}/${KZG_FILE}" ]; then
@@ -436,8 +424,8 @@ run_examples::prepare_bundles() {
   HOST_TAR="${ROOT_DIR}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
   LINUX_TAR="${ROOT_DIR}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
 
-  if [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN}" ] && [ -n "${LOGOS_BLOCKCHAIN_EXECUTOR_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_EXECUTOR_BIN}" ]; then
-    echo "==> Using pre-specified host binaries (LOGOS_BLOCKCHAIN_NODE_BIN/LOGOS_BLOCKCHAIN_EXECUTOR_BIN); skipping tarball restore"
+  if [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN}" ]; then
+    echo "==> Using pre-specified host binaries (LOGOS_BLOCKCHAIN_NODE_BIN); skipping tarball restore"
     return 0
   fi
 
@@ -508,20 +496,18 @@ run_examples::validate_restored_bundle() {
     common::die "KZG params missing at ${KZG_HOST_PATH}; ensure the tarball contains circuits."
   fi
 
-  if [ "${MODE}" = "host" ] && ! { [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -n "${LOGOS_BLOCKCHAIN_EXECUTOR_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_EXECUTOR_BIN:-}" ]; }; then
-    local tar_node tar_exec
+  if [ "${MODE}" = "host" ] && ! { [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ]; }; then
+    local tar_node
     tar_node="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/logos-blockchain-node"
-    tar_exec="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/logos-blockchain-executor"
 
-    [ -x "${tar_node}" ] && [ -x "${tar_exec}" ] || common::die \
+    [ -x "${tar_node}" ] || common::die \
       "Restored tarball missing host executables; provide a host-compatible binaries tarball."
-    run_examples::host_bin_matches_arch "${tar_node}" && run_examples::host_bin_matches_arch "${tar_exec}" || common::die \
+    run_examples::host_bin_matches_arch "${tar_node}" || common::die \
       "Restored executables do not match host architecture; provide a host-compatible binaries tarball."
 
     echo "==> Using restored host binaries from tarball"
     LOGOS_BLOCKCHAIN_NODE_BIN="${tar_node}"
-    LOGOS_BLOCKCHAIN_EXECUTOR_BIN="${tar_exec}"
-    export LOGOS_BLOCKCHAIN_NODE_BIN LOGOS_BLOCKCHAIN_EXECUTOR_BIN
+    export LOGOS_BLOCKCHAIN_NODE_BIN
   fi
 }
 
@@ -571,8 +557,7 @@ run_examples::run() {
   kzg_path="$(run_examples::kzg_path_for_mode)"
 
   export NOMOS_DEMO_RUN_SECS="${RUN_SECS}"
-  export NOMOS_DEMO_VALIDATORS="${DEMO_VALIDATORS}"
-  export NOMOS_DEMO_EXECUTORS="${DEMO_EXECUTORS}"
+  export NOMOS_DEMO_NODES="${DEMO_NODES}"
 
   if [ -n "${METRICS_QUERY_URL}" ]; then
     export NOMOS_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
@@ -591,7 +576,6 @@ run_examples::run() {
   LOGOS_BLOCKCHAIN_CIRCUITS="${HOST_BUNDLE_PATH}" \
   LOGOS_BLOCKCHAIN_KZGRS_PARAMS_PATH="${kzg_path}" \
   LOGOS_BLOCKCHAIN_NODE_BIN="${LOGOS_BLOCKCHAIN_NODE_BIN:-}" \
-  LOGOS_BLOCKCHAIN_EXECUTOR_BIN="${LOGOS_BLOCKCHAIN_EXECUTOR_BIN:-}" \
   COMPOSE_CIRCUITS_PLATFORM="${COMPOSE_CIRCUITS_PLATFORM:-}" \
     cargo run -p runner-examples --bin "${BIN}"
 }

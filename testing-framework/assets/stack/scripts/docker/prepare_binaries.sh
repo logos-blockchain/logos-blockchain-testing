@@ -9,7 +9,6 @@ TARGET_ARCH="$(uname -m)"
 
 have_prebuilt() {
   [ -f testing-framework/assets/stack/bin/logos-blockchain-node ] && \
-  [ -f testing-framework/assets/stack/bin/logos-blockchain-executor ] && \
   [ -f testing-framework/assets/stack/bin/logos-blockchain-cli ]
 }
 
@@ -34,7 +33,6 @@ bin_matches_arch() {
 if have_prebuilt && bin_matches_arch; then
   echo "Using prebuilt logos-blockchain binaries from testing-framework/assets/stack/bin"
   cp testing-framework/assets/stack/bin/logos-blockchain-node /workspace/artifacts/logos-blockchain-node
-  cp testing-framework/assets/stack/bin/logos-blockchain-executor /workspace/artifacts/logos-blockchain-executor
   cp testing-framework/assets/stack/bin/logos-blockchain-cli /workspace/artifacts/logos-blockchain-cli
   exit 0
 fi
@@ -67,10 +65,9 @@ fi
 RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS=/opt/circuits \
   LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits \
   cargo build --features "testing" \
-  -p logos-blockchain-node -p logos-blockchain-executor -p logos-blockchain-cli
+  -p logos-blockchain-node -p logos-blockchain-cli
 
 cp /tmp/nomos-node/target/debug/logos-blockchain-node /workspace/artifacts/logos-blockchain-node
-cp /tmp/nomos-node/target/debug/logos-blockchain-executor /workspace/artifacts/logos-blockchain-executor
 cp /tmp/nomos-node/target/debug/logos-blockchain-cli /workspace/artifacts/logos-blockchain-cli
 
 rm -rf /tmp/nomos-node/target/debug/incremental

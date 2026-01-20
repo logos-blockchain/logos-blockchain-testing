@@ -56,10 +56,8 @@ impl K8sDeployer {
 #[derive(Debug, thiserror::Error)]
 /// High-level runner failures returned to the scenario harness.
 pub enum K8sRunnerError {
-    #[error(
-        "kubernetes runner requires at least one validator and one executor (validators={validators}, executors={executors})"
-    )]
-    UnsupportedTopology { validators: usize, executors: usize },
+    #[error("kubernetes runner requires at least one node (nodes={nodes})")]
+    UnsupportedTopology { nodes: usize },
     #[error("failed to initialise kubernetes client: {source}")]
     ClientInit {
         #[source]
@@ -124,13 +122,9 @@ impl From<ClusterWaitError> for K8sRunnerError {
 }
 
 fn ensure_supported_topology(descriptors: &GeneratedTopology) -> Result<(), K8sRunnerError> {
-    let validators = descriptors.validators().len();
-    let executors = descriptors.executors().len();
-    if validators == 0 || executors == 0 {
-        return Err(K8sRunnerError::UnsupportedTopology {
-            validators,
-            executors,
-        });
+    let nodes = descriptors.nodes().len();
+    if nodes == 0 {
+        return Err(K8sRunnerError::UnsupportedTopology { nodes });
     }
     Ok(())
 }
@@ -143,15 +137,13 @@ async fn deploy_with_observability<Caps>(
     let observability = resolve_observability_inputs(observability)?;
 
     let descriptors = scenario.topology().clone();
-    let validator_count = descriptors.validators().len();
-    let executor_count = descriptors.executors().len();
+    let node_count = descriptors.nodes().len();
     ensure_supported_topology(&descriptors)?;
 
     let client = init_kube_client().await?;
 
     info!(
-        validators = validator_count,
-        executors = executor_count,
+        nodes = node_count,
         duration_secs = scenario.duration().as_secs(),
         readiness_checks = deployer.readiness_checks,
         metrics_query_url = observability.metrics_query_url.as_ref().map(|u| u.as_str()),
@@ -203,8 +195,7 @@ async fn deploy_with_observability<Caps>(
         telemetry,
         block_feed,
         block_feed_guard,
-        validator_count,
-        executor_count,
+        node_count,
     )
 }
 
@@ -216,14 +207,13 @@ async fn setup_cluster(
     observability: &ObservabilityInputs,
 ) -> Result<ClusterEnvironment, K8sRunnerError> {
     let assets = prepare_assets(descriptors, observability.metrics_otlp_ingest_url.as_ref())?;
-    let validators = descriptors.validators().len();
-    let executors = descriptors.executors().len();
+    let nodes = descriptors.nodes().len();
 
     let (namespace, release) = cluster_identifiers();
-    info!(%namespace, %release, validators, executors, "preparing k8s assets and namespace");
+    info!(%namespace, %release, nodes, "preparing k8s assets and namespace");
 
     let mut cleanup_guard =
-        Some(install_stack(client, &assets, &namespace, &release, validators, executors).await?);
+        Some(install_stack(client, &assets, &namespace, &release, nodes).await?);
 
     info!("waiting for helm-managed services to become ready");
     let cluster_ready =
@@ -338,19 +328,9 @@ fn maybe_print_endpoints(
             .unwrap_or_else(|| "<disabled>".to_string())
     );
 
-    let validator_clients = node_clients.validator_clients();
-    for (idx, client) in validator_clients.iter().enumerate() {
+    for (idx, client) in node_clients.node_clients().iter().enumerate() {
         println!(
-            "TESTNET_PPROF validator_{}={}/debug/pprof/profile?seconds=15&format=proto",
-            idx,
-            client.base_url()
-        );
-    }
-
-    let executor_clients = node_clients.executor_clients();
-    for (idx, client) in executor_clients.iter().enumerate() {
-        println!(
-            "TESTNET_PPROF executor_{}={}/debug/pprof/profile?seconds=15&format=proto",
+            "TESTNET_PPROF node_{}={}/debug/pprof/profile?seconds=15&format=proto",
             idx,
             client.base_url()
         );
@@ -366,8 +346,7 @@ fn finalize_runner(
     telemetry: testing_framework_core::scenario::Metrics,
     block_feed: testing_framework_core::scenario::BlockFeed,
     block_feed_guard: BlockFeedTask,
-    validator_count: usize,
-    executor_count: usize,
+    node_count: usize,
 ) -> Result<Runner, K8sRunnerError> {
     let environment = cluster
         .take()
@@ -393,8 +372,7 @@ fn finalize_runner(
     );
 
     info!(
-        validators = validator_count,
-        executors = executor_count,
+        nodes = node_count,
         duration_secs = duration.as_secs(),
         "k8s deployment ready; handing control to scenario runner"
     );

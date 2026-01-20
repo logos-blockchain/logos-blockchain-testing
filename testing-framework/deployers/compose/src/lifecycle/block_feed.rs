@@ -13,13 +13,12 @@ async fn spawn_block_feed_with(
     node_clients: &NodeClients,
 ) -> Result<(BlockFeed, BlockFeedTask), ComposeRunnerError> {
     debug!(
-        validators = node_clients.validator_clients().len(),
-        executors = node_clients.executor_clients().len(),
-        "selecting validator client for block feed"
+        nodes = node_clients.node_clients().len(),
+        "selecting node client for block feed"
     );
 
     let block_source_client = node_clients
-        .random_validator()
+        .random_node()
         .ok_or(ComposeRunnerError::BlockFeedMissing)?;
 
     spawn_block_feed(block_source_client)

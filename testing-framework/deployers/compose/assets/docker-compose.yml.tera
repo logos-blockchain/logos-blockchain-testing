@@ -1,35 +1,5 @@
 services:
-{% for node in validators %}
-  {{ node.name }}:
-    image: {{ node.image }}
-{% if node.platform %}    platform: {{ node.platform }}
-{% endif %}    entrypoint: {{ node.entrypoint }}
-    volumes:
-{% for volume in node.volumes %}
-      - {{ volume }}
-{% endfor %}
-{% if node.extra_hosts | length > 0 %}
-    extra_hosts:
-{% for host in node.extra_hosts %}
-      - {{ host }}
-{% endfor %}
-{% endif %}
-    ports:
-{% for port in node.ports %}
-      - {{ port }}
-{% endfor %}
-    environment:
-{% for env in node.environment %}
-      {{ env.key }}: "{{ env.value }}"
-{% endfor %}
-    cap_add:
-      - SYS_ADMIN
-      - SYS_PTRACE
-    security_opt:
-      - seccomp=unconfined
-    restart: on-failure
-
-{% endfor %}{% for node in executors %}
+{% for node in nodes %}
   {{ node.name }}:
     image: {{ node.image }}
 {% if node.platform %}    platform: {{ node.platform }}

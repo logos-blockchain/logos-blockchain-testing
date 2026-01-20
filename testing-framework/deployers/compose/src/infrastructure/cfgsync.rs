@@ -70,8 +70,7 @@ pub fn update_cfgsync_config(
         path = %path.display(),
         use_kzg_mount,
         port,
-        validators = topology.validators().len(),
-        executors = topology.executors().len(),
+        nodes = topology.nodes().len(),
         "updating cfgsync template"
     );
     let mut cfg = load_cfgsync_template(path)?;

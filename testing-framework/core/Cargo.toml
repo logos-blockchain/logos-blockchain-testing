@@ -24,7 +24,6 @@ futures                       = { default-features = false, version = "0.3" }
 groth16                       = { workspace = true }
 hex                           = { version = "0.4.3", default-features = false }
 key-management-system-service = { workspace = true }
-logos-blockchain-executor     = { workspace = true, default-features = false, features = ["testing", "tracing"] }
 nomos-core                    = { workspace = true }
 nomos-da-network-core         = { workspace = true }
 nomos-da-network-service      = { workspace = true }

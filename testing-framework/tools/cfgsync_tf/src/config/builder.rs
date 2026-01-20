@@ -24,7 +24,7 @@ use crate::{
         tracing::update_tracing_identifier,
         validation::{ValidationError, validate_inputs},
     },
-    host::{Host, HostKind, sort_hosts},
+    host::{Host, sort_hosts},
     network::rewrite_initial_peers,
 };
 
@@ -177,9 +177,7 @@ pub fn try_create_node_configs(
                 message: source.to_string(),
             }
         })?;
-        if matches!(host.kind, HostKind::Validator) {
-            da_config.policy_settings.min_dispersal_peers = 0;
-        }
+        da_config.policy_settings.min_dispersal_peers = 0;
 
         let mut network_config = network_configs[i].clone();
         network_config.backend.swarm.host = Ipv4Addr::UNSPECIFIED;

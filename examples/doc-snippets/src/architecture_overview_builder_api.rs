@@ -6,7 +6,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 use crate::SnippetResult;
 
 pub fn scenario_plan() -> SnippetResult<Scenario<()>> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(5))
         .wallets(50)
         .transactions_with(|txs| txs.rate(5).users(20))
         .expect_consensus_liveness()

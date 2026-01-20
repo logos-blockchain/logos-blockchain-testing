@@ -13,7 +13,7 @@ use testing_framework_core::{
     topology::{
         config::TopologyConfig,
         configs::GeneralConfig,
-        generation::{GeneratedNodeConfig, GeneratedTopology, NodeRole},
+        generation::{GeneratedNodeConfig, GeneratedTopology},
     },
 };
 
@@ -23,13 +23,12 @@ pub(super) fn build_general_config_for(
     descriptors: &GeneratedTopology,
     base_consensus: &consensus::GeneralConsensusConfig,
     base_time: &GeneralTimeConfig,
-    role: NodeRole,
     index: usize,
     peer_ports_by_name: &HashMap<String, u16>,
     options: &StartNodeOptions,
     peer_ports: &[u16],
 ) -> Result<(GeneralConfig, u16), LocalDynamicError> {
-    if let Some(node) = descriptor_for(descriptors, role, index) {
+    if let Some(node) = descriptor_for(descriptors, index) {
         let mut config = node.general.clone();
         let initial_peers = resolve_initial_peers(
             peer_ports_by_name,
@@ -68,15 +67,8 @@ pub(super) fn build_general_config_for(
     Ok((general_config, network_port))
 }
 
-fn descriptor_for(
-    descriptors: &GeneratedTopology,
-    role: NodeRole,
-    index: usize,
-) -> Option<&GeneratedNodeConfig> {
-    match role {
-        NodeRole::Validator => descriptors.validators().get(index),
-        NodeRole::Executor => descriptors.executors().get(index),
-    }
+fn descriptor_for(descriptors: &GeneratedTopology, index: usize) -> Option<&GeneratedNodeConfig> {
+    descriptors.nodes().get(index)
 }
 
 fn resolve_peer_names(

@@ -32,8 +32,7 @@ impl DeploymentSetup {
         ensure_supported_topology(&self.descriptors)?;
 
         info!(
-            validators = self.descriptors.validators().len(),
-            executors = self.descriptors.executors().len(),
+            nodes = self.descriptors.nodes().len(),
             "starting compose deployment"
         );
 

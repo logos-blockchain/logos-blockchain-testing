@@ -102,14 +102,14 @@ mod tests {
     use testing_framework_core::{
         scenario::ScenarioBuilder,
         topology::{
-            generation::{GeneratedNodeConfig, GeneratedTopology, NodeRole as TopologyNodeRole},
+            generation::{GeneratedNodeConfig, GeneratedTopology},
             utils::multiaddr_port,
         },
     };
 
     #[test]
     fn cfgsync_prebuilt_configs_preserve_genesis() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.nodes(2))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -121,9 +121,15 @@ mod tests {
             &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
-            Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
-            Some(topology.nodes().map(|node| node.blend_port).collect()),
+            Some(topology.nodes().iter().map(|node| node.id).collect()),
+            Some(topology.nodes().iter().map(|node| node.da_port).collect()),
+            Some(
+                topology
+                    .nodes()
+                    .iter()
+                    .map(|node| node.blend_port)
+                    .collect(),
+            ),
             hosts,
         )
         .expect("cfgsync config generation should succeed");
@@ -133,7 +139,7 @@ mod tests {
             .collect();
 
         for node in topology.nodes() {
-            let identifier = identifier_for(node.role(), node.index());
+            let identifier = identifier_for(node.index());
             let cfgsync_config = configs_by_identifier
                 .get(&identifier)
                 .unwrap_or_else(|| panic!("missing cfgsync config for {identifier}"));
@@ -164,7 +170,7 @@ mod tests {
 
     #[test]
     fn cfgsync_genesis_proofs_verify_against_ledger() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.nodes(2))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -176,9 +182,15 @@ mod tests {
             &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
-            Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
-            Some(topology.nodes().map(|node| node.blend_port).collect()),
+            Some(topology.nodes().iter().map(|node| node.id).collect()),
+            Some(topology.nodes().iter().map(|node| node.da_port).collect()),
+            Some(
+                topology
+                    .nodes()
+                    .iter()
+                    .map(|node| node.blend_port)
+                    .collect(),
+            ),
             hosts,
         )
         .expect("cfgsync config generation should succeed");
@@ -188,7 +200,7 @@ mod tests {
             .collect();
 
         for node in topology.nodes() {
-            let identifier = identifier_for(node.role(), node.index());
+            let identifier = identifier_for(node.index());
             let cfgsync_config = configs_by_identifier
                 .get(&identifier)
                 .unwrap_or_else(|| panic!("missing cfgsync config for {identifier}"));
@@ -203,7 +215,7 @@ mod tests {
 
     #[test]
     fn cfgsync_docker_overrides_produce_valid_genesis() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.nodes(2))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -215,9 +227,15 @@ mod tests {
             &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
-            Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
-            Some(topology.nodes().map(|node| node.blend_port).collect()),
+            Some(topology.nodes().iter().map(|node| node.id).collect()),
+            Some(topology.nodes().iter().map(|node| node.da_port).collect()),
+            Some(
+                topology
+                    .nodes()
+                    .iter()
+                    .map(|node| node.blend_port)
+                    .collect(),
+            ),
             hosts,
         )
         .expect("cfgsync config generation should succeed");
@@ -237,7 +255,7 @@ mod tests {
 
     #[test]
     fn cfgsync_configs_match_topology_ports_and_genesis() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.nodes(2))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -249,9 +267,15 @@ mod tests {
             &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
-            Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
-            Some(topology.nodes().map(|node| node.blend_port).collect()),
+            Some(topology.nodes().iter().map(|node| node.id).collect()),
+            Some(topology.nodes().iter().map(|node| node.da_port).collect()),
+            Some(
+                topology
+                    .nodes()
+                    .iter()
+                    .map(|node| node.blend_port)
+                    .collect(),
+            ),
             hosts,
         )
         .expect("cfgsync config generation should succeed");
@@ -261,7 +285,7 @@ mod tests {
             .collect();
 
         for node in topology.nodes() {
-            let identifier = identifier_for(node.role(), node.index());
+            let identifier = identifier_for(node.index());
             let cfg = configs_by_identifier
                 .get(&identifier)
                 .unwrap_or_else(|| panic!("missing cfgsync config for {identifier}"));
@@ -303,20 +327,21 @@ mod tests {
     }
 
     fn hosts_from_topology(topology: &GeneratedTopology) -> Vec<Host> {
-        topology.nodes().map(host_from_node).collect()
+        topology.nodes().iter().map(host_from_node).collect()
     }
 
     fn docker_style_hosts(topology: &GeneratedTopology) -> Vec<Host> {
         topology
             .nodes()
+            .iter()
             .map(|node| docker_host(node, 10 + node.index() as u8))
             .collect()
     }
 
     fn host_from_node(node: &GeneratedNodeConfig) -> Host {
-        let identifier = identifier_for(node.role(), node.index());
+        let identifier = identifier_for(node.index());
         let ip = Ipv4Addr::LOCALHOST;
-        let mut host = make_host(node.role(), ip, identifier);
+        let mut host = make_host(ip, identifier);
         host.network_port = node.network_port();
         host.da_network_port = node.da_port;
         host.blend_port = node.blend_port;
@@ -324,9 +349,9 @@ mod tests {
     }
 
     fn docker_host(node: &GeneratedNodeConfig, octet: u8) -> Host {
-        let identifier = identifier_for(node.role(), node.index());
+        let identifier = identifier_for(node.index());
         let ip = Ipv4Addr::new(172, 23, 0, octet);
-        let mut host = make_host(node.role(), ip, identifier);
+        let mut host = make_host(ip, identifier);
         host.network_port = node.network_port().saturating_add(1000);
         host.da_network_port = node.da_port.saturating_add(1000);
         host.blend_port = node.blend_port.saturating_add(1000);
@@ -335,9 +360,8 @@ mod tests {
 
     fn tracing_settings(topology: &GeneratedTopology) -> TracingSettings {
         topology
-            .validators()
+            .nodes()
             .first()
-            .or_else(|| topology.executors().first())
             .expect("topology must contain at least one node")
             .general
             .tracing_config
@@ -345,14 +369,11 @@ mod tests {
             .clone()
     }
 
-    fn identifier_for(role: TopologyNodeRole, index: usize) -> String {
-        match role {
-            TopologyNodeRole::Validator => format!("validator-{index}"),
-            TopologyNodeRole::Executor => format!("executor-{index}"),
-        }
+    fn identifier_for(index: usize) -> String {
+        format!("node-{index}")
     }
 
-    fn make_host(role: TopologyNodeRole, ip: Ipv4Addr, identifier: String) -> Host {
+    fn make_host(ip: Ipv4Addr, identifier: String) -> Host {
         let ports = PortOverrides {
             network_port: None,
             da_network_port: None,
@@ -360,10 +381,7 @@ mod tests {
             api_port: None,
             testing_http_port: None,
         };
-        match role {
-            TopologyNodeRole::Validator => Host::validator_from_ip(ip, identifier, ports),
-            TopologyNodeRole::Executor => Host::executor_from_ip(ip, identifier, ports),
-        }
+        Host::node_from_ip(ip, identifier, ports)
     }
 
     fn declaration_fingerprint<G>(

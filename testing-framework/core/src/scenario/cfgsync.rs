@@ -75,13 +75,10 @@ pub fn apply_topology_overrides(
     use_kzg_mount: bool,
 ) {
     debug!(
-        validators = topology.validators().len(),
-        executors = topology.executors().len(),
-        use_kzg_mount,
-        "applying topology overrides to cfgsync config"
+        nodes = topology.nodes().len(),
+        use_kzg_mount, "applying topology overrides to cfgsync config"
     );
-    let hosts = topology.validators().len() + topology.executors().len();
-    cfg.n_hosts = hosts;
+    cfg.n_hosts = topology.nodes().len();
 
     let consensus = &topology.config().consensus_params;
     cfg.security_param = consensus.security_param;
@@ -89,9 +86,15 @@ pub fn apply_topology_overrides(
 
     let config = topology.config();
     cfg.wallet = config.wallet_config.clone();
-    cfg.ids = Some(topology.nodes().map(|node| node.id).collect());
-    cfg.da_ports = Some(topology.nodes().map(|node| node.da_port).collect());
-    cfg.blend_ports = Some(topology.nodes().map(|node| node.blend_port).collect());
+    cfg.ids = Some(topology.nodes().iter().map(|node| node.id).collect());
+    cfg.da_ports = Some(topology.nodes().iter().map(|node| node.da_port).collect());
+    cfg.blend_ports = Some(
+        topology
+            .nodes()
+            .iter()
+            .map(|node| node.blend_port)
+            .collect(),
+    );
 
     let da = &config.da_params;
     cfg.subnetwork_size = da.subnetwork_size;

@@ -18,15 +18,15 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
     // Required env vars (set on the command line when running this test):
     // - `POL_PROOF_DEV_MODE=true`
     // - `RUST_LOG=info` (optional)
-    let config = TopologyConfig::with_node_numbers(2, 0);
+    let config = TopologyConfig::with_node_count(2);
     let deployer = LocalDeployer::new();
     let cluster = deployer.manual_cluster(config)?;
     // Nodes are stopped automatically when the cluster is dropped.
 
-    println!("starting validator a");
+    println!("starting node a");
 
-    let validator_a = cluster
-        .start_validator_with(
+    let node_a = cluster
+        .start_node_with(
             "a",
             StartNodeOptions {
                 peers: PeerSelection::None,
@@ -38,12 +38,12 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
     println!("waiting briefly before starting c");
     sleep(Duration::from_secs(30)).await;
 
-    println!("starting validator c -> a");
-    let validator_c = cluster
-        .start_validator_with(
+    println!("starting node c -> a");
+    let node_c = cluster
+        .start_node_with(
             "c",
             StartNodeOptions {
-                peers: PeerSelection::Named(vec!["validator-a".to_owned()]),
+                peers: PeerSelection::Named(vec!["node-a".to_owned()]),
             },
         )
         .await?
@@ -54,12 +54,12 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
 
     sleep(Duration::from_secs(5)).await;
 
-    let a_info = validator_a.consensus_info().await?;
-    let c_info = validator_c.consensus_info().await?;
+    let a_info = node_a.consensus_info().await?;
+    let c_info = node_c.consensus_info().await?;
     let height_diff = a_info.height.abs_diff(c_info.height);
 
     println!(
-        "final heights: validator-a={}, validator-c={}, diff={}",
+        "final heights: node-a={}, node-c={}, diff={}",
         a_info.height, c_info.height, height_diff
     );
 

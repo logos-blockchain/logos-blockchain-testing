@@ -38,14 +38,7 @@ impl<'a> ReadinessCheck<'a> for MembershipReadiness<'a> {
     type Data = Vec<NodeMembershipStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        let (validator_statuses, executor_statuses) = tokio::join!(
-            collect_validator_statuses(self),
-            collect_executor_statuses(self)
-        );
-        validator_statuses
-            .into_iter()
-            .chain(executor_statuses)
-            .collect()
+        collect_node_statuses(self).await
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
@@ -107,12 +100,10 @@ impl<'a> ReadinessCheck<'a> for HttpMembershipReadiness<'a> {
     }
 }
 
-async fn collect_validator_statuses(
-    readiness: &MembershipReadiness<'_>,
-) -> Vec<NodeMembershipStatus> {
-    let validator_futures = readiness
+async fn collect_node_statuses(readiness: &MembershipReadiness<'_>) -> Vec<NodeMembershipStatus> {
+    let node_futures = readiness
         .topology
-        .validators
+        .nodes
         .iter()
         .enumerate()
         .map(|(idx, node)| {
@@ -120,7 +111,7 @@ async fn collect_validator_statuses(
                 .labels
                 .get(idx)
                 .cloned()
-                .unwrap_or_else(|| format!("validator#{idx}"));
+                .unwrap_or_else(|| format!("node#{idx}"));
             async move {
                 let result = node
                     .api()
@@ -131,36 +122,7 @@ async fn collect_validator_statuses(
             }
         });
 
-    futures::future::join_all(validator_futures).await
-}
-
-async fn collect_executor_statuses(
-    readiness: &MembershipReadiness<'_>,
-) -> Vec<NodeMembershipStatus> {
-    let offset = readiness.topology.validators.len();
-    let executor_futures = readiness
-        .topology
-        .executors
-        .iter()
-        .enumerate()
-        .map(|(idx, node)| {
-            let global_idx = offset + idx;
-            let label = readiness
-                .labels
-                .get(global_idx)
-                .cloned()
-                .unwrap_or_else(|| format!("executor#{idx}"));
-            async move {
-                let result = node
-                    .api()
-                    .da_get_membership_checked(&readiness.session)
-                    .await
-                    .map_err(MembershipError::from);
-                NodeMembershipStatus { label, result }
-            }
-        });
-
-    futures::future::join_all(executor_futures).await
+    futures::future::join_all(node_futures).await
 }
 
 pub async fn try_fetch_membership(

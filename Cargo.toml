@@ -50,12 +50,10 @@ chain-service = { package = "logos-blockchain-chain-service", default-features =
 common-http-client = { package = "logos-blockchain-common-http-client", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 cryptarchia-engine = { package = "logos-blockchain-cryptarchia-engine", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 cryptarchia-sync = { package = "logos-blockchain-cryptarchia-sync", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
-executor-http-client = { package = "logos-blockchain-executor-http-client", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 groth16 = { package = "logos-blockchain-groth16", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 key-management-system-service = { package = "logos-blockchain-key-management-system-service", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 kzgrs = { package = "logos-blockchain-kzgrs", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 kzgrs-backend = { package = "logos-blockchain-kzgrs-backend", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
-logos-blockchain-executor = { package = "logos-blockchain-executor", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 nomos-api = { package = "logos-blockchain-api-service", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 nomos-blend-message = { package = "logos-blockchain-blend-message", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }
 nomos-blend-service = { package = "logos-blockchain-blend-service", default-features = false, git = "https://github.com/logos-co/nomos-node.git", rev = "97b411ed0ce269e72a6253c8cd48eea41db5ab71" }

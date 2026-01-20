@@ -4,7 +4,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 use crate::SnippetResult;
 
 pub fn wallets_plan() -> SnippetResult<Scenario<()>> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(0))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .wallets(50) // Seed 50 funded wallet accounts
         .build()
 }

@@ -5,15 +5,8 @@ use testing_framework_config::constants::{
     DEFAULT_LIBP2P_NETWORK_PORT,
 };
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub enum HostKind {
-    Validator,
-    Executor,
-}
-
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct Host {
-    pub kind: HostKind,
     pub ip: Ipv4Addr,
     pub identifier: String,
     pub network_port: u16,
@@ -33,9 +26,8 @@ pub struct PortOverrides {
 }
 
 impl Host {
-    fn from_parts(kind: HostKind, ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
+    fn from_parts(ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
         Self {
-            kind,
             ip,
             identifier,
             network_port: ports.network_port.unwrap_or(DEFAULT_LIBP2P_NETWORK_PORT),
@@ -47,13 +39,8 @@ impl Host {
     }
 
     #[must_use]
-    pub fn validator_from_ip(ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
-        Self::from_parts(HostKind::Validator, ip, identifier, ports)
-    }
-
-    #[must_use]
-    pub fn executor_from_ip(ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
-        Self::from_parts(HostKind::Executor, ip, identifier, ports)
+    pub fn node_from_ip(ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
+        Self::from_parts(ip, identifier, ports)
     }
 }
 
@@ -66,11 +53,7 @@ pub fn sort_hosts(mut hosts: Vec<Host>) -> Vec<Host> {
             .next()
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(0);
-        let kind = match host.kind {
-            HostKind::Validator => 0,
-            HostKind::Executor => 1,
-        };
-        (kind, index)
+        index
     });
     hosts
 }

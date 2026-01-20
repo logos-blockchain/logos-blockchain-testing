@@ -45,23 +45,13 @@ pub struct ComposeNodeControl {
 
 #[async_trait::async_trait]
 impl NodeControlHandle for ComposeNodeControl {
-    async fn restart_validator(&self, index: usize) -> Result<(), DynError> {
+    async fn restart_node(&self, index: usize) -> Result<(), DynError> {
         restart_compose_service(
             &self.compose_file,
             &self.project_name,
-            &format!("validator-{index}"),
+            &format!("node-{index}"),
         )
         .await
-        .map_err(|err| format!("validator restart failed: {err}").into())
-    }
-
-    async fn restart_executor(&self, index: usize) -> Result<(), DynError> {
-        restart_compose_service(
-            &self.compose_file,
-            &self.project_name,
-            &format!("executor-{index}"),
-        )
-        .await
-        .map_err(|err| format!("executor restart failed: {err}").into())
+        .map_err(|err| format!("node restart failed: {err}").into())
     }
 }

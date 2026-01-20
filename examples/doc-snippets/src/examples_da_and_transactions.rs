@@ -6,7 +6,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn transactions_multi_node() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(5))
         .wallets(30)
         .transactions_with(|txs| txs.rate(5).users(15))
         .expect_consensus_liveness()

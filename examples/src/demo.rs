@@ -1,3 +1,2 @@
-pub const DEFAULT_VALIDATORS: usize = 2;
-pub const DEFAULT_EXECUTORS: usize = 0;
+pub const DEFAULT_NODES: usize = 2;
 pub const DEFAULT_RUN_SECS: u64 = 60;

@@ -1,17 +1,17 @@
 {{- $root := . -}}
-{{- $nodes := default (list) .Values.executors.nodes }}
+{{- $nodes := default (list) .Values.nodes.nodes }}
 {{- range $i, $node := $nodes }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "nomos-runner.fullname" $root }}-executor-{{ $i }}
+  name: {{ include "nomos-runner.fullname" $root }}-node-{{ $i }}
   labels:
-    {{- include "nomos-runner.executorLabels" (dict "root" $root "index" $i) | nindent 4 }}
+    {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
 spec:
   type: NodePort
   selector:
-    {{- include "nomos-runner.executorLabels" (dict "root" $root "index" $i) | nindent 4 }}
+    {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
   ports:
     - name: http
       port: {{ default 18080 $node.apiPort }}

@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, RunContext, Runner,
-        Scenario, ScenarioError, spawn_block_feed,
+        BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, NodeControlCapability,
+        RunContext, Runner, Scenario, ScenarioError, spawn_block_feed,
     },
     topology::{
+        config::TopologyConfig,
         deployment::{SpawnTopologyError, Topology},
         readiness::ReadinessError,
     },
@@ -12,8 +15,9 @@ use testing_framework_core::{
 use thiserror::Error;
 use tracing::{debug, info};
 
-/// Spawns validators and executors as local processes, reusing the existing
-/// integration harness.
+use crate::{LocalDynamicNodes, LocalDynamicSeed, LocalManualCluster, ManualClusterError};
+
+/// Spawns nodes as local processes, reusing the existing integration harness.
 #[derive(Clone)]
 pub struct LocalDeployer {}
 
@@ -59,8 +63,7 @@ impl Deployer<()> for LocalDeployer {
 
     async fn deploy(&self, scenario: &Scenario<()>) -> Result<Runner, Self::Error> {
         info!(
-            validators = scenario.topology().validators().len(),
-            executors = scenario.topology().executors().len(),
+            nodes = scenario.topology().nodes().len(),
             "starting local deployment"
         );
         let topology = Self::prepare_topology(scenario).await?;
@@ -82,6 +85,43 @@ impl Deployer<()> for LocalDeployer {
     }
 }
 
+#[async_trait]
+impl Deployer<NodeControlCapability> for LocalDeployer {
+    type Error = LocalDeployerError;
+
+    async fn deploy(
+        &self,
+        scenario: &Scenario<NodeControlCapability>,
+    ) -> Result<Runner, Self::Error> {
+        info!(
+            nodes = scenario.topology().nodes().len(),
+            "starting local deployment with node control"
+        );
+        let topology = Self::prepare_topology(scenario).await?;
+        let node_clients = NodeClients::from_topology(scenario.topology(), &topology);
+        let seed = LocalDynamicSeed::from_topology(scenario.topology());
+        let node_control = Arc::new(LocalDynamicNodes::new_with_seed(
+            scenario.topology().clone(),
+            node_clients.clone(),
+            seed,
+        ));
+
+        let (block_feed, block_feed_guard) = spawn_block_feed_with(&node_clients).await?;
+
+        let context = RunContext::new(
+            scenario.topology().clone(),
+            Some(topology),
+            node_clients,
+            scenario.duration(),
+            Metrics::empty(),
+            block_feed,
+            Some(node_control),
+        );
+
+        Ok(Runner::new(context, Some(Box::new(block_feed_guard))))
+    }
+}
+
 impl LocalDeployer {
     #[must_use]
     /// Construct a local deployer.
@@ -89,13 +129,18 @@ impl LocalDeployer {
         Self::default()
     }
 
-    async fn prepare_topology(scenario: &Scenario<()>) -> Result<Topology, LocalDeployerError> {
+    pub fn manual_cluster(
+        &self,
+        config: TopologyConfig,
+    ) -> Result<LocalManualCluster, ManualClusterError> {
+        LocalManualCluster::from_config(config)
+    }
+
+    async fn prepare_topology<Caps>(
+        scenario: &Scenario<Caps>,
+    ) -> Result<Topology, LocalDeployerError> {
         let descriptors = scenario.topology();
-        info!(
-            validators = descriptors.validators().len(),
-            executors = descriptors.executors().len(),
-            "spawning local validators/executors"
-        );
+        info!(nodes = descriptors.nodes().len(), "spawning local nodes");
         let topology = descriptors
             .clone()
             .spawn_local()
@@ -128,14 +173,13 @@ async fn spawn_block_feed_with(
     node_clients: &NodeClients,
 ) -> Result<(BlockFeed, BlockFeedTask), LocalDeployerError> {
     debug!(
-        validators = node_clients.validator_clients().len(),
-        executors = node_clients.executor_clients().len(),
-        "selecting validator client for local block feed"
+        nodes = node_clients.node_clients().len(),
+        "selecting node client for local block feed"
     );
 
-    let Some(block_source_client) = node_clients.random_validator().cloned() else {
+    let Some(block_source_client) = node_clients.random_node() else {
         return Err(LocalDeployerError::WorkloadFailed {
-            source: "block feed requires at least one validator".into(),
+            source: "block feed requires at least one node".into(),
         });
     };
 

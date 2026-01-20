@@ -2,7 +2,7 @@ use std::{env, time::Duration};
 
 use testing_framework_core::{
     adjust_timeout,
-    scenario::http_probe::{self, HttpReadinessError, NodeRole},
+    scenario::http_probe::{self, HttpReadinessError},
 };
 use tracing::{debug, info};
 
@@ -12,23 +12,15 @@ const POLL_INTERVAL_MILLIS: u64 = 250;
 const DEFAULT_WAIT: Duration = Duration::from_secs(DEFAULT_WAIT_TIMEOUT_SECS);
 const POLL_INTERVAL: Duration = Duration::from_millis(POLL_INTERVAL_MILLIS);
 
-pub async fn wait_for_validators(ports: &[u16]) -> Result<(), HttpReadinessError> {
-    wait_for_ports(ports, NodeRole::Validator).await
-}
-
-pub async fn wait_for_executors(ports: &[u16]) -> Result<(), HttpReadinessError> {
-    wait_for_ports(ports, NodeRole::Executor).await
-}
-
-async fn wait_for_ports(ports: &[u16], role: NodeRole) -> Result<(), HttpReadinessError> {
+pub async fn wait_for_nodes(ports: &[u16]) -> Result<(), HttpReadinessError> {
     let host = compose_runner_host();
     let timeout = compose_http_timeout();
 
-    info!(role = ?role, ports = ?ports, host, "waiting for compose HTTP readiness");
+    info!(role = "node", ports = ?ports, host, "waiting for compose HTTP readiness");
 
     http_probe::wait_for_http_ports_with_host(
         ports,
-        role,
+        "node",
         &host,
         adjust_timeout(timeout),
         POLL_INTERVAL,

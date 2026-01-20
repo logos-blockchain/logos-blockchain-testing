@@ -1,9 +1,9 @@
 use serde::Serialize;
 use testing_framework_core::topology::generation::GeneratedNodeConfig;
 
-use super::{ComposeNodeKind, base_environment, base_volumes, default_extra_hosts};
+use super::{base_environment, base_volumes, default_extra_hosts};
 
-/// Describes a validator or executor container in the compose stack.
+/// Describes a node container in the compose stack.
 #[derive(Clone, Debug, Serialize)]
 pub struct NodeDescriptor {
     name: String,
@@ -45,7 +45,6 @@ impl EnvEntry {
 
 impl NodeDescriptor {
     pub(crate) fn from_node(
-        kind: ComposeNodeKind,
         index: usize,
         node: &GeneratedNodeConfig,
         image: &str,
@@ -53,8 +52,9 @@ impl NodeDescriptor {
         use_kzg_mount: bool,
         cfgsync_port: u16,
     ) -> Self {
+        const ENTRYPOINT: &str = "/etc/nomos/scripts/run_nomos_node.sh";
         let mut environment = base_environment(cfgsync_port, use_kzg_mount);
-        let identifier = kind.instance_name(index);
+        let identifier = format!("node-{index}");
         let api_port = node.general.api_config.address.port();
         let testing_port = node.general.api_config.testing_http_address.port();
         environment.extend([
@@ -78,9 +78,9 @@ impl NodeDescriptor {
         ];
 
         Self {
-            name: kind.instance_name(index),
+            name: format!("node-{index}"),
             image: image.to_owned(),
-            entrypoint: kind.entrypoint().to_owned(),
+            entrypoint: ENTRYPOINT.to_owned(),
             volumes: base_volumes(use_kzg_mount),
             extra_hosts: default_extra_hosts(),
             ports,

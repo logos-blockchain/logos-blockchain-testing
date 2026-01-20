@@ -126,7 +126,11 @@ build_linux_binaries::stage_from_bundle() {
   local tar_path="$1"
   local extract_dir
   extract_dir="$(common::tmpdir nomos-linux-bundle.XXXXXX)"
-  cleanup() { rm -rf "${extract_dir}" 2>/dev/null || true; }
+  cleanup() {
+    if [ -n "${extract_dir:-}" ]; then
+      rm -rf "${extract_dir}" 2>/dev/null || true
+    fi
+  }
   trap cleanup EXIT
 
   echo "==> Extracting ${tar_path}"
@@ -134,7 +138,6 @@ build_linux_binaries::stage_from_bundle() {
 
   local artifacts="${extract_dir}/artifacts"
   [ -f "${artifacts}/logos-blockchain-node" ] || common::die "Missing logos-blockchain-node in bundle: ${tar_path}"
-  [ -f "${artifacts}/logos-blockchain-executor" ] || common::die "Missing logos-blockchain-executor in bundle: ${tar_path}"
   [ -f "${artifacts}/logos-blockchain-cli" ] || common::die "Missing logos-blockchain-cli in bundle: ${tar_path}"
   [ -d "${artifacts}/circuits" ] || common::die "Missing circuits/ in bundle: ${tar_path}"
 
@@ -144,7 +147,7 @@ build_linux_binaries::stage_from_bundle() {
 
   echo "==> Staging binaries to ${bin_out}"
   mkdir -p "${bin_out}"
-  cp "${artifacts}/logos-blockchain-node" "${artifacts}/logos-blockchain-executor" "${artifacts}/logos-blockchain-cli" "${bin_out}/"
+  cp "${artifacts}/logos-blockchain-node" "${artifacts}/logos-blockchain-cli" "${bin_out}/"
 
   echo "==> Staging circuits to ${circuits_out}"
   rm -rf "${circuits_out}"
