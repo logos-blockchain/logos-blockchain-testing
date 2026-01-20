@@ -42,8 +42,9 @@ pub(crate) fn build_blend_service_config(
 ) {
     let message_frequency_per_round = message_frequency_per_round();
     let zk_key_id = key_id_for_preload_backend(&Key::from(config.secret_zk_key.clone()));
+    let signing_key_id = key_id_for_preload_backend(&Key::from(config.signer.clone()));
 
-    let user = build_blend_user_config(config, zk_key_id);
+    let user = build_blend_user_config(config, zk_key_id, signing_key_id);
     let deployment_settings = build_blend_deployment_settings(config, message_frequency_per_round);
     let network_deployment = build_network_deployment_settings();
 
@@ -60,12 +61,16 @@ fn message_frequency_per_round() -> NonNegativeF64 {
     }
 }
 
-fn build_blend_user_config(config: &TopologyBlendConfig, zk_key_id: String) -> BlendUserConfig {
+fn build_blend_user_config(
+    config: &TopologyBlendConfig,
+    zk_key_id: String,
+    signing_key_id: String,
+) -> BlendUserConfig {
     let backend_core = &config.backend_core;
     let backend_edge = &config.backend_edge;
 
     BlendUserConfig {
-        non_ephemeral_signing_key: config.private_key.clone(),
+        non_ephemeral_signing_key_id: signing_key_id,
         // Persist recovery data under the tempdir so components expecting it
         // can start cleanly.
         recovery_path_prefix: PathBuf::from("./recovery/blend"),
@@ -142,6 +147,9 @@ fn build_network_deployment_settings() -> NetworkDeploymentSettings {
         ),
         kademlia_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
             "/integration/nomos/kad/1.0.0",
+        ),
+        chain_sync_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
+            "/integration/nomos/cryptarchia/sync/1.0.0",
         ),
     }
 }
