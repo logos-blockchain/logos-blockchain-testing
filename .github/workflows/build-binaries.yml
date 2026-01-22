@@ -45,7 +45,7 @@ jobs:
           sudo apt-get install -y clang llvm-dev libclang-dev pkg-config cmake libssl-dev rsync libgmp10 libgmp-dev libgomp1 nasm
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$NOMOS_CIRCUITS"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$NOMOS_CIRCUITS"
           echo "NOMOS_CIRCUITS=$NOMOS_CIRCUITS" >> "$GITHUB_ENV"
       - name: Add top-level KZG params file
         run: |
