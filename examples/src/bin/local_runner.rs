@@ -61,7 +61,7 @@ async fn run_local_case(validators: usize, executors: usize, run_duration: Durat
 
     let mut plan = scenario.build()?;
 
-    let deployer = LocalDeployer::default().with_membership_check(true);
+    let deployer = LocalDeployer::default();
     info!("deploying local nodes");
 
     let runner: Runner = deployer

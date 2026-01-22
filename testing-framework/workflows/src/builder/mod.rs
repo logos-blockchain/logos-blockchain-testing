@@ -10,7 +10,7 @@ use testing_framework_core::{
 
 use crate::{
     expectations::ConsensusLiveness,
-    workloads::{chaos::RandomRestartWorkload, da, transaction},
+    workloads::{chaos::RandomRestartWorkload, transaction},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -35,15 +35,6 @@ pub trait ScenarioBuilderExt<Caps>: Sized {
         self,
         f: impl FnOnce(TransactionFlowBuilder<Caps>) -> TransactionFlowBuilder<Caps>,
     ) -> CoreScenarioBuilder<Caps>;
-
-    /// Configure a data-availability workload.
-    fn da(self) -> DataAvailabilityFlowBuilder<Caps>;
-
-    /// Configure a data-availability workload via closure.
-    fn da_with(
-        self,
-        f: impl FnOnce(DataAvailabilityFlowBuilder<Caps>) -> DataAvailabilityFlowBuilder<Caps>,
-    ) -> CoreScenarioBuilder<Caps>;
     #[must_use]
     /// Attach a consensus liveness expectation.
     fn expect_consensus_liveness(self) -> Self;
@@ -63,17 +54,6 @@ impl<Caps> ScenarioBuilderExt<Caps> for CoreScenarioBuilder<Caps> {
         f: impl FnOnce(TransactionFlowBuilder<Caps>) -> TransactionFlowBuilder<Caps>,
     ) -> CoreScenarioBuilder<Caps> {
         f(self.transactions()).apply()
-    }
-
-    fn da(self) -> DataAvailabilityFlowBuilder<Caps> {
-        DataAvailabilityFlowBuilder::new(self)
-    }
-
-    fn da_with(
-        self,
-        f: impl FnOnce(DataAvailabilityFlowBuilder<Caps>) -> DataAvailabilityFlowBuilder<Caps>,
-    ) -> CoreScenarioBuilder<Caps> {
-        f(self.da()).apply()
     }
 
     fn expect_consensus_liveness(self) -> Self {
@@ -491,112 +471,6 @@ impl<Caps> TransactionFlowBuilder<Caps> {
             rate = self.rate.get(),
             users = self.users.map(|u| u.get()),
             "attaching transaction workload"
-        );
-
-        self.builder = self.builder.with_workload(workload);
-        self.builder
-    }
-}
-
-/// Builder for data availability workloads.
-pub struct DataAvailabilityFlowBuilder<Caps> {
-    builder: CoreScenarioBuilder<Caps>,
-    channel_rate: NonZeroU64,
-    blob_rate: NonZeroU64,
-    headroom_percent: u64,
-}
-
-impl<Caps> DataAvailabilityFlowBuilder<Caps> {
-    const fn default_channel_rate() -> NonZeroU64 {
-        NonZeroU64::MIN
-    }
-
-    const fn default_blob_rate() -> NonZeroU64 {
-        NonZeroU64::MIN
-    }
-
-    const fn new(builder: CoreScenarioBuilder<Caps>) -> Self {
-        Self {
-            builder,
-            channel_rate: Self::default_channel_rate(),
-            blob_rate: Self::default_blob_rate(),
-            headroom_percent: da::Workload::default_headroom_percent(),
-        }
-    }
-
-    #[must_use]
-    /// Set the number of DA channels to run (ignores zero).
-    pub fn channel_rate(mut self, rate: u64) -> Self {
-        match NonZeroU64::new(rate) {
-            Some(rate) => self.channel_rate = rate,
-            None => tracing::warn!(
-                rate,
-                "DA channel rate must be non-zero; keeping previous rate"
-            ),
-        }
-        self
-    }
-
-    /// Like `channel_rate`, but returns an error instead of panicking.
-    pub fn try_channel_rate(self, rate: u64) -> Result<Self, BuilderInputError> {
-        let Some(rate) = NonZeroU64::new(rate) else {
-            return Err(BuilderInputError::ZeroValue {
-                field: "da_channel_rate",
-            });
-        };
-        Ok(self.channel_rate_per_block(rate))
-    }
-
-    #[must_use]
-    /// Set the number of DA channels to run.
-    pub const fn channel_rate_per_block(mut self, rate: NonZeroU64) -> Self {
-        self.channel_rate = rate;
-        self
-    }
-
-    #[must_use]
-    /// Set blob publish rate (per block).
-    pub fn blob_rate(mut self, rate: u64) -> Self {
-        match NonZeroU64::new(rate) {
-            Some(rate) => self.blob_rate = rate,
-            None => tracing::warn!(rate, "DA blob rate must be non-zero; keeping previous rate"),
-        }
-        self
-    }
-
-    /// Like `blob_rate`, but returns an error instead of panicking.
-    pub fn try_blob_rate(self, rate: u64) -> Result<Self, BuilderInputError> {
-        let Some(rate) = NonZeroU64::new(rate) else {
-            return Err(BuilderInputError::ZeroValue {
-                field: "da_blob_rate",
-            });
-        };
-        Ok(self.blob_rate_per_block(rate))
-    }
-
-    #[must_use]
-    /// Set blob publish rate per block.
-    pub const fn blob_rate_per_block(mut self, rate: NonZeroU64) -> Self {
-        self.blob_rate = rate;
-        self
-    }
-
-    #[must_use]
-    /// Apply headroom when converting blob rate into channel count.
-    pub const fn headroom_percent(mut self, percent: u64) -> Self {
-        self.headroom_percent = percent;
-        self
-    }
-
-    #[must_use]
-    pub fn apply(mut self) -> CoreScenarioBuilder<Caps> {
-        let workload =
-            da::Workload::with_rate(self.blob_rate, self.channel_rate, self.headroom_percent);
-        tracing::info!(
-            channel_rate = self.channel_rate.get(),
-            blob_rate = self.blob_rate.get(),
-            headroom_percent = self.headroom_percent,
-            "attaching data-availability workload"
         );
 
         self.builder = self.builder.with_workload(workload);

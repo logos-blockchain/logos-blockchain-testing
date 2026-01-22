@@ -15,9 +15,7 @@ use tracing::{debug, info};
 /// Spawns validators and executors as local processes, reusing the existing
 /// integration harness.
 #[derive(Clone)]
-pub struct LocalDeployer {
-    membership_check: bool,
-}
+pub struct LocalDeployer {}
 
 /// Errors surfaced by the local deployer while driving a scenario.
 #[derive(Debug, Error)]
@@ -63,10 +61,9 @@ impl Deployer<()> for LocalDeployer {
         info!(
             validators = scenario.topology().validators().len(),
             executors = scenario.topology().executors().len(),
-            membership_checks = self.membership_check,
             "starting local deployment"
         );
-        let topology = Self::prepare_topology(scenario, self.membership_check).await?;
+        let topology = Self::prepare_topology(scenario).await?;
         let node_clients = NodeClients::from_topology(scenario.topology(), &topology);
 
         let (block_feed, block_feed_guard) = spawn_block_feed_with(&node_clients).await?;
@@ -87,22 +84,12 @@ impl Deployer<()> for LocalDeployer {
 
 impl LocalDeployer {
     #[must_use]
-    /// Construct with membership readiness checks enabled.
+    /// Construct a local deployer.
     pub fn new() -> Self {
         Self::default()
     }
 
-    #[must_use]
-    /// Enable or disable membership readiness probes.
-    pub const fn with_membership_check(mut self, enabled: bool) -> Self {
-        self.membership_check = enabled;
-        self
-    }
-
-    async fn prepare_topology(
-        scenario: &Scenario<()>,
-        membership_check: bool,
-    ) -> Result<Topology, LocalDeployerError> {
+    async fn prepare_topology(scenario: &Scenario<()>) -> Result<Topology, LocalDeployerError> {
         let descriptors = scenario.topology();
         info!(
             validators = descriptors.validators().len(),
@@ -115,13 +102,10 @@ impl LocalDeployer {
             .await
             .map_err(|source| LocalDeployerError::Spawn { source })?;
 
-        let skip_membership = !membership_check;
-        wait_for_readiness(&topology, skip_membership)
-            .await
-            .map_err(|source| {
-                debug!(error = ?source, "local readiness failed");
-                LocalDeployerError::ReadinessFailed { source }
-            })?;
+        wait_for_readiness(&topology).await.map_err(|source| {
+            debug!(error = ?source, "local readiness failed");
+            LocalDeployerError::ReadinessFailed { source }
+        })?;
 
         info!("local nodes are ready");
         Ok(topology)
@@ -130,27 +114,14 @@ impl LocalDeployer {
 
 impl Default for LocalDeployer {
     fn default() -> Self {
-        Self {
-            membership_check: true,
-        }
+        Self {}
     }
 }
 
-async fn wait_for_readiness(
-    topology: &Topology,
-    skip_membership: bool,
-) -> Result<(), ReadinessError> {
+async fn wait_for_readiness(topology: &Topology) -> Result<(), ReadinessError> {
     info!("waiting for local network readiness");
     topology.wait_network_ready().await?;
-    if skip_membership {
-        // Allow callers to bypass deeper readiness for lightweight demos.
-        return Ok(());
-    }
-    info!("waiting for membership readiness");
-    topology.wait_membership_ready().await?;
-
-    info!("waiting for DA balancer readiness");
-    topology.wait_da_balancer_ready().await
+    Ok(())
 }
 
 async fn spawn_block_feed_with(

@@ -12,11 +12,6 @@ pub async fn run_test() -> Result<()> {
             txs.rate(5) // 5 transactions per block
                 .users(20)
         })
-        .da_with(|da| {
-            da.channel_rate(1) // number of DA channels
-                .blob_rate(2) // target 2 blobs per block
-                .headroom_percent(20) // optional channel headroom
-        })
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(90))
         .build()?;

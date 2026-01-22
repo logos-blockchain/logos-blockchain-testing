@@ -37,7 +37,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -78,7 +78,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -119,7 +119,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -154,7 +154,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -220,7 +220,7 @@ jobs:
           : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-nomos-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
           echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:

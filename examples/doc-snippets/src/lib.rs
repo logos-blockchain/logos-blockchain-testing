@@ -16,7 +16,6 @@ mod dsl_cheat_sheet_topology;
 mod dsl_cheat_sheet_transactions_workload;
 mod dsl_cheat_sheet_wallets;
 mod dsl_cheat_sheet_workload_chaos;
-mod dsl_cheat_sheet_workload_da;
 mod dsl_cheat_sheet_workload_execution;
 mod examples_advanced_aggressive_chaos_test;
 mod examples_advanced_load_progression_test;
