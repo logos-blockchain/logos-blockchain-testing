@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use reqwest::Url;
 
 use super::DynError;
+use crate::{nodes::ApiClient, topology::generation::NodeRole};
 
 /// Marker type used by scenario builders to request node control support.
 #[derive(Clone, Copy, Debug, Default)]
@@ -19,6 +20,13 @@ pub struct ObservabilityCapability {
     pub metrics_otlp_ingest_url: Option<Url>,
     /// Optional Grafana base URL for printing/logging (human access).
     pub grafana_url: Option<Url>,
+}
+
+/// Options for dynamically starting a node.
+#[derive(Clone, Debug, Default)]
+pub struct StartNodeOptions {
+    /// Names of nodes to connect to on startup (implementation-defined).
+    pub peer_names: Vec<String>,
 }
 
 /// Trait implemented by scenario capability markers to signal whether node
@@ -45,4 +53,35 @@ pub trait NodeControlHandle: Send + Sync {
     async fn restart_validator(&self, index: usize) -> Result<(), DynError>;
 
     async fn restart_executor(&self, index: usize) -> Result<(), DynError>;
+
+    async fn start_validator(&self, _name: &str) -> Result<StartedNode, DynError> {
+        Err("start_validator not supported by this deployer".into())
+    }
+
+    async fn start_executor(&self, _name: &str) -> Result<StartedNode, DynError> {
+        Err("start_executor not supported by this deployer".into())
+    }
+
+    async fn start_validator_with(
+        &self,
+        _name: &str,
+        _options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        Err("start_validator_with not supported by this deployer".into())
+    }
+
+    async fn start_executor_with(
+        &self,
+        _name: &str,
+        _options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        Err("start_executor_with not supported by this deployer".into())
+    }
+}
+
+#[derive(Clone)]
+pub struct StartedNode {
+    pub name: String,
+    pub role: NodeRole,
+    pub api: ApiClient,
 }

@@ -90,7 +90,7 @@ impl ConsensusLiveness {
     }
 
     fn ensure_participants(ctx: &RunContext) -> Result<(), DynError> {
-        if ctx.node_clients().all_clients().count() == 0 {
+        if ctx.node_clients().all_clients().is_empty() {
             Err(Box::new(ConsensusLivenessError::MissingParticipants))
         } else {
             Ok(())
@@ -98,7 +98,7 @@ impl ConsensusLiveness {
     }
 
     async fn collect_results(ctx: &RunContext) -> LivenessCheck {
-        let clients: Vec<_> = ctx.node_clients().all_clients().collect();
+        let clients = ctx.node_clients().all_clients();
         let mut samples = Vec::with_capacity(clients.len());
         let mut issues = Vec::new();
 

@@ -20,5 +20,8 @@ tokio                            = { workspace = true, features = ["macros", "ne
 tracing                          = { workspace = true }
 tracing-subscriber               = { version = "0.3", features = ["env-filter", "fmt"] }
 
+[dev-dependencies]
+async-trait = { workspace = true }
+
 [lints]
 workspace = true

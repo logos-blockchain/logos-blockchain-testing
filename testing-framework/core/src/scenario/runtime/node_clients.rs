@@ -1,4 +1,7 @@
-use std::pin::Pin;
+use std::{
+    pin::Pin,
+    sync::{Arc, RwLock},
+};
 
 use rand::{Rng as _, seq::SliceRandom as _, thread_rng};
 
@@ -11,6 +14,11 @@ use crate::{
 /// Collection of API clients for the validator and executor set.
 #[derive(Clone, Default)]
 pub struct NodeClients {
+    inner: Arc<RwLock<NodeClientsInner>>,
+}
+
+#[derive(Default)]
+struct NodeClientsInner {
     validators: Vec<ApiClient>,
     executors: Vec<ApiClient>,
 }
@@ -18,10 +26,12 @@ pub struct NodeClients {
 impl NodeClients {
     #[must_use]
     /// Build clients from preconstructed vectors.
-    pub const fn new(validators: Vec<ApiClient>, executors: Vec<ApiClient>) -> Self {
+    pub fn new(validators: Vec<ApiClient>, executors: Vec<ApiClient>) -> Self {
         Self {
-            validators,
-            executors,
+            inner: Arc::new(RwLock::new(NodeClientsInner {
+                validators,
+                executors,
+            })),
         }
     }
 
@@ -43,48 +53,65 @@ impl NodeClients {
 
     #[must_use]
     /// Validator API clients.
-    pub fn validator_clients(&self) -> &[ApiClient] {
-        &self.validators
+    pub fn validator_clients(&self) -> Vec<ApiClient> {
+        self.inner
+            .read()
+            .expect("node clients lock poisoned")
+            .validators
+            .clone()
     }
 
     #[must_use]
     /// Executor API clients.
-    pub fn executor_clients(&self) -> &[ApiClient] {
-        &self.executors
+    pub fn executor_clients(&self) -> Vec<ApiClient> {
+        self.inner
+            .read()
+            .expect("node clients lock poisoned")
+            .executors
+            .clone()
     }
 
     #[must_use]
     /// Choose a random validator client if present.
-    pub fn random_validator(&self) -> Option<&ApiClient> {
-        if self.validators.is_empty() {
+    pub fn random_validator(&self) -> Option<ApiClient> {
+        let validators = self.validator_clients();
+        if validators.is_empty() {
             return None;
         }
         let mut rng = thread_rng();
-        let idx = rng.gen_range(0..self.validators.len());
-        self.validators.get(idx)
+        let idx = rng.gen_range(0..validators.len());
+        validators.get(idx).cloned()
     }
 
     #[must_use]
     /// Choose a random executor client if present.
-    pub fn random_executor(&self) -> Option<&ApiClient> {
-        if self.executors.is_empty() {
+    pub fn random_executor(&self) -> Option<ApiClient> {
+        let executors = self.executor_clients();
+        if executors.is_empty() {
             return None;
         }
         let mut rng = thread_rng();
-        let idx = rng.gen_range(0..self.executors.len());
-        self.executors.get(idx)
+        let idx = rng.gen_range(0..executors.len());
+        executors.get(idx).cloned()
     }
 
     /// Iterator over all clients.
-    pub fn all_clients(&self) -> impl Iterator<Item = &ApiClient> {
-        self.validators.iter().chain(self.executors.iter())
+    pub fn all_clients(&self) -> Vec<ApiClient> {
+        let guard = self.inner.read().expect("node clients lock poisoned");
+        guard
+            .validators
+            .iter()
+            .chain(guard.executors.iter())
+            .cloned()
+            .collect()
     }
 
     #[must_use]
     /// Choose any random client from validators+executors.
-    pub fn any_client(&self) -> Option<&ApiClient> {
-        let validator_count = self.validators.len();
-        let executor_count = self.executors.len();
+    pub fn any_client(&self) -> Option<ApiClient> {
+        let guard = self.inner.read().expect("node clients lock poisoned");
+        let validator_count = guard.validators.len();
+        let executor_count = guard.executors.len();
         let total = validator_count + executor_count;
         if total == 0 {
             return None;
@@ -92,9 +119,9 @@ impl NodeClients {
         let mut rng = thread_rng();
         let choice = rng.gen_range(0..total);
         if choice < validator_count {
-            self.validators.get(choice)
+            guard.validators.get(choice).cloned()
         } else {
-            self.executors.get(choice - validator_count)
+            guard.executors.get(choice - validator_count).cloned()
         }
     }
 
@@ -102,6 +129,16 @@ impl NodeClients {
     /// Convenience wrapper for fan-out queries.
     pub const fn cluster_client(&self) -> ClusterClient<'_> {
         ClusterClient::new(self)
+    }
+
+    pub fn add_validator(&self, client: ApiClient) {
+        let mut guard = self.inner.write().expect("node clients lock poisoned");
+        guard.validators.push(client);
+    }
+
+    pub fn add_executor(&self, client: ApiClient) {
+        let mut guard = self.inner.write().expect("node clients lock poisoned");
+        guard.executors.push(client);
     }
 }
 
@@ -127,7 +164,7 @@ impl<'a> ClusterClient<'a> {
     where
         E: Into<DynError>,
     {
-        let mut clients: Vec<&ApiClient> = self.node_clients.all_clients().collect();
+        let mut clients = self.node_clients.all_clients();
         if clients.is_empty() {
             return Err("cluster client has no api clients".into());
         }
@@ -135,7 +172,7 @@ impl<'a> ClusterClient<'a> {
         clients.shuffle(&mut thread_rng());
 
         let mut last_err = None;
-        for client in clients {
+        for client in &clients {
             match f(client).await {
                 Ok(value) => return Ok(value),
                 Err(err) => last_err = Some(err.into()),

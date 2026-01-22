@@ -43,16 +43,13 @@ impl Workload for ReachabilityWorkload {
     }
 
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
-        let client = ctx
-            .node_clients()
-            .validator_clients()
-            .get(self.target_idx)
-            .ok_or_else(|| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "missing target client",
-                )) as DynError
-            })?;
+        let validators = ctx.node_clients().validator_clients();
+        let client = validators.get(self.target_idx).ok_or_else(|| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "missing target client",
+            )) as DynError
+        })?;
 
         // Lightweight API call to prove reachability.
         client
