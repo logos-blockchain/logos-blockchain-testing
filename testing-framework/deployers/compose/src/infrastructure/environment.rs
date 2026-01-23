@@ -139,10 +139,7 @@ pub fn ensure_supported_topology(
 ) -> Result<(), ComposeRunnerError> {
     let validators = descriptors.validators().len();
     if validators == 0 {
-        return Err(ComposeRunnerError::MissingValidator {
-            validators,
-            executors: descriptors.executors().len(),
-        });
+        return Err(ComposeRunnerError::MissingValidator { validators });
     }
     Ok(())
 }

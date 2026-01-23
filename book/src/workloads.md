@@ -45,7 +45,7 @@ use testing_framework_workflows::workloads::transaction::Workload;
 ```rust,ignore
 use testing_framework_workflows::ScenarioBuilderExt;
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(20)  // Seed 20 wallet accounts
     .transactions_with(|tx| {
         tx.rate(10)   // 10 transactions per block
@@ -63,7 +63,7 @@ use testing_framework_workflows::workloads::transaction;
 let tx_workload = transaction::Workload::with_rate(10)
     .expect("transaction rate must be non-zero");
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(20)
     .with_workload(tx_workload)
     .with_run_duration(Duration::from_secs(60))
@@ -117,7 +117,7 @@ Error: Expectation failed: TxInclusionExpectation
 **How to debug:**
 1. Check logs for proof generation timing:
    ```bash
-   grep "proof generation" $NOMOS_LOG_DIR/executor-0/*.log
+   grep "proof generation" $NOMOS_LOG_DIR/*/*.log
    ```
 2. Verify `POL_PROOF_DEV_MODE=true` was set
 3. Increase duration: `.with_run_duration(Duration::from_secs(120))`
@@ -147,7 +147,7 @@ use testing_framework_workflows::workloads::da::Workload;
 ```rust,ignore
 use testing_framework_workflows::ScenarioBuilderExt;
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .da_with(|da| {
         da.channel_rate(2)  // 2 channels per block
           .blob_rate(4)     // 4 blobs per block
@@ -168,7 +168,7 @@ let da_workload = da::Workload::with_rate(
     20,                            // headroom_percent
 );
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .with_workload(da_workload)
     .with_run_duration(Duration::from_secs(120))
     .build();
@@ -176,16 +176,10 @@ ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
 
 #### Prerequisites
 
-1. **Executors must be present:**
-   ```rust,ignore
-   .executors(N)  // At least 1 executor
-   ```
-   DA workload requires executor nodes to handle blob publishing.
-
-2. **Sufficient duration:**
+1. **Sufficient duration:**
    Channel creation and blob publishing are slower than transaction submission. Allow 120+ seconds.
 
-3. **Circuit artifacts:**
+2. **Circuit artifacts:**
    Same as transaction workload (POL_PROOF_DEV_MODE, circuits staged).
 
 #### Attached Expectation
@@ -195,12 +189,12 @@ ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
 **What it checks:**
 - At least `N` channels were created (where N = channel_rate × expected blocks)
 - At least `M` blobs were published (where M = blob_rate × expected blocks × headroom)
-- Uses BlockFeed and executor API to verify
+- Uses BlockFeed API to verify
 
 **Failure modes:**
 - "Expected >= X channels, observed Y" (Y < X)
 - "Expected >= X blobs, observed Y" (Y < X)
-- Common causes: executor crashes, insufficient duration, DA saturation
+- Common causes: insufficient duration, DA saturation
 
 #### What Failure Looks Like
 
@@ -210,23 +204,14 @@ Error: Expectation failed: DaWorkloadExpectation
   Observed: 23 channels
   
   Possible causes:
-  - Executors crashed or restarted (check executor logs)
   - Duration too short (channels still being created)
-  - Blob publishing failed (check executor API errors)
-  - Network issues (check validator/executor connectivity)
+  - Blob publishing failed (check API errors)
+  - Network issues (check validator connectivity)
 ```
 
 **How to debug:**
-1. Check executor logs:
-   ```bash
-   grep "channel\|blob" $NOMOS_LOG_DIR/executor-0/*.log
-   ```
-2. Verify executors stayed running:
-   ```bash
-   grep "panic\|killed" $NOMOS_LOG_DIR/executor-*/*.log
-   ```
-3. Increase duration: `.with_run_duration(Duration::from_secs(180))`
-4. Reduce rates: `.channel_rate(1).blob_rate(2)`
+1. Increase duration: `.with_run_duration(Duration::from_secs(180))`
+2. Reduce rates: `.channel_rate(1).blob_rate(2)`
 
 ---
 
@@ -247,7 +232,6 @@ use testing_framework_workflows::workloads::chaos::RandomRestartWorkload;
 | `max_delay` | `Duration` | **Required** | Maximum time between restart attempts |
 | `target_cooldown` | `Duration` | **Required** | Minimum time before restarting same node again |
 | `include_validators` | `bool` | **Required** | Whether to restart validators |
-| `include_executors` | `bool` | **Required** | Whether to restart executors |
 
 #### Usage
 
@@ -258,7 +242,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::{ScenarioBuilderExt, workloads::chaos::RandomRestartWorkload};
 
 let scenario = ScenarioBuilder::topology_with(|t| {
-    t.network_star().validators(3).executors(2)
+    t.network_star().validators(3)
 })
 .enable_node_control()  // REQUIRED for chaos
 .with_workload(RandomRestartWorkload::new(
@@ -266,7 +250,6 @@ let scenario = ScenarioBuilder::topology_with(|t| {
     Duration::from_secs(75),   // max_delay
     Duration::from_secs(120),  // target_cooldown
     true,                      // include_validators
-    true,                      // include_executors
 ))
 .expect_consensus_liveness()
 .with_run_duration(Duration::from_secs(180))
@@ -288,7 +271,6 @@ let scenario = ScenarioBuilder::topology_with(|t| {
 
 3. **Sufficient topology:**
    - For validators: Need >1 validator (workload skips if only 1)
-   - For executors: Can restart all executors
 
 4. **Realistic timing:**
    - Total duration should be 2-3× the max_delay + cooldown
@@ -338,8 +320,7 @@ Error: Expectation failed: ConsensusLiveness
    grep "NodeControlHandle" $NOMOS_LOG_DIR/*/*.log
    ```
 3. Increase cooldown: `Duration::from_secs(180)`
-4. Reduce restart scope: `include_validators = false` (test executors only)
-5. Increase duration: `.with_run_duration(Duration::from_secs(300))`
+4. Increase duration: `.with_run_duration(Duration::from_secs(300))`
 
 ---
 
@@ -357,7 +338,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 #### DSL Usage
 
 ```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -452,7 +433,6 @@ These expectations are added automatically when using the DSL (`.transactions_wi
     Duration::from_secs(75),   // max
     Duration::from_secs(120),  // cooldown
     true,  // validators
-    true,  // executors
 ))
 ```
 
@@ -463,7 +443,7 @@ These expectations are added automatically when using the DSL (`.transactions_wi
 ### Pattern 1: Multiple Workloads
 
 ```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(20)
     .transactions_with(|tx| tx.rate(5).users(10))
     .da_with(|da| da.channel_rate(2).blob_rate(2))
@@ -493,7 +473,7 @@ impl Expectation for MyCustomExpectation {
     }
 }
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .with_expectation(MyCustomExpectation)
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -507,7 +487,7 @@ When a workload or expectation fails:
 
 1. Check logs: `$NOMOS_LOG_DIR/*/` or `docker compose logs` or `kubectl logs`
 2. Verify environment variables: `POL_PROOF_DEV_MODE`, `NOMOS_NODE_BIN`, etc.
-3. Check prerequisites: wallets, executors, node control, circuits
+3. Check prerequisites: wallets, node control, circuits
 4. Increase duration: Double the run duration and retry
 5. Reduce rates: Half the traffic rates and retry
 6. Check metrics: Prometheus queries for block height, tx count, DA stats

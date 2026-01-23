@@ -30,7 +30,7 @@ See also: [RunContext: BlockFeed & Node Control](node-control.md) for the curren
 
 ## Guidance
 - Keep chaos realistic: avoid flapping or patterns you wouldn't operate in prod.
-- Scope chaos: choose validators vs executors intentionally; don't restart all
+- Scope chaos: choose validators intentionally; don't restart all
   nodes at once unless you're testing full outages.
 - Combine chaos with observability: capture block feed/metrics and API health so
   failures are diagnosable.

@@ -8,19 +8,18 @@ Use `scripts/run/run-examples.sh` for all modes—it handles all setup automatic
 
 ```bash
 # Host mode (local processes)
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
+scripts/run/run-examples.sh -t 60 -v 3 host
 
 # Compose mode (Docker Compose)
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+scripts/run/run-examples.sh -t 60 -v 3 compose
 
 # K8s mode (Kubernetes)
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
+scripts/run/run-examples.sh -t 60 -v 3 k8s
 ```
 
 **Parameters:**
 - `-t 60` — Run duration in seconds
 - `-v 3` — Number of validators
-- `-e 1` — Number of executors
 - `host|compose|k8s` — Deployment mode
 
 This script handles:
@@ -102,7 +101,6 @@ For manual control, run the `local_runner` binary directly:
 ```bash
 POL_PROOF_DEV_MODE=true \
 NOMOS_NODE_BIN=/path/to/nomos-node \
-NOMOS_EXECUTOR_BIN=/path/to/nomos-executor \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -111,10 +109,8 @@ cargo run -p runner-examples --bin local_runner
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `NOMOS_DEMO_VALIDATORS` | 1 | Number of validators (legacy: `LOCAL_DEMO_VALIDATORS`) |
-| `NOMOS_DEMO_EXECUTORS` | 1 | Number of executors (legacy: `LOCAL_DEMO_EXECUTORS`) |
 | `NOMOS_DEMO_RUN_SECS` | 60 | Run duration in seconds (legacy: `LOCAL_DEMO_RUN_SECS`) |
 | `NOMOS_NODE_BIN` | — | Path to nomos-node binary (required) |
-| `NOMOS_EXECUTOR_BIN` | — | Path to nomos-executor binary (required) |
 | `NOMOS_LOG_DIR` | None | Directory for per-node log files |
 | `NOMOS_TESTS_KEEP_LOGS` | 0 | Keep per-run temporary directories (useful for debugging/CI) |
 | `NOMOS_TESTS_TRACING` | false | Enable debug tracing preset |
@@ -176,9 +172,8 @@ cargo run -p runner-examples --bin compose_runner
 | `NOMOS_TESTNET_IMAGE` | — | Image tag (required, must match built image) |
 | `POL_PROOF_DEV_MODE` | — | **REQUIRED**: Set to `true` for all runners |
 | `NOMOS_DEMO_VALIDATORS` | 1 | Number of validators |
-| `NOMOS_DEMO_EXECUTORS` | 1 | Number of executors |
 | `NOMOS_DEMO_RUN_SECS` | 60 | Run duration in seconds |
-| `COMPOSE_NODE_PAIRS` | — | Alternative topology format: "validators×executors" (e.g., `3x2`) |
+| `COMPOSE_NODE_PAIRS` | — | Alternative topology format: "validators" (e.g., `3`) |
 | `NOMOS_METRICS_QUERY_URL` | None | Prometheus-compatible base URL for runner to query |
 | `NOMOS_METRICS_OTLP_INGEST_URL` | None | Full OTLP HTTP ingest URL for node metrics export |
 | `NOMOS_GRAFANA_URL` | None | Grafana base URL for printing/logging |
@@ -249,7 +244,6 @@ cargo run -p runner-examples --bin k8s_runner
 | `NOMOS_TESTNET_IMAGE` | — | Image tag (required) |
 | `POL_PROOF_DEV_MODE` | — | **REQUIRED**: Set to `true` for all runners |
 | `NOMOS_DEMO_VALIDATORS` | 1 | Number of validators |
-| `NOMOS_DEMO_EXECUTORS` | 1 | Number of executors |
 | `NOMOS_DEMO_RUN_SECS` | 60 | Run duration in seconds |
 | `NOMOS_METRICS_QUERY_URL` | None | Prometheus-compatible base URL for runner to query (PromQL) |
 | `NOMOS_METRICS_OTLP_INGEST_URL` | None | Full OTLP HTTP ingest URL for node metrics export |

@@ -38,7 +38,7 @@ This file is required and should define:
 
 ## Node Binaries
 
-Scenarios need compiled `nomos-node` and `nomos-executor` binaries.
+Scenarios need compiled `nomos-node` binaries.
 
 ### Option 1: Use Helper Scripts (Recommended)
 
@@ -49,7 +49,7 @@ scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
 This automatically:
 - Clones/updates nomos-node checkout
 - Builds required binaries
-- Sets `NOMOS_NODE_BIN` / `NOMOS_EXECUTOR_BIN`
+- Sets `NOMOS_NODE_BIN` 
 
 ### Option 2: Manual Build
 
@@ -57,11 +57,10 @@ If you have a sibling `nomos-node` checkout:
 
 ```bash
 cd ../nomos-node
-cargo build --release --bin nomos-node --bin nomos-executor
+cargo build --release --bin nomos-node 
 
 # Set environment variables
 export NOMOS_NODE_BIN=$PWD/target/release/nomos-node
-export NOMOS_EXECUTOR_BIN=$PWD/target/release/nomos-executor
 
 # Return to testing framework
 cd ../nomos-testing
@@ -82,7 +81,6 @@ CI workflows use prebuilt artifacts:
   run: |
     tar -xzf .tmp/nomos-binaries-linux-*.tar.gz -C .tmp/
     export NOMOS_NODE_BIN=$PWD/.tmp/nomos-node
-    export NOMOS_EXECUTOR_BIN=$PWD/.tmp/nomos-executor
 ```
 
 ## Circuit Assets (KZG Parameters)
@@ -253,7 +251,6 @@ docker images | grep logos-blockchain-testing
 
 # 6. For host runner: verify node binaries (if not using scripts)
 $NOMOS_NODE_BIN --version
-$NOMOS_EXECUTOR_BIN --version
 ```
 
 ## Recommended: Use Helper Scripts

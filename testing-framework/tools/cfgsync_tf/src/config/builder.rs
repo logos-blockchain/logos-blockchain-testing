@@ -3,14 +3,12 @@ use std::{collections::HashMap, net::Ipv4Addr, str::FromStr as _};
 use nomos_core::mantle::GenesisTx as _;
 use nomos_libp2p::{Multiaddr, PeerId, ed25519};
 use nomos_tracing_service::TracingSettings;
-use nomos_utils::net::get_available_udp_port;
 use rand::{Rng as _, thread_rng};
 use testing_framework_config::topology::configs::{
     GeneralConfig,
     api::GeneralApiConfig,
     base::{BaseConfigError, BaseConfigs, build_base_configs},
     consensus::{ConsensusConfigError, ConsensusParams, create_genesis_tx_with_declarations},
-    da::DaParams,
     network::NetworkParams,
     time::default_time_config,
     wallet::WalletConfig,
@@ -24,27 +22,23 @@ use crate::{
         tracing::update_tracing_identifier,
         validation::{ValidationError, validate_inputs},
     },
-    host::{Host, HostKind, sort_hosts},
+    host::{Host, sort_hosts},
     network::rewrite_initial_peers,
 };
 
 pub fn create_node_configs(
     consensus_params: &ConsensusParams,
-    da_params: &DaParams,
     tracing_settings: &TracingSettings,
     wallet_config: &WalletConfig,
     ids: Option<Vec<[u8; 32]>>,
-    da_ports: Option<Vec<u16>>,
     blend_ports: Option<Vec<u16>>,
     hosts: Vec<Host>,
 ) -> Result<HashMap<Host, GeneralConfig>, NodeConfigBuildError> {
     try_create_node_configs(
         consensus_params,
-        da_params,
         tracing_settings,
         wallet_config,
         ids,
-        da_ports,
         blend_ports,
         hosts,
     )
@@ -81,41 +75,29 @@ pub enum NodeConfigBuildError {
 
 pub fn try_create_node_configs(
     consensus_params: &ConsensusParams,
-    da_params: &DaParams,
     tracing_settings: &TracingSettings,
     wallet_config: &WalletConfig,
     ids: Option<Vec<[u8; 32]>>,
-    da_ports: Option<Vec<u16>>,
     blend_ports: Option<Vec<u16>>,
     hosts: Vec<Host>,
 ) -> Result<HashMap<Host, GeneralConfig>, NodeConfigBuildError> {
     let hosts = sort_hosts(hosts);
 
-    validate_inputs(
-        &hosts,
-        consensus_params,
-        ids.as_ref(),
-        da_ports.as_ref(),
-        blend_ports.as_ref(),
-    )?;
+    validate_inputs(&hosts, consensus_params, ids.as_ref(), blend_ports.as_ref())?;
 
     let ids = generate_ids(consensus_params.n_participants, ids);
-    let ports = resolve_da_ports(consensus_params.n_participants, da_ports)?;
     let blend_ports = resolve_blend_ports(&hosts, blend_ports);
 
     let BaseConfigs {
         mut consensus_configs,
         bootstrap_configs,
-        da_configs,
         network_configs,
         blend_configs,
     } = build_base_configs(
         &ids,
         consensus_params,
-        da_params,
         &NetworkParams::default(),
         wallet_config,
-        &ports,
         &blend_ports,
     )?;
 
@@ -139,7 +121,7 @@ pub fn try_create_node_configs(
         &peer_ids,
     )?;
 
-    let providers = try_create_providers(&hosts, &consensus_configs, &blend_configs, &da_configs)?;
+    let providers = try_create_providers(&hosts, &consensus_configs, &blend_configs)?;
 
     let first_consensus = consensus_configs
         .get(0)
@@ -151,12 +133,11 @@ pub fn try_create_node_configs(
         c.genesis_tx = genesis_tx.clone();
     }
 
-    let kms_configs = create_kms_configs(&blend_configs, &da_configs);
+    let kms_configs = create_kms_configs(&blend_configs);
 
     for (i, host) in hosts.into_iter().enumerate() {
         if i >= consensus_configs.len()
             || i >= api_configs.len()
-            || i >= da_configs.len()
             || i >= network_configs.len()
             || i >= blend_configs.len()
             || i >= host_network_init_peers.len()
@@ -168,18 +149,6 @@ pub fn try_create_node_configs(
 
         let consensus_config = consensus_configs[i].clone();
         let api_config = api_configs[i].clone();
-
-        let mut da_config = da_configs[i].clone();
-        let da_addr_value = format!("/ip4/0.0.0.0/udp/{}/quic-v1", host.da_network_port);
-        da_config.listening_address = Multiaddr::from_str(&da_addr_value).map_err(|source| {
-            NodeConfigBuildError::InvalidMultiaddr {
-                value: da_addr_value,
-                message: source.to_string(),
-            }
-        })?;
-        if matches!(host.kind, HostKind::Validator) {
-            da_config.policy_settings.min_dispersal_peers = 0;
-        }
 
         let mut network_config = network_configs[i].clone();
         network_config.backend.swarm.host = Ipv4Addr::UNSPECIFIED;
@@ -215,7 +184,6 @@ pub fn try_create_node_configs(
             GeneralConfig {
                 consensus_config,
                 bootstrapping_config: bootstrap_configs[i].clone(),
-                da_config,
                 network_config,
                 blend_config,
                 api_config,
@@ -238,17 +206,6 @@ fn generate_ids(count: usize, ids: Option<Vec<[u8; 32]>>) -> Vec<[u8; 32]> {
         }
 
         generated
-    })
-}
-
-fn resolve_da_ports(
-    count: usize,
-    da_ports: Option<Vec<u16>>,
-) -> Result<Vec<u16>, NodeConfigBuildError> {
-    da_ports.map(Ok).unwrap_or_else(|| {
-        (0..count)
-            .map(|_| get_available_udp_port().ok_or(NodeConfigBuildError::PortAllocFailed))
-            .collect()
     })
 }
 

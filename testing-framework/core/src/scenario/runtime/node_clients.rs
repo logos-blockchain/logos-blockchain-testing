@@ -11,7 +11,7 @@ use crate::{
     topology::{deployment::Topology, generation::GeneratedTopology},
 };
 
-/// Collection of API clients for the validator and executor set.
+/// Collection of API clients for the validatorset.
 #[derive(Clone, Default)]
 pub struct NodeClients {
     inner: Arc<RwLock<NodeClientsInner>>,
@@ -20,18 +20,14 @@ pub struct NodeClients {
 #[derive(Default)]
 struct NodeClientsInner {
     validators: Vec<ApiClient>,
-    executors: Vec<ApiClient>,
 }
 
 impl NodeClients {
     #[must_use]
     /// Build clients from preconstructed vectors.
-    pub fn new(validators: Vec<ApiClient>, executors: Vec<ApiClient>) -> Self {
+    pub fn new(validators: Vec<ApiClient>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(NodeClientsInner {
-                validators,
-                executors,
-            })),
+            inner: Arc::new(RwLock::new(NodeClientsInner { validators })),
         }
     }
 
@@ -43,12 +39,7 @@ impl NodeClients {
             ApiClient::from_urls(node.url(), testing)
         });
 
-        let executor_clients = topology.executors().iter().map(|node| {
-            let testing = node.testing_url();
-            ApiClient::from_urls(node.url(), testing)
-        });
-
-        Self::new(validator_clients.collect(), executor_clients.collect())
+        Self::new(validator_clients.collect())
     }
 
     #[must_use]
@@ -58,16 +49,6 @@ impl NodeClients {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .validators
-            .clone()
-    }
-
-    #[must_use]
-    /// Executor API clients.
-    pub fn executor_clients(&self) -> Vec<ApiClient> {
-        self.inner
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .executors
             .clone()
     }
 
@@ -83,18 +64,6 @@ impl NodeClients {
         validators.get(idx).cloned()
     }
 
-    #[must_use]
-    /// Choose a random executor client if present.
-    pub fn random_executor(&self) -> Option<ApiClient> {
-        let executors = self.executor_clients();
-        if executors.is_empty() {
-            return None;
-        }
-        let mut rng = thread_rng();
-        let idx = rng.gen_range(0..executors.len());
-        executors.get(idx).cloned()
-    }
-
     /// Iterator over all clients.
     pub fn all_clients(&self) -> Vec<ApiClient> {
         let guard = self
@@ -102,16 +71,11 @@ impl NodeClients {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        guard
-            .validators
-            .iter()
-            .chain(guard.executors.iter())
-            .cloned()
-            .collect()
+        guard.validators.iter().cloned().collect()
     }
 
     #[must_use]
-    /// Choose any random client from validators+executors.
+    /// Choose any random client from validators.
     pub fn any_client(&self) -> Option<ApiClient> {
         let guard = self
             .inner
@@ -119,18 +83,13 @@ impl NodeClients {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let validator_count = guard.validators.len();
-        let executor_count = guard.executors.len();
-        let total = validator_count + executor_count;
+        let total = validator_count;
         if total == 0 {
             return None;
         }
         let mut rng = thread_rng();
         let choice = rng.gen_range(0..total);
-        if choice < validator_count {
-            guard.validators.get(choice).cloned()
-        } else {
-            guard.executors.get(choice - validator_count).cloned()
-        }
+        guard.validators.get(choice).cloned()
     }
 
     #[must_use]
@@ -148,15 +107,6 @@ impl NodeClients {
         guard.validators.push(client);
     }
 
-    pub fn add_executor(&self, client: ApiClient) {
-        let mut guard = self
-            .inner
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        guard.executors.push(client);
-    }
-
     pub fn clear(&self) {
         let mut guard = self
             .inner
@@ -164,7 +114,6 @@ impl NodeClients {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         guard.validators.clear();
-        guard.executors.clear();
     }
 }
 

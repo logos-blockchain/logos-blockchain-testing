@@ -19,9 +19,7 @@ clap                          = { default-features = false, version = "4" }
 groth16                       = { workspace = true }
 hex                           = { workspace = true }
 key-management-system-service = { workspace = true }
-logos-blockchain-executor     = { workspace = true }
 nomos-core                    = { workspace = true }
-nomos-da-network-core         = { workspace = true }
 nomos-libp2p                  = { workspace = true }
 nomos-node                    = { workspace = true }
 nomos-tracing-service         = { workspace = true }
@@ -33,7 +31,6 @@ serde_json                    = { default-features = false, version = "1.0" }
 serde_path_to_error           = "0.1"
 serde_with                    = { workspace = true }
 serde_yaml                    = "0.9"
-subnetworks-assignations      = { workspace = true }
 testing-framework-config      = { workspace = true }
 testing-framework-core        = { path = "../../core" }
 thiserror                     = { workspace = true }

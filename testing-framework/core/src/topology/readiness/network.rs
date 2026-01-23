@@ -1,3 +1,4 @@
+use nomos_libp2p::PeerId;
 use nomos_network::backends::libp2p::Libp2pInfo;
 use reqwest::{Client, Url};
 use thiserror::Error;
@@ -36,14 +37,7 @@ impl<'a> ReadinessCheck<'a> for NetworkReadiness<'a> {
     type Data = Vec<NodeNetworkStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        let (validator_statuses, executor_statuses) = tokio::join!(
-            collect_validator_statuses(self),
-            collect_executor_statuses(self)
-        );
-        validator_statuses
-            .into_iter()
-            .chain(executor_statuses)
-            .collect()
+        collect_validator_statuses(self).await
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
@@ -137,38 +131,6 @@ async fn collect_validator_statuses(readiness: &NetworkReadiness<'_>) -> Vec<Nod
     futures::future::join_all(validator_futures).await
 }
 
-async fn collect_executor_statuses(readiness: &NetworkReadiness<'_>) -> Vec<NodeNetworkStatus> {
-    let offset = readiness.topology.validators.len();
-    let executor_futures = readiness
-        .topology
-        .executors
-        .iter()
-        .enumerate()
-        .map(|(idx, node)| {
-            let global_idx = offset + idx;
-            let label = readiness
-                .labels
-                .get(global_idx)
-                .cloned()
-                .unwrap_or_else(|| format!("executor#{idx}"));
-            let expected_peers = readiness.expected_peer_counts.get(global_idx).copied();
-            async move {
-                let result = node
-                    .api()
-                    .network_info()
-                    .await
-                    .map_err(NetworkInfoError::from);
-                NodeNetworkStatus {
-                    label,
-                    expected_peers,
-                    result,
-                }
-            }
-        });
-
-    futures::future::join_all(executor_futures).await
-}
-
 pub async fn try_fetch_network_info(
     client: &Client,
     base: &Url,
@@ -217,6 +179,7 @@ fn log_network_warning(base: &Url, err: &NetworkInfoError) -> Libp2pInfo {
 fn empty_libp2p_info() -> Libp2pInfo {
     Libp2pInfo {
         listen_addresses: Vec::with_capacity(0),
+        peer_id: PeerId::random(),
         n_peers: 0,
         n_connections: 0,
         n_pending_connections: 0,

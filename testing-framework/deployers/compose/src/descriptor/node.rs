@@ -3,7 +3,7 @@ use testing_framework_core::topology::generation::GeneratedNodeConfig;
 
 use super::{ComposeNodeKind, base_environment, base_volumes, default_extra_hosts};
 
-/// Describes a validator or executor container in the compose stack.
+/// Describes a validator container in the compose stack.
 #[derive(Clone, Debug, Serialize)]
 pub struct NodeDescriptor {
     name: String,
@@ -62,7 +62,6 @@ impl NodeDescriptor {
                 "CFG_NETWORK_PORT",
                 node.general.network_config.backend.swarm.port.to_string(),
             ),
-            EnvEntry::new("CFG_DA_PORT", node.da_port.to_string()),
             EnvEntry::new("CFG_BLEND_PORT", node.blend_port.to_string()),
             EnvEntry::new("CFG_API_PORT", api_port.to_string()),
             EnvEntry::new("CFG_TESTING_HTTP_PORT", testing_port.to_string()),

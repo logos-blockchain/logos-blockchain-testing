@@ -33,7 +33,6 @@ impl DeploymentSetup {
 
         info!(
             validators = self.descriptors.validators().len(),
-            executors = self.descriptors.executors().len(),
             "starting compose deployment"
         );
 

@@ -16,10 +16,6 @@ pub async fn wait_for_validators(ports: &[u16]) -> Result<(), HttpReadinessError
     wait_for_ports(ports, NodeRole::Validator).await
 }
 
-pub async fn wait_for_executors(ports: &[u16]) -> Result<(), HttpReadinessError> {
-    wait_for_ports(ports, NodeRole::Executor).await
-}
-
 async fn wait_for_ports(ports: &[u16], role: NodeRole) -> Result<(), HttpReadinessError> {
     let host = compose_runner_host();
     let timeout = compose_http_timeout();

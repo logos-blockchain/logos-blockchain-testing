@@ -2,11 +2,6 @@
 
 - **Validator**: node role responsible for participating in consensus and block
   production.
-- **Executor**: a validator node with the DA dispersal service enabled. Executors
-  can submit transactions and disperse blob data to the DA network, in addition
-  to performing all validator functions.
-- **DA (Data Availability)**: subsystem ensuring blobs or channel data are
-  published and retrievable for validation.
 - **Deployer**: component that provisions infrastructure (spawns processes,
   creates containers, or launches pods), waits for readiness, and returns a
   Runner. Examples: LocalDeployer, ComposeDeployer, K8sDeployer.

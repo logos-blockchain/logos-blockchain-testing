@@ -201,7 +201,7 @@ impl Deployer<()> for MyDeployer {
     async fn deploy(&self, scenario: &Scenario<()>) -> Result<Runner, Self::Error> {
         // 1. Launch nodes using scenario.topology()
         // 2. Wait for readiness (e.g., consensus info endpoint responds)
-        // 3. Build NodeClients for validators/executors
+        // 3. Build NodeClients for validators
         // 4. Spawn a block feed for expectations (optional but recommended)
         // 5. Create NodeControlHandle if you support restarts (optional)
         // 6. Return a Runner wrapping RunContext + CleanupGuard
@@ -345,7 +345,7 @@ impl MyWorkloadDsl for ScenarioBuilder {
 Users can then call:
 
 ```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(1))
+ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
     .my_workload_with(|w| {
         w.target_rate(10)
          .some_option(true)

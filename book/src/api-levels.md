@@ -17,7 +17,7 @@ use std::time::Duration;
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
-let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(5)
     .transactions_with(|txs| txs.rate(5).users(3))
     .da_with(|da| da.channel_rate(1).blob_rate(1).headroom_percent(20))
@@ -56,7 +56,7 @@ let da_workload = da::Workload::with_rate(
     da::Workload::default_headroom_percent(),
 );
 
-let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(5)
     .with_workload(tx_workload)
     .with_workload(da_workload)
@@ -97,7 +97,7 @@ use testing_framework_workflows::{ScenarioBuilderExt, workloads::transaction};
 let tx_workload = transaction::Workload::with_rate(5)
     .expect("transaction rate must be non-zero");
 
-let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(5)
     .with_workload(tx_workload)          // direct instantiation
     .expect_consensus_liveness()         // DSL

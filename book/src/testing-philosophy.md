@@ -14,7 +14,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn declarative_over_imperative() {
     // Good: declarative
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -22,7 +22,7 @@ pub fn declarative_over_imperative() {
         .build();
 
     // Bad: imperative (framework doesn't work this way)
-    // spawn_validator(); spawn_executor();
+    // spawn_validator();
     // loop { submit_tx(); check_block(); }
 }
 ```
@@ -47,7 +47,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn protocol_time_not_wall_time() {
     // Good: protocol-oriented thinking
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -84,7 +84,7 @@ use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub fn determinism_first() {
     // Separate: functional test (deterministic)
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -93,7 +93,7 @@ pub fn determinism_first() {
 
     // Separate: chaos test (introduces randomness)
     let _chaos_plan =
-        ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+        ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
             .enable_node_control()
             .chaos_with(|c| {
                 c.restart()

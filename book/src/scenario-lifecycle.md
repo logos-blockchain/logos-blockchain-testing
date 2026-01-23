@@ -61,7 +61,7 @@ flowchart TB
 Declare a topology, attach workloads and expectations, and set the run window. The plan is the single source of truth for what will happen.
 
 **Key actions:**
-- Define cluster shape (validators, executors, network topology)
+- Define cluster shape (validators, network topology)
 - Configure workloads (transaction rate, DA traffic, chaos patterns)
 - Attach expectations (liveness, inclusion, custom checks)
 - Set timing parameters (run duration, cooldown period)
@@ -74,7 +74,7 @@ Hand the plan to a deployer. It provisions the environment on the chosen backend
 
 **Key actions:**
 - Provision infrastructure (processes, containers, or pods)
-- Launch validator and executor nodes
+- Launch validator nodes
 - Wait for readiness probes (HTTP endpoints respond)
 - Establish node connectivity and metrics endpoints
 - Spawn BlockFeed for real-time block observation

@@ -322,7 +322,6 @@ build_bundle::prepare_circuits() {
   fi
 
   NODE_BIN="${NODE_TARGET}/debug/logos-blockchain-node"
-  EXEC_BIN="${NODE_TARGET}/debug/logos-blockchain-executor"
   CLI_BIN="${NODE_TARGET}/debug/logos-blockchain-cli"
 }
 
@@ -360,13 +359,13 @@ build_bundle::build_binaries() {
         LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
         cargo build --all-features \
-        -p logos-blockchain-node -p logos-blockchain-executor -p logos-blockchain-cli \
+        -p logos-blockchain-node -p logos-blockchain-cli \
         --target-dir "${NODE_TARGET}"
     else
       RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
         LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
         cargo build --all-features \
-        -p logos-blockchain-node -p logos-blockchain-executor -p logos-blockchain-cli \
+        -p logos-blockchain-node -p logos-blockchain-cli \
         --target-dir "${NODE_TARGET}"
     fi
   )
@@ -380,7 +379,6 @@ build_bundle::package_bundle() {
   cp -a "${CIRCUITS_DIR}/." "${bundle_dir}/artifacts/circuits/"
   mkdir -p "${bundle_dir}/artifacts"
   cp "${NODE_BIN}" "${bundle_dir}/artifacts/logos-blockchain-node"
-  cp "${EXEC_BIN}" "${bundle_dir}/artifacts/logos-blockchain-executor"
   cp "${CLI_BIN}" "${bundle_dir}/artifacts/logos-blockchain-cli"
   {
     echo "nomos_node_path=${NOMOS_NODE_PATH:-}"

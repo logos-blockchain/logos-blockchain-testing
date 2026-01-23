@@ -18,7 +18,7 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
     // Required env vars (set on the command line when running this test):
     // - `POL_PROOF_DEV_MODE=true`
     // - `RUST_LOG=info` (optional)
-    let config = TopologyConfig::with_node_numbers(2, 0);
+    let config = TopologyConfig::with_node_numbers(2);
     let deployer = LocalDeployer::new();
     let cluster = deployer.manual_cluster(config)?;
     // Nodes are stopped automatically when the cluster is dropped.

@@ -81,7 +81,7 @@ Helper utilities:
 
 **Compose runner** includes:
 - **Prometheus** at `http://localhost:9090` (metrics scraping)
-- Node metrics exposed per validator/executor
+- Node metrics exposed per validator
 - Access in expectations: `ctx.telemetry().prometheus().map(|p| p.base_url())`
 
 **Logging** controlled by:

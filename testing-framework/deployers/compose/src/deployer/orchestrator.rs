@@ -51,7 +51,6 @@ impl DeploymentOrchestrator {
 
         tracing::info!(
             validators = descriptors.validators().len(),
-            executors = descriptors.executors().len(),
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
             metrics_query_url = observability.metrics_query_url.as_ref().map(|u| u.as_str()),
@@ -64,7 +63,6 @@ impl DeploymentOrchestrator {
         );
 
         let validator_count = descriptors.validators().len();
-        let executor_count = descriptors.executors().len();
         let host_ports = PortManager::prepare(&mut environment, &descriptors).await?;
 
         wait_for_readiness_or_grace_period(
@@ -105,7 +103,6 @@ impl DeploymentOrchestrator {
 
         info!(
             validators = validator_count,
-            executors = executor_count,
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
             host,
@@ -208,28 +205,12 @@ fn log_profiling_urls(host: &str, ports: &HostPortMapping) {
             "validator profiling endpoint (profiling feature required)"
         );
     }
-    for (idx, node) in ports.executors.iter().enumerate() {
-        tracing::info!(
-            executor = idx,
-            profiling_url = %format!(
-                "http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
-                host, node.api
-            ),
-            "executor profiling endpoint (profiling feature required)"
-        );
-    }
 }
 
 fn print_profiling_urls(host: &str, ports: &HostPortMapping) {
     for (idx, node) in ports.validators.iter().enumerate() {
         println!(
             "TESTNET_PPROF validator_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
-            idx, host, node.api
-        );
-    }
-    for (idx, node) in ports.executors.iter().enumerate() {
-        println!(
-            "TESTNET_PPROF executor_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
             idx, host, node.api
         );
     }

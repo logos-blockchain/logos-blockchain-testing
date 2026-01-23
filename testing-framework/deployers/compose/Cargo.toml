@@ -18,18 +18,18 @@ async-trait              = { workspace = true }
 cfgsync_tf               = { workspace = true }
 nomos-tracing            = { workspace = true }
 nomos-tracing-service    = { workspace = true }
-reqwest                  = { workspace = true, features = ["json"] }
-serde                    = { workspace = true, features = ["derive"] }
+reqwest                  = { features = ["json"], workspace = true }
+serde                    = { features = ["derive"], workspace = true }
 tempfile                 = { workspace = true }
 tera                     = "1.19"
 testing-framework-config = { workspace = true }
 testing-framework-core   = { path = "../../core" }
 testing-framework-env    = { workspace = true }
 thiserror                = { workspace = true }
-tokio                    = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio                    = { features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"], workspace = true }
 tracing                  = { workspace = true }
 url                      = { version = "2" }
-uuid                     = { version = "1", features = ["v4"] }
+uuid                     = { features = ["v4"], version = "1" }
 
 [dev-dependencies]
 groth16                       = { workspace = true }

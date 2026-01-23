@@ -50,14 +50,12 @@ The framework ships with runnable example binaries in `examples/src/bin/`.
 scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
 ```
 
-This handles circuit setup, binary building, and runs a complete scenario: 1 validator + 1 executor, mixed transaction + DA workload (5 tx/block + 1 channel + 1 blob), 60s duration.
-
-**Note:** The DA workload attaches `DaWorkloadExpectation`, and channel/blob publishing is slower than tx submission. If you see `DaWorkloadExpectation` failures, rerun with a longer duration (e.g., `-t 120`), especially on CI or slower machines.
+This handles circuit setup, binary building, and runs a complete scenario: 1 validator, mixed transaction + DA workload (5 tx/block + 1 channel + 1 blob), 60s duration.
 
 **Alternative:** Direct cargo run (requires manual setup):
 
 ```bash
-# Requires circuits in place and NOMOS_NODE_BIN/NOMOS_EXECUTOR_BIN set
+# Requires circuits in place and NOMOS_NODE_BIN set
 POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 ```
 
@@ -72,8 +70,8 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn run_local_demo() -> Result<()> {
-    // Define the scenario (1 validator + 1 executor, tx + DA workload)
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(1))
+    // Define the scenario (1 validator, tx + DA workload)
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
         .wallets(1_000)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
@@ -121,7 +119,6 @@ pub fn step_1_topology() -> testing_framework_core::scenario::Builder<()> {
     ScenarioBuilder::topology_with(|t| {
         t.network_star() // Star topology: all nodes connect to seed
             .validators(1) // 1 validator node
-            .executors(1) // 1 executor node (validator + DA dispersal)
     })
 }
 ```
@@ -216,7 +213,7 @@ pub async fn step_6_deploy_and_execute() -> Result<()> {
 **With run-examples.sh** (recommended):
 
 ```bash
-# Scale up to 3 validators + 2 executors, run for 2 minutes
+# Scale up to 3 validators, run for 2 minutes
 scripts/run/run-examples.sh -t 120 -v 3 -e 2 host
 ```
 
@@ -225,7 +222,6 @@ scripts/run/run-examples.sh -t 120 -v 3 -e 2 host
 ```bash
 # Uses NOMOS_DEMO_* env vars (or legacy *_DEMO_* vars)
 NOMOS_DEMO_VALIDATORS=3 \
-NOMOS_DEMO_EXECUTORS=2 \
 NOMOS_DEMO_RUN_SECS=120 \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner

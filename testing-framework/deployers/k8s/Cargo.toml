@@ -15,19 +15,19 @@ workspace = true
 [dependencies]
 anyhow                   = "1"
 async-trait              = { workspace = true }
-k8s-openapi              = { version = "0.20", features = ["latest"] }
-kube                     = { version = "0.87", default-features = false, features = ["client", "runtime", "rustls-tls"] }
+k8s-openapi              = { features = ["latest"], version = "0.20" }
+kube                     = { default-features = false, features = ["client", "runtime", "rustls-tls"], version = "0.87" }
 nomos-tracing            = { workspace = true }
 nomos-tracing-service    = { workspace = true }
-reqwest                  = { workspace = true, features = ["json"] }
-serde                    = { version = "1", features = ["derive"] }
+reqwest                  = { features = ["json"], workspace = true }
+serde                    = { features = ["derive"], version = "1" }
 serde_yaml               = { workspace = true }
 tempfile                 = { workspace = true }
 testing-framework-config = { workspace = true }
 testing-framework-core   = { path = "../../core" }
 testing-framework-env    = { workspace = true }
 thiserror                = { workspace = true }
-tokio                    = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio                    = { features = ["macros", "net", "process", "rt-multi-thread", "sync", "time"], workspace = true }
 tracing                  = { workspace = true }
 url                      = { version = "2" }
-uuid                     = { version = "1", features = ["v4"] }
+uuid                     = { features = ["v4"], version = "1" }

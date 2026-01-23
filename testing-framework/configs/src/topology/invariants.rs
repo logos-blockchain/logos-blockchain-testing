@@ -19,7 +19,6 @@ pub enum TopologyInvariantError {
 pub fn validate_node_vectors(
     participants: usize,
     ids: Option<&Vec<[u8; 32]>>,
-    da_ports: Option<&Vec<u16>>,
     blend_ports: Option<&Vec<u16>>,
 ) -> Result<(), TopologyInvariantError> {
     if participants == 0 {
@@ -30,15 +29,6 @@ pub fn validate_node_vectors(
         if ids.len() != participants {
             return Err(TopologyInvariantError::IdCountMismatch {
                 actual: ids.len(),
-                expected: participants,
-            });
-        }
-    }
-
-    if let Some(ports) = da_ports {
-        if ports.len() != participants {
-            return Err(TopologyInvariantError::DaPortCountMismatch {
-                actual: ports.len(),
                 expected: participants,
             });
         }
@@ -59,7 +49,6 @@ pub fn validate_node_vectors(
 pub fn validate_generated_vectors(
     participants: usize,
     ids: &[[u8; 32]],
-    da_ports: &[u16],
     blend_ports: &[u16],
 ) -> Result<(), TopologyInvariantError> {
     if participants == 0 {
@@ -69,13 +58,6 @@ pub fn validate_generated_vectors(
     if ids.len() != participants {
         return Err(TopologyInvariantError::IdCountMismatch {
             actual: ids.len(),
-            expected: participants,
-        });
-    }
-
-    if da_ports.len() != participants {
-        return Err(TopologyInvariantError::DaPortCountMismatch {
-            actual: da_ports.len(),
             expected: participants,
         });
     }

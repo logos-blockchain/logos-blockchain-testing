@@ -14,7 +14,6 @@ async fn spawn_block_feed_with(
 ) -> Result<(BlockFeed, BlockFeedTask), ComposeRunnerError> {
     debug!(
         validators = node_clients.validator_clients().len(),
-        executors = node_clients.executor_clients().len(),
         "selecting validator client for block feed"
     );
 

@@ -13,9 +13,9 @@ Realistic advanced scenarios demonstrating framework capabilities for production
 
 | Example | Topology | Workloads | Deployer | Key Feature |
 |---------|----------|-----------|----------|-------------|
-| Load Progression | 3 validators + 2 executors | Increasing tx rate | Compose | Dynamic load testing |
-| Sustained Load | 4 validators + 2 executors | High tx + DA rate | Compose | Stress testing |
-| Aggressive Chaos | 4 validators + 2 executors | Frequent restarts + traffic | Compose | Resilience validation |
+| Load Progression | 3 validators  | Increasing tx rate | Compose | Dynamic load testing |
+| Sustained Load | 4 validators  | High tx + DA rate | Compose | Stress testing |
+| Aggressive Chaos | 4 validators  | Frequent restarts + traffic | Compose | Resilience validation |
 
 ## Load Progression Test
 
@@ -34,7 +34,7 @@ pub async fn load_progression_test() -> Result<()> {
         println!("Testing with rate: {}", rate);
 
         let mut plan =
-            ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+            ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
                 .wallets(50)
                 .transactions_with(|txs| txs.rate(rate).users(20))
                 .expect_consensus_liveness()
@@ -65,7 +65,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn sustained_load_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
         .wallets(100)
         .transactions_with(|txs| txs.rate(15).users(50))
         .da_with(|da| da.channel_rate(2).blob_rate(3))
@@ -96,7 +96,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub async fn aggressive_chaos_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
         .enable_node_control()
         .wallets(50)
         .transactions_with(|txs| txs.rate(10).users(20))

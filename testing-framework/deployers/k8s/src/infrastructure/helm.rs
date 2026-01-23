@@ -32,14 +32,12 @@ pub async fn install_release(
     release: &str,
     namespace: &str,
     validators: usize,
-    executors: usize,
 ) -> Result<(), HelmError> {
     let kzg = resolve_kzg_install_args(assets)?;
     info!(
         release,
         namespace,
         validators,
-        executors,
         image = %assets.image,
         cfgsync_port = cfgsync_port_value(),
         kzg_mode = ?assets.kzg_mode,
@@ -49,9 +47,7 @@ pub async fn install_release(
     );
 
     let command = format!("helm install {release}");
-    let cmd = build_install_command(
-        assets, release, namespace, validators, executors, &kzg, &command,
-    );
+    let cmd = build_install_command(assets, release, namespace, validators, &kzg, &command);
     let output = run_helm_command(cmd, &command).await?;
 
     maybe_log_install_output(&command, &output);
@@ -102,7 +98,6 @@ fn build_install_command(
     release: &str,
     namespace: &str,
     validators: usize,
-    executors: usize,
     kzg: &KzgInstallArgs<'_>,
     command: &str,
 ) -> Command {
@@ -120,8 +115,6 @@ fn build_install_command(
         .arg(format!("image={}", assets.image))
         .arg("--set")
         .arg(format!("validators.count={validators}"))
-        .arg("--set")
-        .arg(format!("executors.count={executors}"))
         .arg("--set")
         .arg(format!("cfgsync.port={}", cfgsync_port_value()))
         .arg("-f")
@@ -144,11 +137,6 @@ fn build_install_command(
         .arg(format!(
             "scripts.runNomosSh={}",
             assets.run_nomos_script.display()
-        ))
-        .arg("--set-file")
-        .arg(format!(
-            "scripts.runNomosExecutorSh={}",
-            assets.run_nomos_executor_script.display()
         ))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

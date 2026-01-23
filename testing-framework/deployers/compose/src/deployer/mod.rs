@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn cfgsync_prebuilt_configs_preserve_genesis() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -118,11 +118,9 @@ mod tests {
 
         let configs = create_node_configs(
             &topology.config().consensus_params,
-            &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
             Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
             Some(topology.nodes().map(|node| node.blend_port).collect()),
             hosts,
         )
@@ -164,7 +162,7 @@ mod tests {
 
     #[test]
     fn cfgsync_genesis_proofs_verify_against_ledger() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -173,11 +171,9 @@ mod tests {
 
         let configs = create_node_configs(
             &topology.config().consensus_params,
-            &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
             Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
             Some(topology.nodes().map(|node| node.blend_port).collect()),
             hosts,
         )
@@ -203,7 +199,7 @@ mod tests {
 
     #[test]
     fn cfgsync_docker_overrides_produce_valid_genesis() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.validators(3))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -212,11 +208,9 @@ mod tests {
 
         let configs = create_node_configs(
             &topology.config().consensus_params,
-            &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
             Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
             Some(topology.nodes().map(|node| node.blend_port).collect()),
             hosts,
         )
@@ -237,7 +231,7 @@ mod tests {
 
     #[test]
     fn cfgsync_configs_match_topology_ports_and_genesis() {
-        let scenario = ScenarioBuilder::topology_with(|t| t.validators(1).executors(1))
+        let scenario = ScenarioBuilder::topology_with(|t| t.validators(2))
             .build()
             .expect("scenario build should succeed");
         let topology = scenario.topology().clone();
@@ -246,11 +240,9 @@ mod tests {
 
         let configs = create_node_configs(
             &topology.config().consensus_params,
-            &topology.config().da_params,
             &tracing_settings,
             &topology.config().wallet_config,
             Some(topology.nodes().map(|node| node.id).collect()),
-            Some(topology.nodes().map(|node| node.da_port).collect()),
             Some(topology.nodes().map(|node| node.blend_port).collect()),
             hosts,
         )
@@ -278,11 +270,6 @@ mod tests {
                 "network port mismatch for {identifier}"
             );
 
-            assert_eq!(
-                multiaddr_port(&cfg.da_config.listening_address),
-                Some(node.da_port),
-                "DA listening port mismatch for {identifier}"
-            );
             assert_eq!(
                 multiaddr_port(&cfg.blend_config.backend_core.listening_address),
                 Some(node.blend_port),
@@ -318,7 +305,6 @@ mod tests {
         let ip = Ipv4Addr::LOCALHOST;
         let mut host = make_host(node.role(), ip, identifier);
         host.network_port = node.network_port();
-        host.da_network_port = node.da_port;
         host.blend_port = node.blend_port;
         host
     }
@@ -328,7 +314,6 @@ mod tests {
         let ip = Ipv4Addr::new(172, 23, 0, octet);
         let mut host = make_host(node.role(), ip, identifier);
         host.network_port = node.network_port().saturating_add(1000);
-        host.da_network_port = node.da_port.saturating_add(1000);
         host.blend_port = node.blend_port.saturating_add(1000);
         host
     }
@@ -337,7 +322,6 @@ mod tests {
         topology
             .validators()
             .first()
-            .or_else(|| topology.executors().first())
             .expect("topology must contain at least one node")
             .general
             .tracing_config
@@ -348,21 +332,18 @@ mod tests {
     fn identifier_for(role: TopologyNodeRole, index: usize) -> String {
         match role {
             TopologyNodeRole::Validator => format!("validator-{index}"),
-            TopologyNodeRole::Executor => format!("executor-{index}"),
         }
     }
 
     fn make_host(role: TopologyNodeRole, ip: Ipv4Addr, identifier: String) -> Host {
         let ports = PortOverrides {
             network_port: None,
-            da_network_port: None,
             blend_port: None,
             api_port: None,
             testing_http_port: None,
         };
         match role {
             TopologyNodeRole::Validator => Host::validator_from_ip(ip, identifier, ports),
-            TopologyNodeRole::Executor => Host::executor_from_ip(ip, identifier, ports),
         }
     }
 

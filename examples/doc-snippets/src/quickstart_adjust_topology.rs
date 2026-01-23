@@ -4,7 +4,7 @@ use testing_framework_runner_local::LocalDeployer;
 
 pub async fn run_with_env_overrides() -> Result<()> {
     // Uses NOMOS_DEMO_* env vars (or legacy *_DEMO_* vars)
-    let mut plan = ScenarioBuilder::with_node_counts(3, 2)
+    let mut plan = ScenarioBuilder::with_node_counts(3)
         .with_run_duration(std::time::Duration::from_secs(120))
         .build()?;
 

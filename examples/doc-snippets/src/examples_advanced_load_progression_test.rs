@@ -9,13 +9,12 @@ pub async fn load_progression_test() -> Result<()> {
     for rate in [5, 10, 20, 30] {
         println!("Testing with rate: {}", rate);
 
-        let mut plan =
-            ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
-                .wallets(50)
-                .transactions_with(|txs| txs.rate(rate).users(20))
-                .expect_consensus_liveness()
-                .with_run_duration(Duration::from_secs(60))
-                .build()?;
+        let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+            .wallets(50)
+            .transactions_with(|txs| txs.rate(rate).users(20))
+            .expect_consensus_liveness()
+            .with_run_duration(Duration::from_secs(60))
+            .build()?;
 
         let deployer = ComposeDeployer::default();
         let runner = deployer.deploy(&plan).await?;

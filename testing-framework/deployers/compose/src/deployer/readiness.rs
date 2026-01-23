@@ -7,7 +7,7 @@ use crate::{
         environment::StackEnvironment,
         ports::{HostPortMapping, ensure_remote_readiness_with_ports},
     },
-    lifecycle::readiness::{ensure_executors_ready_with_ports, ensure_validators_ready_with_ports},
+    lifecycle::readiness::ensure_validators_ready_with_ports,
 };
 
 pub struct ReadinessChecker;
@@ -25,18 +25,6 @@ impl ReadinessChecker {
                 environment,
                 "validator readiness failed",
                 "validator readiness failed",
-                err,
-            )
-            .await;
-        }
-
-        let executor_ports = host_ports.executor_api_ports();
-        info!(ports = ?executor_ports, "waiting for executor HTTP endpoints");
-        if let Err(err) = ensure_executors_ready_with_ports(&executor_ports).await {
-            return fail_readiness_step(
-                environment,
-                "executor readiness failed",
-                "executor readiness failed",
                 err,
             )
             .await;

@@ -8,7 +8,6 @@ pub async fn spawn_block_feed_with(
 ) -> Result<(BlockFeed, BlockFeedTask), K8sRunnerError> {
     debug!(
         validators = node_clients.validator_clients().len(),
-        executors = node_clients.executor_clients().len(),
         "selecting node client for block feed"
     );
 

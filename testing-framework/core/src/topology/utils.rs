@@ -6,21 +6,17 @@ use nomos_utils::net::get_available_udp_port;
 use rand::{Rng, thread_rng};
 use thiserror::Error;
 
-use crate::topology::configs::{
-    blend::GeneralBlendConfig, da::GeneralDaConfig, wallet::WalletAccount,
-};
+use crate::topology::configs::{blend::GeneralBlendConfig, wallet::WalletAccount};
 
 #[must_use]
 /// Build preload KMS configs for blend/DA and wallet keys for every node.
 pub fn create_kms_configs(
     blend_configs: &[GeneralBlendConfig],
-    da_configs: &[GeneralDaConfig],
     wallet_accounts: &[WalletAccount],
 ) -> Vec<PreloadKMSBackendSettings> {
-    da_configs
+    blend_configs
         .iter()
-        .zip(blend_configs.iter())
-        .map(|(da_conf, blend_conf)| {
+        .map(|blend_conf| {
             let mut keys = HashMap::from([
                 (
                     hex::encode(blend_conf.signer.public_key().to_bytes()),
@@ -31,14 +27,6 @@ pub fn create_kms_configs(
                         blend_conf.secret_zk_key.to_public_key().as_fr(),
                     )),
                     Key::Zk(blend_conf.secret_zk_key.clone()),
-                ),
-                (
-                    hex::encode(da_conf.signer.public_key().to_bytes()),
-                    Key::Ed25519(da_conf.signer.clone()),
-                ),
-                (
-                    hex::encode(fr_to_bytes(da_conf.secret_zk_key.to_public_key().as_fr())),
-                    Key::Zk(da_conf.secret_zk_key.clone()),
                 ),
             ]);
 

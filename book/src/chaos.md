@@ -9,7 +9,7 @@ recovery. The built-in restart workload lives in
 ## How it works
 - Requires `NodeControlCapability` (`enable_node_control()` in the scenario
   builder) and a runner that provides a `NodeControlHandle`.
-- Randomly selects nodes (validators, executors) to restart based on your
+- Randomly selects nodes (validators) to restart based on your
   include/exclude flags.
 - Respects min/max delay between restarts and a target cooldown to avoid
   flapping the same node too frequently.
@@ -29,14 +29,13 @@ use testing_framework_workflows::{ScenarioBuilderExt, workloads::chaos::RandomRe
 pub fn random_restart_plan() -> testing_framework_core::scenario::Scenario<
     testing_framework_core::scenario::NodeControlCapability,
 > {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(1))
+    ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
         .enable_node_control()
         .with_workload(RandomRestartWorkload::new(
             Duration::from_secs(45),  // min delay
             Duration::from_secs(75),  // max delay
             Duration::from_secs(120), // target cooldown
             true,                     // include validators
-            true,                     // include executors
         ))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(150))
@@ -53,6 +52,6 @@ pub fn random_restart_plan() -> testing_framework_core::scenario::Scenario<
 ## Best practices
 - Keep delays/cooldowns realistic; avoid back-to-back restarts that would never
   happen in production.
-- Limit chaos scope: toggle validators vs executors based on what you want to
+- Limit chaos scope: toggle validators based on what you want to
   test.
 - Combine with observability: monitor metrics/logs to explain failures.

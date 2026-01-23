@@ -3,16 +3,12 @@ use std::net::SocketAddr;
 use chain_service::CryptarchiaInfo;
 use common_http_client::CommonHttpClient;
 use hex;
-use nomos_core::{block::Block, da::BlobId, mantle::SignedMantleTx, sdp::SessionNumber};
-use nomos_da_network_core::swarm::{BalancerStats, MonitorStats};
-use nomos_da_network_service::MembershipResponse;
+use nomos_core::{block::Block, mantle::SignedMantleTx};
 use nomos_http_api_common::paths::{
-    CRYPTARCHIA_HEADERS, CRYPTARCHIA_INFO, DA_BALANCER_STATS, DA_BLACKLISTED_PEERS, DA_BLOCK_PEER,
-    DA_GET_MEMBERSHIP, DA_HISTORIC_SAMPLING, DA_MONITOR_STATS, DA_UNBLOCK_PEER, MEMPOOL_ADD_TX,
-    NETWORK_INFO, STORAGE_BLOCK,
+    CRYPTARCHIA_HEADERS, CRYPTARCHIA_INFO, MEMPOOL_ADD_TX, NETWORK_INFO, STORAGE_BLOCK,
 };
 use nomos_network::backends::libp2p::Libp2pInfo;
-use nomos_node::{HeaderId, api::testing::handlers::HistoricSamplingRequest};
+use nomos_node::HeaderId;
 use reqwest::{Client, RequestBuilder, Response, Url};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -232,31 +228,6 @@ impl ApiClient {
         self.get_testing_response_checked(path).await
     }
 
-    /// Block a peer via the DA testing API.
-    pub async fn block_peer(&self, peer_id: &str) -> reqwest::Result<bool> {
-        self.post_json_decode(DA_BLOCK_PEER, &peer_id).await
-    }
-
-    /// Unblock a peer via the DA testing API.
-    pub async fn unblock_peer(&self, peer_id: &str) -> reqwest::Result<bool> {
-        self.post_json_decode(DA_UNBLOCK_PEER, &peer_id).await
-    }
-
-    /// Fetch the list of blacklisted peers.
-    pub async fn blacklisted_peers(&self) -> reqwest::Result<Vec<String>> {
-        self.get_json(DA_BLACKLISTED_PEERS).await
-    }
-
-    /// Fetch balancer stats from DA API.
-    pub async fn balancer_stats(&self) -> reqwest::Result<BalancerStats> {
-        self.get_json(DA_BALANCER_STATS).await
-    }
-
-    /// Fetch monitor stats from DA API.
-    pub async fn monitor_stats(&self) -> reqwest::Result<MonitorStats> {
-        self.get_json(DA_MONITOR_STATS).await
-    }
-
     /// Fetch consensus info from the base API.
     pub async fn consensus_info(&self) -> reqwest::Result<CryptarchiaInfo> {
         self.get_json(CRYPTARCHIA_INFO).await
@@ -301,37 +272,6 @@ impl ApiClient {
             .await?
             .error_for_status()?
             .json()
-            .await
-    }
-
-    /// Query DA membership via testing API.
-    pub async fn da_get_membership_checked(
-        &self,
-        session_id: &SessionNumber,
-    ) -> Result<MembershipResponse, ApiClientError> {
-        self.post_testing_json_response_checked(DA_GET_MEMBERSHIP, session_id)
-            .await?
-            .error_for_status()
-            .map_err(ApiClientError::Request)?
-            .json()
-            .await
-            .map_err(ApiClientError::Request)
-    }
-
-    pub async fn da_get_membership(
-        &self,
-        session_id: &SessionNumber,
-    ) -> Result<MembershipResponse, ApiClientError> {
-        self.post_testing_json_decode(DA_GET_MEMBERSHIP, session_id)
-            .await
-    }
-
-    /// Query historic sampling via testing API.
-    pub async fn da_historic_sampling(
-        &self,
-        request: &HistoricSamplingRequest<BlobId>,
-    ) -> Result<bool, ApiClientError> {
-        self.post_testing_json_decode(DA_HISTORIC_SAMPLING, request)
             .await
     }
 

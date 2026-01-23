@@ -6,7 +6,7 @@ tests and full-system validation by letting teams describe a cluster layout,
 drive meaningful traffic, and assert the outcomes in one coherent plan.
 
 It is for protocol engineers, infrastructure operators, and QA teams who need
-repeatable confidence that validators, executors, and data-availability
+repeatable confidence that validators
 components work together under network and timing constraints.
 
 Multi-node integration testing is required because many Logos behaviors—block
@@ -23,7 +23,6 @@ Here's the conceptual shape of every test you'll write:
 let scenario = ScenarioBuilder::topology_with(|t| {
     t.network_star()
         .validators(3)
-        .executors(2)
 })
 // 2. Add workloads (traffic)
 .transactions_with(|tx| tx.rate(10).users(5))

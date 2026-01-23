@@ -18,7 +18,6 @@ image rebuilds (where it makes sense), after cleaning and rebuilding bundles.
 Options:
   -t, --run-seconds N     Demo duration for each run (default: 120)
   -v, --validators N      Validators (default: 1)
-  -e, --executors N       Executors (default: 1)
   --modes LIST            Comma-separated: host,compose,k8s (default: host,compose,k8s)
   --no-clean              Skip scripts/ops/clean.sh step
   --no-bundles            Skip scripts/build/build-bundle.sh (uses existing .tmp tarballs)
@@ -46,7 +45,6 @@ matrix::have() { command -v "$1" >/dev/null 2>&1; }
 matrix::parse_args() {
   RUN_SECS=120
   VALIDATORS=1
-  EXECUTORS=1
   MODES_RAW="host,compose,k8s"
   DO_CLEAN=1
   DO_BUNDLES=1
@@ -63,8 +61,6 @@ matrix::parse_args() {
       --run-seconds=*) RUN_SECS="${1#*=}"; shift ;;
       -v|--validators) VALIDATORS="${2:-}"; shift 2 ;;
       --validators=*) VALIDATORS="${1#*=}"; shift ;;
-      -e|--executors) EXECUTORS="${2:-}"; shift 2 ;;
-      --executors=*) EXECUTORS="${1#*=}"; shift ;;
       --modes) MODES_RAW="${2:-}"; shift 2 ;;
       --modes=*) MODES_RAW="${1#*=}"; shift ;;
       --no-clean) DO_CLEAN=0; shift ;;
@@ -83,7 +79,6 @@ matrix::parse_args() {
   common::is_uint "${RUN_SECS}" || matrix::die "--run-seconds must be an integer"
   [ "${RUN_SECS}" -gt 0 ] || matrix::die "--run-seconds must be > 0"
   common::is_uint "${VALIDATORS}" || matrix::die "--validators must be an integer"
-  common::is_uint "${EXECUTORS}" || matrix::die "--executors must be an integer"
 }
 
 matrix::split_modes() {
@@ -220,7 +215,7 @@ matrix::main() {
       host)
         matrix::run_case "host" \
           "${ROOT_DIR}/scripts/run/run-examples.sh" \
-            -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+            -t "${RUN_SECS}" -v "${VALIDATORS}" \
             "${forward[@]}" \
             host
         ;;
@@ -228,7 +223,7 @@ matrix::main() {
         if [ "${SKIP_IMAGE_BUILD_VARIANTS}" -eq 0 ]; then
           matrix::run_case "compose.image_build" \
             "${ROOT_DIR}/scripts/run/run-examples.sh" \
-              -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+              -t "${RUN_SECS}" -v "${VALIDATORS}" \
               "${forward[@]}" \
               compose
         else
@@ -238,7 +233,7 @@ matrix::main() {
         matrix::run_case "compose.skip_image_build" \
           "${ROOT_DIR}/scripts/run/run-examples.sh" \
             --no-image-build \
-            -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+            -t "${RUN_SECS}" -v "${VALIDATORS}" \
             "${forward[@]}" \
             compose
         ;;
@@ -259,7 +254,7 @@ matrix::main() {
             fi
             matrix::run_case "k8s.image_build" \
               "${ROOT_DIR}/scripts/run/run-examples.sh" \
-                -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+                -t "${RUN_SECS}" -v "${VALIDATORS}" \
                 "${forward[@]}" \
                 k8s
             unset NOMOS_FORCE_IMAGE_BUILD || true
@@ -273,7 +268,7 @@ matrix::main() {
         matrix::run_case "k8s.skip_image_build" \
           "${ROOT_DIR}/scripts/run/run-examples.sh" \
             --no-image-build \
-            -t "${RUN_SECS}" -v "${VALIDATORS}" -e "${EXECUTORS}" \
+            -t "${RUN_SECS}" -v "${VALIDATORS}" \
             "${forward[@]}" \
             k8s
         ;;

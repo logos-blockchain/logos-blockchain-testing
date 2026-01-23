@@ -6,7 +6,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn sustained_load_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
         .wallets(100)
         .transactions_with(|txs| txs.rate(15).users(50))
         .expect_consensus_liveness()

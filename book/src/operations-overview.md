@@ -13,7 +13,7 @@ Operational readiness focuses on prerequisites, environment fit, and clear signa
 
 **Prerequisites:**
 - `versions.env` file at repository root (required by helper scripts)
-- Node binaries (`nomos-node`, `nomos-executor`) available or built on demand
+- Node binaries (`nomos-node`) available or built on demand
 - Platform requirements met (Docker for compose, cluster access for k8s)
 - Circuit assets for DA workloads
 

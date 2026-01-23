@@ -1,10 +1,7 @@
-use std::time::Duration;
-
 use nomos_core::{
     mantle::GenesisTx as _,
     sdp::{Locator, ServiceType},
 };
-use nomos_da_network_core::swarm::DAConnectionPolicySettings;
 use testing_framework_config::topology::{
     configs::{
         api::{ApiConfigError, create_api_configs},
@@ -13,12 +10,11 @@ use testing_framework_config::topology::{
             ConsensusConfigError, ConsensusParams, ProviderInfo,
             create_genesis_tx_with_declarations,
         },
-        da::DaParams,
         network::{Libp2pNetworkLayout, NetworkParams},
         tracing::create_tracing_configs,
         wallet::WalletConfig,
     },
-    invariants::{TopologyInvariantError, validate_generated_vectors},
+    invariants::TopologyInvariantError,
 };
 use thiserror::Error;
 
@@ -27,9 +23,6 @@ use crate::topology::{
     generation::{GeneratedNodeConfig, GeneratedTopology, NodeRole},
     utils::{TopologyResolveError, create_kms_configs, resolve_ids, resolve_ports},
 };
-
-const DEFAULT_DA_BALANCER_INTERVAL: Duration = Duration::from_secs(1);
-const VALIDATOR_EXECUTOR_DA_BALANCER_INTERVAL: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Error)]
 pub enum TopologyBuildError {
@@ -59,9 +52,7 @@ pub enum TopologyBuildError {
 #[derive(Clone)]
 pub struct TopologyConfig {
     pub n_validators: usize,
-    pub n_executors: usize,
     pub consensus_params: ConsensusParams,
-    pub da_params: DaParams,
     pub network_params: NetworkParams,
     pub wallet_config: WalletConfig,
 }
@@ -72,9 +63,7 @@ impl TopologyConfig {
     pub fn empty() -> Self {
         Self {
             n_validators: 0,
-            n_executors: 0,
             consensus_params: ConsensusParams::default_for_participants(1),
-            da_params: DaParams::default(),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
         }
@@ -85,101 +74,20 @@ impl TopologyConfig {
     pub fn two_validators() -> Self {
         Self {
             n_validators: 2,
-            n_executors: 0,
             consensus_params: ConsensusParams::default_for_participants(2),
-            da_params: DaParams::default(),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
         }
     }
 
     #[must_use]
-    /// Single validator + single executor config for minimal dual-role setups.
-    pub fn validator_and_executor() -> Self {
-        Self {
-            n_validators: 1,
-            n_executors: 1,
-            consensus_params: ConsensusParams::default_for_participants(2),
-            da_params: DaParams {
-                dispersal_factor: 2,
-                subnetwork_size: 2,
-                num_subnets: 2,
-                policy_settings: DAConnectionPolicySettings {
-                    min_dispersal_peers: 1,
-                    min_replication_peers: 1,
-                    max_dispersal_failures: 0,
-                    max_sampling_failures: 0,
-                    max_replication_failures: 0,
-                    malicious_threshold: 0,
-                },
-                balancer_interval: DEFAULT_DA_BALANCER_INTERVAL,
-                ..Default::default()
-            },
-            network_params: NetworkParams::default(),
-            wallet_config: WalletConfig::default(),
-        }
-    }
-
-    #[must_use]
-    /// Build a topology with explicit validator and executor counts.
-    pub fn with_node_numbers(validators: usize, executors: usize) -> Self {
-        let participants = validators + executors;
-
-        let mut da_params = DaParams::default();
-        let da_nodes = participants;
-        if da_nodes <= 1 {
-            da_params.subnetwork_size = 1;
-            da_params.num_subnets = 1;
-            da_params.dispersal_factor = 1;
-            da_params.policy_settings.min_dispersal_peers = 0;
-            da_params.policy_settings.min_replication_peers = 0;
-        } else {
-            let dispersal = da_nodes.min(da_params.dispersal_factor.max(2));
-            da_params.dispersal_factor = dispersal;
-            da_params.subnetwork_size = da_params.subnetwork_size.max(dispersal);
-            da_params.num_subnets = da_params.subnetwork_size as u16;
-            let min_peers = dispersal.saturating_sub(1).max(1);
-            da_params.policy_settings.min_dispersal_peers = min_peers;
-            da_params.policy_settings.min_replication_peers = min_peers;
-            da_params.balancer_interval = DEFAULT_DA_BALANCER_INTERVAL;
-        }
+    /// Build a topology with explicit validator counts.
+    pub fn with_node_numbers(validators: usize) -> Self {
+        let participants = validators;
 
         Self {
             n_validators: validators,
-            n_executors: executors,
             consensus_params: ConsensusParams::default_for_participants(participants),
-            da_params,
-            network_params: NetworkParams::default(),
-            wallet_config: WalletConfig::default(),
-        }
-    }
-
-    #[must_use]
-    /// Build a topology with one executor and a configurable validator set.
-    pub fn validators_and_executor(
-        num_validators: usize,
-        num_subnets: usize,
-        dispersal_factor: usize,
-    ) -> Self {
-        Self {
-            n_validators: num_validators,
-            n_executors: 1,
-            consensus_params: ConsensusParams::default_for_participants(num_validators + 1),
-            da_params: DaParams {
-                dispersal_factor,
-                subnetwork_size: num_subnets,
-                num_subnets: num_subnets as u16,
-                policy_settings: DAConnectionPolicySettings {
-                    min_dispersal_peers: num_subnets,
-                    min_replication_peers: dispersal_factor - 1,
-                    max_dispersal_failures: 0,
-                    max_sampling_failures: 0,
-                    max_replication_failures: 0,
-                    malicious_threshold: 0,
-                },
-                balancer_interval: VALIDATOR_EXECUTOR_DA_BALANCER_INTERVAL,
-                ..Default::default()
-            },
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
         }
@@ -196,7 +104,6 @@ impl TopologyConfig {
 pub struct TopologyBuilder {
     config: TopologyConfig,
     ids: Option<Vec<[u8; 32]>>,
-    da_ports: Option<Vec<u16>>,
     blend_ports: Option<Vec<u16>>,
 }
 
@@ -207,7 +114,6 @@ impl TopologyBuilder {
         Self {
             config,
             ids: None,
-            da_ports: None,
             blend_ports: None,
         }
     }
@@ -216,13 +122,6 @@ impl TopologyBuilder {
     /// Provide deterministic node IDs.
     pub fn with_ids(mut self, ids: Vec<[u8; 32]>) -> Self {
         self.ids = Some(ids);
-        self
-    }
-
-    #[must_use]
-    /// Override DA ports for nodes in order.
-    pub fn with_da_ports(mut self, ports: Vec<u16>) -> Self {
-        self.da_ports = Some(ports);
         self
     }
 
@@ -240,17 +139,9 @@ impl TopologyBuilder {
     }
 
     #[must_use]
-    /// Set executor count.
-    pub const fn with_executor_count(mut self, executors: usize) -> Self {
-        self.config.n_executors = executors;
-        self
-    }
-
-    #[must_use]
-    /// Set validator and executor counts together.
-    pub const fn with_node_counts(mut self, validators: usize, executors: usize) -> Self {
+    /// Set validator counts.
+    pub const fn with_node_counts(mut self, validators: usize) -> Self {
         self.config.n_validators = validators;
-        self.config.n_executors = executors;
         self
     }
 
@@ -272,28 +163,23 @@ impl TopologyBuilder {
         let Self {
             config,
             ids,
-            da_ports,
             blend_ports,
         } = self;
 
         let n_participants = participant_count(&config)?;
 
-        let (ids, da_ports, blend_ports) =
-            resolve_and_validate_vectors(ids, da_ports, blend_ports, n_participants)?;
+        let (ids, blend_ports) = resolve_and_validate_vectors(ids, blend_ports, n_participants)?;
 
         let BaseConfigs {
             mut consensus_configs,
             bootstrap_configs: bootstrapping_config,
-            da_configs,
             network_configs,
             blend_configs,
         } = build_base_configs(
             &ids,
             &config.consensus_params,
-            &config.da_params,
             &config.network_params,
             &config.wallet_config,
-            &da_ports,
             &blend_ports,
         )?;
 
@@ -304,23 +190,20 @@ impl TopologyBuilder {
         let first_consensus = consensus_configs
             .first()
             .ok_or(TopologyBuildError::MissingConsensusConfig)?;
-        let providers = collect_provider_infos(first_consensus, &da_configs, &blend_configs)?;
+        let providers = collect_provider_infos(first_consensus, &blend_configs)?;
 
         let genesis_tx = create_consensus_genesis_tx(first_consensus, providers)?;
         apply_consensus_genesis_tx(&mut consensus_configs, &genesis_tx);
 
-        let kms_configs =
-            create_kms_configs(&blend_configs, &da_configs, &config.wallet_config.accounts);
+        let kms_configs = create_kms_configs(&blend_configs, &config.wallet_config.accounts);
 
-        let (validators, executors) = build_node_descriptors(
+        let validators = build_node_descriptors(
             &config,
             n_participants,
             &ids,
-            &da_ports,
             &blend_ports,
             &consensus_configs,
             &bootstrapping_config,
-            &da_configs,
             &network_configs,
             &blend_configs,
             &api_configs,
@@ -329,11 +212,7 @@ impl TopologyBuilder {
             &time_config,
         )?;
 
-        Ok(GeneratedTopology {
-            config,
-            validators,
-            executors,
-        })
+        Ok(GeneratedTopology { config, validators })
     }
 
     #[must_use]
@@ -343,7 +222,7 @@ impl TopologyBuilder {
 }
 
 fn participant_count(config: &TopologyConfig) -> Result<usize, TopologyBuildError> {
-    let n_participants = config.n_validators + config.n_executors;
+    let n_participants = config.n_validators;
     if n_participants == 0 {
         return Err(TopologyBuildError::EmptyParticipants);
     }
@@ -353,36 +232,20 @@ fn participant_count(config: &TopologyConfig) -> Result<usize, TopologyBuildErro
 
 fn resolve_and_validate_vectors(
     ids: Option<Vec<[u8; 32]>>,
-    da_ports: Option<Vec<u16>>,
     blend_ports: Option<Vec<u16>>,
     n_participants: usize,
-) -> Result<(Vec<[u8; 32]>, Vec<u16>, Vec<u16>), TopologyBuildError> {
+) -> Result<(Vec<[u8; 32]>, Vec<u16>), TopologyBuildError> {
     let ids = resolve_ids(ids, n_participants)?;
-    let da_ports = resolve_ports(da_ports, n_participants, "DA")?;
     let blend_ports = resolve_ports(blend_ports, n_participants, "Blend")?;
 
-    validate_generated_vectors(n_participants, &ids, &da_ports, &blend_ports)?;
-
-    Ok((ids, da_ports, blend_ports))
+    Ok((ids, blend_ports))
 }
 
 fn collect_provider_infos(
     first_consensus: &testing_framework_config::topology::configs::consensus::GeneralConsensusConfig,
-    da_configs: &[testing_framework_config::topology::configs::da::GeneralDaConfig],
     blend_configs: &[testing_framework_config::topology::configs::blend::GeneralBlendConfig],
 ) -> Result<Vec<ProviderInfo>, TopologyBuildError> {
-    let mut providers = Vec::with_capacity(da_configs.len() + blend_configs.len());
-
-    for (i, da_conf) in da_configs.iter().enumerate() {
-        let note = get_cloned("da_notes", &first_consensus.da_notes, i, da_configs.len())?;
-        providers.push(ProviderInfo {
-            service_type: ServiceType::DataAvailability,
-            provider_sk: da_conf.signer.clone(),
-            zk_sk: da_conf.secret_zk_key.clone(),
-            locator: Locator(da_conf.listening_address.clone()),
-            note,
-        });
-    }
+    let mut providers = Vec::with_capacity(blend_configs.len());
 
     for (i, blend_conf) in blend_configs.iter().enumerate() {
         let note = get_cloned(
@@ -425,27 +288,23 @@ fn build_node_descriptors(
     config: &TopologyConfig,
     n_participants: usize,
     ids: &[[u8; 32]],
-    da_ports: &[u16],
     blend_ports: &[u16],
     consensus_configs: &[testing_framework_config::topology::configs::consensus::GeneralConsensusConfig],
     bootstrapping_config: &[testing_framework_config::topology::configs::bootstrap::GeneralBootstrapConfig],
-    da_configs: &[testing_framework_config::topology::configs::da::GeneralDaConfig],
     network_configs: &[testing_framework_config::topology::configs::network::GeneralNetworkConfig],
     blend_configs: &[testing_framework_config::topology::configs::blend::GeneralBlendConfig],
     api_configs: &[testing_framework_config::topology::configs::api::GeneralApiConfig],
     tracing_configs: &[testing_framework_config::topology::configs::tracing::GeneralTracingConfig],
     kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
     time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
-) -> Result<(Vec<GeneratedNodeConfig>, Vec<GeneratedNodeConfig>), TopologyBuildError> {
+) -> Result<Vec<GeneratedNodeConfig>, TopologyBuildError> {
     let mut validators = Vec::with_capacity(config.n_validators);
-    let mut executors = Vec::with_capacity(config.n_executors);
 
     for i in 0..n_participants {
         let consensus_config =
             get_cloned("consensus_configs", consensus_configs, i, n_participants)?;
         let bootstrapping_config =
             get_cloned("bootstrap_configs", bootstrapping_config, i, n_participants)?;
-        let da_config = get_cloned("da_configs", da_configs, i, n_participants)?;
         let network_config = get_cloned("network_configs", network_configs, i, n_participants)?;
         let blend_config = get_cloned("blend_configs", blend_configs, i, n_participants)?;
         let api_config = get_cloned("api_configs", api_configs, i, n_participants)?;
@@ -453,13 +312,11 @@ fn build_node_descriptors(
         let kms_config = get_cloned("kms_configs", kms_configs, i, n_participants)?;
 
         let id = get_copied("ids", ids, i, n_participants)?;
-        let da_port = get_copied("da_ports", da_ports, i, n_participants)?;
         let blend_port = get_copied("blend_ports", blend_ports, i, n_participants)?;
 
         let general = GeneralConfig {
             consensus_config,
             bootstrapping_config,
-            da_config,
             network_config,
             blend_config,
             api_config,
@@ -468,31 +325,21 @@ fn build_node_descriptors(
             kms_config,
         };
 
-        let (role, index) = node_role_and_index(i, config.n_validators);
+        let (role, index) = (NodeRole::Validator, i);
         let descriptor = GeneratedNodeConfig {
             role,
             index,
             id,
             general,
-            da_port,
             blend_port,
         };
 
         match role {
             NodeRole::Validator => validators.push(descriptor),
-            NodeRole::Executor => executors.push(descriptor),
         }
     }
 
-    Ok((validators, executors))
-}
-
-fn node_role_and_index(i: usize, n_validators: usize) -> (NodeRole, usize) {
-    if i < n_validators {
-        (NodeRole::Validator, i)
-    } else {
-        (NodeRole::Executor, i - n_validators)
-    }
+    Ok(validators)
 }
 
 fn get_cloned<T: Clone>(

@@ -32,21 +32,18 @@ Control which runner to use and the test topology:
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `NOMOS_DEMO_VALIDATORS` | 1 | Number of validators (all runners) |
-| `NOMOS_DEMO_EXECUTORS` | 1 | Number of executors (all runners) |
 | `NOMOS_DEMO_RUN_SECS` | 60 | Run duration in seconds (all runners) |
 | `LOCAL_DEMO_VALIDATORS` | — | Legacy: Number of validators (host runner only) |
-| `LOCAL_DEMO_EXECUTORS` | — | Legacy: Number of executors (host runner only) |
 | `LOCAL_DEMO_RUN_SECS` | — | Legacy: Run duration (host runner only) |
-| `COMPOSE_NODE_PAIRS` | — | Compose-specific topology format: "validators×executors" (e.g., `3x2`) |
+| `COMPOSE_NODE_PAIRS` | — | Compose-specific topology format: "validators" (e.g., `3`) |
 
 **Example:**
 
 ```bash
-# Run with 5 validators, 2 executors, for 120 seconds
+# Run with 5 validators, for 120 seconds
 NOMOS_DEMO_VALIDATORS=5 \
-NOMOS_DEMO_EXECUTORS=2 \
 NOMOS_DEMO_RUN_SECS=120 \
-scripts/run/run-examples.sh -t 120 -v 5 -e 2 host
+scripts/run/run-examples.sh -t 120 -v 5 host
 ```
 
 ---
@@ -58,14 +55,12 @@ Required for host runner when not using helper scripts:
 | Variable | Required | Default | Effect |
 |----------|----------|---------|--------|
 | `NOMOS_NODE_BIN` | Yes (host) | — | Path to `nomos-node` binary |
-| `NOMOS_EXECUTOR_BIN` | Yes (host) | — | Path to `nomos-executor` binary |
 | `NOMOS_NODE_PATH` | No | — | Path to nomos-node git checkout (dev workflow) |
 
 **Example:**
 
 ```bash
 export NOMOS_NODE_BIN=/path/to/nomos-node/target/release/nomos-node
-export NOMOS_EXECUTOR_BIN=/path/to/nomos-node/target/release/nomos-executor
 ```
 
 ---
@@ -309,7 +304,7 @@ scripts/run/run-examples.sh -t 120 -v 5 -e 2 compose
 
 ## Node Configuration (Advanced)
 
-Node-level configuration passed through to nomos-node/nomos-executor:
+Node-level configuration passed through to nomos-node:
 
 | Variable | Default | Effect |
 |----------|---------|--------|

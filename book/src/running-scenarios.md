@@ -37,7 +37,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 async fn run_once() -> anyhow::Result<()> {
-    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
         .wallets(20)
         .transactions_with(|tx| tx.rate(1).users(5))
         .expect_consensus_liveness()

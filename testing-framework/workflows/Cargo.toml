@@ -22,7 +22,7 @@ reqwest                       = { workspace = true }
 testing-framework-config      = { workspace = true }
 testing-framework-core        = { workspace = true }
 thiserror                     = { workspace = true }
-tokio                         = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
+tokio                         = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
 tracing                       = { workspace = true }
 
 [package.metadata.cargo-machete]

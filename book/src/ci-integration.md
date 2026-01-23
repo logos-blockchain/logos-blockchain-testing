@@ -79,7 +79,6 @@ jobs:
         with:
           path: |
             ../nomos-node/target/release/nomos-node
-            ../nomos-node/target/release/nomos-executor
           key: ${{ runner.os }}-nomos-${{ hashFiles('../nomos-node/**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-nomos-

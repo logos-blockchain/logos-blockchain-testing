@@ -110,13 +110,12 @@ impl Workload for JoinNodeWithPeersWorkload {
 async fn dynamic_join_reaches_consensus_liveness() -> Result<()> {
     let _ = try_init();
 
-    let mut scenario =
-        ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(0))
-            .enable_node_control()
-            .with_workload(JoinNodeWorkload::new("joiner"))
-            .expect_consensus_liveness()
-            .with_run_duration(Duration::from_secs(60))
-            .build()?;
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+        .enable_node_control()
+        .with_workload(JoinNodeWorkload::new("joiner"))
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(60))
+        .build()?;
 
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&scenario).await?;
@@ -128,16 +127,15 @@ async fn dynamic_join_reaches_consensus_liveness() -> Result<()> {
 #[tokio::test]
 #[ignore = "run manually with `cargo test -p runner-examples -- --ignored`"]
 async fn dynamic_join_with_peers_reaches_consensus_liveness() -> Result<()> {
-    let mut scenario =
-        ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(0))
-            .enable_node_control()
-            .with_workload(JoinNodeWithPeersWorkload::new(
-                "joiner",
-                vec!["validator-0".to_string()],
-            ))
-            .expect_consensus_liveness()
-            .with_run_duration(Duration::from_secs(60))
-            .build()?;
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+        .enable_node_control()
+        .with_workload(JoinNodeWithPeersWorkload::new(
+            "joiner",
+            vec!["validator-0".to_string()],
+        ))
+        .expect_consensus_liveness()
+        .with_run_duration(Duration::from_secs(60))
+        .build()?;
 
     let deployer = LocalDeployer::default();
     let runner = deployer.deploy(&scenario).await?;
