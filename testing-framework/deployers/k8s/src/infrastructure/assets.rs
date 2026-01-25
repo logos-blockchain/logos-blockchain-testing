@@ -31,7 +31,6 @@ pub struct RunnerAssets {
     pub run_cfgsync_script: PathBuf,
     pub run_nomos_script: PathBuf,
     pub run_nomos_node_script: PathBuf,
-    pub run_nomos_executor_script: PathBuf,
     pub values_file: PathBuf,
     _tempdir: TempDir,
 }
@@ -85,7 +84,6 @@ pub fn prepare_assets(
 ) -> Result<RunnerAssets, AssetsError> {
     info!(
         validators = topology.validators().len(),
-        executors = topology.executors().len(),
         "preparing k8s runner assets"
     );
 
@@ -130,7 +128,6 @@ pub fn prepare_assets(
         run_nomos_script: scripts.run_shared,
         run_cfgsync_script: scripts.run_cfgsync,
         run_nomos_node_script: scripts.run_node,
-        run_nomos_executor_script: scripts.run_executor,
         values_file,
         _tempdir: tempdir,
     })
@@ -207,7 +204,6 @@ struct ScriptPaths {
     run_cfgsync: PathBuf,
     run_shared: PathBuf,
     run_node: PathBuf,
-    run_executor: PathBuf,
 }
 
 fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
@@ -215,9 +211,8 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
     let run_cfgsync = scripts_dir.join("run_cfgsync.sh");
     let run_shared = scripts_dir.join("run_nomos.sh");
     let run_node = scripts_dir.join("run_nomos_node.sh");
-    let run_executor = scripts_dir.join("run_nomos_executor.sh");
 
-    for path in [&run_cfgsync, &run_shared, &run_node, &run_executor] {
+    for path in [&run_cfgsync, &run_shared, &run_node] {
         if !path.exists() {
             return Err(AssetsError::MissingScript { path: path.clone() });
         }
@@ -227,7 +222,6 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
         run_cfgsync = %run_cfgsync.display(),
         run_shared = %run_shared.display(),
         run_node = %run_node.display(),
-        run_executor = %run_executor.display(),
         "validated runner scripts exist"
     );
 
@@ -235,7 +229,6 @@ fn validate_scripts(root: &Path) -> Result<ScriptPaths, AssetsError> {
         run_cfgsync,
         run_shared,
         run_node,
-        run_executor,
     })
 }
 
@@ -317,7 +310,6 @@ struct HelmValues {
     image_pull_policy: String,
     cfgsync: CfgsyncValues,
     validators: NodeGroup,
-    executors: NodeGroup,
 }
 
 #[derive(Serialize)]
@@ -349,13 +341,11 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
         tf_env::nomos_testnet_image_pull_policy().unwrap_or_else(|| "IfNotPresent".into());
     debug!(pol_mode, "rendering Helm values for k8s stack");
     let validators = build_node_group("validator", topology.validators(), &pol_mode);
-    let executors = build_node_group("executor", topology.executors(), &pol_mode);
 
     HelmValues {
         image_pull_policy,
         cfgsync,
         validators,
-        executors,
     }
 }
 
@@ -385,7 +375,6 @@ fn build_node_values(
     let mut env = BTreeMap::new();
     env.insert("POL_PROOF_DEV_MODE".into(), pol_mode.to_string());
     env.insert("CFG_NETWORK_PORT".into(), node.network_port().to_string());
-    env.insert("CFG_DA_PORT".into(), node.da_port.to_string());
     env.insert("CFG_BLEND_PORT".into(), node.blend_port.to_string());
     env.insert(
         "CFG_API_PORT".into(),

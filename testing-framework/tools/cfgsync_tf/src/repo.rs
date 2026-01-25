@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use nomos_tracing_service::TracingSettings;
 use testing_framework_config::topology::configs::{
-    GeneralConfig, consensus::ConsensusParams, da::DaParams, wallet::WalletConfig,
+    GeneralConfig, consensus::ConsensusParams, wallet::WalletConfig,
 };
 use tokio::{
     sync::{Mutex, oneshot::Sender},
@@ -24,33 +24,27 @@ pub struct ConfigRepo {
     waiting_hosts: Mutex<HashMap<Host, Sender<RepoResponse>>>,
     n_hosts: usize,
     consensus_params: ConsensusParams,
-    da_params: DaParams,
     tracing_settings: TracingSettings,
     wallet_config: WalletConfig,
     timeout_duration: Duration,
     ids: Option<Vec<[u8; 32]>>,
-    da_ports: Option<Vec<u16>>,
     blend_ports: Option<Vec<u16>>,
 }
 
 impl From<CfgSyncConfig> for Arc<ConfigRepo> {
     fn from(config: CfgSyncConfig) -> Self {
         let consensus_params = config.to_consensus_params();
-        let da_params = config.to_da_params();
         let tracing_settings = config.to_tracing_settings();
         let wallet_config = config.wallet_config();
         let ids = config.ids;
-        let da_ports = config.da_ports;
         let blend_ports = config.blend_ports;
 
         ConfigRepo::new(
             config.n_hosts,
             consensus_params,
-            da_params,
             tracing_settings,
             wallet_config,
             ids,
-            da_ports,
             blend_ports,
             Duration::from_secs(config.timeout),
         )
@@ -62,11 +56,9 @@ impl ConfigRepo {
     pub fn new(
         n_hosts: usize,
         consensus_params: ConsensusParams,
-        da_params: DaParams,
         tracing_settings: TracingSettings,
         wallet_config: WalletConfig,
         ids: Option<Vec<[u8; 32]>>,
-        da_ports: Option<Vec<u16>>,
         blend_ports: Option<Vec<u16>>,
         timeout_duration: Duration,
     ) -> Arc<Self> {
@@ -74,11 +66,9 @@ impl ConfigRepo {
             waiting_hosts: Mutex::new(HashMap::new()),
             n_hosts,
             consensus_params,
-            da_params,
             tracing_settings,
             wallet_config,
             ids,
-            da_ports,
             blend_ports,
             timeout_duration,
         });
@@ -150,11 +140,9 @@ fn generate_node_configs(
 ) -> Result<HashMap<Host, GeneralConfig>, String> {
     try_create_node_configs(
         &repo.consensus_params,
-        &repo.da_params,
         &repo.tracing_settings,
         &repo.wallet_config,
         repo.ids.clone(),
-        repo.da_ports.clone(),
         repo.blend_ports.clone(),
         hosts,
     )

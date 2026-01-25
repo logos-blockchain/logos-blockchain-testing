@@ -42,9 +42,7 @@ pub struct HostPort {
 #[derive(Debug)]
 pub struct ClusterPorts {
     pub validators: Vec<NodePortAllocation>,
-    pub executors: Vec<NodePortAllocation>,
     pub validator_host: String,
-    pub executor_host: String,
 }
 
 /// Success result from waiting for the cluster: host ports and forward handles.

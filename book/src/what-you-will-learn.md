@@ -14,7 +14,7 @@ without changing the plan.
 - Understand when to use each runner (Host, Compose, Kubernetes)
 
 **Author and Run Scenarios**
-- Define multi-node topologies with validators and executors
+- Define multi-node topologies with validators
 - Configure transaction and DA workloads with appropriate rates
 - Add consensus liveness and inclusion expectations
 - Run scenarios across all three deployment modes

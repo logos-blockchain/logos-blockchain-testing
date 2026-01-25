@@ -46,7 +46,6 @@ pub(super) fn build_general_config_for(
 
     let id = random_node_id();
     let network_port = allocate_udp_port("network port")?;
-    let da_port = allocate_udp_port("DA port")?;
     let blend_port = allocate_udp_port("Blend port")?;
     let topology = descriptors.config();
     let initial_peers =
@@ -55,10 +54,8 @@ pub(super) fn build_general_config_for(
         id,
         network_port,
         initial_peers,
-        da_port,
         blend_port,
         &topology.consensus_params,
-        &topology.da_params,
         &topology.wallet_config,
         base_consensus,
         base_time,
@@ -75,7 +72,6 @@ fn descriptor_for(
 ) -> Option<&GeneratedNodeConfig> {
     match role {
         NodeRole::Validator => descriptors.validators().get(index),
-        NodeRole::Executor => descriptors.executors().get(index),
     }
 }
 

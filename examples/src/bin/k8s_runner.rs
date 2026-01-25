@@ -18,32 +18,28 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let validators = read_env_any(&["NOMOS_DEMO_VALIDATORS"], demo::DEFAULT_VALIDATORS);
-    let executors = read_env_any(&["NOMOS_DEMO_EXECUTORS"], demo::DEFAULT_EXECUTORS);
     let run_secs = read_env_any(&["NOMOS_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);
-    info!(validators, executors, run_secs, "starting k8s runner demo");
+    info!(validators, run_secs, "starting k8s runner demo");
 
-    if let Err(err) = run_k8s_case(validators, executors, Duration::from_secs(run_secs)).await {
+    if let Err(err) = run_k8s_case(validators, Duration::from_secs(run_secs)).await {
         warn!("k8s runner demo failed: {err:#}");
         process::exit(1);
     }
 }
 
-async fn run_k8s_case(validators: usize, executors: usize, run_duration: Duration) -> Result<()> {
+async fn run_k8s_case(validators: usize, run_duration: Duration) -> Result<()> {
     info!(
         validators,
-        executors,
         duration_secs = run_duration.as_secs(),
         "building scenario plan"
     );
 
-    let mut scenario = ScenarioBuilder::topology_with(|t| {
-        t.network_star().validators(validators).executors(executors)
-    })
-    .with_capabilities(ObservabilityCapability::default())
-    .wallets(TOTAL_WALLETS)
-    .transactions_with(|txs| txs.rate(MIXED_TXS_PER_BLOCK).users(TRANSACTION_WALLETS))
-    .with_run_duration(run_duration)
-    .expect_consensus_liveness();
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(validators))
+        .with_capabilities(ObservabilityCapability::default())
+        .wallets(TOTAL_WALLETS)
+        .transactions_with(|txs| txs.rate(MIXED_TXS_PER_BLOCK).users(TRANSACTION_WALLETS))
+        .with_run_duration(run_duration)
+        .expect_consensus_liveness();
 
     if let Ok(url) = env::var("NOMOS_METRICS_QUERY_URL") {
         if !url.trim().is_empty() {

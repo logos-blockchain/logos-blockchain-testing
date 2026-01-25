@@ -54,14 +54,4 @@ impl NodeControlHandle for ComposeNodeControl {
         .await
         .map_err(|err| format!("validator restart failed: {err}").into())
     }
-
-    async fn restart_executor(&self, index: usize) -> Result<(), DynError> {
-        restart_compose_service(
-            &self.compose_file,
-            &self.project_name,
-            &format!("executor-{index}"),
-        )
-        .await
-        .map_err(|err| format!("executor restart failed: {err}").into())
-    }
 }

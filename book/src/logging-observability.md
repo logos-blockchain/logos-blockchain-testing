@@ -9,7 +9,7 @@ Comprehensive guide to log collection, metrics, and debugging across all runners
 | Component | Controlled By | Purpose |
 |-----------|--------------|---------|
 | **Framework binaries** (`cargo run -p runner-examples --bin local_runner`) | `RUST_LOG` | Runner orchestration, deployment logs |
-| **Node processes** (validators, executors spawned by runner) | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER` (+ `NOMOS_LOG_DIR` on host runner) | Consensus, DA, mempool, network logs |
+| **Node processes** (validators spawned by runner) | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER` (+ `NOMOS_LOG_DIR` on host runner) | Consensus, DA, mempool, network logs |
 
 **Common mistake:** Setting `RUST_LOG=debug` only increases verbosity of the runner binary itself. Node logs remain at their default level unless you also set `NOMOS_LOG_LEVEL=debug`.
 
@@ -56,12 +56,10 @@ When `NOMOS_LOG_DIR` is set, each node writes logs to separate files:
 
 **File naming pattern:**
 - **Validators**: Prefix `nomos-node-0`, `nomos-node-1`, etc. (may include timestamp suffix)
-- **Executors**: Prefix `nomos-executor-0`, `nomos-executor-1`, etc. (may include timestamp suffix)
 
 **Example filenames:**
 - `nomos-node-0.2024-12-18T14-30-00.log`
 - `nomos-node-1.2024-12-18T14-30-00.log`
-- `nomos-executor-0.2024-12-18T14-30-00.log`
 
 **Local runner note:** The local runner uses per-run temporary directories under the current working directory and removes them after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. Use `NOMOS_LOG_DIR=/path/to/logs` to write per-node log files to a stable location.
 
@@ -109,7 +107,7 @@ cargo run -p runner-examples --bin local_runner
 
 # After test completes:
 ls /tmp/local-logs/
-# Files with prefix: nomos-node-0*, nomos-node-1*, nomos-executor-0*
+# Files with prefix: nomos-node-0*, nomos-node-1*
 # May include timestamps in filename
 ```
 
@@ -186,10 +184,9 @@ kubectl get pods
 
 # Stream logs using label selectors (recommended)
 # Helm chart labels:
-# - nomos/logical-role=validator|executor
-# - nomos/validator-index / nomos/executor-index
+# - nomos/logical-role=validator
+# - nomos/validator-index
 kubectl logs -l nomos/logical-role=validator -f
-kubectl logs -l nomos/logical-role=executor -f
 
 # Stream logs from specific pod
 kubectl logs -f nomos-validator-0
@@ -203,11 +200,9 @@ kubectl logs --previous -l nomos/logical-role=validator
 ```bash
 # Using label selectors
 kubectl logs -l nomos/logical-role=validator --tail=1000 > all-validators.log
-kubectl logs -l nomos/logical-role=executor --tail=1000 > all-executors.log
 
 # Specific pods
 kubectl logs nomos-validator-0 > validator-0.log
-kubectl logs nomos-executor-1 > executor-1.log
 ```
 
 **K8s debugging variables:**

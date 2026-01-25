@@ -11,7 +11,7 @@ use tokio::time::sleep;
 use crate::{
     errors::{NodeClientError, StackReadinessError},
     infrastructure::ports::{HostPortMapping, NodeHostPorts},
-    lifecycle::wait::{wait_for_executors, wait_for_validators},
+    lifecycle::wait::wait_for_validators,
 };
 
 const DISABLED_READINESS_SLEEP: Duration = Duration::from_secs(5);
@@ -23,15 +23,6 @@ pub async fn ensure_validators_ready_with_ports(ports: &[u16]) -> Result<(), Sta
     }
 
     wait_for_validators(ports).await.map_err(Into::into)
-}
-
-/// Wait until all executors respond on their API ports.
-pub async fn ensure_executors_ready_with_ports(ports: &[u16]) -> Result<(), StackReadinessError> {
-    if ports.is_empty() {
-        return Ok(());
-    }
-
-    wait_for_executors(ports).await.map_err(Into::into)
 }
 
 /// Allow a brief pause when readiness probes are disabled.
@@ -53,14 +44,8 @@ pub fn build_node_clients_with_ports(
         .zip(mapping.validators.iter())
         .map(|(node, ports)| api_client_from_host_ports(to_http_role(node.role()), ports, host))
         .collect::<Result<Vec<_>, _>>()?;
-    let executors = descriptors
-        .executors()
-        .iter()
-        .zip(mapping.executors.iter())
-        .map(|(node, ports)| api_client_from_host_ports(to_http_role(node.role()), ports, host))
-        .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(NodeClients::new(validators, executors))
+    Ok(NodeClients::new(validators))
 }
 
 fn api_client_from_host_ports(
@@ -91,7 +76,6 @@ fn api_client_from_host_ports(
 fn to_http_role(role: TopologyNodeRole) -> testing_framework_core::scenario::http_probe::NodeRole {
     match role {
         TopologyNodeRole::Validator => HttpNodeRole::Validator,
-        TopologyNodeRole::Executor => HttpNodeRole::Executor,
     }
 }
 

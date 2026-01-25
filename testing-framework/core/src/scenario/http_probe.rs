@@ -11,7 +11,6 @@ use tracing::{debug, info};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeRole {
     Validator,
-    Executor,
 }
 
 impl NodeRole {
@@ -19,7 +18,6 @@ impl NodeRole {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Validator => "validator",
-            Self::Executor => "executor",
         }
     }
 }

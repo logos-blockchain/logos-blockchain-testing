@@ -17,6 +17,7 @@ NOMOS_RUST_SOURCES_ONLY.txt
 dump.zsh
 testing-framework/assets/stack/bin/
 testing-framework/assets/stack/kzgrs_test_params/
+null
 
 # Local test artifacts (kept when NOMOS_TESTS_KEEP_LOGS=1)
 tests/workflows/.tmp*

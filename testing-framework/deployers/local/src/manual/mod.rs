@@ -56,27 +56,12 @@ impl LocalManualCluster {
             .await?)
     }
 
-    pub async fn start_executor(&self, name: &str) -> Result<StartedNode, ManualClusterError> {
-        Ok(self
-            .nodes
-            .start_executor_with(name, StartNodeOptions::default())
-            .await?)
-    }
-
     pub async fn start_validator_with(
         &self,
         name: &str,
         options: StartNodeOptions,
     ) -> Result<StartedNode, ManualClusterError> {
         Ok(self.nodes.start_validator_with(name, options).await?)
-    }
-
-    pub async fn start_executor_with(
-        &self,
-        name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, ManualClusterError> {
-        Ok(self.nodes.start_executor_with(name, options).await?)
     }
 
     pub fn stop_all(&self) {
@@ -115,16 +100,6 @@ impl ManualClusterHandle for LocalManualCluster {
         options: StartNodeOptions,
     ) -> Result<StartedNode, DynError> {
         self.start_validator_with(name, options)
-            .await
-            .map_err(|err| err.into())
-    }
-
-    async fn start_executor_with(
-        &self,
-        name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError> {
-        self.start_executor_with(name, options)
             .await
             .map_err(|err| err.into())
     }

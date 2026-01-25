@@ -19,7 +19,7 @@ use crate::{
     manual::{LocalManualCluster, ManualClusterError},
     node_control::{LocalDynamicNodes, LocalDynamicSeed},
 };
-/// Spawns validators and executors as local processes, reusing the existing
+/// Spawns validators as local processes, reusing the existing
 /// integration harness.
 #[derive(Clone)]
 pub struct LocalDeployer {}
@@ -67,7 +67,6 @@ impl Deployer<()> for LocalDeployer {
     async fn deploy(&self, scenario: &Scenario<()>) -> Result<Runner, Self::Error> {
         info!(
             validators = scenario.topology().validators().len(),
-            executors = scenario.topology().executors().len(),
             "starting local deployment"
         );
         let topology = Self::prepare_topology(scenario).await?;
@@ -99,7 +98,6 @@ impl Deployer<NodeControlCapability> for LocalDeployer {
     ) -> Result<Runner, Self::Error> {
         info!(
             validators = scenario.topology().validators().len(),
-            executors = scenario.topology().executors().len(),
             "starting local deployment with node control"
         );
 
@@ -149,8 +147,7 @@ impl LocalDeployer {
 
         info!(
             validators = descriptors.validators().len(),
-            executors = descriptors.executors().len(),
-            "spawning local validators/executors"
+            "spawning local validators"
         );
 
         let topology = descriptors
@@ -188,7 +185,6 @@ async fn spawn_block_feed_with(
 ) -> Result<(BlockFeed, BlockFeedTask), LocalDeployerError> {
     debug!(
         validators = node_clients.validator_clients().len(),
-        executors = node_clients.executor_clients().len(),
         "selecting validator client for local block feed"
     );
 

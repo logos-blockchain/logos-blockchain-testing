@@ -3,7 +3,6 @@ pub mod base;
 pub mod blend;
 pub mod bootstrap;
 pub mod consensus;
-pub mod da;
 pub mod network;
 pub mod runtime;
 pub mod time;
@@ -16,7 +15,6 @@ use blend::GeneralBlendConfig;
 use consensus::{
     ConsensusConfigError, GeneralConsensusConfig, ProviderInfo, create_genesis_tx_with_declarations,
 };
-use da::GeneralDaConfig;
 use key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
 use network::GeneralNetworkConfig;
 use nomos_core::{
@@ -35,7 +33,6 @@ use crate::{
             api::GeneralApiConfig,
             bootstrap::{GeneralBootstrapConfig, SHORT_PROLONGED_BOOTSTRAP_PERIOD},
             consensus::ConsensusParams,
-            da::DaParams,
             network::NetworkParams,
             time::GeneralTimeConfig,
         },
@@ -61,8 +58,6 @@ pub enum GeneralConfigError {
     #[error(transparent)]
     Network(#[from] network::NetworkConfigError),
     #[error(transparent)]
-    Da(#[from] da::DaConfigError),
-    #[error(transparent)]
     Api(#[from] api::ApiConfigError),
 }
 
@@ -71,7 +66,6 @@ pub struct GeneralConfig {
     pub api_config: GeneralApiConfig,
     pub consensus_config: GeneralConsensusConfig,
     pub bootstrapping_config: GeneralBootstrapConfig,
-    pub da_config: GeneralDaConfig,
     pub network_config: GeneralNetworkConfig,
     pub blend_config: GeneralBlendConfig,
     pub tracing_config: GeneralTracingConfig,
@@ -99,9 +93,9 @@ pub fn create_general_configs_with_blend_core_subset(
 ) -> Result<Vec<GeneralConfig>, GeneralConfigError> {
     validate_node_counts(n_nodes, n_blend_core_nodes)?;
 
-    let (ids, da_ports, blend_ports) = generate_ids_and_ports(n_nodes)?;
+    let (ids, blend_ports) = generate_ids_and_ports(n_nodes)?;
 
-    validate_generated_vectors(n_nodes, &ids, &da_ports, &blend_ports)?;
+    validate_generated_vectors(n_nodes, &ids, &blend_ports)?;
 
     let consensus_params = ConsensusParams::default_for_participants(n_nodes);
     let mut consensus_configs =
@@ -109,7 +103,6 @@ pub fn create_general_configs_with_blend_core_subset(
     let bootstrap_config =
         bootstrap::create_bootstrap_configs(&ids, SHORT_PROLONGED_BOOTSTRAP_PERIOD);
     let network_configs = network::create_network_configs(&ids, network_params)?;
-    let da_configs = da::try_create_da_configs(&ids, &DaParams::default(), &da_ports)?;
     let api_configs = api::create_api_configs(&ids)?;
     let blend_configs = blend::create_blend_configs(&ids, &blend_ports);
     let tracing_configs = tracing::create_tracing_configs(&ids);
@@ -133,7 +126,6 @@ pub fn create_general_configs_with_blend_core_subset(
         &api_configs,
         &consensus_configs,
         &bootstrap_config,
-        &da_configs,
         &network_configs,
         &blend_configs,
         &tracing_configs,
@@ -160,29 +152,22 @@ fn validate_node_counts(
     Ok(())
 }
 
-fn generate_ids_and_ports(
-    n_nodes: usize,
-) -> Result<(Vec<[u8; 32]>, Vec<u16>, Vec<u16>), GeneralConfigError> {
+fn generate_ids_and_ports(n_nodes: usize) -> Result<(Vec<[u8; 32]>, Vec<u16>), GeneralConfigError> {
     // Blend relies on each node declaring a different ZK public key, so we need
     // different IDs to generate different keys.
     let mut ids: Vec<_> = (0..n_nodes).map(|i| [i as u8; 32]).collect();
-    let mut da_ports = Vec::with_capacity(n_nodes);
     let mut blend_ports = Vec::with_capacity(n_nodes);
 
     for id in &mut ids {
         thread_rng().fill(id);
 
-        da_ports.push(
-            get_available_udp_port()
-                .ok_or(GeneralConfigError::PortAllocationFailed { label: "DA" })?,
-        );
         blend_ports.push(
             get_available_udp_port()
                 .ok_or(GeneralConfigError::PortAllocationFailed { label: "Blend" })?,
         );
     }
 
-    Ok((ids, da_ports, blend_ports))
+    Ok((ids, blend_ports))
 }
 
 fn collect_blend_core_providers(
@@ -250,7 +235,6 @@ fn build_general_configs(
     api_configs: &[GeneralApiConfig],
     consensus_configs: &[GeneralConsensusConfig],
     bootstrap_config: &[GeneralBootstrapConfig],
-    da_configs: &[GeneralDaConfig],
     network_configs: &[GeneralNetworkConfig],
     blend_configs: &[GeneralBlendConfig],
     tracing_configs: &[GeneralTracingConfig],
@@ -263,7 +247,6 @@ fn build_general_configs(
         let api_config = get_cloned_or_empty(api_configs, i)?;
         let consensus_config = get_cloned_or_empty(consensus_configs, i)?;
         let bootstrapping_config = get_cloned_or_empty(bootstrap_config, i)?;
-        let da_config = get_cloned_or_empty(da_configs, i)?;
         let network_config = get_cloned_or_empty(network_configs, i)?;
         let blend_config = get_cloned_or_empty(blend_configs, i)?;
         let tracing_config = get_cloned_or_empty(tracing_configs, i)?;
@@ -273,7 +256,6 @@ fn build_general_configs(
             api_config,
             consensus_config,
             bootstrapping_config,
-            da_config,
             network_config,
             blend_config,
             tracing_config,

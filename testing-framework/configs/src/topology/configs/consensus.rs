@@ -103,7 +103,6 @@ pub struct GeneralConsensusConfig {
     pub genesis_tx: GenesisTx,
     pub utxos: Vec<Utxo>,
     pub blend_notes: Vec<ServiceNote>,
-    pub da_notes: Vec<ServiceNote>,
     pub wallet_accounts: Vec<WalletAccount>,
 }
 
@@ -166,28 +165,16 @@ fn build_ledger_config(
         },
         sdp_config: nomos_ledger::mantle::sdp::Config {
             service_params: Arc::new(
-                [
-                    (
-                        ServiceType::BlendNetwork,
-                        ServiceParameters {
-                            lock_period: 10,
-                            inactivity_period: 20,
-                            retention_period: 100,
-                            timestamp: 0,
-                            session_duration: 1000,
-                        },
-                    ),
-                    (
-                        ServiceType::DataAvailability,
-                        ServiceParameters {
-                            lock_period: 10,
-                            inactivity_period: 20,
-                            retention_period: 100,
-                            timestamp: 0,
-                            session_duration: 1000,
-                        },
-                    ),
-                ]
+                [(
+                    ServiceType::BlendNetwork,
+                    ServiceParameters {
+                        lock_period: 10,
+                        inactivity_period: 20,
+                        retention_period: 100,
+                        timestamp: 0,
+                        session_duration: 1000,
+                    },
+                )]
                 .into(),
             ),
             min_stake: nomos_core::sdp::MinStake {
@@ -218,14 +205,8 @@ pub fn create_consensus_configs(
 ) -> Result<Vec<GeneralConsensusConfig>, ConsensusConfigError> {
     let mut leader_keys = Vec::new();
     let mut blend_notes = Vec::new();
-    let mut da_notes = Vec::new();
 
-    let utxos = create_utxos_for_leader_and_services(
-        ids,
-        &mut leader_keys,
-        &mut blend_notes,
-        &mut da_notes,
-    );
+    let utxos = create_utxos_for_leader_and_services(ids, &mut leader_keys, &mut blend_notes);
     let utxos = append_wallet_utxos(utxos, wallet);
     let genesis_tx = create_genesis_tx(&utxos)?;
     let ledger_config = build_ledger_config(consensus_params)?;
@@ -237,7 +218,6 @@ pub fn create_consensus_configs(
             ledger_config: ledger_config.clone(),
             genesis_tx: genesis_tx.clone(),
             utxos: utxos.clone(),
-            da_notes: da_notes.clone(),
             blend_notes: blend_notes.clone(),
             wallet_accounts: wallet.accounts.clone(),
         })
@@ -248,7 +228,6 @@ fn create_utxos_for_leader_and_services(
     ids: &[[u8; 32]],
     leader_keys: &mut Vec<(ZkPublicKey, UnsecuredZkKey)>,
     blend_notes: &mut Vec<ServiceNote>,
-    da_notes: &mut Vec<ServiceNote>,
 ) -> Vec<Utxo> {
     let mut utxos = Vec::new();
 
@@ -258,7 +237,6 @@ fn create_utxos_for_leader_and_services(
     // Create notes for leader, Blend and DA declarations.
     for &id in ids {
         output_index = push_leader_utxo(id, leader_keys, &mut utxos, output_index);
-        output_index = push_service_note(b"da", id, da_notes, &mut utxos, output_index);
         output_index = push_service_note(b"bn", id, blend_notes, &mut utxos, output_index);
     }
 

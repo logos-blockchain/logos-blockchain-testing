@@ -75,7 +75,6 @@ impl ScenarioWorkload for Workload {
         let reference_node = descriptors
             .validators()
             .first()
-            .or_else(|| descriptors.executors().first())
             .ok_or("transaction workload requires at least one node in the topology")?;
 
         let utxo_map = wallet_utxo_map(reference_node);

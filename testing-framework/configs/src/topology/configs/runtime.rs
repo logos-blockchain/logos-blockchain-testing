@@ -9,8 +9,6 @@ use crate::{
     topology::configs::{
         GeneralConfig, GeneralConfigError, api, blend, bootstrap, consensus,
         consensus::{ConsensusParams, GeneralConsensusConfig},
-        da,
-        da::DaParams,
         network,
         network::{Libp2pNetworkLayout, NetworkParams},
         time, tracing,
@@ -22,10 +20,8 @@ pub fn build_general_config_for_node(
     id: [u8; 32],
     network_port: u16,
     initial_peers: Vec<Multiaddr>,
-    da_port: u16,
     blend_port: u16,
     consensus_params: &ConsensusParams,
-    da_params: &DaParams,
     wallet_config: &WalletConfig,
     base_consensus: &GeneralConsensusConfig,
     time_config: &time::GeneralTimeConfig,
@@ -38,11 +34,6 @@ pub fn build_general_config_for_node(
             .into_iter()
             .next()
             .ok_or(GeneralConfigError::EmptyParticipants)?;
-
-    let da_config = da::try_create_da_configs(&[id], da_params, &[da_port])?
-        .into_iter()
-        .next()
-        .ok_or(GeneralConfigError::EmptyParticipants)?;
 
     let blend_config = blend::create_blend_configs(&[id], &[blend_port])
         .into_iter()
@@ -61,12 +52,11 @@ pub fn build_general_config_for_node(
         .next()
         .ok_or(GeneralConfigError::EmptyParticipants)?;
 
-    let kms_config = build_kms_config_for_node(&blend_config, &da_config, wallet_config);
+    let kms_config = build_kms_config_for_node(&blend_config, wallet_config);
 
     Ok(GeneralConfig {
         consensus_config,
         bootstrapping_config: bootstrap_config,
-        da_config,
         network_config,
         blend_config,
         api_config,
@@ -89,7 +79,6 @@ pub fn build_consensus_config_for_node(
 
     config.genesis_tx = base.genesis_tx.clone();
     config.utxos = base.utxos.clone();
-    config.da_notes = base.da_notes.clone();
     config.blend_notes = base.blend_notes.clone();
     config.wallet_accounts = base.wallet_accounts.clone();
 
@@ -115,7 +104,6 @@ pub fn build_initial_peers(network_params: &NetworkParams, peer_ports: &[u16]) -
 
 fn build_kms_config_for_node(
     blend_config: &blend::GeneralBlendConfig,
-    da_config: &da::GeneralDaConfig,
     wallet_config: &WalletConfig,
 ) -> PreloadKMSBackendSettings {
     let mut keys = HashMap::from([
@@ -126,14 +114,6 @@ fn build_kms_config_for_node(
         (
             key_id_for_preload_backend(&Key::Zk(blend_config.secret_zk_key.clone())),
             Key::Zk(blend_config.secret_zk_key.clone()),
-        ),
-        (
-            key_id_for_preload_backend(&Key::Ed25519(da_config.signer.clone())),
-            Key::Ed25519(da_config.signer.clone()),
-        ),
-        (
-            key_id_for_preload_backend(&Key::Zk(da_config.secret_zk_key.clone())),
-            Key::Zk(da_config.secret_zk_key.clone()),
         ),
     ]);
 

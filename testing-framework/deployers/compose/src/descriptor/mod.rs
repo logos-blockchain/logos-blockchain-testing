@@ -21,7 +21,6 @@ use testing_framework_config::constants::DEFAULT_CFGSYNC_PORT;
 #[derive(Clone, Debug, Serialize)]
 pub struct ComposeDescriptor {
     validators: Vec<NodeDescriptor>,
-    executors: Vec<NodeDescriptor>,
 }
 
 impl ComposeDescriptor {
@@ -34,11 +33,6 @@ impl ComposeDescriptor {
     #[cfg(test)]
     pub fn validators(&self) -> &[NodeDescriptor] {
         &self.validators
-    }
-
-    #[cfg(test)]
-    pub fn executors(&self) -> &[NodeDescriptor] {
-        &self.executors
     }
 }
 
@@ -89,40 +83,25 @@ impl<'a> ComposeDescriptorBuilder<'a> {
             cfgsync_port,
         );
 
-        let executors = build_nodes(
-            self.topology.executors(),
-            ComposeNodeKind::Executor,
-            &image,
-            platform.as_deref(),
-            self.use_kzg_mount,
-            cfgsync_port,
-        );
-
-        ComposeDescriptor {
-            validators,
-            executors,
-        }
+        ComposeDescriptor { validators }
     }
 }
 
 #[derive(Clone, Copy)]
 pub(crate) enum ComposeNodeKind {
     Validator,
-    Executor,
 }
 
 impl ComposeNodeKind {
     fn instance_name(self, index: usize) -> String {
         match self {
             Self::Validator => format!("validator-{index}"),
-            Self::Executor => format!("executor-{index}"),
         }
     }
 
     const fn entrypoint(self) -> &'static str {
         match self {
             Self::Validator => "/etc/nomos/scripts/run_nomos_node.sh",
-            Self::Executor => "/etc/nomos/scripts/run_nomos_executor.sh",
         }
     }
 }

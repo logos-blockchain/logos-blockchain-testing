@@ -13,13 +13,8 @@ scripts:
   runCfgsyncSh: ""
   runNomosSh: ""
   runNomosNodeSh: ""
-  runNomosExecutorSh: ""
 
 validators:
-  count: 1
-  nodes: []
-
-executors:
   count: 1
   nodes: []
 

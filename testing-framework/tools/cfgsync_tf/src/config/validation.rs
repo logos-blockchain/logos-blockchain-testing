@@ -18,7 +18,6 @@ pub fn validate_inputs(
     hosts: &[Host],
     consensus_params: &ConsensusParams,
     ids: Option<&Vec<[u8; 32]>>,
-    da_ports: Option<&Vec<u16>>,
     blend_ports: Option<&Vec<u16>>,
 ) -> Result<(), ValidationError> {
     let expected = consensus_params.n_participants;
@@ -30,7 +29,7 @@ pub fn validate_inputs(
         });
     }
 
-    validate_node_vectors(expected, ids, da_ports, blend_ports)?;
+    validate_node_vectors(expected, ids, blend_ports)?;
 
     Ok(())
 }

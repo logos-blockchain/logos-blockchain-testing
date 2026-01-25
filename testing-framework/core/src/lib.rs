@@ -8,7 +8,6 @@ use std::{env, ops::Mul as _, sync::LazyLock, time::Duration};
 
 pub use testing_framework_config::{
     IS_DEBUG_TRACING, node_address_from_port, secret_key_to_peer_id, secret_key_to_provider_id,
-    topology::configs::da::GLOBAL_PARAMS_PATH,
 };
 
 static IS_SLOW_TEST_ENV: LazyLock<bool> =

@@ -1,7 +1,6 @@
 use std::{fs::File, num::NonZero, path::Path, time::Duration};
 
 use anyhow::{Context as _, Result};
-use nomos_da_network_core::swarm::ReplicationConfig;
 use nomos_tracing_service::TracingSettings;
 use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
@@ -24,8 +23,6 @@ pub struct CfgSyncConfig {
     #[serde(default)]
     pub ids: Option<Vec<[u8; 32]>>,
     #[serde(default)]
-    pub da_ports: Option<Vec<u16>>,
-    #[serde(default)]
     pub blend_ports: Option<Vec<u16>>,
     pub subnetwork_size: usize,
     pub dispersal_factor: usize,
@@ -42,7 +39,6 @@ pub struct CfgSyncConfig {
     pub monitor_failure_time_window: Duration,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
     pub balancer_interval: Duration,
-    pub replication_settings: ReplicationConfig,
     pub retry_shares_limit: usize,
     pub retry_commitments_limit: usize,
     pub tracing_settings: TracingSettings,
@@ -76,11 +72,9 @@ pub fn apply_topology_overrides(
 ) {
     debug!(
         validators = topology.validators().len(),
-        executors = topology.executors().len(),
-        use_kzg_mount,
-        "applying topology overrides to cfgsync config"
+        use_kzg_mount, "applying topology overrides to cfgsync config"
     );
-    let hosts = topology.validators().len() + topology.executors().len();
+    let hosts = topology.validators().len();
     cfg.n_hosts = hosts;
 
     let consensus = &topology.config().consensus_params;
@@ -90,30 +84,13 @@ pub fn apply_topology_overrides(
     let config = topology.config();
     cfg.wallet = config.wallet_config.clone();
     cfg.ids = Some(topology.nodes().map(|node| node.id).collect());
-    cfg.da_ports = Some(topology.nodes().map(|node| node.da_port).collect());
     cfg.blend_ports = Some(topology.nodes().map(|node| node.blend_port).collect());
 
-    let da = &config.da_params;
-    cfg.subnetwork_size = da.subnetwork_size;
-    cfg.dispersal_factor = da.dispersal_factor;
-    cfg.num_samples = da.num_samples;
-    cfg.num_subnets = da.num_subnets;
-    cfg.old_blobs_check_interval = da.old_blobs_check_interval;
-    cfg.blobs_validity_duration = da.blobs_validity_duration;
-    cfg.global_params_path = if use_kzg_mount {
+    if use_kzg_mount {
         // Compose mounts the bundle at /kzgrs_test_params; the proving key lives under
         // pol/.
-        kzg_container_path()
-    } else {
-        da.global_params_path.clone()
+        cfg.global_params_path = kzg_container_path()
     };
-    cfg.min_dispersal_peers = da.policy_settings.min_dispersal_peers;
-    cfg.min_replication_peers = da.policy_settings.min_replication_peers;
-    cfg.monitor_failure_time_window = da.monitor_settings.failure_time_window;
-    cfg.balancer_interval = da.balancer_interval;
-    cfg.replication_settings = da.replication_settings;
-    cfg.retry_shares_limit = da.retry_shares_limit;
-    cfg.retry_commitments_limit = da.retry_commitments_limit;
 }
 
 #[serde_as]
@@ -127,8 +104,6 @@ struct SerializableCfgSyncConfig {
     wallet: WalletConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     ids: Option<Vec<[u8; 32]>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    da_ports: Option<Vec<u16>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     blend_ports: Option<Vec<u16>>,
     subnetwork_size: usize,
@@ -146,7 +121,6 @@ struct SerializableCfgSyncConfig {
     monitor_failure_time_window: Duration,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
     balancer_interval: Duration,
-    replication_settings: ReplicationConfig,
     retry_shares_limit: usize,
     retry_commitments_limit: usize,
     tracing_settings: TracingSettings,
@@ -162,7 +136,6 @@ impl From<&CfgSyncConfig> for SerializableCfgSyncConfig {
             active_slot_coeff: cfg.active_slot_coeff,
             wallet: cfg.wallet.clone(),
             ids: cfg.ids.clone(),
-            da_ports: cfg.da_ports.clone(),
             blend_ports: cfg.blend_ports.clone(),
             subnetwork_size: cfg.subnetwork_size,
             dispersal_factor: cfg.dispersal_factor,
@@ -175,7 +148,6 @@ impl From<&CfgSyncConfig> for SerializableCfgSyncConfig {
             min_replication_peers: cfg.min_replication_peers,
             monitor_failure_time_window: cfg.monitor_failure_time_window,
             balancer_interval: cfg.balancer_interval,
-            replication_settings: cfg.replication_settings,
             retry_shares_limit: cfg.retry_shares_limit,
             retry_commitments_limit: cfg.retry_commitments_limit,
             tracing_settings: cfg.tracing_settings.clone(),

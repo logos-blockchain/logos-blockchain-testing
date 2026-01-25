@@ -8,14 +8,13 @@ use tracing::info;
 
 const MIN_DELAY_SPREAD_FALLBACK: Duration = Duration::from_millis(1);
 
-/// Randomly restarts validators and executors during a run to introduce chaos.
+/// Randomly restarts validators during a run to introduce chaos.
 #[derive(Debug)]
 pub struct RandomRestartWorkload {
     min_delay: Duration,
     max_delay: Duration,
     target_cooldown: Duration,
     include_validators: bool,
-    include_executors: bool,
 }
 
 impl RandomRestartWorkload {
@@ -23,21 +22,19 @@ impl RandomRestartWorkload {
     ///
     /// `min_delay`/`max_delay` bound the sleep between restart attempts, while
     /// `target_cooldown` prevents repeatedly restarting the same node too
-    /// quickly. Validators or executors can be selectively included.
+    /// quickly. Validators can be selectively included.
     #[must_use]
     pub const fn new(
         min_delay: Duration,
         max_delay: Duration,
         target_cooldown: Duration,
         include_validators: bool,
-        include_executors: bool,
     ) -> Self {
         Self {
             min_delay,
             max_delay,
             target_cooldown,
             include_validators,
-            include_executors,
         }
     }
 
@@ -51,11 +48,6 @@ impl RandomRestartWorkload {
                 }
             } else if validator_count == 1 {
                 info!("chaos restart skipping validators: only one validator configured");
-            }
-        }
-        if self.include_executors {
-            for index in 0..ctx.descriptors().executors().len() {
-                targets.push(Target::Executor(index));
             }
         }
         targets
@@ -155,7 +147,6 @@ impl Workload for RandomRestartWorkload {
         tracing::info!(
             config = ?self,
             validators = ctx.descriptors().validators().len(),
-            executors = ctx.descriptors().executors().len(),
             target_count = targets.len(),
             "starting chaos restart workload"
         );
@@ -174,13 +165,6 @@ impl Workload for RandomRestartWorkload {
                         .await
                         .map_err(|err| format!("validator restart failed: {err}"))?
                 }
-                Target::Executor(index) => {
-                    tracing::info!(index, "chaos restarting executor");
-                    handle
-                        .restart_executor(index)
-                        .await
-                        .map_err(|err| format!("executor restart failed: {err}"))?
-                }
             }
 
             cooldowns.insert(target, Instant::now() + self.target_cooldown);
@@ -191,5 +175,4 @@ impl Workload for RandomRestartWorkload {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum Target {
     Validator(usize),
-    Executor(usize),
 }

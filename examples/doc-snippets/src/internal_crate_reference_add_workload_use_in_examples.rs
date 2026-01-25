@@ -27,7 +27,7 @@ impl<Caps> YourWorkloadDslExt for testing_framework_core::scenario::Builder<Caps
 }
 
 pub fn use_in_examples() -> SnippetResult<()> {
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(0))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
         .your_workload_with(|w| w.some_config())
         .build()?;
     Ok(())

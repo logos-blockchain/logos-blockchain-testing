@@ -242,7 +242,6 @@ jobs:
       POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
       LOCAL_DEMO_VALIDATORS: 1
-      LOCAL_DEMO_EXECUTORS: 1
       NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
       NOMOS_KZGRS_PARAMS_PATH: ${{ github.workspace }}/.tmp/kzgrs_test_params
       CARGO_INCREMENTAL: 0

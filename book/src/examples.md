@@ -13,7 +13,7 @@ and expectations.
 - `compose_runner.rs` — Docker Compose (requires image built)
 - `k8s_runner.rs` — Kubernetes (requires cluster access and image loaded)
 
-**Recommended:** Use `scripts/run/run-examples.sh -t <duration> -v <validators> -e <executors> <mode>` where mode is `host`, `compose`, or `k8s`.
+**Recommended:** Use `scripts/run/run-examples.sh -t <duration> -v <validators> <mode>` where mode is `host`, `compose`, or `k8s`.
 
 **Alternative:** Direct cargo run: `POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>`
 
@@ -34,7 +34,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn simple_consensus() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(0))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(30))
         .build();
@@ -62,7 +62,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn transaction_workload() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2).executors(0))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
         .wallets(20)
         .transactions_with(|txs| txs.rate(5).users(10))
         .expect_consensus_liveness()
@@ -92,7 +92,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn da_and_transactions() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
         .wallets(30)
         .transactions_with(|txs| txs.rate(5).users(15))
         .da_with(|da| da.channel_rate(2).blob_rate(2))
@@ -123,7 +123,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub async fn chaos_resilience() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4).executors(2))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
         .enable_node_control()
         .wallets(20)
         .transactions_with(|txs| txs.rate(3).users(10))

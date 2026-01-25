@@ -29,9 +29,4 @@ data:
 {{- else }}
 {{ "" | indent 4 }}
 {{- end }}
-  run_nomos_executor.sh: |
-{{- if .Values.scripts.runNomosExecutorSh }}
-{{ .Values.scripts.runNomosExecutorSh | indent 4 }}
-{{- else }}
-{{ "" | indent 4 }}
-{{- end }}
+

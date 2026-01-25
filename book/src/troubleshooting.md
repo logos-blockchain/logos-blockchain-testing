@@ -138,9 +138,9 @@ ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
 ### 4. Node Binaries Not Found
 
 **Symptoms:**
-- Error about missing `nomos-node` or `nomos-executor` binary
+- Error about missing `nomos-node` binary
 - "file not found" or "no such file or directory"
-- Environment variables `NOMOS_NODE_BIN` / `NOMOS_EXECUTOR_BIN` not set
+- Environment variables `NOMOS_NODE_BIN` not set
 
 **What you'll see:**
 
@@ -151,7 +151,7 @@ Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }
 thread 'main' panicked at 'failed to spawn nomos-node process'
 ```
 
-**Root Cause:** The local runner needs compiled `nomos-node` and `nomos-executor` binaries, but doesn't know where they are.
+**Root Cause:** The local runner needs compiled `nomos-node` binaries, but doesn't know where they are.
 
 **Fix (recommended):**
 
@@ -165,11 +165,10 @@ scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
 ```bash
 # Build binaries first
 cd ../nomos-node  # or wherever your nomos-node checkout is
-cargo build --release --bin nomos-node --bin nomos-executor
+cargo build --release --bin nomos-node
 
 # Set environment variables
 export NOMOS_NODE_BIN=$PWD/target/release/nomos-node
-export NOMOS_EXECUTOR_BIN=$PWD/target/release/nomos-executor
 
 # Return to testing framework
 cd ../nomos-testing
@@ -289,7 +288,6 @@ netstat -ano | findstr :18080  # Windows
 
 # Kill orphaned nomos processes
 pkill nomos-node
-pkill nomos-executor
 
 # For compose: ensure containers are stopped
 docker compose down
@@ -337,7 +335,7 @@ thread 'main' panicked at 'workload init failed: insufficient wallets'
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
-let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .wallets(20) // ← Increase wallet count
     .transactions_with(|tx| {
         tx.users(10) // ← Must be ≤ wallets(20)
@@ -459,7 +457,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 // Increase run duration to allow more blocks.
-let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3).executors(1))
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(120)) // ← Give more time
     .build();
@@ -484,7 +482,7 @@ When a test fails, check these in order:
 1. **`POL_PROOF_DEV_MODE=true` is set** (REQUIRED for all runners)
 2. **`versions.env` exists at repo root**
 3. **KZG circuit assets present** (for DA workloads): `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
-4. **Node binaries available** (`NOMOS_NODE_BIN` / `NOMOS_EXECUTOR_BIN` set, or using `run-examples.sh`)
+4. **Node binaries available** (`NOMOS_NODE_BIN` set, or using `run-examples.sh`)
 5. **Docker daemon running** (for compose/k8s)
 6. **Docker image built** (`logos-blockchain-testing:local` exists for compose/k8s)
 7. **No port conflicts** (`lsof -i :18080`, kill orphaned processes)
@@ -508,7 +506,7 @@ When a test fails, check these in order:
 **Important Notes:**
 - **Host runner** (local processes): Per-run temporary directories are created under the current working directory and removed after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. To write per-node log files to a stable location, set `NOMOS_LOG_DIR=/path/to/logs`.
 - **Compose/K8s**: Node log destination is controlled by `testing-framework/assets/stack/cfgsync.yaml` (`tracing_settings.logger`). By default, rely on `docker logs` or `kubectl logs`.
-- **File naming**: Log files use prefix `nomos-node-{index}*` or `nomos-executor-{index}*` with timestamps, e.g., `nomos-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
+- **File naming**: Log files use prefix `nomos-node-{index}*` with timestamps, e.g., `nomos-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
 - **Container names**: Compose containers include project UUID, e.g., `nomos-compose-<uuid>-validator-0-1` where `<uuid>` is randomly generated per run
 
 ### Accessing Node Logs by Runner
@@ -566,7 +564,7 @@ docker exec -it <container-id> /bin/sh
 docker logs <container-id> > debug.log
 ```
 
-**Note:** Container names follow the pattern `nomos-compose-{uuid}-validator-{index}-1` or `nomos-compose-{uuid}-executor-{index}-1`, where `{uuid}` is randomly generated per run.
+**Note:** Container names follow the pattern `nomos-compose-{uuid}-validator-{index}-1`, where `{uuid}` is randomly generated per run.
 
 #### K8s Runner
 
@@ -580,9 +578,6 @@ kubectl config view --minify | grep namespace
 
 # All validator pods (add -n <namespace> if not using default)
 kubectl logs -l nomos/logical-role=validator -f
-
-# All executor pods
-kubectl logs -l nomos/logical-role=executor -f
 
 # Specific pod by name (find exact name first)
 kubectl get pods -l nomos/logical-role=validator  # Find the exact pod name
@@ -616,7 +611,6 @@ done > all-logs.txt
 
 # Or use label selectors (recommended)
 kubectl logs -l nomos/logical-role=validator --tail=500 > validators.log
-kubectl logs -l nomos/logical-role=executor --tail=500 > executors.log
 
 # With explicit namespace
 kubectl logs -n my-namespace -l nomos/logical-role=validator --tail=500 > validators.log
@@ -651,7 +645,6 @@ docker ps -a --filter "name=nomos-compose-"
 
 # K8s: check pod status (use label selectors, add -n <namespace> if needed)
 kubectl get pods -l nomos/logical-role=validator
-kubectl get pods -l nomos/logical-role=executor
 kubectl describe pod <actual-pod-name>  # Get name from above first
 ```
 

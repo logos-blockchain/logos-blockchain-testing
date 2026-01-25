@@ -38,7 +38,6 @@ pub fn standard_da_topology() -> GeneratedTopology {
     TopologyBuilder::new()
         .network_star()
         .validators(3)
-        .executors(2)
         .generate()
 }
 ```
@@ -200,7 +199,6 @@ docker stats  # monitor resource usage
 
 **Minimal viable topology**
 - Consensus: 3 validators (minimum for Byzantine fault tolerance)
-- DA: 2+ executors (test dispersal and sampling)
 - Network: Star topology (simplest for debugging)
 
 **Workload rate selection**

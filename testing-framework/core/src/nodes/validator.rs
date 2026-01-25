@@ -96,12 +96,6 @@ impl NodeConfigCommon for Config {
 
     fn set_paths(&mut self, base: &std::path::Path) {
         self.storage.db_path = base.join("db");
-        base.clone_into(
-            &mut self
-                .da_verifier
-                .storage_adapter_settings
-                .blob_storage_directory,
-        );
     }
 
     fn addresses(&self) -> NodeAddresses {

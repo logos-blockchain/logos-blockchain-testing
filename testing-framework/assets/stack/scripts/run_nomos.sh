@@ -7,7 +7,6 @@ role="${1:-validator}"
 bin_for_role() {
   case "$1" in
     validator) echo "/usr/bin/logos-blockchain-node" ;;
-    executor) echo "/usr/bin/logos-blockchain-executor" ;;
     *) echo "Unknown role: $1" >&2; exit 2 ;;
   esac
 }

@@ -6,14 +6,13 @@ use crate::topology::{
     config::TopologyConfig,
     configs::{GeneralConfig, wallet::WalletAccount},
     deployment::{SpawnTopologyError, Topology},
-    readiness::{HttpMembershipReadiness, HttpNetworkReadiness, ReadinessCheck, ReadinessError},
+    readiness::{HttpNetworkReadiness, ReadinessCheck, ReadinessError},
 };
 
 /// Node role within the generated topology.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeRole {
     Validator,
-    Executor,
 }
 
 /// Fully generated configuration for an individual node.
@@ -23,7 +22,6 @@ pub struct GeneratedNodeConfig {
     pub index: usize,
     pub id: [u8; 32],
     pub general: GeneralConfig,
-    pub da_port: u16,
     pub blend_port: u16,
 }
 
@@ -62,7 +60,6 @@ impl GeneratedNodeConfig {
 pub struct GeneratedTopology {
     pub(crate) config: TopologyConfig,
     pub(crate) validators: Vec<GeneratedNodeConfig>,
-    pub(crate) executors: Vec<GeneratedNodeConfig>,
 }
 
 impl GeneratedTopology {
@@ -78,15 +75,9 @@ impl GeneratedTopology {
         &self.validators
     }
 
-    #[must_use]
-    /// All executor configs.
-    pub fn executors(&self) -> &[GeneratedNodeConfig] {
-        &self.executors
-    }
-
     /// Iterator over all node configs in role order.
     pub fn nodes(&self) -> impl Iterator<Item = &GeneratedNodeConfig> {
-        self.validators.iter().chain(self.executors.iter())
+        self.validators.iter()
     }
 
     #[must_use]
@@ -109,30 +100,17 @@ impl GeneratedTopology {
             .map(|node| node.general.clone())
             .collect::<Vec<_>>();
 
-        let (validators, executors) = Topology::spawn_validators_executors(
-            configs,
-            self.config.n_validators,
-            self.config.n_executors,
-        )
-        .await?;
+        let validators = Topology::spawn_validators(configs, self.config.n_validators).await?;
 
-        Ok(Topology {
-            validators,
-            executors,
-        })
+        Ok(Topology { validators })
     }
 
     pub async fn wait_remote_readiness(
         &self,
         // Node endpoints
         validator_endpoints: &[Url],
-        executor_endpoints: &[Url],
-
-        // Membership endpoints
-        validator_membership_endpoints: Option<&[Url]>,
-        executor_membership_endpoints: Option<&[Url]>,
     ) -> Result<(), ReadinessError> {
-        let total_nodes = self.validators.len() + self.executors.len();
+        let total_nodes = self.validators.len();
         if total_nodes == 0 {
             return Ok(());
         }
@@ -140,42 +118,15 @@ impl GeneratedTopology {
         let labels = self.labels();
         let client = Client::new();
 
-        let endpoints =
-            collect_node_endpoints(self, validator_endpoints, executor_endpoints, total_nodes);
+        let endpoints = collect_node_endpoints(self, validator_endpoints, total_nodes);
 
-        wait_for_network_readiness(self, &client, &endpoints, &labels).await?;
-
-        if validator_membership_endpoints.is_none() && executor_membership_endpoints.is_none() {
-            return Ok(());
-        }
-
-        let membership_endpoints = collect_membership_endpoints(
-            self,
-            total_nodes,
-            validator_membership_endpoints,
-            executor_membership_endpoints,
-        );
-
-        let membership_check = HttpMembershipReadiness {
-            client: &client,
-            endpoints: &membership_endpoints,
-            session: nomos_core::sdp::SessionNumber::from(0u64),
-            labels: &labels,
-            expect_non_empty: true,
-        };
-
-        membership_check.wait().await
+        wait_for_network_readiness(self, &client, &endpoints, &labels).await
     }
 
     fn listen_ports(&self) -> Vec<u16> {
         self.validators
             .iter()
             .map(|node| node.general.network_config.backend.swarm.port)
-            .chain(
-                self.executors
-                    .iter()
-                    .map(|node| node.general.network_config.backend.swarm.port),
-            )
             .collect()
     }
 
@@ -191,15 +142,6 @@ impl GeneratedTopology {
                     .filter_map(crate::topology::utils::multiaddr_port)
                     .collect::<HashSet<u16>>()
             })
-            .chain(self.executors.iter().map(|node| {
-                node.general
-                    .network_config
-                    .backend
-                    .initial_peers
-                    .iter()
-                    .filter_map(crate::topology::utils::multiaddr_port)
-                    .collect::<HashSet<u16>>()
-            }))
             .collect()
     }
 
@@ -213,12 +155,6 @@ impl GeneratedTopology {
                     node.general.network_config.backend.swarm.port
                 )
             })
-            .chain(self.executors.iter().enumerate().map(|(idx, node)| {
-                format!(
-                    "executor#{idx}@{}",
-                    node.general.network_config.backend.swarm.port
-                )
-            }))
             .collect()
     }
 }
@@ -226,7 +162,6 @@ impl GeneratedTopology {
 fn collect_node_endpoints(
     topology: &GeneratedTopology,
     validator_endpoints: &[Url],
-    executor_endpoints: &[Url],
     total_nodes: usize,
 ) -> Vec<Url> {
     assert_eq!(
@@ -234,15 +169,9 @@ fn collect_node_endpoints(
         validator_endpoints.len(),
         "validator endpoints must match topology"
     );
-    assert_eq!(
-        topology.executors.len(),
-        executor_endpoints.len(),
-        "executor endpoints must match topology"
-    );
 
     let mut endpoints = Vec::with_capacity(total_nodes);
     endpoints.extend_from_slice(validator_endpoints);
-    endpoints.extend_from_slice(executor_endpoints);
     endpoints
 }
 
@@ -269,52 +198,6 @@ async fn wait_for_network_readiness(
     };
 
     network_check.wait().await
-}
-
-fn collect_membership_endpoints(
-    topology: &GeneratedTopology,
-    total_nodes: usize,
-    validator_membership_endpoints: Option<&[Url]>,
-    executor_membership_endpoints: Option<&[Url]>,
-) -> Vec<Url> {
-    let mut membership_endpoints = Vec::with_capacity(total_nodes);
-
-    membership_endpoints.extend(collect_role_membership_endpoints(
-        &topology.validators,
-        validator_membership_endpoints,
-        "validator membership endpoints must match topology",
-    ));
-    membership_endpoints.extend(collect_role_membership_endpoints(
-        &topology.executors,
-        executor_membership_endpoints,
-        "executor membership endpoints must match topology",
-    ));
-
-    membership_endpoints
-}
-
-fn collect_role_membership_endpoints(
-    nodes: &[GeneratedNodeConfig],
-    membership_endpoints: Option<&[Url]>,
-    mismatch_message: &'static str,
-) -> Vec<Url> {
-    match membership_endpoints {
-        Some(urls) => {
-            assert_eq!(nodes.len(), urls.len(), "{mismatch_message}");
-            urls.to_vec()
-        }
-        None => nodes
-            .iter()
-            .map(|node| testing_base_url(node.testing_http_port()))
-            .collect(),
-    }
-}
-
-fn testing_base_url(port: u16) -> Url {
-    Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap_or_else(|_| unsafe {
-        // Safety: `port` is a valid u16 port.
-        std::hint::unreachable_unchecked()
-    })
 }
 
 pub fn find_expected_peer_counts(

@@ -14,10 +14,8 @@ use crate::{docker::commands::ComposeCommandError, infrastructure::template::Tem
 #[derive(Debug, thiserror::Error)]
 /// Top-level compose runner errors.
 pub enum ComposeRunnerError {
-    #[error(
-        "compose runner requires at least one validator (validators={validators}, executors={executors})"
-    )]
-    MissingValidator { validators: usize, executors: usize },
+    #[error("compose runner requires at least one validator (validators={validators})")]
+    MissingValidator { validators: usize },
     #[error("docker does not appear to be available on this host")]
     DockerUnavailable,
     #[error("failed to resolve host port for {service} container port {container_port}: {source}")]

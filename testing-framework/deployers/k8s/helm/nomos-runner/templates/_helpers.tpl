@@ -29,11 +29,3 @@ nomos/logical-role: validator
 nomos/validator-index: "{{ $index }}"
 {{- end -}}
 
-{{- define "nomos-runner.executorLabels" -}}
-{{- $root := index . "root" -}}
-{{- $index := index . "index" -}}
-app.kubernetes.io/name: {{ include "nomos-runner.chart" $root }}
-app.kubernetes.io/instance: {{ $root.Release.Name }}
-nomos/logical-role: executor
-nomos/executor-index: "{{ $index }}"
-{{- end -}}

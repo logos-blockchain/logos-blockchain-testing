@@ -3,13 +3,11 @@ use std::{
     sync::Mutex,
 };
 
-use logos_blockchain_executor::config::Config as ExecutorConfig;
 use nomos_node::Config as ValidatorConfig;
 use testing_framework_config::topology::configs::{consensus, time};
 use testing_framework_core::{
     nodes::{
         ApiClient,
-        executor::{Executor, create_executor_config},
         validator::{Validator, create_validator_config},
     },
     scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
@@ -57,7 +55,6 @@ pub struct LocalDynamicNodes {
 #[derive(Clone, Default)]
 pub struct LocalDynamicSeed {
     pub validator_count: usize,
-    pub executor_count: usize,
     pub peer_ports: Vec<u16>,
     pub peer_ports_by_name: HashMap<String, u16>,
 }
@@ -74,17 +71,10 @@ impl LocalDynamicSeed {
             .validators()
             .iter()
             .map(|node| (format!("validator-{}", node.index()), node.network_port()))
-            .chain(
-                descriptors
-                    .executors()
-                    .iter()
-                    .map(|node| (format!("executor-{}", node.index()), node.network_port())),
-            )
             .collect();
 
         Self {
             validator_count: descriptors.validators().len(),
-            executor_count: descriptors.executors().len(),
             peer_ports,
             peer_ports_by_name,
         }
@@ -110,7 +100,6 @@ impl LocalDynamicNodes {
         let base_node = descriptors
             .validators()
             .first()
-            .or_else(|| descriptors.executors().first())
             .expect("generated topology must include at least one node");
 
         let base_consensus = base_node.general.consensus_config.clone();
@@ -118,12 +107,10 @@ impl LocalDynamicNodes {
 
         let state = LocalDynamicState {
             validator_count: seed.validator_count,
-            executor_count: seed.executor_count,
             peer_ports: seed.peer_ports.clone(),
             peer_ports_by_name: seed.peer_ports_by_name.clone(),
             clients_by_name: HashMap::new(),
             validators: Vec::new(),
-            executors: Vec::new(),
         };
 
         Self {
@@ -153,14 +140,12 @@ impl LocalDynamicNodes {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         state.validators.clear();
-        state.executors.clear();
         state.peer_ports.clone_from(&self.seed.peer_ports);
         state
             .peer_ports_by_name
             .clone_from(&self.seed.peer_ports_by_name);
         state.clients_by_name.clear();
         state.validator_count = self.seed.validator_count;
-        state.executor_count = self.seed.executor_count;
         self.node_clients.clear();
     }
 
@@ -170,14 +155,6 @@ impl LocalDynamicNodes {
         options: StartNodeOptions,
     ) -> Result<StartedNode, LocalDynamicError> {
         self.start_node(NodeRole::Validator, name, options).await
-    }
-
-    pub async fn start_executor_with(
-        &self,
-        name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, LocalDynamicError> {
-        self.start_node(NodeRole::Executor, name, options).await
     }
 
     pub(crate) fn readiness_nodes(&self) -> Vec<ReadinessNode> {
@@ -190,12 +167,6 @@ impl LocalDynamicNodes {
             .validators
             .iter()
             .map(|node| node.config().network.backend.swarm.port)
-            .chain(
-                state
-                    .executors
-                    .iter()
-                    .map(|node| node.config().network.backend.swarm.port),
-            )
             .collect::<Vec<_>>();
 
         let initial_peer_ports = state
@@ -210,15 +181,6 @@ impl LocalDynamicNodes {
                     .filter_map(multiaddr_port)
                     .collect::<HashSet<u16>>()
             })
-            .chain(state.executors.iter().map(|node| {
-                node.config()
-                    .network
-                    .backend
-                    .initial_peers
-                    .iter()
-                    .filter_map(multiaddr_port)
-                    .collect::<HashSet<u16>>()
-            }))
             .collect::<Vec<_>>();
 
         let expected_peer_counts = find_expected_peer_counts(&listen_ports, &initial_peer_ports);
@@ -235,17 +197,6 @@ impl LocalDynamicNodes {
                 expected_peers: expected_peer_counts.get(idx).copied(),
                 api: node.api().clone(),
             })
-            .chain(state.executors.iter().enumerate().map(|(idx, node)| {
-                let global_idx = state.validators.len() + idx;
-                ReadinessNode {
-                    label: format!(
-                        "executor#{idx}@{}",
-                        node.config().network.backend.swarm.port
-                    ),
-                    expected_peers: expected_peer_counts.get(global_idx).copied(),
-                    api: node.api().clone(),
-                }
-            }))
             .collect::<Vec<_>>()
     }
 
@@ -263,7 +214,6 @@ impl LocalDynamicNodes {
 
             let (index, role_label) = match role {
                 NodeRole::Validator => (state.validator_count, "validator"),
-                NodeRole::Executor => (state.executor_count, "executor"),
             };
 
             let label = if name.trim().is_empty() {
@@ -303,11 +253,6 @@ impl LocalDynamicNodes {
                 self.spawn_and_register_validator(&node_name, network_port, config)
                     .await?
             }
-            NodeRole::Executor => {
-                let config = create_executor_config(general_config);
-                self.spawn_and_register_executor(&node_name, network_port, config)
-                    .await?
-            }
         };
 
         Ok(StartedNode {
@@ -339,29 +284,6 @@ impl LocalDynamicNodes {
 
         Ok(client)
     }
-
-    async fn spawn_and_register_executor(
-        &self,
-        node_name: &str,
-        network_port: u16,
-        config: ExecutorConfig,
-    ) -> Result<ApiClient, LocalDynamicError> {
-        let node = Executor::spawn(config, node_name)
-            .await
-            .map_err(|source| LocalDynamicError::Spawn { source })?;
-        let client = node.api().clone();
-
-        self.node_clients.add_executor(client.clone());
-
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        state.register_executor(node_name, network_port, client.clone(), node);
-
-        Ok(client)
-    }
 }
 
 #[async_trait::async_trait]
@@ -370,18 +292,8 @@ impl NodeControlHandle for LocalDynamicNodes {
         Err("local deployer does not support restart_validator".into())
     }
 
-    async fn restart_executor(&self, _index: usize) -> Result<(), DynError> {
-        Err("local deployer does not support restart_executor".into())
-    }
-
     async fn start_validator(&self, name: &str) -> Result<StartedNode, DynError> {
         self.start_validator_with(name, StartNodeOptions::default())
-            .await
-            .map_err(|err| err.into())
-    }
-
-    async fn start_executor(&self, name: &str) -> Result<StartedNode, DynError> {
-        self.start_executor_with(name, StartNodeOptions::default())
             .await
             .map_err(|err| err.into())
     }
@@ -392,16 +304,6 @@ impl NodeControlHandle for LocalDynamicNodes {
         options: StartNodeOptions,
     ) -> Result<StartedNode, DynError> {
         self.start_validator_with(name, options)
-            .await
-            .map_err(|err| err.into())
-    }
-
-    async fn start_executor_with(
-        &self,
-        name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError> {
-        self.start_executor_with(name, options)
             .await
             .map_err(|err| err.into())
     }

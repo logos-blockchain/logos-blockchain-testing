@@ -6,8 +6,8 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn run_local_demo() -> Result<()> {
-    // Define the scenario (1 validator + 1 executor, tx workload)
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1).executors(1))
+    // Define the scenario (2 validator, tx workload)
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
         .wallets(1_000)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block

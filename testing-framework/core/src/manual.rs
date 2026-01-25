@@ -11,11 +11,5 @@ pub trait ManualClusterHandle: Send + Sync {
         options: StartNodeOptions,
     ) -> Result<StartedNode, DynError>;
 
-    async fn start_executor_with(
-        &self,
-        name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError>;
-
     async fn wait_network_ready(&self) -> Result<(), DynError>;
 }

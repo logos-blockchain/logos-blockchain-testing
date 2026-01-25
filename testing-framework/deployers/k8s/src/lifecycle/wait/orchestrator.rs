@@ -14,7 +14,6 @@ pub async fn wait_for_cluster_ready(
     namespace: &str,
     release: &str,
     validator_ports: &[NodeConfigPorts],
-    executor_ports: &[NodeConfigPorts],
 ) -> Result<ClusterReady, ClusterWaitError> {
     if validator_ports.is_empty() {
         return Err(ClusterWaitError::MissingValidator);
@@ -69,70 +68,11 @@ pub async fn wait_for_cluster_ready(
         }
     }
 
-    let mut executor_allocations = Vec::with_capacity(executor_ports.len());
-    let mut executor_host = crate::host::node_host();
-    for (index, ports) in executor_ports.iter().enumerate() {
-        let name = format!("{release}-executor-{index}");
-        wait_for_deployment_ready(client, namespace, &name).await?;
-        let allocation = discover_node_ports(client, namespace, &name, *ports).await?;
-        executor_allocations.push(allocation);
-    }
-
-    let executor_api_ports: Vec<u16> = executor_allocations.iter().map(|ports| ports.api).collect();
-    if !executor_allocations.is_empty()
-        && wait_for_node_http_nodeport(&executor_api_ports, NodeRole::Executor)
-            .await
-            .is_err()
-    {
-        executor_allocations.clear();
-        executor_host = "127.0.0.1".to_owned();
-        let namespace = namespace.to_owned();
-        let release = release.to_owned();
-        let ports = executor_ports.to_vec();
-        let (forwards, allocations) = match tokio::task::spawn_blocking(move || {
-            let mut allocations = Vec::with_capacity(ports.len());
-            let forwards =
-                port_forward_group(&namespace, &release, "executor", &ports, &mut allocations)?;
-            Ok::<_, ClusterWaitError>((forwards, allocations))
-        })
-        .await
-        {
-            Ok(result) => result?,
-            Err(source) => {
-                return Err(cleanup_port_forwards(
-                    &mut port_forwards,
-                    ClusterWaitError::PortForwardTask {
-                        source: source.into(),
-                    },
-                ));
-            }
-        };
-        port_forwards.extend(forwards);
-        executor_allocations = allocations;
-        let executor_api_ports: Vec<u16> =
-            executor_allocations.iter().map(|ports| ports.api).collect();
-        if let Err(err) =
-            wait_for_node_http_port_forward(&executor_api_ports, NodeRole::Executor).await
-        {
-            return Err(cleanup_port_forwards(&mut port_forwards, err));
-        }
-    }
-
     Ok(ClusterReady {
         ports: ClusterPorts {
             validators: validator_allocations,
-            executors: executor_allocations,
             validator_host,
-            executor_host,
         },
         port_forwards,
     })
-}
-
-fn cleanup_port_forwards(
-    port_forwards: &mut Vec<PortForwardHandle>,
-    error: ClusterWaitError,
-) -> ClusterWaitError {
-    kill_port_forwards(port_forwards);
-    error
 }
