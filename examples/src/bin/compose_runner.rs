@@ -24,27 +24,27 @@ async fn main() {
 
     tracing_subscriber::fmt::init();
 
-    let validators = read_env_any(&["NOMOS_DEMO_VALIDATORS"], demo::DEFAULT_VALIDATORS);
+    let nodes = read_env_any(&["NOMOS_DEMO_NODES"], demo::DEFAULT_NODES);
 
     let run_secs = read_env_any(&["NOMOS_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);
 
-    info!(validators, run_secs, "starting compose runner demo");
+    info!(nodes, run_secs, "starting compose runner demo");
 
-    if let Err(err) = run_compose_case(validators, Duration::from_secs(run_secs)).await {
+    if let Err(err) = run_compose_case(nodes, Duration::from_secs(run_secs)).await {
         warn!("compose runner demo failed: {err:#}");
         process::exit(1);
     }
 }
 
-async fn run_compose_case(validators: usize, run_duration: Duration) -> Result<()> {
+async fn run_compose_case(nodes: usize, run_duration: Duration) -> Result<()> {
     info!(
-        validators,
+        nodes,
         duration_secs = run_duration.as_secs(),
         "building scenario plan"
     );
 
-    let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(validators))
-        .enable_node_control();
+    let scenario =
+        ScenarioBuilder::topology_with(|t| t.network_star().nodes(nodes)).enable_node_control();
 
     let scenario = if let Some((chaos_min_delay, chaos_max_delay, chaos_target_cooldown)) =
         chaos_timings(run_duration)

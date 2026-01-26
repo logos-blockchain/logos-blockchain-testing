@@ -530,7 +530,7 @@ impl ChaosBuilder {
             min_delay: DEFAULT_CHAOS_MIN_DELAY,
             max_delay: DEFAULT_CHAOS_MAX_DELAY,
             target_cooldown: DEFAULT_CHAOS_TARGET_COOLDOWN,
-            include_validators: true,
+            include_nodes: true,
         }
     }
 }
@@ -540,7 +540,7 @@ pub struct ChaosRestartBuilder {
     min_delay: Duration,
     max_delay: Duration,
     target_cooldown: Duration,
-    include_validators: bool,
+    include_nodes: bool,
 }
 
 impl ChaosRestartBuilder {
@@ -580,9 +580,9 @@ impl ChaosRestartBuilder {
     }
 
     #[must_use]
-    /// Include validators in the restart target set.
-    pub const fn include_validators(mut self, enabled: bool) -> Self {
-        self.include_validators = enabled;
+    /// Include nodes in the restart target set.
+    pub const fn include_nodes(mut self, enabled: bool) -> Self {
+        self.include_nodes = enabled;
         self
     }
 
@@ -605,16 +605,16 @@ impl ChaosRestartBuilder {
             );
             self.target_cooldown = self.min_delay;
         }
-        if !self.include_validators {
+        if !self.include_nodes {
             tracing::warn!("chaos restart requires at least one node group; enabling all targets");
-            self.include_validators = true;
+            self.include_nodes = true;
         }
 
         let workload = RandomRestartWorkload::new(
             self.min_delay,
             self.max_delay,
             self.target_cooldown,
-            self.include_validators,
+            self.include_nodes,
         );
         self.builder = self.builder.with_workload(workload);
         self.builder

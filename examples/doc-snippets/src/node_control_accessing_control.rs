@@ -11,8 +11,8 @@ impl Workload for RestartWorkload {
 
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
         if let Some(control) = ctx.node_control() {
-            // Restart the first validator (index 0) if supported.
-            control.restart_validator(0).await?;
+            // Restart the first node (index 0) if supported.
+            control.restart_node(0).await?;
         }
         Ok(())
     }

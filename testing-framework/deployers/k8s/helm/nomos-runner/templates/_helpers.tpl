@@ -20,12 +20,11 @@ app.kubernetes.io/name: {{ include "nomos-runner.chart" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
-{{- define "nomos-runner.validatorLabels" -}}
+{{- define "nomos-runner.nodeLabels" -}}
 {{- $root := index . "root" -}}
 {{- $index := index . "index" -}}
 app.kubernetes.io/name: {{ include "nomos-runner.chart" $root }}
 app.kubernetes.io/instance: {{ $root.Release.Name }}
-nomos/logical-role: validator
-nomos/validator-index: "{{ $index }}"
+nomos/logical-role: node
+nomos/node-index: "{{ $index }}"
 {{- end -}}
-

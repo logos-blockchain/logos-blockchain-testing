@@ -1,7 +1,7 @@
 use std::{env, sync::LazyLock, time::Duration};
 
 use kube::Error as KubeError;
-use testing_framework_core::scenario::http_probe::NodeRole;
+use testing_framework_core::scenario::http_probe::NodeKind;
 use thiserror::Error;
 
 mod deployment;
@@ -41,8 +41,8 @@ pub struct HostPort {
 /// All port assignments for the cluster.
 #[derive(Debug)]
 pub struct ClusterPorts {
-    pub validators: Vec<NodePortAllocation>,
-    pub validator_host: String,
+    pub nodes: Vec<NodePortAllocation>,
+    pub node_host: String,
 }
 
 /// Success result from waiting for the cluster: host ports and forward handles.
@@ -75,14 +75,14 @@ pub enum ClusterWaitError {
     },
     #[error("service {service} did not allocate a node port for {port}")]
     NodePortUnavailable { service: String, port: u16 },
-    #[error("cluster must have at least one validator")]
-    MissingValidator,
+    #[error("cluster must have at least one node")]
+    MissingNode,
     #[error(
         "timeout waiting for {role} HTTP endpoint on port {port} after {timeout:?}",
         role = role.label()
     )]
     NodeHttpTimeout {
-        role: NodeRole,
+        role: NodeKind,
         port: u16,
         timeout: Duration,
     },

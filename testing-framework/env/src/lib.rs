@@ -38,11 +38,6 @@ pub fn nomos_cfgsync_port() -> Option<u16> {
 }
 
 #[must_use]
-pub fn nomos_kzg_container_path() -> Option<String> {
-    env::var("NOMOS_KZG_CONTAINER_PATH").ok()
-}
-
-#[must_use]
 pub fn nomos_tests_keep_logs() -> bool {
     env::var("NOMOS_TESTS_KEEP_LOGS").is_ok()
 }
@@ -58,21 +53,6 @@ pub fn nomos_testnet_image_pull_policy() -> Option<String> {
 }
 
 #[must_use]
-pub fn nomos_kzg_mode() -> Option<String> {
-    env::var("NOMOS_KZG_MODE").ok()
-}
-
-#[must_use]
-pub fn nomos_kzg_dir_rel() -> Option<String> {
-    env::var("NOMOS_KZG_DIR_REL").ok()
-}
-
-#[must_use]
-pub fn nomos_kzg_file() -> Option<String> {
-    env::var("NOMOS_KZG_FILE").ok()
-}
-
-#[must_use]
 pub fn pol_proof_dev_mode() -> Option<String> {
     env::var("POL_PROOF_DEV_MODE").ok()
 }
@@ -85,11 +65,6 @@ pub fn rust_log() -> Option<String> {
 #[must_use]
 pub fn nomos_time_backend() -> Option<String> {
     env::var("NOMOS_TIME_BACKEND").ok()
-}
-
-#[must_use]
-pub fn nomos_kzgrs_params_path() -> Option<String> {
-    env::var("LOGOS_BLOCKCHAIN_KZGRS_PARAMS_PATH").ok()
 }
 
 #[must_use]

@@ -18,8 +18,8 @@ impl Expectation for ReachabilityExpectation {
     }
 
     async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
-        let validators = ctx.node_clients().validator_clients();
-        let client = validators.get(self.target_idx).ok_or_else(|| {
+        let nodes = ctx.node_clients().node_clients();
+        let client = nodes.get(self.target_idx).ok_or_else(|| {
             Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "missing target client",

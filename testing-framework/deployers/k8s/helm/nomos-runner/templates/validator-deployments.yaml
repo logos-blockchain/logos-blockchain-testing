@@ -1,25 +1,25 @@
 {{- $root := . -}}
-{{- $nodes := default (list) .Values.validators.nodes }}
+{{- $nodes := default (list) .Values.nodes.nodes }}
 {{- range $i, $node := $nodes }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "nomos-runner.fullname" $root }}-validator-{{ $i }}
+  name: {{ include "nomos-runner.fullname" $root }}-node-{{ $i }}
   labels:
-    {{- include "nomos-runner.validatorLabels" (dict "root" $root "index" $i) | nindent 4 }}
+    {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "nomos-runner.validatorLabels" (dict "root" $root "index" $i) | nindent 6 }}
+      {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "nomos-runner.validatorLabels" (dict "root" $root "index" $i) | nindent 8 }}
+        {{- include "nomos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 8 }}
     spec:
       containers:
-        - name: validator
+        - name: node
           image: {{ $root.Values.image }}
           imagePullPolicy: {{ $root.Values.imagePullPolicy }}
           command: ["/etc/nomos/scripts/run_nomos_node.sh"]
@@ -33,8 +33,6 @@ spec:
               value: http://{{ include "nomos-runner.fullname" $root }}-cfgsync:{{ $root.Values.cfgsync.port }}
             - name: NOMOS_TIME_BACKEND
               value: {{ $root.Values.timeBackend | default "monotonic" | quote }}
-            - name: LOGOS_BLOCKCHAIN_KZGRS_PARAMS_PATH
-              value: '{{ if eq $root.Values.kzg.mode "inImage" }}{{ $root.Values.kzg.inImageParamsPath }}{{ else }}{{ $root.Values.kzg.hostPathParamsPath }}{{ end }}'
             {{- range $key, $value := $node.env }}
             - name: {{ $key }}
               value: "{{ $value }}"
@@ -43,11 +41,6 @@ spec:
             - name: assets
               mountPath: /etc/nomos
               readOnly: true
-            {{- if eq $root.Values.kzg.mode "hostPath" }}
-            - name: kzg-params
-              mountPath: /kzgrs_test_params
-              readOnly: true
-            {{- end }}
       volumes:
         - name: assets
           configMap:
@@ -62,10 +55,4 @@ spec:
                 path: scripts/run_nomos.sh
               - key: run_nomos_node.sh
                 path: scripts/run_nomos_node.sh
-        {{- if eq $root.Values.kzg.mode "hostPath" }}
-        - name: kzg-params
-          persistentVolumeClaim:
-            claimName: {{ include "nomos-runner.fullname" $root }}-kzg
-            readOnly: true
-        {{- end }}
 {{- end }}

@@ -67,7 +67,7 @@ enum ConsensusLivenessIssue {
 
 #[derive(Debug, Error)]
 enum ConsensusLivenessError {
-    #[error("consensus liveness requires at least one validator")]
+    #[error("consensus liveness requires at least one node")]
     MissingParticipants,
     #[error("consensus liveness violated (target={target}):\n{details}")]
     Violations {

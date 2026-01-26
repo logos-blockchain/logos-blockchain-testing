@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json, to_value};
 use serde_with::serde_as;
 use testing_framework_config::{
-    nodes::validator::create_validator_config,
+    nodes::node::create_node_config,
     topology::configs::{consensus::ConsensusParams, wallet::WalletConfig},
 };
 use tokio::sync::oneshot::channel;
@@ -46,7 +46,6 @@ pub struct CfgSyncConfig {
     pub old_blobs_check_interval: Duration,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
     pub blobs_validity_duration: Duration,
-    pub global_params_path: String,
     pub min_dispersal_peers: usize,
     pub min_replication_peers: usize,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
@@ -102,7 +101,7 @@ pub struct ClientIp {
     pub testing_http_port: Option<u16>,
 }
 
-async fn validator_config(
+async fn node_config(
     State(config_repo): State<Arc<ConfigRepo>>,
     Json(payload): Json<ClientIp>,
 ) -> impl IntoResponse {
@@ -123,20 +122,20 @@ async fn validator_config(
 
     let (reply_tx, reply_rx) = channel();
     config_repo
-        .register(Host::validator_from_ip(ip, identifier, ports), reply_tx)
+        .register(Host::node_from_ip(ip, identifier, ports), reply_tx)
         .await;
 
     (reply_rx.await).map_or_else(
         |_| (StatusCode::INTERNAL_SERVER_ERROR, "Error receiving config").into_response(),
         |config_response| match config_response {
             RepoResponse::Config(config) => {
-                let config = create_validator_config(*config);
+                let config = create_node_config(*config);
                 let mut value = match to_value(&config) {
                     Ok(value) => value,
                     Err(err) => {
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("failed to serialize validator config: {err}"),
+                            format!("failed to serialize node config: {err}"),
                         )
                             .into_response();
                     }
@@ -158,7 +157,7 @@ async fn validator_config(
 
 pub fn cfgsync_app(config_repo: Arc<ConfigRepo>) -> Router {
     Router::new()
-        .route("/validator", post(validator_config))
+        .route("/node", post(node_config))
         .with_state(config_repo)
 }
 

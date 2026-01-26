@@ -9,16 +9,16 @@ use crate::topology::{
     readiness::{HttpNetworkReadiness, ReadinessCheck, ReadinessError},
 };
 
-/// Node role within the generated topology.
+/// Node kind within the generated topology.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NodeRole {
-    Validator,
+pub enum NodeKind {
+    Node,
 }
 
 /// Fully generated configuration for an individual node.
 #[derive(Clone)]
 pub struct GeneratedNodeConfig {
-    pub role: NodeRole,
+    pub kind: NodeKind,
     pub index: usize,
     pub id: [u8; 32],
     pub general: GeneralConfig,
@@ -27,9 +27,9 @@ pub struct GeneratedNodeConfig {
 
 impl GeneratedNodeConfig {
     #[must_use]
-    /// Logical role of the node.
-    pub const fn role(&self) -> NodeRole {
-        self.role
+    /// Logical kind of the node.
+    pub const fn kind(&self) -> NodeKind {
+        self.kind
     }
 
     #[must_use]
@@ -59,7 +59,7 @@ impl GeneratedNodeConfig {
 #[derive(Clone)]
 pub struct GeneratedTopology {
     pub(crate) config: TopologyConfig,
-    pub(crate) validators: Vec<GeneratedNodeConfig>,
+    pub(crate) nodes: Vec<GeneratedNodeConfig>,
 }
 
 impl GeneratedTopology {
@@ -70,20 +70,20 @@ impl GeneratedTopology {
     }
 
     #[must_use]
-    /// All validator configs.
-    pub fn validators(&self) -> &[GeneratedNodeConfig] {
-        &self.validators
+    /// All node configs.
+    pub fn nodes(&self) -> &[GeneratedNodeConfig] {
+        &self.nodes
     }
 
     /// Iterator over all node configs in role order.
-    pub fn nodes(&self) -> impl Iterator<Item = &GeneratedNodeConfig> {
-        self.validators.iter()
+    pub fn iter(&self) -> impl Iterator<Item = &GeneratedNodeConfig> {
+        self.nodes.iter()
     }
 
     #[must_use]
     /// Slot duration from the first node (assumes homogeneous configs).
     pub fn slot_duration(&self) -> Option<Duration> {
-        self.validators
+        self.nodes
             .first()
             .map(|node| node.general.time_config.slot_duration)
     }
@@ -96,21 +96,21 @@ impl GeneratedTopology {
 
     pub async fn spawn_local(&self) -> Result<Topology, SpawnTopologyError> {
         let configs = self
-            .nodes()
+            .iter()
             .map(|node| node.general.clone())
             .collect::<Vec<_>>();
 
-        let validators = Topology::spawn_validators(configs, self.config.n_validators).await?;
+        let nodes = Topology::spawn_nodes(configs, self.config.n_nodes).await?;
 
-        Ok(Topology { validators })
+        Ok(Topology { nodes })
     }
 
     pub async fn wait_remote_readiness(
         &self,
         // Node endpoints
-        validator_endpoints: &[Url],
+        node_endpoints: &[Url],
     ) -> Result<(), ReadinessError> {
-        let total_nodes = self.validators.len();
+        let total_nodes = self.nodes.len();
         if total_nodes == 0 {
             return Ok(());
         }
@@ -118,20 +118,20 @@ impl GeneratedTopology {
         let labels = self.labels();
         let client = Client::new();
 
-        let endpoints = collect_node_endpoints(self, validator_endpoints, total_nodes);
+        let endpoints = collect_node_endpoints(self, node_endpoints, total_nodes);
 
         wait_for_network_readiness(self, &client, &endpoints, &labels).await
     }
 
     fn listen_ports(&self) -> Vec<u16> {
-        self.validators
+        self.nodes
             .iter()
             .map(|node| node.general.network_config.backend.swarm.port)
             .collect()
     }
 
     fn initial_peer_ports(&self) -> Vec<HashSet<u16>> {
-        self.validators
+        self.nodes
             .iter()
             .map(|node| {
                 node.general
@@ -146,12 +146,12 @@ impl GeneratedTopology {
     }
 
     fn labels(&self) -> Vec<String> {
-        self.validators
+        self.nodes
             .iter()
             .enumerate()
             .map(|(idx, node)| {
                 format!(
-                    "validator#{idx}@{}",
+                    "node#{idx}@{}",
                     node.general.network_config.backend.swarm.port
                 )
             })
@@ -161,17 +161,17 @@ impl GeneratedTopology {
 
 fn collect_node_endpoints(
     topology: &GeneratedTopology,
-    validator_endpoints: &[Url],
+    node_endpoints: &[Url],
     total_nodes: usize,
 ) -> Vec<Url> {
     assert_eq!(
-        topology.validators.len(),
-        validator_endpoints.len(),
-        "validator endpoints must match topology"
+        topology.nodes.len(),
+        node_endpoints.len(),
+        "node endpoints must match topology"
     );
 
     let mut endpoints = Vec::with_capacity(total_nodes);
-    endpoints.extend_from_slice(validator_endpoints);
+    endpoints.extend_from_slice(node_endpoints);
     endpoints
 }
 

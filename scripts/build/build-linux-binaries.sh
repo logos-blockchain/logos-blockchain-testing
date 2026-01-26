@@ -14,7 +14,6 @@ Usage: scripts/build/build-linux-binaries.sh [options]
 
 Builds a Linux bundle via scripts/build/build-bundle.sh, then stages artifacts into:
   - testing-framework/assets/stack/bin
-  - testing-framework/assets/stack/kzgrs_test_params (or NOMOS_KZG_DIR_REL)
 
 Options:
   --rev REV              logos-blockchain-node git revision to build (overrides NOMOS_NODE_REV)
@@ -26,10 +25,9 @@ Options:
   -h, --help             show help
 
 Environment:
-  VERSION                circuits version (default from versions.env)
+  VERSION                bundle version (default from versions.env)
   NOMOS_CIRCUITS_VERSION legacy alias for VERSION (supported)
   NOMOS_NODE_REV         default logos-blockchain-node revision (from versions.env)
-  NOMOS_KZG_DIR_REL      host path for staged circuits dir (default: testing-framework/assets/stack/kzgrs_test_params)
 EOF
 }
 
@@ -134,28 +132,13 @@ build_linux_binaries::stage_from_bundle() {
 
   local artifacts="${extract_dir}/artifacts"
   [ -f "${artifacts}/logos-blockchain-node" ] || common::die "Missing logos-blockchain-node in bundle: ${tar_path}"
-  [ -f "${artifacts}/logos-blockchain-cli" ] || common::die "Missing logos-blockchain-cli in bundle: ${tar_path}"
-  [ -d "${artifacts}/circuits" ] || common::die "Missing circuits/ in bundle: ${tar_path}"
-
   local bin_out="${ROOT_DIR}/testing-framework/assets/stack/bin"
-  local kzg_dir_rel="${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
-  local circuits_out="${ROOT_DIR}/${kzg_dir_rel}"
 
   echo "==> Staging binaries to ${bin_out}"
   mkdir -p "${bin_out}"
-  cp "${artifacts}/logos-blockchain-node" "${artifacts}/logos-blockchain-cli" "${bin_out}/"
-
-  echo "==> Staging circuits to ${circuits_out}"
-  rm -rf "${circuits_out}"
-  mkdir -p "${circuits_out}"
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -a --delete "${artifacts}/circuits/" "${circuits_out}/"
-  else
-    cp -a "${artifacts}/circuits/." "${circuits_out}/"
-  fi
-
+  cp "${artifacts}/logos-blockchain-node" "${bin_out}/"
   # If the tarball was produced inside Docker, it might be root-owned on the host.
-  chown -R "$(id -u)":"$(id -g)" "${bin_out}" "${circuits_out}" 2>/dev/null || true
+  chown -R "$(id -u)":"$(id -g)" "${bin_out}" 2>/dev/null || true
 }
 
 build_linux_binaries::main() {
@@ -166,7 +149,6 @@ build_linux_binaries::main() {
 
   echo
   echo "Binaries staged in ${ROOT_DIR}/testing-framework/assets/stack/bin"
-  echo "Circuits staged in ${ROOT_DIR}/${NOMOS_KZG_DIR_REL:-testing-framework/assets/stack/kzgrs_test_params}"
   echo "Bundle tarball: ${BUNDLE_TAR}"
 }
 

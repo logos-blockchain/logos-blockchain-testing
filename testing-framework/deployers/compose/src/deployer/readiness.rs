@@ -7,7 +7,7 @@ use crate::{
         environment::StackEnvironment,
         ports::{HostPortMapping, ensure_remote_readiness_with_ports},
     },
-    lifecycle::readiness::ensure_validators_ready_with_ports,
+    lifecycle::readiness::ensure_nodes_ready_with_ports,
 };
 
 pub struct ReadinessChecker;
@@ -18,13 +18,13 @@ impl ReadinessChecker {
         host_ports: &HostPortMapping,
         environment: &mut StackEnvironment,
     ) -> Result<(), ComposeRunnerError> {
-        let validator_ports = host_ports.validator_api_ports();
-        info!(ports = ?validator_ports, "waiting for validator HTTP endpoints");
-        if let Err(err) = ensure_validators_ready_with_ports(&validator_ports).await {
+        let node_ports = host_ports.node_api_ports();
+        info!(ports = ?node_ports, "waiting for node HTTP endpoints");
+        if let Err(err) = ensure_nodes_ready_with_ports(&node_ports).await {
             return fail_readiness_step(
                 environment,
-                "validator readiness failed",
-                "validator readiness failed",
+                "node readiness failed",
+                "node readiness failed",
                 err,
             )
             .await;

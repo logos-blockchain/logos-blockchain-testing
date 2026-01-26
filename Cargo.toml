@@ -52,12 +52,9 @@ cryptarchia-engine = { default-features = false, git = "https://github.com/logos
 cryptarchia-sync = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-cryptarchia-sync", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 groth16 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-groth16", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 key-management-system-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-key-management-system-service", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
-kzgrs = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-kzgrs", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
-kzgrs-backend = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-kzgrs-backend", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 nomos-api = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-api-service", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 nomos-blend-message = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-blend-message", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 nomos-blend-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-blend-service", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
-nomos-cli = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-cli", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 nomos-core = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-core", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 nomos-http-api-common = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-http-api-common", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }
 nomos-ledger = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-ledger", rev = "47ae18e95f643bde563b4769212b37f6f018fed3" }

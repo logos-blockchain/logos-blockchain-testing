@@ -7,7 +7,7 @@ use crate::SnippetResult;
 
 pub fn protocol_time_not_wall_time() -> SnippetResult<()> {
     // Good: protocol-oriented thinking
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })

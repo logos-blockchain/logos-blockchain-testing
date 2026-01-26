@@ -37,18 +37,5 @@ pub fn cfgsync_port() -> u16 {
     tf_env::nomos_cfgsync_port().unwrap_or(DEFAULT_CFGSYNC_PORT)
 }
 
-/// Default KZG parameters file name.
-pub const KZG_PARAMS_FILENAME: &str = "kzgrs_test_params";
-/// Default container path for KZG parameters (compose/k8s mount point).
-pub const DEFAULT_KZG_CONTAINER_PATH: &str = "/kzgrs_test_params/kzgrs_test_params";
-
-/// Resolve container KZG path from `NOMOS_KZG_CONTAINER_PATH`, falling back to
-/// the default.
-pub fn kzg_container_path() -> String {
-    tf_env::nomos_kzg_container_path().unwrap_or_else(|| DEFAULT_KZG_CONTAINER_PATH.to_string())
-}
-
 /// Default stack assets directory.
 pub const DEFAULT_ASSETS_STACK_DIR: &str = "testing-framework/assets/stack";
-/// Default host-relative directory for KZG assets.
-pub const DEFAULT_KZG_HOST_DIR: &str = "testing-framework/assets/stack/kzgrs_test_params";

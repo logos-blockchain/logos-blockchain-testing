@@ -7,12 +7,12 @@ pub async fn spawn_block_feed_with(
     node_clients: &NodeClients,
 ) -> Result<(BlockFeed, BlockFeedTask), K8sRunnerError> {
     debug!(
-        validators = node_clients.validator_clients().len(),
+        nodes = node_clients.node_clients().len(),
         "selecting node client for block feed"
     );
 
     let block_source_client = node_clients
-        .validator_clients()
+        .node_clients()
         .into_iter()
         .next()
         .or_else(|| node_clients.any_client())

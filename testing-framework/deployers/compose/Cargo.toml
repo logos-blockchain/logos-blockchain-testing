@@ -36,5 +36,4 @@ groth16                       = { workspace = true }
 key-management-system-service = { workspace = true }
 nomos-core                    = { workspace = true }
 nomos-ledger                  = { workspace = true }
-tests                         = { workspace = true }
 zksign                        = { workspace = true }

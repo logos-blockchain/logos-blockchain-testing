@@ -11,7 +11,7 @@ use crate::{
     topology::{deployment::Topology, generation::GeneratedTopology},
 };
 
-/// Collection of API clients for the validatorset.
+/// Collection of API clients for the node set.
 #[derive(Clone, Default)]
 pub struct NodeClients {
     inner: Arc<RwLock<NodeClientsInner>>,
@@ -19,49 +19,49 @@ pub struct NodeClients {
 
 #[derive(Default)]
 struct NodeClientsInner {
-    validators: Vec<ApiClient>,
+    nodes: Vec<ApiClient>,
 }
 
 impl NodeClients {
     #[must_use]
     /// Build clients from preconstructed vectors.
-    pub fn new(validators: Vec<ApiClient>) -> Self {
+    pub fn new(nodes: Vec<ApiClient>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(NodeClientsInner { validators })),
+            inner: Arc::new(RwLock::new(NodeClientsInner { nodes })),
         }
     }
 
     #[must_use]
     /// Derive clients from a spawned topology.
     pub fn from_topology(_descriptors: &GeneratedTopology, topology: &Topology) -> Self {
-        let validator_clients = topology.validators().iter().map(|node| {
+        let node_clients = topology.nodes().iter().map(|node| {
             let testing = node.testing_url();
             ApiClient::from_urls(node.url(), testing)
         });
 
-        Self::new(validator_clients.collect())
+        Self::new(node_clients.collect())
     }
 
     #[must_use]
-    /// Validator API clients.
-    pub fn validator_clients(&self) -> Vec<ApiClient> {
+    /// Node API clients.
+    pub fn node_clients(&self) -> Vec<ApiClient> {
         self.inner
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .validators
+            .nodes
             .clone()
     }
 
     #[must_use]
-    /// Choose a random validator client if present.
-    pub fn random_validator(&self) -> Option<ApiClient> {
-        let validators = self.validator_clients();
-        if validators.is_empty() {
+    /// Choose a random node client if present.
+    pub fn random_node(&self) -> Option<ApiClient> {
+        let nodes = self.node_clients();
+        if nodes.is_empty() {
             return None;
         }
         let mut rng = thread_rng();
-        let idx = rng.gen_range(0..validators.len());
-        validators.get(idx).cloned()
+        let idx = rng.gen_range(0..nodes.len());
+        nodes.get(idx).cloned()
     }
 
     /// Iterator over all clients.
@@ -71,25 +71,24 @@ impl NodeClients {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        guard.validators.iter().cloned().collect()
+        guard.nodes.iter().cloned().collect()
     }
 
     #[must_use]
-    /// Choose any random client from validators.
+    /// Choose any random client from nodes.
     pub fn any_client(&self) -> Option<ApiClient> {
         let guard = self
             .inner
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        let validator_count = guard.validators.len();
-        let total = validator_count;
+        let total = guard.nodes.len();
         if total == 0 {
             return None;
         }
         let mut rng = thread_rng();
         let choice = rng.gen_range(0..total);
-        guard.validators.get(choice).cloned()
+        guard.nodes.get(choice).cloned()
     }
 
     #[must_use]
@@ -98,13 +97,13 @@ impl NodeClients {
         ClusterClient::new(self)
     }
 
-    pub fn add_validator(&self, client: ApiClient) {
+    pub fn add_node(&self, client: ApiClient) {
         let mut guard = self
             .inner
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        guard.validators.push(client);
+        guard.nodes.push(client);
     }
 
     pub fn clear(&self) {
@@ -113,7 +112,7 @@ impl NodeClients {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        guard.validators.clear();
+        guard.nodes.clear();
     }
 }
 

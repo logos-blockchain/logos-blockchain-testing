@@ -264,10 +264,6 @@ build_bundle::maybe_run_linux_build_in_docker() {
     -e NOMOS_NODE_REV="${NOMOS_NODE_REV}" \
     -e NOMOS_NODE_PATH="${node_path_env}" \
     -e NOMOS_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
-    -e NOMOS_CIRCUITS="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e LOGOS_BLOCKCHAIN_CIRCUITS="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e STACK_DIR="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e HOST_DIR="/workspace/.tmp/logos-blockchain-circuits-linux" \
     -e NOMOS_EXTRA_FEATURES="${NOMOS_EXTRA_FEATURES:-}" \
     -e BUNDLE_IN_CONTAINER=1 \
     -e CARGO_HOME=/workspace/.tmp/cargo-linux \
@@ -284,12 +280,10 @@ build_bundle::maybe_run_linux_build_in_docker() {
 }
 
 build_bundle::prepare_circuits() {
-  echo "==> Preparing circuits (version ${VERSION})"
+  echo "==> Preparing build workspace (version ${VERSION})"
   if [ "${PLATFORM}" = "host" ]; then
-    CIRCUITS_DIR="${ROOT_DIR}/.tmp/logos-blockchain-circuits-host"
     NODE_TARGET="${ROOT_DIR}/.tmp/logos-blockchain-node-host-target"
   else
-    CIRCUITS_DIR="${ROOT_DIR}/.tmp/logos-blockchain-circuits-linux"
     # When building Linux bundles in Docker, avoid reusing the same target dir
     # across different container architectures (e.g. linux/arm64 vs linux/amd64),
     # as the native-host `target/debug` layout would otherwise get mixed.
@@ -311,18 +305,7 @@ build_bundle::prepare_circuits() {
     NODE_TARGET="${NODE_TARGET}-local"
   fi
 
-  export NOMOS_CIRCUITS="${CIRCUITS_DIR}"
-  export LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}"
-  mkdir -p "${ROOT_DIR}/.tmp" "${CIRCUITS_DIR}"
-  if [ -f "${CIRCUITS_DIR}/${KZG_FILE:-kzgrs_test_params}" ]; then
-    echo "Circuits already present at ${CIRCUITS_DIR}; skipping download"
-  else
-    STACK_DIR="${CIRCUITS_DIR}" HOST_DIR="${CIRCUITS_DIR}" \
-      "${ROOT_DIR}/scripts/setup/setup-circuits-stack.sh" "${VERSION}" </dev/null
-  fi
-
   NODE_BIN="${NODE_TARGET}/debug/logos-blockchain-node"
-  CLI_BIN="${NODE_TARGET}/debug/logos-blockchain-cli"
 }
 
 build_bundle::build_binaries() {
@@ -346,26 +329,17 @@ build_bundle::build_binaries() {
     if [ -z "${NOMOS_NODE_PATH}" ]; then
       build_bundle::apply_nomos_node_patches "${NODE_SRC}"
     fi
-    if [ -f "${CIRCUITS_DIR}/zksign/verification_key.json" ] \
-      || [ -f "${CIRCUITS_DIR}/pol/verification_key.json" ] \
-      || [ -f "${CIRCUITS_DIR}/poq/verification_key.json" ] \
-      || [ -f "${CIRCUITS_DIR}/poc/verification_key.json" ]; then
-      export CARGO_FEATURE_BUILD_VERIFICATION_KEY=1
-    else
-      unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
-    fi
+    unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
-      RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
-        LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
+      RUSTFLAGS='--cfg feature="pol-dev-mode"' \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
         cargo build --all-features \
-        -p logos-blockchain-node -p logos-blockchain-cli \
+        -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
     else
-      RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
-        LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
+      RUSTFLAGS='--cfg feature="pol-dev-mode"' \
         cargo build --all-features \
-        -p logos-blockchain-node -p logos-blockchain-cli \
+        -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
     fi
   )
@@ -375,11 +349,8 @@ build_bundle::package_bundle() {
   echo "==> Packaging bundle"
   local bundle_dir="${ROOT_DIR}/.tmp/nomos-bundle"
   rm -rf "${bundle_dir}"
-  mkdir -p "${bundle_dir}/artifacts/circuits"
-  cp -a "${CIRCUITS_DIR}/." "${bundle_dir}/artifacts/circuits/"
   mkdir -p "${bundle_dir}/artifacts"
   cp "${NODE_BIN}" "${bundle_dir}/artifacts/logos-blockchain-node"
-  cp "${CLI_BIN}" "${bundle_dir}/artifacts/logos-blockchain-cli"
   {
     echo "nomos_node_path=${NOMOS_NODE_PATH:-}"
     echo "nomos_node_rev=${NOMOS_NODE_REV:-}"

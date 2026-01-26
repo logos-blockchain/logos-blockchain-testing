@@ -159,8 +159,6 @@ targets = [
     "logos-blockchain-groth16",
     "logos-blockchain-http-api-common",
     "logos-blockchain-key-management-system-service",
-    "logos-blockchain-kzgrs",
-    "logos-blockchain-kzgrs-backend",
     "logos-blockchain-ledger",
     "logos-blockchain-libp2p",
     "logos-blockchain-network-service",

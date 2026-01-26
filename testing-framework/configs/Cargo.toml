@@ -10,7 +10,6 @@ repository.workspace  = true
 version               = "0.1.0"
 
 [dependencies]
-blst                          = "0.3.11"
 chain-leader                  = { workspace = true }
 chain-network                 = { workspace = true }
 chain-service                 = { workspace = true }

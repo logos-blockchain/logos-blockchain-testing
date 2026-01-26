@@ -42,19 +42,13 @@ pub async fn submit_transaction_via_cluster(
     tx: Arc<SignedMantleTx>,
 ) -> Result<(), DynError> {
     let tx_hash = tx.hash();
-    debug!(
-        ?tx_hash,
-        "submitting transaction via cluster (validators first)"
-    );
+    debug!(?tx_hash, "submitting transaction via cluster (nodes first)");
 
     let node_clients = ctx.node_clients();
-    let mut validator_clients = node_clients.validator_clients();
-    validator_clients.shuffle(&mut thread_rng());
+    let mut clients = node_clients.node_clients();
+    clients.shuffle(&mut thread_rng());
 
-    let clients = validator_clients.into_iter();
-    let mut clients: Vec<_> = clients.collect();
     let mut last_err = None;
-
     for attempt in 0..SUBMIT_RETRIES {
         clients.shuffle(&mut thread_rng());
 

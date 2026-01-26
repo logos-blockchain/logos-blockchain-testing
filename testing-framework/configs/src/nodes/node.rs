@@ -1,5 +1,5 @@
 use nomos_node::{
-    Config as ValidatorConfig, RocksBackendSettings, config::deployment::DeploymentSettings,
+    Config as NodeConfig, RocksBackendSettings, config::deployment::DeploymentSettings,
 };
 use nomos_sdp::SdpSettings;
 
@@ -16,15 +16,15 @@ use crate::{
 };
 
 #[must_use]
-pub fn create_validator_config(config: GeneralConfig) -> ValidatorConfig {
+pub fn create_node_config(config: GeneralConfig) -> NodeConfig {
     let network_config = config.network_config.clone();
     let (blend_user_config, blend_deployment, network_deployment) =
         build_blend_service_config(&config.blend_config);
 
     let deployment_settings =
-        build_validator_deployment_settings(&config, blend_deployment, network_deployment);
+        build_node_deployment_settings(&config, blend_deployment, network_deployment);
 
-    ValidatorConfig {
+    NodeConfig {
         network: network_config,
         blend: blend_user_config,
         deployment: deployment_settings,
@@ -41,7 +41,7 @@ pub fn create_validator_config(config: GeneralConfig) -> ValidatorConfig {
     }
 }
 
-fn build_validator_deployment_settings(
+fn build_node_deployment_settings(
     config: &GeneralConfig,
     blend_deployment: nomos_node::config::blend::deployment::Settings,
     network_deployment: nomos_node::config::network::deployment::Settings,

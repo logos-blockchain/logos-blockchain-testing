@@ -73,7 +73,7 @@ impl ScenarioWorkload for Workload {
         }
 
         let reference_node = descriptors
-            .validators()
+            .nodes()
             .first()
             .ok_or("transaction workload requires at least one node in the topology")?;
 

@@ -80,26 +80,6 @@ checks::print_disk_space() {
   fi
 }
 
-checks::print_kzg_params() {
-  checks::section "KZG Params"
-
-  local default_kzg_dir_rel="testing-framework/assets/stack/kzgrs_test_params"
-  local default_kzg_file="kzgrs_test_params"
-  local default_kzg_container_path="/kzgrs_test_params/kzgrs_test_params"
-
-  local kzg_dir_rel="${NOMOS_KZG_DIR_REL:-${default_kzg_dir_rel}}"
-  local kzg_file="${NOMOS_KZG_FILE:-${default_kzg_file}}"
-  local kzg_container_path="${NOMOS_KZG_CONTAINER_PATH:-${default_kzg_container_path}}"
-  local host_kzg_path="${ROOT_DIR}/${kzg_dir_rel}/${kzg_file}"
-
-  checks::say "host: ${host_kzg_path}"
-  checks::say "container: ${kzg_container_path}"
-  if [ -f "${host_kzg_path}" ]; then
-    checks::ok "KZG params file exists"
-  else
-    checks::warn "KZG params file missing (DA workloads will fail); run: scripts/run/run-examples.sh <mode> (auto) or scripts/setup/setup-logos-blockchain-circuits.sh"
-  fi
-}
 
 checks::print_rust_toolchain() {
   checks::section "Rust Toolchain"
@@ -285,7 +265,6 @@ checks::main() {
   checks::load_env
   checks::print_workspace
   checks::print_disk_space
-  checks::print_kzg_params
   checks::print_rust_toolchain
   checks::print_docker
   checks::print_docker_compose

@@ -2,7 +2,7 @@ use std::{env, time::Duration};
 
 use testing_framework_core::{
     adjust_timeout,
-    scenario::http_probe::{self, HttpReadinessError, NodeRole},
+    scenario::http_probe::{self, HttpReadinessError, NodeKind},
 };
 use tracing::{debug, info};
 
@@ -12,11 +12,11 @@ const POLL_INTERVAL_MILLIS: u64 = 250;
 const DEFAULT_WAIT: Duration = Duration::from_secs(DEFAULT_WAIT_TIMEOUT_SECS);
 const POLL_INTERVAL: Duration = Duration::from_millis(POLL_INTERVAL_MILLIS);
 
-pub async fn wait_for_validators(ports: &[u16]) -> Result<(), HttpReadinessError> {
-    wait_for_ports(ports, NodeRole::Validator).await
+pub async fn wait_for_nodes(ports: &[u16]) -> Result<(), HttpReadinessError> {
+    wait_for_ports(ports, NodeKind::Node).await
 }
 
-async fn wait_for_ports(ports: &[u16], role: NodeRole) -> Result<(), HttpReadinessError> {
+async fn wait_for_ports(ports: &[u16], role: NodeKind) -> Result<(), HttpReadinessError> {
     let host = compose_runner_host();
     let timeout = compose_http_timeout();
 

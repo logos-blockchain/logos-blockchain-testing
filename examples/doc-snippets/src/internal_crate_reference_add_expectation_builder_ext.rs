@@ -13,7 +13,7 @@ impl<Caps> YourExpectationDslExt for testing_framework_core::scenario::Builder<C
 }
 
 pub fn use_in_examples() -> SnippetResult<()> {
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .expect_your_condition()
         .build()?;
     Ok(())

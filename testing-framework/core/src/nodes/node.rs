@@ -2,7 +2,7 @@ use std::{ops::Deref, path::PathBuf, time::Duration};
 
 use nomos_node::Config;
 use nomos_tracing_service::LoggerLayer;
-pub use testing_framework_config::nodes::validator::create_validator_config;
+pub use testing_framework_config::nodes::node::create_node_config;
 use tracing::{debug, info};
 
 use super::{persist_tempdir, should_persist_tempdir};
@@ -30,16 +30,11 @@ fn binary_path() -> PathBuf {
     BinaryResolver::resolve_path(&cfg)
 }
 
-pub enum Pool {
-    Da,
-    Mantle,
-}
-
-pub struct Validator {
+pub struct Node {
     handle: NodeHandle<Config>,
 }
 
-impl Deref for Validator {
+impl Deref for Node {
     type Target = NodeHandle<Config>;
 
     fn deref(&self) -> &Self::Target {
@@ -47,26 +42,26 @@ impl Deref for Validator {
     }
 }
 
-impl Drop for Validator {
+impl Drop for Node {
     fn drop(&mut self) {
         if should_persist_tempdir()
             && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "logos-blockchain-node")
         {
-            debug!(error = ?e, "failed to persist validator tempdir");
+            debug!(error = ?e, "failed to persist node tempdir");
         }
 
-        debug!("stopping validator process");
+        debug!("stopping node process");
         kill_child(&mut self.handle.child);
     }
 }
 
-impl Validator {
-    /// Check if the validator process is still running
+impl Node {
+    /// Check if the node process is still running
     pub fn is_running(&mut self) -> bool {
         is_running(&mut self.handle.child)
     }
 
-    /// Wait for the validator process to exit, with a timeout
+    /// Wait for the node process to exit, with a timeout
     /// Returns true if the process exited within the timeout, false otherwise
     pub async fn wait_for_exit(&mut self, timeout: Duration) -> bool {
         self.handle.wait_for_exit(timeout).await
@@ -77,13 +72,13 @@ impl Validator {
         let handle = spawn_node(
             config,
             &log_prefix,
-            "validator.yaml",
+            "node.yaml",
             binary_path(),
             !*IS_DEBUG_TRACING,
         )
         .await?;
 
-        info!("validator spawned and ready");
+        info!("node spawned and ready");
 
         Ok(Self { handle })
     }

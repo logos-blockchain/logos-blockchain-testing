@@ -4,7 +4,7 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{CleanupGuard, NodeClients, http_probe::NodeRole},
+    scenario::{CleanupGuard, NodeClients, http_probe::NodeKind},
     topology::{generation::GeneratedTopology, readiness::ReadinessError},
 };
 use tracing::{debug, info};
@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Default)]
 pub struct PortSpecs {
-    pub validators: Vec<NodeConfigPorts>,
+    pub nodes: Vec<NodeConfigPorts>,
 }
 
 /// Holds k8s namespace, Helm release, port forwards, and cleanup guard.
@@ -30,9 +30,9 @@ pub struct ClusterEnvironment {
     namespace: String,
     release: String,
     cleanup: Option<RunnerCleanup>,
-    validator_host: String,
-    validator_api_ports: Vec<u16>,
-    validator_testing_ports: Vec<u16>,
+    node_host: String,
+    node_api_ports: Vec<u16>,
+    node_testing_ports: Vec<u16>,
     port_forwards: Vec<PortForwardHandle>,
 }
 
@@ -51,17 +51,17 @@ impl ClusterEnvironment {
         ports: &ClusterPorts,
         port_forwards: Vec<PortForwardHandle>,
     ) -> Self {
-        let validator_api_ports = ports.validators.iter().map(|ports| ports.api).collect();
-        let validator_testing_ports = ports.validators.iter().map(|ports| ports.testing).collect();
+        let node_api_ports = ports.nodes.iter().map(|ports| ports.api).collect();
+        let node_testing_ports = ports.nodes.iter().map(|ports| ports.testing).collect();
 
         Self {
             client,
             namespace,
             release,
             cleanup: Some(cleanup),
-            validator_host: ports.validator_host.clone(),
-            validator_api_ports,
-            validator_testing_ports,
+            node_host: ports.node_host.clone(),
+            node_api_ports,
+            node_testing_ports,
             port_forwards,
         }
     }
@@ -99,8 +99,8 @@ impl ClusterEnvironment {
         &self.release
     }
 
-    pub fn validator_ports(&self) -> (&[u16], &[u16]) {
-        (&self.validator_api_ports, &self.validator_testing_ports)
+    pub fn node_ports(&self) -> (&[u16], &[u16]) {
+        (&self.node_api_ports, &self.node_testing_ports)
     }
 }
 
@@ -112,7 +112,7 @@ pub enum NodeClientError {
         role = role.label()
     )]
     Endpoint {
-        role: NodeRole,
+        role: NodeKind,
         endpoint: &'static str,
         port: u16,
         #[source]
@@ -128,7 +128,7 @@ pub enum RemoteReadinessError {
         role = role.label()
     )]
     Endpoint {
-        role: NodeRole,
+        role: NodeKind,
         port: u16,
         #[source]
         source: ParseError,
@@ -141,8 +141,8 @@ pub enum RemoteReadinessError {
 }
 
 pub fn collect_port_specs(descriptors: &GeneratedTopology) -> PortSpecs {
-    let validators = descriptors
-        .validators()
+    let nodes = descriptors
+        .nodes()
         .iter()
         .map(|node| NodeConfigPorts {
             api: node.general.api_config.address.port(),
@@ -150,35 +150,27 @@ pub fn collect_port_specs(descriptors: &GeneratedTopology) -> PortSpecs {
         })
         .collect();
 
-    let specs = PortSpecs { validators };
+    let specs = PortSpecs { nodes };
 
-    debug!(
-        validators = specs.validators.len(),
-        "collected k8s port specs"
-    );
+    debug!(nodes = specs.nodes.len(), "collected k8s port specs");
 
     specs
 }
 
 pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, NodeClientError> {
-    let validators = cluster
-        .validator_api_ports
+    let nodes = cluster
+        .node_api_ports
         .iter()
         .copied()
-        .zip(cluster.validator_testing_ports.iter().copied())
+        .zip(cluster.node_testing_ports.iter().copied())
         .map(|(api_port, testing_port)| {
-            api_client_from_ports(
-                &cluster.validator_host,
-                NodeRole::Validator,
-                api_port,
-                testing_port,
-            )
+            api_client_from_ports(&cluster.node_host, NodeKind::Node, api_port, testing_port)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    debug!(validators = validators.len(), "built k8s node clients");
+    debug!(nodes = nodes.len(), "built k8s node clients");
 
-    Ok(NodeClients::new(validators))
+    Ok(NodeClients::new(nodes))
 }
 
 pub async fn ensure_cluster_readiness(
@@ -186,18 +178,17 @@ pub async fn ensure_cluster_readiness(
     cluster: &ClusterEnvironment,
 ) -> Result<(), RemoteReadinessError> {
     info!("waiting for remote readiness (API + membership)");
-    let (validator_api, _validator_testing) = cluster.validator_ports();
+    let (node_api, _node_testing) = cluster.node_ports();
 
-    let validator_urls =
-        readiness_urls(validator_api, NodeRole::Validator, &cluster.validator_host)?;
+    let node_urls = readiness_urls(node_api, NodeKind::Node, &cluster.node_host)?;
 
     descriptors
-        .wait_remote_readiness(&validator_urls)
+        .wait_remote_readiness(&node_urls)
         .await
         .map_err(|source| RemoteReadinessError::Remote { source })?;
 
     info!(
-        validator_api_ports = ?validator_api,
+        node_api_ports = ?node_api,
         "k8s remote readiness confirmed"
     );
 
@@ -225,14 +216,14 @@ pub async fn install_stack(
     assets: &RunnerAssets,
     namespace: &str,
     release: &str,
-    validators: usize,
+    nodes: usize,
 ) -> Result<RunnerCleanup, crate::deployer::K8sRunnerError> {
     tracing::info!(
         release = %release,
         namespace = %namespace,
         "installing helm release"
     );
-    crate::infrastructure::helm::install_release(assets, release, namespace, validators).await?;
+    crate::infrastructure::helm::install_release(assets, release, namespace, nodes).await?;
     tracing::info!(release = %release, "helm install succeeded");
 
     let preserve = env::var("K8S_RUNNER_PRESERVE").is_ok();
@@ -252,15 +243,15 @@ pub async fn wait_for_ports_or_cleanup(
     cleanup_guard: &mut Option<RunnerCleanup>,
 ) -> Result<ClusterReady, crate::deployer::K8sRunnerError> {
     info!(
-        validators = specs.validators.len(),
+        nodes = specs.nodes.len(),
         %namespace,
         %release,
         "waiting for cluster port-forwards"
     );
-    match wait_for_cluster_ready(client, namespace, release, &specs.validators).await {
+    match wait_for_cluster_ready(client, namespace, release, &specs.nodes).await {
         Ok(ports) => {
             info!(
-                validator_ports = ?ports.ports.validators,
+                node_ports = ?ports.ports.nodes,
                 "cluster port-forwards established"
             );
             Ok(ports)
@@ -288,7 +279,7 @@ async fn cleanup_pending(client: &Client, namespace: &str, guard: &mut Option<Ru
 
 fn readiness_urls(
     ports: &[u16],
-    role: NodeRole,
+    role: NodeKind,
     host: &str,
 ) -> Result<Vec<Url>, RemoteReadinessError> {
     ports
@@ -298,7 +289,7 @@ fn readiness_urls(
         .collect()
 }
 
-fn readiness_url(host: &str, role: NodeRole, port: u16) -> Result<Url, RemoteReadinessError> {
+fn readiness_url(host: &str, role: NodeKind, port: u16) -> Result<Url, RemoteReadinessError> {
     cluster_host_url(host, port).map_err(|source| RemoteReadinessError::Endpoint {
         role,
         port,
@@ -312,7 +303,7 @@ fn cluster_host_url(host: &str, port: u16) -> Result<Url, ParseError> {
 
 fn api_client_from_ports(
     host: &str,
-    role: NodeRole,
+    role: NodeKind,
     api_port: u16,
     testing_port: u16,
 ) -> Result<ApiClient, NodeClientError> {

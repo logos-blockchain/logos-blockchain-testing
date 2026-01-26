@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use testing_framework_core::{
     scenario::{
         MetricsError,
-        http_probe::{HttpReadinessError, NodeRole},
+        http_probe::{HttpReadinessError, NodeKind},
     },
     topology::readiness::ReadinessError,
 };
@@ -14,8 +14,8 @@ use crate::{docker::commands::ComposeCommandError, infrastructure::template::Tem
 #[derive(Debug, thiserror::Error)]
 /// Top-level compose runner errors.
 pub enum ComposeRunnerError {
-    #[error("compose runner requires at least one validator (validators={validators})")]
-    MissingValidator { validators: usize },
+    #[error("compose runner requires at least one node (nodes={nodes})")]
+    MissingNode { nodes: usize },
     #[error("docker does not appear to be available on this host")]
     DockerUnavailable,
     #[error("failed to resolve host port for {service} container port {container_port}: {source}")]
@@ -37,7 +37,7 @@ pub enum ComposeRunnerError {
     NodeClients(#[from] NodeClientError),
     #[error(transparent)]
     Telemetry(#[from] MetricsError),
-    #[error("block feed requires at least one validator client")]
+    #[error("block feed requires at least one node client")]
     BlockFeedMissing,
     #[error("failed to start block feed: {source}")]
     BlockFeed {
@@ -105,7 +105,7 @@ pub enum StackReadinessError {
     Http(#[from] HttpReadinessError),
     #[error("failed to build readiness URL for {role} port {port}: {source}", role = role.label())]
     Endpoint {
-        role: NodeRole,
+        role: NodeKind,
         port: u16,
         #[source]
         source: ParseError,
@@ -125,7 +125,7 @@ pub enum NodeClientError {
         role = role.label()
     )]
     Endpoint {
-        role: NodeRole,
+        role: NodeKind,
         endpoint: &'static str,
         port: u16,
         #[source]

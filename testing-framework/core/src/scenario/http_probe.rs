@@ -7,17 +7,17 @@ use thiserror::Error;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 
-/// Role used for labelling readiness probes.
+/// Kind used for labelling readiness probes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NodeRole {
-    Validator,
+pub enum NodeKind {
+    Node,
 }
 
-impl NodeRole {
+impl NodeKind {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Validator => "validator",
+            Self::Node => "node",
         }
     }
 }
@@ -26,14 +26,14 @@ impl NodeRole {
 #[derive(Clone, Copy, Debug, Error)]
 #[error("timeout waiting for {role} HTTP endpoint on port {port} after {timeout:?}", role = role.label())]
 pub struct HttpReadinessError {
-    role: NodeRole,
+    role: NodeKind,
     port: u16,
     timeout: Duration,
 }
 
 impl HttpReadinessError {
     #[must_use]
-    pub const fn new(role: NodeRole, port: u16, timeout: Duration) -> Self {
+    pub const fn new(role: NodeKind, port: u16, timeout: Duration) -> Self {
         Self {
             role,
             port,
@@ -42,7 +42,7 @@ impl HttpReadinessError {
     }
 
     #[must_use]
-    pub const fn role(&self) -> NodeRole {
+    pub const fn role(&self) -> NodeKind {
         self.role
     }
 
@@ -60,7 +60,7 @@ impl HttpReadinessError {
 /// Wait for HTTP readiness on the provided ports against localhost.
 pub async fn wait_for_http_ports(
     ports: &[u16],
-    role: NodeRole,
+    role: NodeKind,
     timeout_duration: Duration,
     poll_interval: Duration,
 ) -> Result<(), HttpReadinessError> {
@@ -70,7 +70,7 @@ pub async fn wait_for_http_ports(
 /// Wait for HTTP readiness on the provided ports against a specific host.
 pub async fn wait_for_http_ports_with_host(
     ports: &[u16],
-    role: NodeRole,
+    role: NodeKind,
     host: &str,
     timeout_duration: Duration,
     poll_interval: Duration,
@@ -106,7 +106,7 @@ pub async fn wait_for_http_ports_with_host(
 async fn wait_for_single_port(
     client: ReqwestClient,
     port: u16,
-    role: NodeRole,
+    role: NodeKind,
     host: &str,
     timeout_duration: Duration,
     poll_interval: Duration,

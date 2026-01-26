@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::{
     nodes::{
         common::node::SpawnNodeError,
-        validator::{Validator, create_validator_config},
+        node::{Node, create_node_config},
     },
     topology::{
         config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
@@ -18,10 +18,10 @@ use crate::{
 
 /// Runtime representation of a spawned topology with running nodes.
 pub struct Topology {
-    pub(crate) validators: Vec<Validator>,
+    pub(crate) nodes: Vec<Node>,
 }
 
-pub type DeployedNodes = Vec<Validator>;
+pub type DeployedNodes = Vec<Node>;
 
 #[derive(Debug, Error)]
 pub enum SpawnTopologyError {
@@ -34,15 +34,15 @@ pub enum SpawnTopologyError {
 impl Topology {
     pub async fn spawn(config: TopologyConfig) -> Result<Self, SpawnTopologyError> {
         let generated = TopologyBuilder::new(config.clone()).build()?;
-        let n_validators = config.n_validators;
+        let n_nodes = config.n_nodes;
         let node_configs = generated
-            .nodes()
+            .iter()
             .map(|node| node.general.clone())
             .collect::<Vec<_>>();
 
-        let validators = Self::spawn_validators(node_configs, n_validators).await?;
+        let nodes = Self::spawn_nodes(node_configs, n_nodes).await?;
 
-        Ok(Self { validators })
+        Ok(Self { nodes })
     }
 
     pub async fn spawn_with_empty_membership(
@@ -56,32 +56,32 @@ impl Topology {
             .build()?;
 
         let node_configs = generated
-            .nodes()
+            .iter()
             .map(|node| node.general.clone())
             .collect::<Vec<_>>();
 
-        let validators = Self::spawn_validators(node_configs, config.n_validators).await?;
+        let nodes = Self::spawn_nodes(node_configs, config.n_nodes).await?;
 
-        Ok(Self { validators })
+        Ok(Self { nodes })
     }
 
-    pub(crate) async fn spawn_validators(
+    pub(crate) async fn spawn_nodes(
         config: Vec<GeneralConfig>,
-        n_validators: usize,
+        n_nodes: usize,
     ) -> Result<DeployedNodes, SpawnTopologyError> {
-        let mut validators = Vec::new();
-        for i in 0..n_validators {
-            let config = create_validator_config(config[i].clone());
-            let label = format!("validator-{i}");
-            validators.push(Validator::spawn(config, &label).await?);
+        let mut nodes = Vec::new();
+        for i in 0..n_nodes {
+            let config = create_node_config(config[i].clone());
+            let label = format!("node-{i}");
+            nodes.push(Node::spawn(config, &label).await?);
         }
 
-        Ok(validators)
+        Ok(nodes)
     }
 
     #[must_use]
-    pub fn validators(&self) -> &[Validator] {
-        &self.validators
+    pub fn nodes(&self) -> &[Node] {
+        &self.nodes
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
@@ -105,14 +105,14 @@ impl Topology {
     }
 
     fn node_listen_ports(&self) -> Vec<u16> {
-        self.validators
+        self.nodes
             .iter()
             .map(|node| node.config().network.backend.swarm.port)
             .collect()
     }
 
     fn node_initial_peer_ports(&self) -> Vec<HashSet<u16>> {
-        self.validators
+        self.nodes
             .iter()
             .map(|node| {
                 node.config()
@@ -127,15 +127,10 @@ impl Topology {
     }
 
     fn node_labels(&self) -> Vec<String> {
-        self.validators
+        self.nodes
             .iter()
             .enumerate()
-            .map(|(idx, node)| {
-                format!(
-                    "validator#{idx}@{}",
-                    node.config().network.backend.swarm.port
-                )
-            })
+            .map(|(idx, node)| format!("node#{idx}@{}", node.config().network.backend.swarm.port))
             .collect()
     }
 }

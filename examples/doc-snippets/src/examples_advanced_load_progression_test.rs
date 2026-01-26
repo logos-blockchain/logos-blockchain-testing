@@ -9,7 +9,7 @@ pub async fn load_progression_test() -> Result<()> {
     for rate in [5, 10, 20, 30] {
         println!("Testing with rate: {}", rate);
 
-        let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+        let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
             .wallets(50)
             .transactions_with(|txs| txs.rate(rate).users(20))
             .expect_consensus_liveness()
