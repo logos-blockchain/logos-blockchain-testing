@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NOMOS_NODE_REV="${NOMOS_NODE_REV:?NOMOS_NODE_REV build arg missing}"
+LOGOS_BLOCKCHAIN_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV:?LOGOS_BLOCKCHAIN_NODE_REV build arg missing}"
 
 mkdir -p /workspace/artifacts
 
@@ -42,11 +42,11 @@ else
   echo "Prebuilt logos-blockchain binaries missing; building from source"
 fi
 
-echo "Building logos-blockchain binaries from source (rev ${NOMOS_NODE_REV})"
+echo "Building logos-blockchain binaries from source (rev ${LOGOS_BLOCKCHAIN_NODE_REV})"
 git clone https://github.com/logos-co/nomos-node.git /tmp/nomos-node
 cd /tmp/nomos-node
-git fetch --depth 1 origin "${NOMOS_NODE_REV}"
-git checkout "${NOMOS_NODE_REV}"
+git fetch --depth 1 origin "${LOGOS_BLOCKCHAIN_NODE_REV}"
+git checkout "${LOGOS_BLOCKCHAIN_NODE_REV}"
 git reset --hard
 git clean -fdx
 

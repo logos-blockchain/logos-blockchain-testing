@@ -4,7 +4,7 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{CleanupGuard, NodeClients, http_probe::NodeKind},
+    scenario::{CleanupGuard, NodeClients, http_probe::NODE_ROLE},
     topology::{generation::GeneratedTopology, readiness::ReadinessError},
 };
 use tracing::{debug, info};
@@ -107,12 +107,9 @@ impl ClusterEnvironment {
 #[derive(Debug, thiserror::Error)]
 /// Failures while building node clients against forwarded ports.
 pub enum NodeClientError {
-    #[error(
-        "failed to build {endpoint} client URL for {role} port {port}: {source}",
-        role = role.label()
-    )]
+    #[error("failed to build {endpoint} client URL for {role} port {port}: {source}")]
     Endpoint {
-        role: NodeKind,
+        role: &'static str,
         endpoint: &'static str,
         port: u16,
         #[source]
@@ -123,12 +120,9 @@ pub enum NodeClientError {
 #[derive(Debug, thiserror::Error)]
 /// Readiness check failures for the remote cluster endpoints.
 pub enum RemoteReadinessError {
-    #[error(
-        "failed to build readiness URL for {role} port {port}: {source}",
-        role = role.label()
-    )]
+    #[error("failed to build readiness URL for {role} port {port}: {source}")]
     Endpoint {
-        role: NodeKind,
+        role: &'static str,
         port: u16,
         #[source]
         source: ParseError,
@@ -164,7 +158,7 @@ pub fn build_node_clients(cluster: &ClusterEnvironment) -> Result<NodeClients, N
         .copied()
         .zip(cluster.node_testing_ports.iter().copied())
         .map(|(api_port, testing_port)| {
-            api_client_from_ports(&cluster.node_host, NodeKind::Node, api_port, testing_port)
+            api_client_from_ports(&cluster.node_host, NODE_ROLE, api_port, testing_port)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -180,7 +174,7 @@ pub async fn ensure_cluster_readiness(
     info!("waiting for remote readiness (API + membership)");
     let (node_api, _node_testing) = cluster.node_ports();
 
-    let node_urls = readiness_urls(node_api, NodeKind::Node, &cluster.node_host)?;
+    let node_urls = readiness_urls(node_api, NODE_ROLE, &cluster.node_host)?;
 
     descriptors
         .wait_remote_readiness(&node_urls)
@@ -279,7 +273,7 @@ async fn cleanup_pending(client: &Client, namespace: &str, guard: &mut Option<Ru
 
 fn readiness_urls(
     ports: &[u16],
-    role: NodeKind,
+    role: &'static str,
     host: &str,
 ) -> Result<Vec<Url>, RemoteReadinessError> {
     ports
@@ -289,7 +283,7 @@ fn readiness_urls(
         .collect()
 }
 
-fn readiness_url(host: &str, role: NodeKind, port: u16) -> Result<Url, RemoteReadinessError> {
+fn readiness_url(host: &str, role: &'static str, port: u16) -> Result<Url, RemoteReadinessError> {
     cluster_host_url(host, port).map_err(|source| RemoteReadinessError::Endpoint {
         role,
         port,
@@ -303,7 +297,7 @@ fn cluster_host_url(host: &str, port: u16) -> Result<Url, ParseError> {
 
 fn api_client_from_ports(
     host: &str,
-    role: NodeKind,
+    role: &'static str,
     api_port: u16,
     testing_port: u16,
 ) -> Result<ApiClient, NodeClientError> {

@@ -20,7 +20,7 @@ use thiserror::Error;
 
 use crate::topology::{
     configs::{GeneralConfig, time::default_time_config},
-    generation::{GeneratedNodeConfig, GeneratedTopology, NodeKind},
+    generation::{GeneratedNodeConfig, GeneratedTopology},
     utils::{TopologyResolveError, create_kms_configs, resolve_ids, resolve_ports},
 };
 
@@ -319,10 +319,8 @@ fn build_node_descriptors(
             kms_config,
         };
 
-        let (kind, index) = (NodeKind::Node, i);
         let descriptor = GeneratedNodeConfig {
-            kind,
-            index,
+            index: i,
             id,
             general,
             blend_port,

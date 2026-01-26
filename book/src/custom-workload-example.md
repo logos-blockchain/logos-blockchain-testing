@@ -48,10 +48,10 @@ impl Workload for ReachabilityWorkload {
         topology: &GeneratedTopology,
         _run_metrics: &RunMetrics,
     ) -> Result<(), DynError> {
-        if topology.validators().get(self.target_idx).is_none() {
+        if topology.nodes().get(self.target_idx).is_none() {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "no validator at requested index",
+                "no node at requested index",
             )));
         }
         Ok(())
@@ -60,7 +60,7 @@ impl Workload for ReachabilityWorkload {
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
         let client = ctx
             .node_clients()
-            .validator_clients()
+            .node_clients()
             .get(self.target_idx)
             .ok_or_else(|| {
                 Box::new(std::io::Error::new(
@@ -108,7 +108,7 @@ impl Expectation for ReachabilityExpectation {
     async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
         let client = ctx
             .node_clients()
-            .validator_clients()
+            .node_clients()
             .get(self.target_idx)
             .ok_or_else(|| {
                 Box::new(std::io::Error::new(

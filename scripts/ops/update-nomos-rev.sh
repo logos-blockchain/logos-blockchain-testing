@@ -16,8 +16,8 @@ Usage:
   scripts/ops/update-nomos-rev.sh --unskip-worktree
 
 Notes:
-  --rev   sets NOMOS_NODE_REV and updates Cargo.toml revs
-  --path  sets NOMOS_NODE_PATH (clears NOMOS_NODE_REV) and patches Cargo.toml to use a local logos-blockchain-node checkout
+  --rev   sets LOGOS_BLOCKCHAIN_NODE_REV and updates Cargo.toml revs
+  --path  sets LOGOS_BLOCKCHAIN_NODE_PATH (clears LOGOS_BLOCKCHAIN_NODE_REV) and patches Cargo.toml to use a local logos-blockchain-node checkout
   --unskip-worktree clears any skip-worktree flag for Cargo.toml
   Only one may be used at a time.
 EOF
@@ -88,8 +88,8 @@ update_nomos_rev::update_to_rev() {
   echo "Updating logos-blockchain-node rev to ${rev}"
 
   sed -i.bak -E \
-    -e "s/^#?[[:space:]]*NOMOS_NODE_REV=.*/NOMOS_NODE_REV=${rev}/" \
-    -e "s/^#?[[:space:]]*NOMOS_NODE_PATH=.*/# NOMOS_NODE_PATH=/" \
+    -e "s/^#?[[:space:]]*LOGOS_BLOCKCHAIN_NODE_REV=.*/LOGOS_BLOCKCHAIN_NODE_REV=${rev}/" \
+    -e "s/^#?[[:space:]]*LOGOS_BLOCKCHAIN_NODE_PATH=.*/# LOGOS_BLOCKCHAIN_NODE_PATH=/" \
     "${ROOT_DIR}/versions.env"
   rm -f "${ROOT_DIR}/versions.env.bak"
 
@@ -123,12 +123,12 @@ update_nomos_rev::update_to_path() {
   [ -d "${node_path}" ] || common::die "path does not exist: ${node_path}"
 
   local current_rev escaped_path
-  current_rev="$(grep -E '^[#[:space:]]*NOMOS_NODE_REV=' "${ROOT_DIR}/versions.env" | head -n1 | sed -E 's/^#?[[:space:]]*NOMOS_NODE_REV=//')"
+  current_rev="$(grep -E '^[#[:space:]]*LOGOS_BLOCKCHAIN_NODE_REV=' "${ROOT_DIR}/versions.env" | head -n1 | sed -E 's/^#?[[:space:]]*LOGOS_BLOCKCHAIN_NODE_REV=//')"
   escaped_path="${node_path//\//\\/}"
 
   sed -i.bak -E \
-    -e "s/^#?[[:space:]]*NOMOS_NODE_PATH=.*/NOMOS_NODE_PATH=${escaped_path}/" \
-    -e "s/^#?[[:space:]]*NOMOS_NODE_REV=.*/# NOMOS_NODE_REV=${current_rev}/" \
+    -e "s/^#?[[:space:]]*LOGOS_BLOCKCHAIN_NODE_PATH=.*/LOGOS_BLOCKCHAIN_NODE_PATH=${escaped_path}/" \
+    -e "s/^#?[[:space:]]*LOGOS_BLOCKCHAIN_NODE_REV=.*/# LOGOS_BLOCKCHAIN_NODE_REV=${current_rev}/" \
     "${ROOT_DIR}/versions.env"
   rm -f "${ROOT_DIR}/versions.env.bak"
 
@@ -226,8 +226,8 @@ update_nomos_rev::main() {
   update_nomos_rev::load_env
   update_nomos_rev::parse_args "$@"
 
-  update_nomos_rev::ensure_env_key "NOMOS_NODE_REV" "# NOMOS_NODE_REV="
-  update_nomos_rev::ensure_env_key "NOMOS_NODE_PATH" "# NOMOS_NODE_PATH="
+  update_nomos_rev::ensure_env_key "LOGOS_BLOCKCHAIN_NODE_REV" "# LOGOS_BLOCKCHAIN_NODE_REV="
+  update_nomos_rev::ensure_env_key "LOGOS_BLOCKCHAIN_NODE_PATH" "# LOGOS_BLOCKCHAIN_NODE_PATH="
 
   if [ "${UNSKIP_WORKTREE}" -eq 1 ]; then
     update_nomos_rev::maybe_unskip_worktree "Cargo.toml"

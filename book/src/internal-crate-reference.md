@@ -2,13 +2,13 @@
 
 High-level roles of the crates that make up the framework:
 
-- **Configs** (`testing-framework/configs/`): Prepares reusable configuration primitives for nodes, networking, tracing, data availability, and wallets, shared by all scenarios and runners. Includes topology generation and circuit asset resolution.
+- **Configs** (`testing-framework/configs/`): Prepares reusable configuration primitives for nodes, networking, tracing, and wallets, shared by all scenarios and runners. Includes topology generation and circuit asset resolution.
 
 - **Core scenario orchestration** (`testing-framework/core/`): Houses the topology and scenario model, runtime coordination, node clients, and readiness/health probes. Defines `Deployer` and `Runner` traits, `ScenarioBuilder`, and `RunContext`.
 
-- **Workflows** (`testing-framework/workflows/`): Packages workloads (transaction, DA, chaos) and expectations (consensus liveness) into reusable building blocks. Offers fluent DSL extensions (`ScenarioBuilderExt`, `ChaosBuilderExt`).
+- **Workflows** (`testing-framework/workflows/`): Packages workloads (transaction, chaos) and expectations (consensus liveness) into reusable building blocks. Offers fluent DSL extensions (`ScenarioBuilderExt`, `ChaosBuilderExt`).
 
-- **Runners** (`testing-framework/runners/{local,compose,k8s}/`): Implements deployment backends (local host, Docker Compose, Kubernetes) that all consume the same scenario plan. Each provides a `Deployer` implementation (`LocalDeployer`, `ComposeDeployer`, `K8sDeployer`).
+- **Deployers** (`testing-framework/deployers/{local,compose,k8s}/`): Implements deployment backends (local host, Docker Compose, Kubernetes) that all consume the same scenario plan. Each provides a `Deployer` implementation (`LocalDeployer`, `ComposeDeployer`, `K8sDeployer`).
 
 - **Runner Examples** (crate name: `runner-examples`, path: `examples/`): Runnable binaries demonstrating framework usage and serving as living documentation. These are the **primary entry point** for running scenarios (`examples/src/bin/local_runner.rs`, `examples/src/bin/compose_runner.rs`, `examples/src/bin/k8s_runner.rs`).
 
@@ -16,13 +16,13 @@ High-level roles of the crates that make up the framework:
 
 | What You're Adding | Where It Goes | Examples |
 |-------------------|---------------|----------|
-| **Node config parameter** | `testing-framework/configs/src/topology/configs/` | Slot duration, log levels, DA params |
-| **Topology feature** | `testing-framework/core/src/topology/` | New network layouts, node roles |
+| **Node config parameter** | `testing-framework/configs/src/topology/configs/` | Slot duration, log levels |
+| **Topology feature** | `testing-framework/core/src/topology/` | New network layouts |
 | **Scenario capability** | `testing-framework/core/src/scenario/` | New capabilities, context methods |
 | **Workload** | `testing-framework/workflows/src/workloads/` | New traffic generators |
 | **Expectation** | `testing-framework/workflows/src/expectations/` | New success criteria |
 | **Builder API** | `testing-framework/workflows/src/builder/` | DSL extensions, fluent methods |
-| **Deployer** | `testing-framework/runners/` | New deployment backends |
+| **Deployer** | `testing-framework/deployers/` | New deployment backends |
 | **Example scenario** | `examples/src/bin/` | Demonstration binaries |
 
 ## Extension Workflow
@@ -93,7 +93,7 @@ impl<Caps> YourWorkloadDslExt for testing_framework_core::scenario::Builder<Caps
 }
 
 pub fn use_in_examples() {
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .your_workload_with(|w| w.some_config())
         .build();
 }
@@ -136,7 +136,7 @@ impl<Caps> YourExpectationDslExt for testing_framework_core::scenario::Builder<C
 }
 
 pub fn use_in_examples() {
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .expect_your_condition()
         .build();
 }

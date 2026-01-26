@@ -16,7 +16,7 @@ Builds a Linux bundle via scripts/build/build-bundle.sh, then stages artifacts i
   - testing-framework/assets/stack/bin
 
 Options:
-  --rev REV              logos-blockchain-node git revision to build (overrides NOMOS_NODE_REV)
+  --rev REV              logos-blockchain-node git revision to build (overrides LOGOS_BLOCKCHAIN_NODE_REV)
   --path DIR             use local logos-blockchain-node checkout (skip fetch/checkout)
   --features LIST        extra cargo features (comma-separated); base includes "testing"
   --docker-platform PLAT docker platform for the Linux build (e.g. linux/amd64, linux/arm64)
@@ -26,8 +26,8 @@ Options:
 
 Environment:
   VERSION                bundle version (default from versions.env)
-  NOMOS_CIRCUITS_VERSION legacy alias for VERSION (supported)
-  NOMOS_NODE_REV         default logos-blockchain-node revision (from versions.env)
+  LOGOS_BLOCKCHAIN_CIRCUITS_VERSION legacy alias for VERSION (supported)
+  LOGOS_BLOCKCHAIN_NODE_REV         default logos-blockchain-node revision (from versions.env)
 EOF
 }
 
@@ -48,8 +48,8 @@ build_linux_binaries::load_env() {
 
   DEFAULT_VERSION="${VERSION:?Missing VERSION in versions.env}"
   VERSION="${VERSION:-${DEFAULT_VERSION}}"
-  if [ -n "${NOMOS_CIRCUITS_VERSION:-}" ]; then
-    VERSION="${NOMOS_CIRCUITS_VERSION}"
+  if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS_VERSION:-}" ]; then
+    VERSION="${LOGOS_BLOCKCHAIN_CIRCUITS_VERSION}"
   fi
 }
 

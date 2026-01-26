@@ -14,7 +14,7 @@ Reviewed against `git rev-parse HEAD` at the time of writing, plus local working
 ## Findings / Fixes Applied
 
 - `book/src/environment-variables.md` was not a complete reference: it missed multiple `NOMOS_*` variables used by the repo (scripts + framework). Added the missing variables and corrected a misleading note about `RUST_LOG` vs node logging.
-- `book/src/running-examples.md` “Quick Smoke Matrix” section didn’t reflect current `scripts/run/run-test-matrix.sh` flags. Added the commonly used options and clarified the relationship to `NOMOS_SKIP_IMAGE_BUILD`.
+- `book/src/running-examples.md` “Quick Smoke Matrix” section didn’t reflect current `scripts/run/run-test-matrix.sh` flags. Added the commonly used options and clarified the relationship to `LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD`.
 - `book/src/part-iv.md` existed but was not in `book/src/SUMMARY.md`. Removed it so the rendered book doesn’t silently diverge from the filesystem.
 - `mdbook test book` was failing because:
   - Many Rust examples were written as ` ```rust` (doctested by default) but depend on workspace crates; they aren’t standalone doctest snippets.

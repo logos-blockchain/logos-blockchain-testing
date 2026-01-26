@@ -24,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -33,12 +33,12 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
-          echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.logos-blockchain-circuits"
+          echo "LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -74,12 +74,12 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
-          echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.logos-blockchain-circuits"
+          echo "LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -106,7 +106,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -115,12 +115,12 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
-          echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.logos-blockchain-circuits"
+          echo "LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -141,7 +141,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -150,12 +150,12 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
-          echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.logos-blockchain-circuits"
+          echo "LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -178,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -187,8 +187,8 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -207,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -216,12 +216,12 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - name: Install nomos circuits
         run: |
-          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.nomos-circuits"
-          echo "NOMOS_CIRCUITS=$HOME/.nomos-circuits" >> "$GITHUB_ENV"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "$HOME/.logos-blockchain-circuits"
+          echo "LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-09-14
@@ -242,8 +242,7 @@ jobs:
       POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
       LOCAL_DEMO_VALIDATORS: 1
-      NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
-      NOMOS_KZGRS_PARAMS_PATH: ${{ github.workspace }}/.tmp/kzgrs_test_params
+      LOGOS_BLOCKCHAIN_CIRCUITS: ${{ github.workspace }}/.tmp/logos-blockchain-circuits
       CARGO_INCREMENTAL: 0
       CARGO_PROFILE_DEV_DEBUG: 0
       RUSTFLAGS: -C debuginfo=0
@@ -254,7 +253,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -263,16 +262,20 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
       - name: Set temp dir
         run: |
           echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
           echo "CARGO_TARGET_DIR=${{ runner.temp }}/target-local" >> "$GITHUB_ENV"
-          echo "NOMOS_LOG_DIR=${{ runner.temp }}/local-logs" >> "$GITHUB_ENV"
-          echo "NOMOS_STATE_DIR=${{ runner.temp }}/nomos-state" >> "$GITHUB_ENV"
+          echo "LOGOS_BLOCKCHAIN_LOG_DIR=${{ runner.temp }}/local-logs" >> "$GITHUB_ENV"
+          echo "LOGOS_BLOCKCHAIN_STATE_DIR=${{ runner.temp }}/nomos-state" >> "$GITHUB_ENV"
           rm -rf "${{ runner.temp }}/local-logs" "${{ runner.temp }}/nomos-state"
           mkdir -p "${{ runner.temp }}/local-logs" "${{ runner.temp }}/nomos-state"
+      - name: Install circuits
+        run: |
+          mkdir -p "${LOGOS_BLOCKCHAIN_CIRCUITS}"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "${LOGOS_BLOCKCHAIN_CIRCUITS}"
       - name: Clean workspace caches
         run: |
           rm -rf .tmp/nomos-* testing-framework/assets/stack/kzgrs_test_params
@@ -303,13 +306,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.tmp/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.LOGOS_BLOCKCHAIN_BUNDLE_VERSION }}-${{ env.LOGOS_BLOCKCHAIN_NODE_REV }}
 
       - name: Download nomos binaries artifact (fallback)
         if: steps.restore-nomos-bins-host.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
+          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.LOGOS_BLOCKCHAIN_BUNDLE_VERSION }}-${{ env.LOGOS_BLOCKCHAIN_NODE_REV }}
         run: |
           set -euo pipefail
           mkdir -p "${TMPDIR}"
@@ -338,27 +341,27 @@ jobs:
           DEST="${GITHUB_WORKSPACE}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
           if [ -f "${SRC}" ]; then
             mv "${SRC}" "${DEST}"
-            echo "NOMOS_BINARIES_TAR=${DEST}" >> "$GITHUB_ENV"
+            echo "LOGOS_BLOCKCHAIN_BINARIES_TAR=${DEST}" >> "$GITHUB_ENV"
           else
             echo "Expected ${SRC} not found" >&2
             exit 1
           fi
       - name: Run host demo (scripted)
         env:
-          NOMOS_TESTS_KEEP_LOGS: "true"
+          LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS: "true"
           RUST_LOG: "info"
-          NOMOS_LOG_DIR: "${{ runner.temp }}/local-logs"
+          LOGOS_BLOCKCHAIN_LOG_DIR: "${{ runner.temp }}/local-logs"
         run: |
-          scripts/run/run-examples.sh -t 120 -v 1 -e 1 host
+          scripts/run/run-examples.sh -t 120 -n 1 host
       - name: Collect host demo logs (on failure)
         if: failure()
         run: |
-          if [ -d "${NOMOS_LOG_DIR}" ]; then
-            tar -czf "${RUNNER_TEMP}/local-logs.tgz" -C "$(dirname "${NOMOS_LOG_DIR}")" "$(basename "${NOMOS_LOG_DIR}")"
+          if [ -d "${LOGOS_BLOCKCHAIN_LOG_DIR}" ]; then
+            tar -czf "${RUNNER_TEMP}/local-logs.tgz" -C "$(dirname "${LOGOS_BLOCKCHAIN_LOG_DIR}")" "$(basename "${LOGOS_BLOCKCHAIN_LOG_DIR}")"
             echo "Local logs tar: $(realpath ${RUNNER_TEMP}/local-logs.tgz)"
-            find "${NOMOS_LOG_DIR}" -type f -print
+            find "${LOGOS_BLOCKCHAIN_LOG_DIR}" -type f -print
           else
-            echo "No local logs directory at ${NOMOS_LOG_DIR}"
+            echo "No local logs directory at ${LOGOS_BLOCKCHAIN_LOG_DIR}"
           fi
       - name: Upload host smoke logs
         if: failure()
@@ -380,8 +383,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TMPDIR: ${{ github.workspace }}/.tmp
-      NOMOS_CIRCUITS: ${{ github.workspace }}/.tmp/nomos-circuits
-      NOMOS_TESTNET_IMAGE: nomos-testnet:${{ github.run_id }}
+      LOGOS_BLOCKCHAIN_CIRCUITS: ${{ github.workspace }}/.tmp/logos-blockchain-circuits
+      LOGOS_BLOCKCHAIN_TESTNET_IMAGE: nomos-testnet:${{ github.run_id }}
       DOCKER_BUILDKIT: 1
       CARGO_INCREMENTAL: 0
       CARGO_PROFILE_DEV_DEBUG: 0
@@ -393,7 +396,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ ! -f versions.env ]; then
-            echo "versions.env missing; populate VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION" >&2
+            echo "versions.env missing; populate VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION" >&2
             exit 1
           fi
           set -a
@@ -402,24 +405,28 @@ jobs:
           # $GITHUB_ENV does not accept comments/blank lines; keep only KEY=VALUE exports.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' versions.env >> "$GITHUB_ENV"
           : "${VERSION:?Missing VERSION}"
-          : "${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV}"
-          : "${NOMOS_BUNDLE_VERSION:?Missing NOMOS_BUNDLE_VERSION}"
+          : "${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV}"
+          : "${LOGOS_BLOCKCHAIN_BUNDLE_VERSION:?Missing LOGOS_BLOCKCHAIN_BUNDLE_VERSION}"
 
       - name: Prepare workspace tmpdir
         run: mkdir -p "$TMPDIR"
+      - name: Install circuits
+        run: |
+          mkdir -p "${LOGOS_BLOCKCHAIN_CIRCUITS}"
+          ./scripts/setup/setup-logos-blockchain-circuits.sh "${VERSION}" "${LOGOS_BLOCKCHAIN_CIRCUITS}"
 
       - name: Restore cached nomos binaries
         id: restore-nomos-bins
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.tmp/nomos-binaries.tar.gz
-          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
+          key: ${{ runner.os }}-nomos-binaries-${{ env.VERSION }}-${{ env.LOGOS_BLOCKCHAIN_BUNDLE_VERSION }}-${{ env.LOGOS_BLOCKCHAIN_NODE_REV }}
 
       - name: Download nomos binaries artifact (fallback)
         if: steps.restore-nomos-bins.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.NOMOS_BUNDLE_VERSION }}-${{ env.NOMOS_NODE_REV }}
+          ARTIFACT_NAME: nomos-binaries-${{ runner.os }}-${{ env.VERSION }}-${{ env.LOGOS_BLOCKCHAIN_BUNDLE_VERSION }}-${{ env.LOGOS_BLOCKCHAIN_NODE_REV }}
         run: |
           set -euo pipefail
           download_dir="${TMPDIR}/nomos-binaries-download"
@@ -450,7 +457,7 @@ jobs:
           DEST="${GITHUB_WORKSPACE}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
           if [ -f "${SRC}" ]; then
             mv "${SRC}" "${DEST}"
-            echo "NOMOS_BINARIES_TAR=${DEST}" >> "$GITHUB_ENV"
+            echo "LOGOS_BLOCKCHAIN_BINARIES_TAR=${DEST}" >> "$GITHUB_ENV"
           else
             echo "Expected ${SRC} not found" >&2
             exit 1
@@ -495,18 +502,17 @@ jobs:
         env:
           POL_PROOF_DEV_MODE: "true"
           COMPOSE_NODE_PAIRS: "1x1"
-          NOMOS_TESTNET_IMAGE: ${{ env.NOMOS_TESTNET_IMAGE }}
+          LOGOS_BLOCKCHAIN_TESTNET_IMAGE: ${{ env.LOGOS_BLOCKCHAIN_TESTNET_IMAGE }}
           COMPOSE_RUNNER_HOST: "127.0.0.1"
-          NOMOS_TIME_BACKEND: "monotonic"
-          NOMOS_KZGRS_PARAMS_PATH: "/kzgrs_test_params/kzgrs_test_params"
+          LOGOS_BLOCKCHAIN_TIME_BACKEND: "monotonic"
           RUST_BACKTRACE: "1"
-          NOMOS_TESTS_TRACING: "true"
+          LOGOS_BLOCKCHAIN_TESTS_TRACING: "true"
           RUST_LOG: "info"
-          NOMOS_LOG_LEVEL: "info"
-          NOMOS_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
+          LOGOS_BLOCKCHAIN_LOG_LEVEL: "info"
+          LOGOS_BLOCKCHAIN_LOG_DIR: "${{ github.workspace }}/.tmp/compose-logs"
         run: |
           mkdir -p "$TMPDIR"
-          scripts/run/run-examples.sh -t 120 -v 1 -e 1 compose
+          scripts/run/run-examples.sh -t 120 -n 1 compose
 
       - name: Show compose runner log
         env:

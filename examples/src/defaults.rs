@@ -22,13 +22,13 @@ fn set_default_env(key: &str, value: &str) {
 
 pub fn init_logging_defaults() {
     set_default_env("POL_PROOF_DEV_MODE", "true");
-    set_default_env("NOMOS_TESTS_KEEP_LOGS", "1");
-    set_default_env("NOMOS_LOG_LEVEL", "info");
+    set_default_env("LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS", "1");
+    set_default_env("LOGOS_BLOCKCHAIN_LOG_LEVEL", "info");
     set_default_env("RUST_LOG", "info");
 }
 
 pub fn init_node_log_dir_defaults(deployer: DeployerKind) {
-    if env::var_os("NOMOS_LOG_DIR").is_some() {
+    if env::var_os("LOGOS_BLOCKCHAIN_LOG_DIR").is_some() {
         return;
     }
 
@@ -36,8 +36,12 @@ pub fn init_node_log_dir_defaults(deployer: DeployerKind) {
     let _ = fs::create_dir_all(&host_dir);
 
     match deployer {
-        DeployerKind::Local => set_default_env("NOMOS_LOG_DIR", &host_dir.display().to_string()),
-        DeployerKind::Compose => set_default_env("NOMOS_LOG_DIR", DEFAULT_CONTAINER_NODE_LOG_DIR),
+        DeployerKind::Local => {
+            set_default_env("LOGOS_BLOCKCHAIN_LOG_DIR", &host_dir.display().to_string())
+        }
+        DeployerKind::Compose => {
+            set_default_env("LOGOS_BLOCKCHAIN_LOG_DIR", DEFAULT_CONTAINER_NODE_LOG_DIR)
+        }
     }
 }
 

@@ -1,7 +1,6 @@
 use std::{env, sync::LazyLock, time::Duration};
 
 use kube::Error as KubeError;
-use testing_framework_core::scenario::http_probe::NodeKind;
 use thiserror::Error;
 
 mod deployment;
@@ -77,12 +76,9 @@ pub enum ClusterWaitError {
     NodePortUnavailable { service: String, port: u16 },
     #[error("cluster must have at least one node")]
     MissingNode,
-    #[error(
-        "timeout waiting for {role} HTTP endpoint on port {port} after {timeout:?}",
-        role = role.label()
-    )]
+    #[error("timeout waiting for {role} HTTP endpoint on port {port} after {timeout:?}")]
     NodeHttpTimeout {
-        role: NodeKind,
+        role: &'static str,
         port: u16,
         timeout: Duration,
     },

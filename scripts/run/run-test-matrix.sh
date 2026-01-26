@@ -250,14 +250,14 @@ matrix::main() {
             # On non-docker-desktop clusters, run-examples.sh defaults to skipping local image builds
             # since the cluster can't see them. Honor the matrix "force" option by overriding.
             if [ "${ctx}" != "docker-desktop" ] && [ "${FORCE_K8S_IMAGE_BUILD}" -eq 1 ]; then
-              export NOMOS_FORCE_IMAGE_BUILD=1
+              export LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD=1
             fi
             matrix::run_case "k8s.image_build" \
               "${ROOT_DIR}/scripts/run/run-examples.sh" \
                 -t "${RUN_SECS}" -n "${NODES}" \
                 "${forward[@]}" \
                 k8s
-            unset NOMOS_FORCE_IMAGE_BUILD || true
+            unset LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD || true
           else
             echo "==> [k8s] Detected context '${ctx}'; skipping image-build variant (use --force-k8s-image-build to override)"
           fi

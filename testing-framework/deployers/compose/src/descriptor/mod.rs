@@ -64,7 +64,6 @@ impl<'a> ComposeDescriptorBuilder<'a> {
 
         let nodes = build_nodes(
             self.topology.nodes(),
-            ComposeNodeKind::Node,
             &image,
             platform.as_deref(),
             cfgsync_port,
@@ -74,28 +73,14 @@ impl<'a> ComposeDescriptorBuilder<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum ComposeNodeKind {
-    Node,
-}
+const NODE_ENTRYPOINT: &str = "/etc/nomos/scripts/run_nomos_node.sh";
 
-impl ComposeNodeKind {
-    fn instance_name(self, index: usize) -> String {
-        match self {
-            Self::Node => format!("node-{index}"),
-        }
-    }
-
-    const fn entrypoint(self) -> &'static str {
-        match self {
-            Self::Node => "/etc/nomos/scripts/run_nomos_node.sh",
-        }
-    }
+pub(crate) fn node_instance_name(index: usize) -> String {
+    format!("node-{index}")
 }
 
 fn build_nodes(
     nodes: &[GeneratedNodeConfig],
-    kind: ComposeNodeKind,
     image: &str,
     platform: Option<&str>,
     cfgsync_port: u16,
@@ -103,9 +88,7 @@ fn build_nodes(
     nodes
         .iter()
         .enumerate()
-        .map(|(index, node)| {
-            NodeDescriptor::from_node(kind, index, node, image, platform, cfgsync_port)
-        })
+        .map(|(index, node)| NodeDescriptor::from_node(index, node, image, platform, cfgsync_port))
         .collect()
 }
 
@@ -143,8 +126,8 @@ fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
     vec![
         EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),
-        EnvEntry::new("NOMOS_LOG_LEVEL", nomos_log_level),
-        EnvEntry::new("NOMOS_TIME_BACKEND", time_backend),
+        EnvEntry::new("LOGOS_BLOCKCHAIN_LOG_LEVEL", nomos_log_level),
+        EnvEntry::new("LOGOS_BLOCKCHAIN_TIME_BACKEND", time_backend),
         EnvEntry::new(
             "CFG_SERVER_ADDR",
             format!("http://host.docker.internal:{cfgsync_port}"),

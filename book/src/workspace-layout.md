@@ -1,7 +1,7 @@
 # Workspace Layout
 
 The workspace focuses on multi-node integration testing and sits alongside a
-`nomos-node` checkout. Its crates separate concerns to keep scenarios
+`logos-blockchain-node` checkout. Its crates separate concerns to keep scenarios
 repeatable and portable:
 
 - **Configs**: prepares high-level node, network, tracing, and wallet settings

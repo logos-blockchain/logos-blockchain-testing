@@ -14,7 +14,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn declarative_over_imperative() {
     // Good: declarative
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -22,13 +22,15 @@ pub fn declarative_over_imperative() {
         .build();
 
     // Bad: imperative (framework doesn't work this way)
-    // spawn_validator();
+    // spawn_node();
     // loop { submit_tx(); check_block(); }
 }
 ```
 
 **Why it matters:** The framework handles deployment, readiness, and cleanup.
 You focus on test intent, not infrastructure orchestration.
+
+**Exception:** For advanced network scenarios (split-brain, late joins, network healing) that can't be expressed declaratively, see [Manual Clusters](manual-cluster.md) for imperative control.
 
 ## Protocol Time, Not Wall Time
 
@@ -47,7 +49,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn protocol_time_not_wall_time() {
     // Good: protocol-oriented thinking
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -84,7 +86,7 @@ use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub fn determinism_first() {
     // Separate: functional test (deterministic)
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -93,7 +95,7 @@ pub fn determinism_first() {
 
     // Separate: chaos test (introduces randomness)
     let _chaos_plan =
-        ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+        ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
             .enable_node_control()
             .chaos_with(|c| {
                 c.restart()
@@ -120,7 +122,7 @@ Prefer **user-facing signals** over internal state:
 **Good checks:**
 - Blocks progressing at expected rate (liveness)
 - Transactions included within N blocks (inclusion)
-- DA blobs retrievable (availability)
+- Transactions included within N blocks (inclusion)
 
 **Avoid internal checks:**
 - Memory pool size
@@ -143,14 +145,14 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn minimum_run_windows() {
     // Bad: too short (~2 blocks with default 2s slots, 0.9 coeff)
-    let _too_short = ScenarioBuilder::with_node_counts(1, 0)
+    let _too_short = ScenarioBuilder::with_node_counts(1)
         .with_run_duration(Duration::from_secs(5))
         .expect_consensus_liveness()
         .build();
 
     // Good: enough blocks for assertions (~27 blocks with default 2s slots, 0.9
     // coeff)
-    let _good = ScenarioBuilder::with_node_counts(1, 0)
+    let _good = ScenarioBuilder::with_node_counts(1)
         .with_run_duration(Duration::from_secs(60))
         .expect_consensus_liveness()
         .build();

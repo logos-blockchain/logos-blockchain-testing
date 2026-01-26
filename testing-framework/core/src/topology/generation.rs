@@ -9,16 +9,9 @@ use crate::topology::{
     readiness::{HttpNetworkReadiness, ReadinessCheck, ReadinessError},
 };
 
-/// Node kind within the generated topology.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NodeKind {
-    Node,
-}
-
 /// Fully generated configuration for an individual node.
 #[derive(Clone)]
 pub struct GeneratedNodeConfig {
-    pub kind: NodeKind,
     pub index: usize,
     pub id: [u8; 32],
     pub general: GeneralConfig,
@@ -27,13 +20,7 @@ pub struct GeneratedNodeConfig {
 
 impl GeneratedNodeConfig {
     #[must_use]
-    /// Logical kind of the node.
-    pub const fn kind(&self) -> NodeKind {
-        self.kind
-    }
-
-    #[must_use]
-    /// Zero-based index within its role group.
+    /// Zero-based index within the topology.
     pub const fn index(&self) -> usize {
         self.index
     }
@@ -75,7 +62,7 @@ impl GeneratedTopology {
         &self.nodes
     }
 
-    /// Iterator over all node configs in role order.
+    /// Iterator over all node configs in topology order.
     pub fn iter(&self) -> impl Iterator<Item = &GeneratedNodeConfig> {
         self.nodes.iter()
     }

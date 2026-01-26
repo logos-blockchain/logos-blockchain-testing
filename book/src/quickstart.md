@@ -16,7 +16,7 @@ git clone https://github.com/logos-blockchain/logos-blockchain-testing.git
 cd logos-blockchain-testing
 
 # 3. Run your first scenario (downloads dependencies automatically)
-POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -n 1 host
 ```
 
 **First run takes 5-10 minutes** (downloads ~120MB circuit assets, builds binaries).
@@ -32,10 +32,10 @@ If you already have the repository cloned:
 - Rust toolchain (nightly)
 - Unix-like system (tested on Linux and macOS)
 - For Docker Compose examples: Docker daemon running
-- For Docker Desktop on Apple silicon (compose/k8s): set `NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64` to avoid slow/fragile amd64 emulation builds
-- **`versions.env` file** at repository root (defines VERSION, NOMOS_NODE_REV, NOMOS_BUNDLE_VERSION)
+- For Docker Desktop on Apple silicon (compose/k8s): set `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/arm64` to avoid slow/fragile amd64 emulation builds
+- **`versions.env` file** at repository root (defines VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION)
 
-**Note:** `nomos-node` binaries are built automatically on demand or can be provided via prebuilt bundles.
+**Note:** `logos-blockchain-node` binaries are built automatically on demand or can be provided via prebuilt bundles.
 
 **Important:** The `versions.env` file is required by helper scripts. If missing, the scripts will fail with an error. The file should already exist in the repository root.
 
@@ -47,15 +47,15 @@ The framework ships with runnable example binaries in `examples/src/bin/`.
 
 ```bash
 # From the logos-blockchain-testing directory
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 1 host
 ```
 
-This handles circuit setup, binary building, and runs a complete scenario: 1 validator, mixed transaction + DA workload (5 tx/block + 1 channel + 1 blob), 60s duration.
+This handles circuit setup, binary building, and runs a complete scenario: 1 node, transaction workload (5 tx/block), 60s duration.
 
 **Alternative:** Direct cargo run (requires manual setup):
 
 ```bash
-# Requires circuits in place and NOMOS_NODE_BIN set
+# Requires circuits in place and LOGOS_BLOCKCHAIN_NODE_BIN set
 POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 ```
 
@@ -70,17 +70,12 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn run_local_demo() -> Result<()> {
-    // Define the scenario (1 validator, tx + DA workload)
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    // Define the scenario (1 node, tx workload)
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .wallets(1_000)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
                 .users(500) // use 500 of the seeded wallets
-        })
-        .da_with(|da| {
-            da.channel_rate(1) // 1 channel
-                .blob_rate(1) // target 1 blob per block
-                .headroom_percent(20) // default headroom when sizing channels
         })
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(60))
@@ -103,8 +98,8 @@ pub async fn run_local_demo() -> Result<()> {
 - Nodes spawn as local processes
 - Consensus starts producing blocks
 - Scenario runs for the configured duration
-- Node state/logs written under a temporary per-run directory in the current working directory (removed after the run unless `NOMOS_TESTS_KEEP_LOGS=1`)
-- To write per-node log files to a stable location: set `NOMOS_LOG_DIR=/path/to/logs` (files will have prefix like `nomos-node-0*`, may include timestamps)
+- Node state/logs written under a temporary per-run directory in the current working directory (removed after the run unless `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`)
+- To write per-node log files to a stable location: set `LOGOS_BLOCKCHAIN_LOG_DIR=/path/to/logs` (files will have prefix like `logos-blockchain-node-0*`, may include timestamps)
 
 ## What Just Happened?
 
@@ -118,7 +113,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 pub fn step_1_topology() -> testing_framework_core::scenario::Builder<()> {
     ScenarioBuilder::topology_with(|t| {
         t.network_star() // Star topology: all nodes connect to seed
-            .validators(1) // 1 validator node
+            .nodes(1) // 1 node
     })
 }
 ```
@@ -132,7 +127,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn step_2_wallets() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1, 1).wallets(1_000) // Seed 1,000 funded wallet accounts
+    ScenarioBuilder::with_node_counts(1).wallets(1_000) // Seed 1,000 funded wallet accounts
 }
 ```
 
@@ -145,21 +140,16 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn step_3_workloads() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1, 1)
+    ScenarioBuilder::with_node_counts(1)
         .wallets(1_000)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
                 .users(500) // Use 500 of the 1,000 wallets
         })
-        .da_with(|da| {
-            da.channel_rate(1) // 1 DA channel (more spawned with headroom)
-                .blob_rate(1) // target 1 blob per block
-                .headroom_percent(20) // default headroom when sizing channels
-        })
 }
 ```
 
-Generates both transaction and DA traffic to stress both subsystems.
+Generates transaction traffic to stress the inclusion pipeline.
 
 ### 4. Expectation
 
@@ -168,7 +158,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn step_4_expectation() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1, 1).expect_consensus_liveness() // This says what success means: blocks must be produced continuously.
+    ScenarioBuilder::with_node_counts(1).expect_consensus_liveness() // This says what success means: blocks must be produced continuously.
 }
 ```
 
@@ -182,7 +172,7 @@ use std::time::Duration;
 use testing_framework_core::scenario::ScenarioBuilder;
 
 pub fn step_5_run_duration() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1, 1).with_run_duration(Duration::from_secs(60))
+    ScenarioBuilder::with_node_counts(1).with_run_duration(Duration::from_secs(60))
 }
 ```
 
@@ -196,7 +186,7 @@ use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 
 pub async fn step_6_deploy_and_execute() -> Result<()> {
-    let mut plan = ScenarioBuilder::with_node_counts(1, 1).build();
+    let mut plan = ScenarioBuilder::with_node_counts(1).build();
 
     let deployer = LocalDeployer::default(); // Use local process deployer
     let runner = deployer.deploy(&plan).await?; // Provision infrastructure
@@ -213,16 +203,16 @@ pub async fn step_6_deploy_and_execute() -> Result<()> {
 **With run-examples.sh** (recommended):
 
 ```bash
-# Scale up to 3 validators, run for 2 minutes
-scripts/run/run-examples.sh -t 120 -v 3 -e 2 host
+# Scale up to 3 nodes, run for 2 minutes
+scripts/run/run-examples.sh -t 120 -n 3 host
 ```
 
 **With direct cargo run:**
 
 ```bash
-# Uses NOMOS_DEMO_* env vars (or legacy *_DEMO_* vars)
-NOMOS_DEMO_VALIDATORS=3 \
-NOMOS_DEMO_RUN_SECS=120 \
+# Uses LOGOS_BLOCKCHAIN_DEMO_* env vars (or legacy *_DEMO_* vars)
+LOGOS_BLOCKCHAIN_DEMO_NODES=3 \
+LOGOS_BLOCKCHAIN_DEMO_RUN_SECS=120 \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
@@ -234,12 +224,12 @@ Use the same API with a different deployer for reproducible containerized enviro
 **Recommended:** Use the convenience script (handles everything):
 
 ```bash
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 1 compose
 ```
 
 This automatically:
-- Fetches circuit assets (to `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`)
-- Builds/uses prebuilt binaries (via `NOMOS_BINARIES_TAR` if available)
+- Fetches circuit assets (to `~/.logos-blockchain-circuits` by default)
+- Builds/uses prebuilt binaries (via `LOGOS_BLOCKCHAIN_BINARIES_TAR` if available)
 - Builds the Docker image
 - Runs the compose scenario
 
@@ -248,15 +238,14 @@ This automatically:
 ```bash
 # Option 1: Use prebuilt bundle (recommended for compose/k8s)
 scripts/build/build-bundle.sh --platform linux  # Creates .tmp/nomos-binaries-linux-v0.3.1.tar.gz
-export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
+export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
 
 # Option 2: Manual circuit/image setup (rebuilds during image build)
-scripts/setup/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
-cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
+scripts/setup/setup-logos-blockchain-circuits.sh v0.3.1 /tmp/logos-blockchain-circuits
 scripts/build/build_test_image.sh
 
 # Run with Compose
-NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 ```
@@ -274,7 +263,7 @@ eval "$(scripts/setup/setup-observability.sh compose env)"
 
 Then run your compose scenario as usual (the environment variables enable PromQL querying and node OTLP metrics export).
 
-**Note:** Compose expects KZG parameters at `/kzgrs_test_params/kzgrs_test_params` inside containers (the directory name is repeated as the filename).
+**Note:** Compose expects circuits at `/opt/circuits` inside containers (set by the image build).
 
 **In code:** Just swap the deployer:
 
@@ -285,7 +274,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 
 pub async fn run_with_compose_deployer() -> Result<()> {
     // ... same scenario definition ...
-    let mut plan = ScenarioBuilder::with_node_counts(1, 1).build();
+    let mut plan = ScenarioBuilder::with_node_counts(1).build();
 
     let deployer = ComposeDeployer::default(); // Use Docker Compose
     let runner = deployer.deploy(&plan).await?;

@@ -37,7 +37,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 async fn run_once() -> anyhow::Result<()> {
-    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let mut scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .wallets(20)
         .transactions_with(|tx| tx.rate(1).users(5))
         .expect_consensus_liveness()
@@ -63,14 +63,14 @@ Notes:
 ### Local (Host) Runner
 
 - **Best for**: fast iteration and debugging
-- **Logs/state**: stored under a temporary run directory unless you set `NOMOS_TESTS_KEEP_LOGS=1` and/or `NOMOS_LOG_DIR=...`
+- **Logs/state**: stored under a temporary run directory unless you set `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1` and/or `LOGOS_BLOCKCHAIN_LOG_DIR=...`
 - **Limitations**: no node-control capability (chaos workflows that require node control won’t work here)
 
 Run the built-in local examples:
 
 ```bash
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
 ### Compose Runner
@@ -83,7 +83,7 @@ Run the built-in compose examples:
 
 ```bash
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 ### K8s Runner
@@ -96,16 +96,16 @@ Run the built-in k8s examples:
 
 ```bash
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
+scripts/run/run-examples.sh -t 60 -n 3 k8s
 ```
 
 ---
 
 ## Artifacts & Where to Look
 
-- **Node logs**: configure via `NOMOS_LOG_DIR`, `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER` (see [Logging & Observability](logging-observability.md))
+- **Node logs**: configure via `LOGOS_BLOCKCHAIN_LOG_DIR`, `LOGOS_BLOCKCHAIN_LOG_LEVEL`, `LOGOS_BLOCKCHAIN_LOG_FILTER` (see [Logging & Observability](logging-observability.md))
 - **Runner logs**: controlled by `RUST_LOG` (runner process only)
-- **Keep run directories**: set `NOMOS_TESTS_KEEP_LOGS=1`
+- **Keep run directories**: set `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`
 - **Compose environment preservation**: set `COMPOSE_RUNNER_PRESERVE=1`
 - **K8s environment preservation**: set `K8S_RUNNER_PRESERVE=1`
 

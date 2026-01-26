@@ -6,12 +6,12 @@ tests and full-system validation by letting teams describe a cluster layout,
 drive meaningful traffic, and assert the outcomes in one coherent plan.
 
 It is for protocol engineers, infrastructure operators, and QA teams who need
-repeatable confidence that validators
-components work together under network and timing constraints.
+repeatable confidence that node components work together under network and
+timing constraints.
 
 Multi-node integration testing is required because many Logos behaviors—block
-progress, data availability, liveness under churn—only emerge when several
-roles interact over real networking and time. This framework makes those checks
+progress and liveness under churn—only emerge when several nodes interact over
+real networking and time. This framework makes those checks
 declarative, observable, and portable across environments.
 
 ## A Scenario in 20 Lines
@@ -22,11 +22,10 @@ Here's the conceptual shape of every test you'll write:
 // 1. Define the cluster
 let scenario = ScenarioBuilder::topology_with(|t| {
     t.network_star()
-        .validators(3)
+        .nodes(3)
 })
 // 2. Add workloads (traffic)
 .transactions_with(|tx| tx.rate(10).users(5))
-.da_with(|da| da.channel_rate(2).blob_rate(2))
 
 // 3. Define success criteria
 .expect_consensus_liveness()

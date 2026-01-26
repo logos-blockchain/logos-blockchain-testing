@@ -22,8 +22,8 @@ async fn main() {
         process::exit(1);
     }
 
-    let nodes = read_env_any(&["NOMOS_DEMO_NODES"], demo::DEFAULT_NODES);
-    let run_secs = read_env_any(&["NOMOS_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);
+    let nodes = read_env_any(&["LOGOS_BLOCKCHAIN_DEMO_NODES"], demo::DEFAULT_NODES);
+    let run_secs = read_env_any(&["LOGOS_BLOCKCHAIN_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);
 
     info!(nodes, run_secs, "starting local runner demo");
 

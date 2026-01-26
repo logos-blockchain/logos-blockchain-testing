@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Url;
 
 use super::DynError;
-use crate::{nodes::ApiClient, topology::generation::NodeKind};
+use crate::nodes::ApiClient;
 
 /// Marker type used by scenario builders to request node control support.
 #[derive(Clone, Copy, Debug, Default)]
@@ -91,6 +91,5 @@ pub trait NodeControlHandle: Send + Sync {
 #[derive(Clone)]
 pub struct StartedNode {
     pub name: String,
-    pub kind: NodeKind,
     pub api: ApiClient,
 }

@@ -45,7 +45,7 @@ use testing_framework_workflows::workloads::transaction::Workload;
 ```rust,ignore
 use testing_framework_workflows::ScenarioBuilderExt;
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(20)  // Seed 20 wallet accounts
     .transactions_with(|tx| {
         tx.rate(10)   // 10 transactions per block
@@ -63,7 +63,7 @@ use testing_framework_workflows::workloads::transaction;
 let tx_workload = transaction::Workload::with_rate(10)
     .expect("transaction rate must be non-zero");
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(20)
     .with_workload(tx_workload)
     .with_run_duration(Duration::from_secs(60))
@@ -86,7 +86,7 @@ ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
 
 3. **Circuit artifacts must be available:**
    - Automatically staged by `scripts/run/run-examples.sh`
-   - Or manually via `scripts/setup/setup-circuits-stack.sh` (recommended) / `scripts/setup/setup-nomos-circuits.sh`
+   - Or manually via `scripts/setup/setup-logos-blockchain-circuits.sh` (recommended) / `scripts/setup/setup-logos-blockchain-circuits.sh`
 
 #### Attached Expectation
 
@@ -117,7 +117,7 @@ Error: Expectation failed: TxInclusionExpectation
 **How to debug:**
 1. Check logs for proof generation timing:
    ```bash
-   grep "proof generation" $NOMOS_LOG_DIR/*/*.log
+   grep "proof generation" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
    ```
 2. Verify `POL_PROOF_DEV_MODE=true` was set
 3. Increase duration: `.with_run_duration(Duration::from_secs(120))`
@@ -125,97 +125,7 @@ Error: Expectation failed: TxInclusionExpectation
 
 ---
 
-### 2. Data Availability (DA) Workload
-
-Drives blob and channel activity to exercise data availability paths and storage.
-
-**Import:**
-```rust,ignore
-use testing_framework_workflows::workloads::da::Workload;
-```
-
-#### Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `blob_rate_per_block` | `NonZeroU64` | **Required** | Blobs to publish per block |
-| `channel_rate_per_block` | `NonZeroU64` | **Required** | Channels to create per block |
-| `headroom_percent` | `u64` | `20` | Extra capacity for channel planning (avoids saturation) |
-
-#### DSL Usage
-
-```rust,ignore
-use testing_framework_workflows::ScenarioBuilderExt;
-
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
-    .da_with(|da| {
-        da.channel_rate(2)  // 2 channels per block
-          .blob_rate(4)     // 4 blobs per block
-    })
-    .with_run_duration(Duration::from_secs(120))
-    .build();
-```
-
-#### Direct Instantiation
-
-```rust,ignore
-use std::num::NonZeroU64;
-use testing_framework_workflows::workloads::da;
-
-let da_workload = da::Workload::with_rate(
-    NonZeroU64::new(4).unwrap(),   // blob_rate_per_block
-    NonZeroU64::new(2).unwrap(),   // channel_rate_per_block
-    20,                            // headroom_percent
-);
-
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
-    .with_workload(da_workload)
-    .with_run_duration(Duration::from_secs(120))
-    .build();
-```
-
-#### Prerequisites
-
-1. **Sufficient duration:**
-   Channel creation and blob publishing are slower than transaction submission. Allow 120+ seconds.
-
-2. **Circuit artifacts:**
-   Same as transaction workload (POL_PROOF_DEV_MODE, circuits staged).
-
-#### Attached Expectation
-
-**DaWorkloadExpectation** — Verifies blobs and channels were created and published.
-
-**What it checks:**
-- At least `N` channels were created (where N = channel_rate × expected blocks)
-- At least `M` blobs were published (where M = blob_rate × expected blocks × headroom)
-- Uses BlockFeed API to verify
-
-**Failure modes:**
-- "Expected >= X channels, observed Y" (Y < X)
-- "Expected >= X blobs, observed Y" (Y < X)
-- Common causes: insufficient duration, DA saturation
-
-#### What Failure Looks Like
-
-```text
-Error: Expectation failed: DaWorkloadExpectation
-  Expected: >= 60 channels (2 channels/block × 30 blocks)
-  Observed: 23 channels
-  
-  Possible causes:
-  - Duration too short (channels still being created)
-  - Blob publishing failed (check API errors)
-  - Network issues (check validator connectivity)
-```
-
-**How to debug:**
-1. Increase duration: `.with_run_duration(Duration::from_secs(180))`
-2. Reduce rates: `.channel_rate(1).blob_rate(2)`
-
----
-
-### 3. Chaos Workload (Random Restart)
+### 2. Chaos Workload (Random Restart)
 
 Triggers controlled node restarts to test resilience and recovery behaviors.
 
@@ -231,7 +141,7 @@ use testing_framework_workflows::workloads::chaos::RandomRestartWorkload;
 | `min_delay` | `Duration` | **Required** | Minimum time between restart attempts |
 | `max_delay` | `Duration` | **Required** | Maximum time between restart attempts |
 | `target_cooldown` | `Duration` | **Required** | Minimum time before restarting same node again |
-| `include_validators` | `bool` | **Required** | Whether to restart validators |
+| `include_nodes` | `bool` | **Required** | Whether to restart nodes |
 
 #### Usage
 
@@ -242,14 +152,14 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::{ScenarioBuilderExt, workloads::chaos::RandomRestartWorkload};
 
 let scenario = ScenarioBuilder::topology_with(|t| {
-    t.network_star().validators(3)
+    t.network_star().nodes(3)
 })
 .enable_node_control()  // REQUIRED for chaos
 .with_workload(RandomRestartWorkload::new(
     Duration::from_secs(45),   // min_delay
     Duration::from_secs(75),   // max_delay
     Duration::from_secs(120),  // target_cooldown
-    true,                      // include_validators
+    true,                      // include_nodes
 ))
 .expect_consensus_liveness()
 .with_run_duration(Duration::from_secs(180))
@@ -270,7 +180,7 @@ let scenario = ScenarioBuilder::topology_with(|t| {
    - **K8s runner:** Not yet implemented
 
 3. **Sufficient topology:**
-   - For validators: Need >1 validator (workload skips if only 1)
+   - For nodes: Need >1 node (workload skips if only 1)
 
 4. **Realistic timing:**
    - Total duration should be 2-3× the max_delay + cooldown
@@ -306,18 +216,18 @@ Error: Expectation failed: ConsensusLiveness
   Possible causes:
   - Restart frequency too high (nodes can't recover)
   - Consensus timing too slow (increase duration)
-  - Too many validators restarted simultaneously
+  - Too many nodes restarted simultaneously
   - Nodes crashed after restart (check logs)
 ```
 
 **How to debug:**
 1. Check restart events in logs:
    ```bash
-   grep "restarting\|restart complete" $NOMOS_LOG_DIR/*/*.log
+   grep "restarting\|restart complete" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
    ```
 2. Verify node control is enabled:
    ```bash
-   grep "NodeControlHandle" $NOMOS_LOG_DIR/*/*.log
+   grep "NodeControlHandle" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
    ```
 3. Increase cooldown: `Duration::from_secs(180)`
 4. Increase duration: `.with_run_duration(Duration::from_secs(300))`
@@ -338,7 +248,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 #### DSL Usage
 
 ```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -360,7 +270,7 @@ Error: Expectation failed: ConsensusLiveness
   Possible causes:
   - Nodes crashed or never started (check logs)
   - Consensus timing misconfigured (CONSENSUS_SLOT_TIME too high)
-  - Insufficient validators (need >= 2 for BFT consensus)
+  - Insufficient nodes (need >= 2 for BFT consensus)
   - Duration too short (nodes still syncing)
 ```
 
@@ -368,15 +278,15 @@ Error: Expectation failed: ConsensusLiveness
 
 1. Check if nodes started:
    ```bash
-   grep "node started\|listening on" $NOMOS_LOG_DIR/*/*.log
+   grep "node started\|listening on" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
    ```
 2. Check block production:
    ```bash
-   grep "block.*height" $NOMOS_LOG_DIR/validator-*/*.log
+   grep "block.*height" $LOGOS_BLOCKCHAIN_LOG_DIR/node-*/*.log
    ```
 3. Check consensus participation:
    ```bash
-   grep "consensus.*slot\|proposal" $NOMOS_LOG_DIR/validator-*/*.log
+   grep "consensus.*slot\|proposal" $LOGOS_BLOCKCHAIN_LOG_DIR/node-*/*.log
    ```
 4. Increase duration: `.with_run_duration(Duration::from_secs(120))`
 5. Check env vars: `echo $CONSENSUS_SLOT_TIME $CONSENSUS_ACTIVE_SLOT_COEFF`
@@ -390,10 +300,9 @@ Each workload automatically attaches its own expectation:
 | Workload | Expectation | What It Checks |
 |----------|-------------|----------------|
 | Transaction | `TxInclusionExpectation` | Transactions were included in blocks |
-| DA | `DaWorkloadExpectation` | Blobs and channels were created/published |
 | Chaos | (None) | Add `.expect_consensus_liveness()` explicitly |
 
-These expectations are added automatically when using the DSL (`.transactions_with()`, `.da_with()`).
+These expectations are added automatically when using the DSL (`.transactions_with()`).
 
 ---
 
@@ -412,18 +321,6 @@ These expectations are added automatically when using the DSL (`.transactions_wi
 | Users | 5 | wallet accounts |
 | Wallets | 20 | total seeded |
 
-### DA Workload
-
-```rust,ignore
-.da_with(|da| da.channel_rate(2).blob_rate(4))
-```
-
-| What | Value | Unit |
-|------|-------|------|
-| Channel rate | 2 | channels/block |
-| Blob rate | 4 | blobs/block |
-| Headroom | 20 | percent |
-
 ### Chaos Workload
 
 ```rust,ignore
@@ -432,7 +329,7 @@ These expectations are added automatically when using the DSL (`.transactions_wi
     Duration::from_secs(45),   // min
     Duration::from_secs(75),   // max
     Duration::from_secs(120),  // cooldown
-    true,  // validators
+    true,  // nodes
 ))
 ```
 
@@ -443,10 +340,9 @@ These expectations are added automatically when using the DSL (`.transactions_wi
 ### Pattern 1: Multiple Workloads
 
 ```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(20)
     .transactions_with(|tx| tx.rate(5).users(10))
-    .da_with(|da| da.channel_rate(2).blob_rate(2))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(120))
     .build();
@@ -473,7 +369,7 @@ impl Expectation for MyCustomExpectation {
     }
 }
 
-ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .with_expectation(MyCustomExpectation)
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -485,12 +381,12 @@ ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
 
 When a workload or expectation fails:
 
-1. Check logs: `$NOMOS_LOG_DIR/*/` or `docker compose logs` or `kubectl logs`
-2. Verify environment variables: `POL_PROOF_DEV_MODE`, `NOMOS_NODE_BIN`, etc.
+1. Check logs: `$LOGOS_BLOCKCHAIN_LOG_DIR/*/` or `docker compose logs` or `kubectl logs`
+2. Verify environment variables: `POL_PROOF_DEV_MODE`, `LOGOS_BLOCKCHAIN_NODE_BIN`, etc.
 3. Check prerequisites: wallets, node control, circuits
 4. Increase duration: Double the run duration and retry
 5. Reduce rates: Half the traffic rates and retry
-6. Check metrics: Prometheus queries for block height, tx count, DA stats
+6. Check metrics: Prometheus queries for block height and tx count
 7. Reproduce locally: Use local runner for faster iteration
 
 ---

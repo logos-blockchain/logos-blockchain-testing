@@ -12,7 +12,7 @@ use testing_framework_core::{
     },
     scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
     topology::{
-        generation::{GeneratedTopology, NodeKind, find_expected_peer_counts},
+        generation::{GeneratedTopology, find_expected_peer_counts},
         utils::multiaddr_port,
     },
 };
@@ -247,7 +247,6 @@ impl LocalDynamicNodes {
 
         Ok(StartedNode {
             name: node_name,
-            kind: NodeKind::Node,
             api: api_client,
         })
     }

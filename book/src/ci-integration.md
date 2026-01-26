@@ -74,19 +74,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-host-
       
-      - name: Cache nomos-node build
+      - name: Cache logos-blockchain-node build
         uses: actions/cache@v3
         with:
           path: |
-            ../nomos-node/target/release/nomos-node
-          key: ${{ runner.os }}-nomos-${{ hashFiles('../nomos-node/**/Cargo.lock') }}
+            ../logos-blockchain-node/target/release/logos-blockchain-node
+          key: ${{ runner.os }}-nomos-${{ hashFiles('../logos-blockchain-node/**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-nomos-
       
       - name: Run host smoke test
         run: |
           # Use run-examples.sh which handles setup automatically
-          scripts/run/run-examples.sh -t 120 -v 3 -e 1 host
+          scripts/run/run-examples.sh -t 120 -n 3 host
       
       - name: Upload logs on failure
         if: failure()
@@ -151,7 +151,7 @@ jobs:
           TOPOLOGY: ${{ matrix.topology }}
         run: |
           # Build and run with the specified topology
-          scripts/run/run-examples.sh -t 120 -v ${TOPOLOGY:0:1} -e ${TOPOLOGY:2:1} compose
+          scripts/run/run-examples.sh -t 120 -n ${TOPOLOGY:0:1} compose
       
       - name: Collect Docker logs on failure
         if: failure()
@@ -198,7 +198,7 @@ jobs:
 ## Workflow Features
 
 1. **Matrix Testing:** Runs compose tests with different topologies (`3v1e`, `5v1e`)
-2. **Caching:** Caches Rust dependencies, Docker layers, and nomos-node builds for faster runs
+2. **Caching:** Caches Rust dependencies, Docker layers, and logos-blockchain-node builds for faster runs
 3. **Log Collection:** Automatically uploads logs and artifacts when tests fail
 4. **Timeout Protection:** Reasonable timeouts prevent jobs from hanging indefinitely
 6. **Clean Teardown:** Ensures Docker resources are cleaned up even on failure
@@ -259,14 +259,14 @@ Without this, tests will hang due to expensive proof generation.
 Prefer `scripts/run/run-examples.sh` which handles all setup automatically:
 
 ```bash
-scripts/run/run-examples.sh -t 120 -v 3 -e 1 host
+scripts/run/run-examples.sh -t 120 -n 3 host
 ```
 
 This is more reliable than manual `cargo run` commands.
 
 ### Cache Aggressively
 
-Cache Rust dependencies, nomos-node builds, and Docker layers to speed up CI:
+Cache Rust dependencies, logos-blockchain-node builds, and Docker layers to speed up CI:
 
 ```yaml
 - name: Cache Rust dependencies
@@ -346,7 +346,7 @@ Add debug environment variables temporarily:
 ```yaml
 env:
   RUST_LOG: debug
-  NOMOS_LOG_LEVEL: debug
+  LOGOS_BLOCKCHAIN_LOG_LEVEL: debug
 ```
 
 ### Preserve Containers (Compose)
@@ -357,7 +357,7 @@ Set `COMPOSE_RUNNER_PRESERVE=1` to keep containers running for inspection:
 - name: Run compose test (preserve on failure)
   env:
     COMPOSE_RUNNER_PRESERVE: 1
-  run: scripts/run/run-examples.sh -t 120 -v 3 -e 1 compose
+  run: scripts/run/run-examples.sh -t 120 -n 3 compose
 ```
 
 ### Access Artifacts

@@ -17,12 +17,12 @@ Usage:
 
 Compose:
   - Runs Prometheus (+ OTLP receiver) and Grafana via docker compose.
-  - Prints NOMOS_METRICS_* / NOMOS_GRAFANA_URL exports to wire into runs.
+  - Prints LOGOS_BLOCKCHAIN_METRICS_* / LOGOS_BLOCKCHAIN_GRAFANA_URL exports to wire into runs.
 
 Kubernetes:
   - Installs prometheus-community/kube-prometheus-stack into namespace
     "logos-observability" and optionally loads Logos Grafana dashboards.
-  - Prints port-forward commands + NOMOS_METRICS_* / NOMOS_GRAFANA_URL exports.
+  - Prints port-forward commands + LOGOS_BLOCKCHAIN_METRICS_* / LOGOS_BLOCKCHAIN_GRAFANA_URL exports.
 USAGE
 }
 
@@ -43,14 +43,14 @@ compose_run() {
 
 compose_env() {
   cat <<'EOF'
-export NOMOS_METRICS_QUERY_URL=http://localhost:9090
-export NOMOS_METRICS_OTLP_INGEST_URL=http://host.docker.internal:9090/api/v1/otlp/v1/metrics
-export NOMOS_GRAFANA_URL=http://localhost:3000
+export LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://localhost:9090
+export LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL=http://host.docker.internal:9090/api/v1/otlp/v1/metrics
+export LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000
 EOF
 }
 
-k8s_namespace() { echo "${LOGOS_OBSERVABILITY_NAMESPACE:-${NOMOS_OBSERVABILITY_NAMESPACE:-logos-observability}}"; }
-k8s_release() { echo "${LOGOS_OBSERVABILITY_RELEASE:-${NOMOS_OBSERVABILITY_RELEASE:-logos-observability}}"; }
+k8s_namespace() { echo "${LOGOS_OBSERVABILITY_NAMESPACE:-${LOGOS_BLOCKCHAIN_OBSERVABILITY_NAMESPACE:-logos-observability}}"; }
+k8s_release() { echo "${LOGOS_OBSERVABILITY_RELEASE:-${LOGOS_BLOCKCHAIN_OBSERVABILITY_RELEASE:-logos-observability}}"; }
 k8s_values() { echo "${ROOT}/scripts/observability/k8s/kube-prometheus-stack.values.yaml"; }
 
 k8s_install() {
@@ -119,14 +119,14 @@ k8s_env() {
   cat <<EOF
 # Prometheus (runner-side): port-forward then set:
 kubectl -n ${ns} port-forward svc/${release}-kube-p-prometheus 9090:9090
-export NOMOS_METRICS_QUERY_URL=http://localhost:9090
+export LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://localhost:9090
 
 # Grafana (runner-side): port-forward then set:
 kubectl -n ${ns} port-forward svc/${release}-grafana 3000:80
-export NOMOS_GRAFANA_URL=http://localhost:3000
+export LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000
 
 # Prometheus OTLP ingest (node-side inside the cluster):
-export NOMOS_METRICS_OTLP_INGEST_URL=http://${release}-kube-p-prometheus.${ns}:9090/api/v1/otlp/v1/metrics
+export LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL=http://${release}-kube-p-prometheus.${ns}:9090/api/v1/otlp/v1/metrics
 EOF
 }
 

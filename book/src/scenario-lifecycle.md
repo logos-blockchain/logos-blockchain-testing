@@ -24,7 +24,7 @@ flowchart TB
     
     subgraph Phase4["4. Execution Phase"]
         Execute[Drive Workloads]
-        ExecuteDetails["• Submit transactions<br/>• Disperse DA blobs<br/>• Trigger chaos events<br/>• Run for duration"]
+        ExecuteDetails["• Submit transactions<br/>• Trigger chaos events<br/>• Run for duration"]
         Execute --> ExecuteDetails
     end
     
@@ -61,8 +61,8 @@ flowchart TB
 Declare a topology, attach workloads and expectations, and set the run window. The plan is the single source of truth for what will happen.
 
 **Key actions:**
-- Define cluster shape (validators, network topology)
-- Configure workloads (transaction rate, DA traffic, chaos patterns)
+- Define cluster shape (nodes, network topology)
+- Configure workloads (transaction rate, chaos patterns)
 - Attach expectations (liveness, inclusion, custom checks)
 - Set timing parameters (run duration, cooldown period)
 
@@ -74,7 +74,7 @@ Hand the plan to a deployer. It provisions the environment on the chosen backend
 
 **Key actions:**
 - Provision infrastructure (processes, containers, or pods)
-- Launch validator nodes
+- Launch nodes
 - Wait for readiness probes (HTTP endpoints respond)
 - Establish node connectivity and metrics endpoints
 - Spawn BlockFeed for real-time block observation
@@ -99,7 +99,6 @@ The runner starts traffic and behaviors for the planned duration.
 
 **Key actions:**
 - Submit transactions at configured rates
-- Disperse and sample DA blobs
 - Trigger chaos events (node restarts)
 - Run concurrently for the specified duration
 - Observe blocks and metrics in real-time
@@ -115,7 +114,6 @@ Once activity stops (and optional cooldown completes), the runner checks livenes
 **Key actions:**
 - Verify consensus liveness (minimum block production)
 - Check transaction inclusion rates
-- Validate DA dispersal and sampling
 - Assess system recovery after chaos events
 - Aggregate pass/fail results
 
@@ -128,7 +126,7 @@ Tear down resources so successive runs start fresh and do not inherit leaked sta
 **Key actions:**
 - Stop all node processes/containers/pods
 - Remove temporary directories and volumes
-- Collect and archive logs (if `NOMOS_TESTS_KEEP_LOGS=1`)
+- Collect and archive logs (if `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`)
 - Release ports and network resources
 - Cleanup observability stack (if spawned)
 

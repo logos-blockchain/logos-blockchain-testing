@@ -24,9 +24,9 @@ async fn main() {
 
     tracing_subscriber::fmt::init();
 
-    let nodes = read_env_any(&["NOMOS_DEMO_NODES"], demo::DEFAULT_NODES);
+    let nodes = read_env_any(&["LOGOS_BLOCKCHAIN_DEMO_NODES"], demo::DEFAULT_NODES);
 
-    let run_secs = read_env_any(&["NOMOS_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);
+    let run_secs = read_env_any(&["LOGOS_BLOCKCHAIN_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);
 
     info!(nodes, run_secs, "starting compose runner demo");
 
@@ -80,7 +80,9 @@ async fn run_compose_case(nodes: usize, run_duration: Duration) -> Result<()> {
     };
 
     if !runner.context().telemetry().is_configured() {
-        warn!("metrics querying is disabled; set NOMOS_METRICS_QUERY_URL to enable PromQL queries");
+        warn!(
+            "metrics querying is disabled; set LOGOS_BLOCKCHAIN_METRICS_QUERY_URL to enable PromQL queries"
+        );
     }
 
     info!("running scenario");

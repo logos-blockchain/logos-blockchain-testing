@@ -32,7 +32,8 @@ pub const DEFAULT_DA_NETWORK_PORT: u16 = 3300;
 /// Default blend network port.
 pub const DEFAULT_BLEND_NETWORK_PORT: u16 = 3400; //4401;
 
-/// Resolve cfgsync port from `NOMOS_CFGSYNC_PORT`, falling back to the default.
+/// Resolve cfgsync port from `LOGOS_BLOCKCHAIN_CFGSYNC_PORT`, falling back to
+/// the default.
 pub fn cfgsync_port() -> u16 {
     tf_env::nomos_cfgsync_port().unwrap_or(DEFAULT_CFGSYNC_PORT)
 }

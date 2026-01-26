@@ -3,8 +3,7 @@ use std::time::Duration;
 use anyhow::{Context as _, anyhow};
 use reqwest::Url;
 use testing_framework_core::{
-    adjust_timeout, scenario::http_probe::NodeKind as HttpNodeKind,
-    topology::generation::GeneratedTopology,
+    adjust_timeout, scenario::http_probe::NODE_ROLE, topology::generation::GeneratedTopology,
 };
 use tokio::{process::Command, time::timeout};
 use tracing::{debug, info};
@@ -132,7 +131,7 @@ pub async fn ensure_remote_readiness_with_ports(
     let node_urls = mapping
         .nodes
         .iter()
-        .map(|ports| readiness_url(HttpNodeKind::Node, ports.api))
+        .map(|ports| readiness_url(NODE_ROLE, ports.api))
         .collect::<Result<Vec<_>, _>>()?;
 
     descriptors
@@ -141,7 +140,7 @@ pub async fn ensure_remote_readiness_with_ports(
         .map_err(|source| StackReadinessError::Remote { source })
 }
 
-fn readiness_url(role: HttpNodeKind, port: u16) -> Result<Url, StackReadinessError> {
+fn readiness_url(role: &'static str, port: u16) -> Result<Url, StackReadinessError> {
     localhost_url(port).map_err(|source| StackReadinessError::Endpoint { role, port, source })
 }
 

@@ -1,7 +1,6 @@
 # Glossary
 
-- **Validator**: node role responsible for participating in consensus and block
-  production.
+- **Node**: process that participates in consensus and produces blocks.
 - **Deployer**: component that provisions infrastructure (spawns processes,
   creates containers, or launches pods), waits for readiness, and returns a
   Runner. Examples: LocalDeployer, ComposeDeployer, K8sDeployer.
@@ -38,9 +37,7 @@
   state (e.g., wallet balances, UTXO sets) rather than just progress signals.
   Also called "correctness expectations."
 - **Mantle transaction**: transaction type in Logos that can contain UTXO transfers
-  (LedgerTx) and operations (Op), including channel data (ChannelBlob).
-- **Channel**: logical grouping for DA blobs; each blob belongs to a channel and
-  references a parent blob in the same channel, creating a chain of related data.
+  (LedgerTx) and operations (Op).
 - **POL_PROOF_DEV_MODE**: environment variable that disables expensive Groth16 zero-knowledge
   proof generation for leader election. **Required for all runners** (local, compose, k8s)
   for practical testing—without it, proof generation causes timeouts. Should never be

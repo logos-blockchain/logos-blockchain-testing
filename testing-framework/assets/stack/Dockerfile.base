@@ -3,7 +3,7 @@
 # Ignore warnings about sensitive information as this is test data.
 
 ARG VERSION
-ARG NOMOS_NODE_REV
+ARG LOGOS_BLOCKCHAIN_NODE_REV
 
 # ===========================
 # BUILD IMAGE
@@ -12,7 +12,7 @@ ARG NOMOS_NODE_REV
 FROM rust:1.91.0-slim-bookworm AS builder
 
 ARG VERSION
-ARG NOMOS_NODE_REV
+ARG LOGOS_BLOCKCHAIN_NODE_REV
 
 LABEL maintainer="augustinas@status.im" \
     source="https://github.com/logos-co/nomos-node" \
@@ -23,7 +23,7 @@ COPY . .
 
 # Reduce debug artifact size.
 ENV CARGO_PROFILE_DEV_DEBUG=0
-ENV NOMOS_NODE_REV=${NOMOS_NODE_REV}
+ENV LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV}
 
 # Install dependencies needed for building RocksDB and for circuit tooling.
 RUN apt-get update && apt-get install -yq \

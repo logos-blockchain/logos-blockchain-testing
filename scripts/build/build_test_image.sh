@@ -19,13 +19,13 @@ Options:
   --version VERSION         Bundle version tag (default: versions.env VERSION)
   --dockerfile PATH         Dockerfile path (default: testing-framework/assets/stack/Dockerfile.runtime)
   --base-tag TAG            Base image tag (default: logos-blockchain-testing:base)
-  --bundle-tar PATH         Bundle tar containing artifacts/{nomos-*} (default: .tmp/nomos-binaries-linux-<version>.tar.gz; or env NOMOS_BINARIES_TAR)
+  --bundle-tar PATH         Bundle tar containing artifacts/{nomos-*} (default: .tmp/nomos-binaries-linux-<version>.tar.gz; or env LOGOS_BLOCKCHAIN_BINARIES_TAR)
   --no-restore              Do not restore binaries from bundle tar (forces Dockerfile to build/download as needed)
   --print-config            Print resolved configuration and exit
   -h, --help                Show this help and exit
 
 Env (legacy/compatible):
-  IMAGE_TAG, VERSION, NOMOS_BINARIES_TAR
+  IMAGE_TAG, VERSION, LOGOS_BLOCKCHAIN_BINARIES_TAR
 USAGE
 }
 
@@ -52,7 +52,7 @@ build_test_image::load_env() {
   BASE_IMAGE_TAG_DEFAULT="logos-blockchain-testing:base"
 
   VERSION_DEFAULT="${VERSION:?Missing VERSION in versions.env}"
-  NOMOS_NODE_REV="${NOMOS_NODE_REV:?Missing NOMOS_NODE_REV in versions.env}"
+  LOGOS_BLOCKCHAIN_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV:?Missing LOGOS_BLOCKCHAIN_NODE_REV in versions.env}"
 }
 
 build_test_image::parse_args() {
@@ -61,7 +61,7 @@ build_test_image::parse_args() {
   DOCKERFILE_PATH="${DOCKERFILE_PATH_DEFAULT}"
   BASE_DOCKERFILE_PATH="${BASE_DOCKERFILE_PATH_DEFAULT}"
   BASE_IMAGE_TAG="${BASE_IMAGE_TAG:-${BASE_IMAGE_TAG_DEFAULT}}"
-  BUNDLE_TAR_PATH="${NOMOS_BINARIES_TAR:-}"
+  BUNDLE_TAR_PATH="${LOGOS_BLOCKCHAIN_BINARIES_TAR:-}"
   NO_RESTORE=0
   PRINT_CONFIG=0
 
@@ -102,7 +102,7 @@ build_test_image::print_config() {
   echo "Dockerfile: ${DOCKERFILE_PATH}"
   echo "Base image tag: ${BASE_IMAGE_TAG}"
   echo "Base Dockerfile: ${BASE_DOCKERFILE_PATH}"
-  echo "Logos node rev: ${NOMOS_NODE_REV}"
+  echo "Logos node rev: ${LOGOS_BLOCKCHAIN_NODE_REV}"
   echo "Binaries dir: ${BIN_DST}"
   echo "Bundle tar (if used): ${TAR_PATH}"
   echo "Restore from tar: $([ "${NO_RESTORE}" -eq 1 ] && echo "disabled" || echo "enabled")"
@@ -168,7 +168,7 @@ build_test_image::docker_build() {
   local -a base_build_args=(
     -f "${BASE_DOCKERFILE_PATH}"
     -t "${BASE_IMAGE_TAG}"
-    --build-arg "NOMOS_NODE_REV=${NOMOS_NODE_REV}"
+    --build-arg "LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV}"
     --build-arg "VERSION=${VERSION}"
     "${ROOT_DIR}"
   )
@@ -212,7 +212,7 @@ build_test_image::main() {
   cat <<EOF
 
 Build complete.
-- Use this image in k8s/compose by exporting NOMOS_TESTNET_IMAGE=${IMAGE_TAG}
+- Use this image in k8s/compose by exporting LOGOS_BLOCKCHAIN_TESTNET_IMAGE=${IMAGE_TAG}
 EOF
 }
 

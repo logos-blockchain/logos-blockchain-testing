@@ -1,5 +1,5 @@
 use kube::Client;
-use testing_framework_core::scenario::http_probe::NodeKind;
+use testing_framework_core::scenario::http_probe::NODE_ROLE;
 
 use super::{ClusterPorts, ClusterReady, ClusterWaitError, NodeConfigPorts};
 use crate::lifecycle::wait::{
@@ -32,7 +32,7 @@ pub async fn wait_for_cluster_ready(
     let mut port_forwards: Vec<PortForwardHandle> = Vec::new();
 
     let node_api_ports: Vec<u16> = node_allocations.iter().map(|ports| ports.api).collect();
-    if wait_for_node_http_nodeport(&node_api_ports, NodeKind::Node)
+    if wait_for_node_http_nodeport(&node_api_ports, NODE_ROLE)
         .await
         .is_err()
     {
@@ -54,7 +54,7 @@ pub async fn wait_for_cluster_ready(
         port_forwards = forwards;
         node_allocations = allocations;
         let node_api_ports: Vec<u16> = node_allocations.iter().map(|ports| ports.api).collect();
-        if let Err(err) = wait_for_node_http_port_forward(&node_api_ports, NodeKind::Node).await {
+        if let Err(err) = wait_for_node_http_port_forward(&node_api_ports, NODE_ROLE).await {
             kill_port_forwards(&mut port_forwards);
             return Err(err);
         }

@@ -16,8 +16,8 @@ flowchart LR
     D --> E[5. Deploy & Run]
 ```
 
-1. **Shape the topology** — How many nodes, what roles, what network shape
-2. **Attach workloads** — What traffic to generate (transactions, blobs, chaos)
+1. **Shape the topology** — How many nodes, what network shape
+2. **Attach workloads** — What traffic to generate (transactions, chaos)
 3. **Define expectations** — What success looks like (liveness, inclusion, recovery)
 4. **Set duration** — How long to run the experiment
 5. **Choose a runner** — Where to execute (local, compose, k8s)
@@ -36,12 +36,12 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 let scenario = ScenarioBuilder::topology_with(|t| {
     t.network_star()      // Star network (one gateway + nodes)
-        .validators(3)     // 3 validator nodes
+        .nodes(3)     // 3 nodes
 })
 ```
 
 **What goes in topology?**
-- Node counts (validators)
+- Node counts (nodes)
 - Network shape (`network_star()` is currently the only built-in layout)
 
 **What does NOT go in topology?**
@@ -61,7 +61,6 @@ let scenario = ScenarioBuilder::topology_with(|t| {
 
 **What goes in workloads?**
 - Transaction traffic (rate, users)
-- DA traffic (channels, blobs)
 - Chaos injection (restarts, delays)
 
 **Units explained:**
@@ -136,7 +135,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 async fn hello_consensus_liveness() -> Result<()> {
     let mut scenario = ScenarioBuilder::topology_with(|t| {
         t.network_star()
-            .validators(3)
+            .nodes(3)
     })
     .wallets(20)
     .transactions_with(|tx| tx.rate(10).users(5))
@@ -204,7 +203,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 #[tokio::test]
 async fn test_consensus_liveness() -> Result<()> {
     let mut scenario = ScenarioBuilder::topology_with(|t| {
-        t.network_star().validators(3)
+        t.network_star().nodes(3)
     })
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(30))
@@ -219,7 +218,7 @@ async fn test_consensus_liveness() -> Result<()> {
 #[tokio::test]
 async fn test_transaction_inclusion() -> Result<()> {
     let mut scenario = ScenarioBuilder::topology_with(|t| {
-        t.network_star().validators(2)
+        t.network_star().nodes(2)
     })
     .wallets(10)
     .transactions_with(|tx| tx.rate(5).users(5))
@@ -245,13 +244,13 @@ use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn minimal_topology() -> ScenarioBuilder {
     ScenarioBuilder::topology_with(|t| {
-        t.network_star().validators(2)
+        t.network_star().nodes(2)
     })
 }
 
 pub fn production_like_topology() -> ScenarioBuilder {
     ScenarioBuilder::topology_with(|t| {
-        t.network_star().validators(7)
+        t.network_star().nodes(7)
     })
 }
 
@@ -293,10 +292,10 @@ use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
 use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
-async fn test_liveness_with_topology(validators: usize) -> Result<()> {
+async fn test_liveness_with_topology(nodes: usize) -> Result<()> {
     let mut scenario = ScenarioBuilder::topology_with(|t| {
         t.network_star()
-            .validators(validators)
+            .nodes(nodes)
     })
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(60))
@@ -331,7 +330,7 @@ async fn liveness_large() -> Result<()> {
 ### Topology
 
 **Do include:**
-- Node counts (`.validators(3)`)
+- Node counts (`.nodes(3)`)
 - Network shape (`.network_star()`)
 
 **Don't include:**
@@ -343,7 +342,7 @@ async fn liveness_large() -> Result<()> {
 
 **Do include:**
 - Transaction traffic (`.transactions_with(|tx| ...)`)
-- DA traffic (`.da_with(|da| ...)`)
+- Chaos traffic (`.chaos().restart()` or `RandomRestartWorkload`)
 - Chaos injection (`.with_workload(RandomRestartWorkload::new(...))`)
 - Rates, users, timing
 
@@ -367,8 +366,8 @@ async fn liveness_large() -> Result<()> {
 ## Best Practices
 
 1. **Keep scenarios focused**: One scenario = one behavior under test
-2. **Start small**: 2-3 validators, 30-60 seconds
-3. **Use descriptive names**: `test_consensus_survives_validator_restart` not `test_1`
+2. **Start small**: 2-3 nodes, 30-60 seconds
+3. **Use descriptive names**: `test_consensus_survives_node_restart` not `test_1`
 4. **Extract common patterns**: Shared topology builders, helper functions
 5. **Document intent**: Add comments explaining what you're testing and why
 6. **Mind the units**: `.rate(N)` is per-block, `.with_run_duration()` is wall-clock
@@ -379,6 +378,6 @@ async fn liveness_large() -> Result<()> {
 ## Next Steps
 
 - **[Core Content: Workloads & Expectations](workloads.md)** — Comprehensive reference for built-in workloads and expectations
-- **[Examples](examples.md)** — More scenario patterns (DA, chaos, advanced topologies)
+- **[Examples](examples.md)** — More scenario patterns (chaos, advanced topologies)
 - **[Running Scenarios](running-scenarios.md)** — How execution works, artifacts produced, per-runner details
 - **[API Levels](api-levels.md)** — When to use builder DSL vs. direct instantiation

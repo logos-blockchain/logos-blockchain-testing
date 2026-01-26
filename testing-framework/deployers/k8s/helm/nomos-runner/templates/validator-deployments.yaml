@@ -31,7 +31,7 @@ spec:
           env:
             - name: CFG_SERVER_ADDR
               value: http://{{ include "nomos-runner.fullname" $root }}-cfgsync:{{ $root.Values.cfgsync.port }}
-            - name: NOMOS_TIME_BACKEND
+            - name: LOGOS_BLOCKCHAIN_TIME_BACKEND
               value: {{ $root.Values.timeBackend | default "monotonic" | quote }}
             {{- range $key, $value := $node.env }}
             - name: {{ $key }}

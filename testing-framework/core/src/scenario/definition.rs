@@ -295,13 +295,6 @@ impl<Caps> TopologyConfigurator<Caps> {
         self
     }
 
-    #[must_use]
-    /// Legacy alias for node count (kept for downstream compatibility; remove
-    /// later).
-    pub fn validators(self, count: usize) -> Self {
-        self.nodes(count)
-    }
-
     /// Use a star libp2p network layout.
     #[must_use]
     pub fn network_star(mut self) -> Self {

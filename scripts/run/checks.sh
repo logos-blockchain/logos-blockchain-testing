@@ -47,9 +47,9 @@ checks::print_workspace() {
   if [ -f "${ROOT_DIR}/versions.env" ]; then
     checks::ok "versions.env present"
     checks::say "VERSION=${VERSION:-<unset>}"
-    checks::say "NOMOS_NODE_REV=${NOMOS_NODE_REV:-<unset>}"
-    if [ -n "${NOMOS_NODE_PATH:-}" ]; then
-      checks::say "NOMOS_NODE_PATH=${NOMOS_NODE_PATH}"
+    checks::say "LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV:-<unset>}"
+    if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH:-}" ]; then
+      checks::say "LOGOS_BLOCKCHAIN_NODE_PATH=${LOGOS_BLOCKCHAIN_NODE_PATH}"
     fi
   else
     checks::warn "versions.env missing (scripts depend on it)"
@@ -118,9 +118,9 @@ checks::print_docker() {
     checks::warn "could not query docker engine arch (is Docker running?)"
   fi
 
-  local bundle_platform="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-}}"
+  local bundle_platform="${LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM:-${LOGOS_BLOCKCHAIN_BIN_PLATFORM:-}}"
   if [ -z "${bundle_platform}" ]; then
-    checks::say "NOMOS_BUNDLE_DOCKER_PLATFORM=<auto>"
+    checks::say "LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=<auto>"
     if [[ "${server_arch}" == *"linux/arm64"* ]]; then
       checks::say "bundle docker platform (auto): ${default_bundle_platform_arm64}"
     else
@@ -128,19 +128,19 @@ checks::print_docker() {
     fi
     bundle_platform="auto"
   else
-    checks::say "NOMOS_BUNDLE_DOCKER_PLATFORM=${bundle_platform}"
+    checks::say "LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=${bundle_platform}"
   fi
 
   if [[ "${server_arch}" == *"linux/arm64"* ]] && [ "${bundle_platform}" = "${default_bundle_platform_amd64}" ]; then
-    checks::warn "Docker engine is linux/arm64 but bundle platform is ${default_bundle_platform_amd64} (emulation). If builds are slow/flaky, set: NOMOS_BUNDLE_DOCKER_PLATFORM=${default_bundle_platform_arm64}"
+    checks::warn "Docker engine is linux/arm64 but bundle platform is ${default_bundle_platform_amd64} (emulation). If builds are slow/flaky, set: LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=${default_bundle_platform_arm64}"
   fi
 
-  local image="${NOMOS_TESTNET_IMAGE:-${default_local_image}}"
-  checks::say "NOMOS_TESTNET_IMAGE=${image}"
+  local image="${LOGOS_BLOCKCHAIN_TESTNET_IMAGE:-${default_local_image}}"
+  checks::say "LOGOS_BLOCKCHAIN_TESTNET_IMAGE=${image}"
   if docker image inspect "${image}" >/dev/null 2>&1; then
     checks::ok "testnet image present locally"
   else
-    checks::warn "testnet image not present locally (compose/k8s runs will rebuild or fail if NOMOS_SKIP_IMAGE_BUILD=1)"
+    checks::warn "testnet image not present locally (compose/k8s runs will rebuild or fail if LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1)"
   fi
 }
 
@@ -186,7 +186,7 @@ checks::print_k8s_image_visibility() {
   checks::section "K8s Image Visibility"
 
   local default_local_image="logos-blockchain-testing:local"
-  local image="${NOMOS_TESTNET_IMAGE:-${default_local_image}}"
+  local image="${LOGOS_BLOCKCHAIN_TESTNET_IMAGE:-${default_local_image}}"
 
   if [ -z "${KUBE_CONTEXT:-}" ]; then
     return 0
@@ -211,7 +211,7 @@ checks::print_k8s_image_visibility() {
     *)
       if [[ "${image}" == *":local" ]]; then
         checks::warn "current context is ${KUBE_CONTEXT}; a :local image tag may not be reachable by cluster nodes"
-        checks::say "Suggested: push to a registry and set NOMOS_TESTNET_IMAGE, or load into the cluster if supported"
+        checks::say "Suggested: push to a registry and set LOGOS_BLOCKCHAIN_TESTNET_IMAGE, or load into the cluster if supported"
       fi
       ;;
   esac
@@ -248,7 +248,7 @@ checks::print_docker_desktop_kubernetes_health() {
 checks::print_debug_flags() {
   checks::section "Runner Debug Flags (optional)"
   checks::say "SLOW_TEST_ENV=${SLOW_TEST_ENV:-<unset>}  (if true: doubles readiness timeouts)"
-  checks::say "NOMOS_SKIP_IMAGE_BUILD=${NOMOS_SKIP_IMAGE_BUILD:-<unset>}  (compose/k8s)"
+  checks::say "LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-<unset>}  (compose/k8s)"
   checks::say "COMPOSE_RUNNER_PRESERVE=${COMPOSE_RUNNER_PRESERVE:-<unset>}  (compose)"
   checks::say "K8S_RUNNER_PRESERVE=${K8S_RUNNER_PRESERVE:-<unset>}  (k8s)"
   checks::say "K8S_RUNNER_DEBUG=${K8S_RUNNER_DEBUG:-<unset>}  (k8s helm debug)"
@@ -274,7 +274,7 @@ checks::main() {
   checks::print_debug_flags
 
   checks::section "Done"
-  checks::say "If something looks off, start with: scripts/run/run-examples.sh <mode> -t 60 -v 1 -e 1"
+  checks::say "If something looks off, start with: scripts/run/run-examples.sh <mode> -t 60 -n 1"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

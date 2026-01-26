@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use testing_framework_core::{
-    scenario::{
-        MetricsError,
-        http_probe::{HttpReadinessError, NodeKind},
-    },
+    scenario::{MetricsError, http_probe::HttpReadinessError},
     topology::readiness::ReadinessError,
 };
 use url::ParseError;
@@ -45,7 +42,7 @@ pub enum ComposeRunnerError {
         source: anyhow::Error,
     },
     #[error(
-        "docker image '{image}' is not available; set NOMOS_TESTNET_IMAGE or build the image manually"
+        "docker image '{image}' is not available; set LOGOS_BLOCKCHAIN_TESTNET_IMAGE or build the image manually"
     )]
     MissingImage { image: String },
     #[error("failed to prepare docker image: {source}")]
@@ -103,9 +100,9 @@ pub enum ConfigError {
 pub enum StackReadinessError {
     #[error(transparent)]
     Http(#[from] HttpReadinessError),
-    #[error("failed to build readiness URL for {role} port {port}: {source}", role = role.label())]
+    #[error("failed to build readiness URL for {role} port {port}: {source}")]
     Endpoint {
-        role: NodeKind,
+        role: &'static str,
         port: u16,
         #[source]
         source: ParseError,
@@ -120,12 +117,9 @@ pub enum StackReadinessError {
 #[derive(Debug, thiserror::Error)]
 /// Node client construction failures.
 pub enum NodeClientError {
-    #[error(
-        "failed to build {endpoint} client URL for {role} port {port}: {source}",
-        role = role.label()
-    )]
+    #[error("failed to build {endpoint} client URL for {role} port {port}: {source}")]
     Endpoint {
-        role: NodeKind,
+        role: &'static str,
         endpoint: &'static str,
         port: u16,
         #[source]

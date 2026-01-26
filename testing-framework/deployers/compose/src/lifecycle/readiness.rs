@@ -3,7 +3,7 @@ use std::time::Duration;
 use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{NodeClients, http_probe::NodeKind as HttpNodeKind},
+    scenario::{NodeClients, http_probe::NODE_ROLE},
     topology::generation::GeneratedTopology,
 };
 use tokio::time::sleep;
@@ -42,14 +42,14 @@ pub fn build_node_clients_with_ports(
         .nodes()
         .iter()
         .zip(mapping.nodes.iter())
-        .map(|(_node, ports)| api_client_from_host_ports(HttpNodeKind::Node, ports, host))
+        .map(|(_node, ports)| api_client_from_host_ports(NODE_ROLE, ports, host))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(NodeClients::new(nodes))
 }
 
 fn api_client_from_host_ports(
-    role: HttpNodeKind,
+    role: &'static str,
     ports: &NodeHostPorts,
     host: &str,
 ) -> Result<ApiClient, NodeClientError> {
