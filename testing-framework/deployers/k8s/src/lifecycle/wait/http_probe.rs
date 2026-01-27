@@ -1,11 +1,11 @@
-use testing_framework_core::scenario::http_probe::{self, HttpReadinessError, NodeRole};
+use testing_framework_core::scenario::http_probe::{self, HttpReadinessError};
 
 use super::{ClusterWaitError, http_poll_interval, node_http_probe_timeout, node_http_timeout};
 use crate::host::node_host;
 
 pub async fn wait_for_node_http_nodeport(
     ports: &[u16],
-    role: NodeRole,
+    role: &'static str,
 ) -> Result<(), ClusterWaitError> {
     let host = node_host();
     wait_for_node_http_on_host(ports, role, &host, node_http_probe_timeout()).await
@@ -15,14 +15,14 @@ const LOCALHOST: &str = "127.0.0.1";
 
 pub async fn wait_for_node_http_port_forward(
     ports: &[u16],
-    role: NodeRole,
+    role: &'static str,
 ) -> Result<(), ClusterWaitError> {
     wait_for_node_http_on_host(ports, role, LOCALHOST, node_http_timeout()).await
 }
 
 async fn wait_for_node_http_on_host(
     ports: &[u16],
-    role: NodeRole,
+    role: &'static str,
     host: &str,
     timeout: std::time::Duration,
 ) -> Result<(), ClusterWaitError> {

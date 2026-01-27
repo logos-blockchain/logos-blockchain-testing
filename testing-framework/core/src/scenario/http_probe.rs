@@ -7,33 +7,21 @@ use thiserror::Error;
 use tokio::time::{Instant, sleep};
 use tracing::{debug, info};
 
-/// Role used for labelling readiness probes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NodeRole {
-    Validator,
-}
-
-impl NodeRole {
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Validator => "validator",
-        }
-    }
-}
+/// Label used for readiness probes.
+pub const NODE_ROLE: &str = "node";
 
 /// Error raised when HTTP readiness checks time out.
 #[derive(Clone, Copy, Debug, Error)]
-#[error("timeout waiting for {role} HTTP endpoint on port {port} after {timeout:?}", role = role.label())]
+#[error("timeout waiting for {role} HTTP endpoint on port {port} after {timeout:?}")]
 pub struct HttpReadinessError {
-    role: NodeRole,
+    role: &'static str,
     port: u16,
     timeout: Duration,
 }
 
 impl HttpReadinessError {
     #[must_use]
-    pub const fn new(role: NodeRole, port: u16, timeout: Duration) -> Self {
+    pub const fn new(role: &'static str, port: u16, timeout: Duration) -> Self {
         Self {
             role,
             port,
@@ -42,7 +30,7 @@ impl HttpReadinessError {
     }
 
     #[must_use]
-    pub const fn role(&self) -> NodeRole {
+    pub const fn role(&self) -> &'static str {
         self.role
     }
 
@@ -60,7 +48,7 @@ impl HttpReadinessError {
 /// Wait for HTTP readiness on the provided ports against localhost.
 pub async fn wait_for_http_ports(
     ports: &[u16],
-    role: NodeRole,
+    role: &'static str,
     timeout_duration: Duration,
     poll_interval: Duration,
 ) -> Result<(), HttpReadinessError> {
@@ -70,7 +58,7 @@ pub async fn wait_for_http_ports(
 /// Wait for HTTP readiness on the provided ports against a specific host.
 pub async fn wait_for_http_ports_with_host(
     ports: &[u16],
-    role: NodeRole,
+    role: &'static str,
     host: &str,
     timeout_duration: Duration,
     poll_interval: Duration,
@@ -80,7 +68,7 @@ pub async fn wait_for_http_ports_with_host(
     }
 
     info!(
-        role = role.label(),
+        role,
         ?ports,
         host,
         timeout_secs = timeout_duration.as_secs_f32(),
@@ -106,13 +94,13 @@ pub async fn wait_for_http_ports_with_host(
 async fn wait_for_single_port(
     client: ReqwestClient,
     port: u16,
-    role: NodeRole,
+    role: &'static str,
     host: &str,
     timeout_duration: Duration,
     poll_interval: Duration,
 ) -> Result<(), HttpReadinessError> {
     let url = format!("http://{host}:{port}{}", paths::CRYPTARCHIA_INFO);
-    debug!(role = role.label(), %url, "probing HTTP endpoint");
+    debug!(role, %url, "probing HTTP endpoint");
     let start = Instant::now();
     let deadline = start + timeout_duration;
     let mut attempts: u64 = 0;
@@ -123,7 +111,7 @@ async fn wait_for_single_port(
         let last_failure: Option<String> = match client.get(&url).send().await {
             Ok(response) if response.status().is_success() => {
                 info!(
-                    role = role.label(),
+                    role,
                     port,
                     host,
                     %url,
@@ -142,7 +130,7 @@ async fn wait_for_single_port(
 
         if attempts == 1 || attempts % 10 == 0 {
             debug!(
-                role = role.label(),
+                role,
                 port,
                 host,
                 %url,
@@ -155,7 +143,7 @@ async fn wait_for_single_port(
 
         if Instant::now() >= deadline {
             info!(
-                role = role.label(),
+                role,
                 port,
                 host,
                 %url,

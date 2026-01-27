@@ -5,7 +5,7 @@ This page collects proven patterns for authoring, running, and maintaining test 
 ## Scenario Design
 
 **State your intent**
-- Document the goal of each scenario (throughput, DA validation, resilience) so expectation choices are obvious
+- Document the goal of each scenario (throughput, resilience) so expectation choices are obvious
 - Use descriptive variable names that explain topology purpose (e.g., `star_topology_3val_2exec` vs `topology`)
 - Add comments explaining why specific rates or durations were chosen
 
@@ -20,7 +20,7 @@ This page collects proven patterns for authoring, running, and maintaining test 
 - Don't mix high transaction load with aggressive chaos in the same test (hard to debug)
 
 **Start small, scale up**
-- Begin with minimal topology (1-2 validators) to validate scenario logic
+- Begin with minimal topology (1-2 nodes) to validate scenario logic
 - Gradually increase topology size and workload rates
 - Use Host runner for fast iteration, then validate on Compose before production
 
@@ -34,10 +34,10 @@ This page collects proven patterns for authoring, running, and maintaining test 
 **Example: Topology preset**
 
 ```rust,ignore
-pub fn standard_da_topology() -> GeneratedTopology {
+pub fn standard_topology() -> GeneratedTopology {
     TopologyBuilder::new()
         .network_star()
-        .validators(3)
+        .nodes(3)
         .generate()
 }
 ```
@@ -46,7 +46,6 @@ pub fn standard_da_topology() -> GeneratedTopology {
 
 ```rust,ignore
 pub const STANDARD_TX_RATE: f64 = 10.0;
-pub const STANDARD_DA_CHANNEL_RATE: f64 = 2.0;
 pub const SHORT_RUN_DURATION: Duration = Duration::from_secs(60);
 pub const LONG_RUN_DURATION: Duration = Duration::from_secs(300);
 ```
@@ -55,8 +54,8 @@ pub const LONG_RUN_DURATION: Duration = Duration::from_secs(300);
 
 **Observe first, tune second**
 - Rely on liveness and inclusion signals to interpret outcomes before tweaking rates or topology
-- Enable detailed logging (`RUST_LOG=debug`, `NOMOS_LOG_LEVEL=debug`) only after initial failure
-- Use `NOMOS_TESTS_KEEP_LOGS=1` to persist logs when debugging failures
+- Enable detailed logging (`RUST_LOG=debug`, `LOGOS_BLOCKCHAIN_LOG_LEVEL=debug`) only after initial failure
+- Use `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1` to persist logs when debugging failures
 
 **Use BlockFeed effectively**
 - Subscribe to BlockFeed in expectations for real-time block monitoring
@@ -102,7 +101,7 @@ strategy:
 
 **Cache aggressively**
 - Cache Rust build artifacts (`target/`)
-- Cache circuit parameters (`assets/stack/kzgrs_test_params/`)
+- Cache circuit parameters (`~/.logos-blockchain-circuits/`)
 - Cache Docker layers (use BuildKit cache)
 
 **Collect logs on failure**
@@ -163,34 +162,32 @@ runner.run(&mut scenario).await?;
 // BAD: Hard to debug when it fails
 .transactions_with(|tx| tx.rate(50).users(100))  // high load
 .chaos_with(|c| c.restart().min_delay(...))        // AND chaos
-.da_with(|da| da.channel_rate(10).blob_rate(20))  // AND DA stress
 
 // GOOD: Separate tests for each concern
 // Test 1: High transaction load only
 // Test 2: Chaos resilience only
-// Test 3: DA stress only
 ```
 
 **DON'T: Hardcode paths or ports**
 ```rust,ignore
 // BAD: Breaks on different machines
-let path = PathBuf::from("/home/user/circuits/kzgrs_test_params");
+let path = PathBuf::from("/home/user/circuits");
 let port = 9000; // might conflict
 
 // GOOD: Use env vars and dynamic allocation
-let path = std::env::var("NOMOS_KZGRS_PARAMS_PATH")
-    .unwrap_or_else(|_| "assets/stack/kzgrs_test_params/kzgrs_test_params".to_string());
+let path = std::env::var("LOGOS_BLOCKCHAIN_CIRCUITS")
+    .unwrap_or_else(|_| "~/.logos-blockchain-circuits".to_string());
 let port = get_available_tcp_port();
 ```
 
 **DON'T: Ignore resource limits**
 ```bash
 # BAD: Large topology without checking resources
-scripts/run/run-examples.sh -v 20 -e 10 compose
+scripts/run/run-examples.sh -n 20 compose
 # (might OOM or exhaust ulimits)
 
 # GOOD: Scale gradually and monitor resources
-scripts/run/run-examples.sh -v 3 -e 2 compose  # start small
+scripts/run/run-examples.sh -n 3 compose  # start small
 docker stats  # monitor resource usage
 # then increase if resources allow
 ```
@@ -198,12 +195,11 @@ docker stats  # monitor resource usage
 ## Scenario Design Heuristics
 
 **Minimal viable topology**
-- Consensus: 3 validators (minimum for Byzantine fault tolerance)
+- Consensus: 3 nodes (minimum for Byzantine fault tolerance)
 - Network: Star topology (simplest for debugging)
 
 **Workload rate selection**
 - Start with 1-5 tx/s per user, then increase
-- DA: 1-2 channels, 1-3 blobs/channel initially
 - Chaos: 30s+ intervals between restarts (allow recovery)
 
 **Duration guidelines**
@@ -222,7 +218,6 @@ docker stats  # monitor resource usage
 |-----------|--------------|
 | Basic functionality | `expect_consensus_liveness()` |
 | Transaction handling | `expect_consensus_liveness()` + custom inclusion check |
-| DA correctness | `expect_consensus_liveness()` + DA dispersal/sampling checks |
 | Resilience | `expect_consensus_liveness()` + recovery time measurement |
 
 ## Testing the Tests

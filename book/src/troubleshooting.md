@@ -3,12 +3,12 @@
 **Prerequisites for All Runners:**
 - **`versions.env` file** at repository root (required by helper scripts)
 - **`POL_PROOF_DEV_MODE=true`** MUST be set for all runners (host, compose, k8s) to avoid expensive Groth16 proof generation that causes timeouts
-- **KZG circuit assets** must be present at `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note the repeated filename) for DA workloads
+- **Circuit assets** must be present and `LOGOS_BLOCKCHAIN_CIRCUITS` must point to a directory that contains them
 
 **Platform/Environment Notes:**
-- **macOS + Docker Desktop (Apple silicon):** prefer `NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64` for local compose/k8s runs to avoid slow/fragile amd64 emulation builds.
+- **macOS + Docker Desktop (Apple silicon):** prefer `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/arm64` for local compose/k8s runs to avoid slow/fragile amd64 emulation builds.
 - **Disk space:** bundle/image builds are storage-heavy. If you see I/O errors or Docker build failures, check free space and prune old artifacts (`.tmp/`, `target/`, and Docker build cache) before retrying.
-- **K8s runner scope:** the default Helm chart mounts KZG params via `hostPath` and uses a local image tag (`logos-blockchain-testing:local`). This is intended for local clusters (Docker Desktop / minikube / kind), not remote managed clusters without additional setup.
+- **K8s runner scope:** the default Helm chart mounts circuit assets via `hostPath` and uses a local image tag (`logos-blockchain-testing:local`). This is intended for local clusters (Docker Desktop / minikube / kind), not remote managed clusters without additional setup.
   - Quick cleanup: `scripts/ops/clean.sh` (and `scripts/ops/clean.sh --docker` if needed).
   - Destructive cleanup (last resort): `scripts/ops/clean.sh --docker-system --dangerous` (add `--volumes` if you also want to prune Docker volumes).
 
@@ -18,7 +18,7 @@
 
 Common symptoms and likely causes:
 
-- **No or slow block progression**: missing `POL_PROOF_DEV_MODE=true`, missing KZG circuit assets (`/kzgrs_test_params/kzgrs_test_params` file) for DA workloads, too-short run window, port conflicts, or resource exhaustion—set required env vars, verify assets exist, extend duration, check node logs for startup errors.
+- **No or slow block progression**: missing `POL_PROOF_DEV_MODE=true`, missing circuit assets, too-short run window, port conflicts, or resource exhaustion—set required env vars, verify assets exist, extend duration, check node logs for startup errors.
 - **Transactions not included**: unfunded or misconfigured wallets (check `.wallets(N)` vs `.users(M)`), transaction rate exceeding block capacity, or rates exceeding block production speed—reduce rate, increase wallet count, verify wallet setup in logs.
 - **Chaos stalls the run**: chaos (node control) only works with ComposeDeployer; host runner (LocalDeployer) and K8sDeployer don't support it (won't "stall", just can't execute chaos workloads). With compose, aggressive restart cadence can prevent consensus recovery—widen restart intervals.
 - **Observability gaps**: metrics or logs unreachable because ports clash or services are not exposed—adjust observability ports and confirm runner wiring.
@@ -43,7 +43,7 @@ $ cargo run -p runner-examples --bin local_runner
     Finished dev [unoptimized + debuginfo] target(s) in 0.48s
      Running `target/debug/local_runner`
 [INFO  runner_examples::local_runner] Starting local runner scenario
-[INFO  testing_framework_runner_local] Launching 3 validators
+[INFO  testing_framework_runner_local] Launching 3 nodes
 [INFO  testing_framework_runner_local] Waiting for node readiness...
 (hangs here for 5+ minutes, CPU at 100%)
 thread 'main' panicked at 'readiness timeout expired'
@@ -71,12 +71,12 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 **What you'll see:**
 
 ```text
-$ scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+$ scripts/run/run-examples.sh -t 60 -n 1 host
 ERROR: versions.env not found at repository root
 This file is required and should define:
   VERSION=<circuit release tag>
-  NOMOS_NODE_REV=<nomos-node git revision>
-  NOMOS_BUNDLE_VERSION=<bundle schema version>
+  LOGOS_BLOCKCHAIN_NODE_REV=<logos-blockchain-node git revision>
+  LOGOS_BLOCKCHAIN_BUNDLE_VERSION=<bundle schema version>
 ```
 
 **Root Cause:** Helper scripts need `versions.env` to know which versions to build/fetch.
@@ -87,50 +87,44 @@ This file is required and should define:
 cat versions.env
 # Should show:
 # VERSION=v0.3.1
-# NOMOS_NODE_REV=abc123def456
-# NOMOS_BUNDLE_VERSION=v1
+# LOGOS_BLOCKCHAIN_NODE_REV=abc123def456
+# LOGOS_BLOCKCHAIN_BUNDLE_VERSION=v1
 ```
 
 ---
 
-### 3. Missing KZG Circuit Assets (DA Workloads)
+### 3. Missing Circuit Assets
 
 **Symptoms:**
-- DA workload tests fail
+- Node startup fails early
 - Error messages about missing circuit files
-- Nodes crash during DA operations
 
 **What you'll see:**
 
 ```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
-[INFO  testing_framework_runner_local] Starting DA workload
-[ERROR nomos_da_dispersal] Failed to load KZG parameters
-Error: Custom { kind: NotFound, error: "Circuit file not found at: testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params" }
+[INFO  testing_framework_runner_local] Starting local runner scenario
+Error: circuit assets directory missing or invalid
 thread 'main' panicked at 'workload init failed'
 ```
 
-**Root Cause:** DA (Data Availability) workloads require KZG cryptographic parameters. The file must exist at: `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note the repeated filename).
+**Root Cause:** Circuit assets are required for proof-related paths. The runner expects `LOGOS_BLOCKCHAIN_CIRCUITS` to point to a directory containing the assets.
 
 **Fix (recommended):**
 
 ```bash
 # Use run-examples.sh which handles setup automatically
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 1 host
 ```
 
 **Fix (manual):**
 
 ```bash
 # Fetch circuits
-scripts/setup/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits
+scripts/setup/setup-logos-blockchain-circuits.sh v0.3.1 ~/.logos-blockchain-circuits
 
-# Copy to expected location
-mkdir -p testing-framework/assets/stack/kzgrs_test_params
-cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/
-
-# Verify (should be ~120MB)
-ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
+# Set the environment variable
+export LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits
 ```
 
 ---
@@ -138,37 +132,37 @@ ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params
 ### 4. Node Binaries Not Found
 
 **Symptoms:**
-- Error about missing `nomos-node` binary
+- Error about missing `logos-blockchain-node` binary
 - "file not found" or "no such file or directory"
-- Environment variables `NOMOS_NODE_BIN` not set
+- Environment variables `LOGOS_BLOCKCHAIN_NODE_BIN` not set
 
 **What you'll see:**
 
 ```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
-[INFO  testing_framework_runner_local] Spawning validator 0
+[INFO  testing_framework_runner_local] Spawning node 0
 Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }
-thread 'main' panicked at 'failed to spawn nomos-node process'
+thread 'main' panicked at 'failed to spawn logos-blockchain-node process'
 ```
 
-**Root Cause:** The local runner needs compiled `nomos-node` binaries, but doesn't know where they are.
+**Root Cause:** The local runner needs compiled `logos-blockchain-node` binaries, but doesn't know where they are.
 
 **Fix (recommended):**
 
 ```bash
 # Use run-examples.sh which builds binaries automatically
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 1 host
 ```
 
 **Fix (manual - set paths explicitly):**
 
 ```bash
 # Build binaries first
-cd ../nomos-node  # or wherever your nomos-node checkout is
-cargo build --release --bin nomos-node
+cd ../logos-blockchain-node  # or wherever your logos-blockchain-node checkout is
+cargo build --release --bin logos-blockchain-node
 
 # Set environment variables
-export NOMOS_NODE_BIN=$PWD/target/release/nomos-node
+export LOGOS_BLOCKCHAIN_NODE_BIN=$PWD/target/release/logos-blockchain-node
 
 # Return to testing framework
 cd ../nomos-testing
@@ -187,7 +181,7 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 **What you'll see:**
 
 ```text
-$ scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+$ scripts/run/run-examples.sh -t 60 -n 1 compose
 [INFO  runner_examples::compose_runner] Starting compose deployment
 Error: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
 thread 'main' panicked at 'compose deployment failed'
@@ -236,7 +230,7 @@ thread 'main' panicked at 'compose deployment failed'
 
 ```bash
 # Use run-examples.sh which builds the image automatically
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 1 compose
 ```
 
 **Fix (manual):**
@@ -246,7 +240,7 @@ scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
 scripts/build/build-bundle.sh --platform linux
 
 # 2. Set bundle path
-export NOMOS_BINARIES_TAR=$(ls -t .tmp/nomos-binaries-linux-*.tar.gz | head -1)
+export LOGOS_BLOCKCHAIN_BINARIES_TAR=$(ls -t .tmp/nomos-binaries-linux-*.tar.gz | head -1)
 
 # 3. Build Docker image
 scripts/build/build_test_image.sh
@@ -272,7 +266,7 @@ kind load docker-image logos-blockchain-testing:local
 
 ```text
 $ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
-[INFO  testing_framework_runner_local] Launching validator 0 on port 18080
+[INFO  testing_framework_runner_local] Launching node 0 on port 18080
 Error: Os { code: 48, kind: AddrInUse, message: "Address already in use" }
 thread 'main' panicked at 'failed to bind port 18080'
 ```
@@ -287,7 +281,7 @@ lsof -i :18080   # macOS/Linux
 netstat -ano | findstr :18080  # Windows
 
 # Kill orphaned nomos processes
-pkill nomos-node
+pkill logos-blockchain-node
 
 # For compose: ensure containers are stopped
 docker compose down
@@ -335,7 +329,7 @@ thread 'main' panicked at 'workload init failed: insufficient wallets'
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
-let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(20) // ← Increase wallet count
     .transactions_with(|tx| {
         tx.users(10) // ← Must be ≤ wallets(20)
@@ -362,7 +356,7 @@ CONTAINER ID   STATUS
 abc123def456   Restarting (137) 30 seconds ago  # 137 = OOM killed
 
 $ docker logs abc123def456
-[INFO  nomos_node] Starting validator
+[INFO  nomos_node] Starting node
 [INFO  consensus] Processing block
 Killed  # ← OOM killer terminated the process
 ```
@@ -414,15 +408,15 @@ $ ls .tmp/
 
 ```bash
 # Persist logs to a specific directory
-NOMOS_LOG_DIR=/tmp/test-logs \
-NOMOS_TESTS_KEEP_LOGS=1 \
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
+LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1 \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # Logs persist after run
 ls /tmp/test-logs/
-# nomos-node-0.2024-12-18T14-30-00.log
-# nomos-node-1.2024-12-18T14-30-00.log
+# logos-blockchain-node-0.2024-12-18T14-30-00.log
+# logos-blockchain-node-1.2024-12-18T14-30-00.log
 # ...
 ```
 
@@ -457,7 +451,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 // Increase run duration to allow more blocks.
-let scenario = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+let scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(120)) // ← Give more time
     .build();
@@ -481,15 +475,15 @@ When a test fails, check these in order:
 
 1. **`POL_PROOF_DEV_MODE=true` is set** (REQUIRED for all runners)
 2. **`versions.env` exists at repo root**
-3. **KZG circuit assets present** (for DA workloads): `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
-4. **Node binaries available** (`NOMOS_NODE_BIN` set, or using `run-examples.sh`)
+3. **Circuit assets present** (`LOGOS_BLOCKCHAIN_CIRCUITS` points to a valid directory)
+4. **Node binaries available** (`LOGOS_BLOCKCHAIN_NODE_BIN` set, or using `run-examples.sh`)
 5. **Docker daemon running** (for compose/k8s)
 6. **Docker image built** (`logos-blockchain-testing:local` exists for compose/k8s)
 7. **No port conflicts** (`lsof -i :18080`, kill orphaned processes)
 8. **Sufficient wallets** (`.wallets(N)` ≥ `.users(M)`)
 9. **Enough resources** (Docker memory 8GB+, ulimit -n 4096)
 10. **Run duration appropriate** (long enough for consensus timing)
-11. **Logs persisted** (`NOMOS_LOG_DIR` + `NOMOS_TESTS_KEEP_LOGS=1` if needed)
+11. **Logs persisted** (`LOGOS_BLOCKCHAIN_LOG_DIR` + `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1` if needed)
 
 **Still stuck?** Check node logs (see [Where to Find Logs](#where-to-find-logs)) for the actual error.
 
@@ -497,17 +491,17 @@ When a test fails, check these in order:
 
 ### Log Location Quick Reference
 
-| Runner | Default Output | With `NOMOS_LOG_DIR` + Flags | Access Command |
+| Runner | Default Output | With `LOGOS_BLOCKCHAIN_LOG_DIR` + Flags | Access Command |
 |--------|---------------|------------------------------|----------------|
-| **Host** (local) | Per-run temporary directories under the current working directory (removed unless `NOMOS_TESTS_KEEP_LOGS=1`) | Per-node files with prefix `nomos-node-{index}` (set `NOMOS_LOG_DIR`) | `cat $NOMOS_LOG_DIR/nomos-node-0*` |
+| **Host** (local) | Per-run temporary directories under the current working directory (removed unless `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`) | Per-node files with prefix `logos-blockchain-node-{index}` (set `LOGOS_BLOCKCHAIN_LOG_DIR`) | `cat $LOGOS_BLOCKCHAIN_LOG_DIR/logos-blockchain-node-0*` |
 | **Compose** | Docker container stdout/stderr | Set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory) | `docker ps` then `docker logs <container-id>` |
-| **K8s** | Pod stdout/stderr | Set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory) | `kubectl logs -l nomos/logical-role=validator` |
+| **K8s** | Pod stdout/stderr | Set `tracing_settings.logger: !File` in `testing-framework/assets/stack/cfgsync.yaml` (and mount a writable directory) | `kubectl logs -l nomos/logical-role=node` |
 
 **Important Notes:**
-- **Host runner** (local processes): Per-run temporary directories are created under the current working directory and removed after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. To write per-node log files to a stable location, set `NOMOS_LOG_DIR=/path/to/logs`.
+- **Host runner** (local processes): Per-run temporary directories are created under the current working directory and removed after the run unless `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`. To write per-node log files to a stable location, set `LOGOS_BLOCKCHAIN_LOG_DIR=/path/to/logs`.
 - **Compose/K8s**: Node log destination is controlled by `testing-framework/assets/stack/cfgsync.yaml` (`tracing_settings.logger`). By default, rely on `docker logs` or `kubectl logs`.
-- **File naming**: Log files use prefix `nomos-node-{index}*` with timestamps, e.g., `nomos-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
-- **Container names**: Compose containers include project UUID, e.g., `nomos-compose-<uuid>-validator-0-1` where `<uuid>` is randomly generated per run
+- **File naming**: Log files use prefix `logos-blockchain-node-{index}*` with timestamps, e.g., `logos-blockchain-node-0.2024-12-01T10-30-45.log` (NOT just `.log` suffix).
+- **Container names**: Compose containers include project UUID, e.g., `nomos-compose-<uuid>-node-0-1` where `<uuid>` is randomly generated per run
 
 ### Accessing Node Logs by Runner
 
@@ -520,15 +514,15 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner 2>&1 | t
 
 **Persistent file output:**
 ```bash
-NOMOS_LOG_DIR=/tmp/debug-logs \
-NOMOS_LOG_LEVEL=debug \
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/debug-logs \
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # Inspect logs (note: filenames include timestamps):
 ls /tmp/debug-logs/
-# Example: nomos-node-0.2024-12-01T10-30-45.log
-tail -f /tmp/debug-logs/nomos-node-0*  # Use wildcard to match timestamp
+# Example: logos-blockchain-node-0.2024-12-01T10-30-45.log
+tail -f /tmp/debug-logs/logos-blockchain-node-0*  # Use wildcard to match timestamp
 ```
 
 #### Compose Runner
@@ -542,7 +536,7 @@ docker ps --filter "name=nomos-compose-"
 docker logs -f <container-id>
 
 # Or filter by name pattern:
-docker logs -f $(docker ps --filter "name=nomos-compose-.*-validator-0" -q | head -1)
+docker logs -f $(docker ps --filter "name=nomos-compose-.*-node-0" -q | head -1)
 
 # Show last 100 lines
 docker logs --tail 100 <container-id>
@@ -551,12 +545,12 @@ docker logs --tail 100 <container-id>
 **Keep containers for post-mortem debugging:**
 ```bash
 COMPOSE_RUNNER_PRESERVE=1 \
-NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 
 # OR: Use run-examples.sh (handles setup automatically)
-COMPOSE_RUNNER_PRESERVE=1 scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+COMPOSE_RUNNER_PRESERVE=1 scripts/run/run-examples.sh -t 60 -n 1 compose
 
 # After test failure, containers remain running:
 docker ps --filter "name=nomos-compose-"
@@ -564,7 +558,7 @@ docker exec -it <container-id> /bin/sh
 docker logs <container-id> > debug.log
 ```
 
-**Note:** Container names follow the pattern `nomos-compose-{uuid}-validator-{index}-1`, where `{uuid}` is randomly generated per run.
+**Note:** Container names follow the pattern `nomos-compose-{uuid}-node-{index}-1`, where `{uuid}` is randomly generated per run.
 
 #### K8s Runner
 
@@ -576,26 +570,26 @@ docker logs <container-id> > debug.log
 # Check your namespace first
 kubectl config view --minify | grep namespace
 
-# All validator pods (add -n <namespace> if not using default)
-kubectl logs -l nomos/logical-role=validator -f
+# All node pods (add -n <namespace> if not using default)
+kubectl logs -l nomos/logical-role=node -f
 
 # Specific pod by name (find exact name first)
-kubectl get pods -l nomos/logical-role=validator  # Find the exact pod name
+kubectl get pods -l nomos/logical-role=node  # Find the exact pod name
 kubectl logs -f <actual-pod-name>        # Then use it
 
 # With explicit namespace
-kubectl logs -n my-namespace -l nomos/logical-role=validator -f
+kubectl logs -n my-namespace -l nomos/logical-role=node -f
 ```
 
 **Download logs from crashed pods:**
 
 ```bash
 # Previous logs from crashed pod
-kubectl get pods -l nomos/logical-role=validator  # Find crashed pod name first
-kubectl logs --previous <actual-pod-name> > crashed-validator.log
+kubectl get pods -l nomos/logical-role=node  # Find crashed pod name first
+kubectl logs --previous <actual-pod-name> > crashed-node.log
 
-# Or use label selector for all crashed validators
-for pod in $(kubectl get pods -l nomos/logical-role=validator -o name); do
+# Or use label selector for all crashed nodes
+for pod in $(kubectl get pods -l nomos/logical-role=node -o name); do
   kubectl logs --previous $pod > $(basename $pod)-previous.log 2>&1
 done
 ```
@@ -610,10 +604,10 @@ for pod in $(kubectl get pods -o name); do
 done > all-logs.txt
 
 # Or use label selectors (recommended)
-kubectl logs -l nomos/logical-role=validator --tail=500 > validators.log
+kubectl logs -l nomos/logical-role=node --tail=500 > nodes.log
 
 # With explicit namespace
-kubectl logs -n my-namespace -l nomos/logical-role=validator --tail=500 > validators.log
+kubectl logs -n my-namespace -l nomos/logical-role=node --tail=500 > nodes.log
 ```
 
 ## Debugging Workflow
@@ -644,7 +638,7 @@ ps aux | grep nomos
 docker ps -a --filter "name=nomos-compose-"
 
 # K8s: check pod status (use label selectors, add -n <namespace> if needed)
-kubectl get pods -l nomos/logical-role=validator
+kubectl get pods -l nomos/logical-role=node
 kubectl describe pod <actual-pod-name>  # Get name from above first
 ```
 
@@ -658,7 +652,7 @@ Focus on the first node that exhibited problems or the node with the highest ind
 - "Failed to bind address" → port conflict
 - "Connection refused" → peer not ready or network issue
 - "Proof verification failed" or "Proof generation timeout" → missing `POL_PROOF_DEV_MODE=true` (REQUIRED for all runners)
-- "Failed to load KZG parameters" or "Circuit file not found" → missing KZG circuit assets at `testing-framework/assets/stack/kzgrs_test_params/`
+- "Circuit file not found" → missing circuit assets at the path in `LOGOS_BLOCKCHAIN_CIRCUITS`
 - "Insufficient funds" → wallet seeding issue (increase `.wallets(N)` or reduce `.users(M)`)
 
 ### 4. Check Log Levels
@@ -666,12 +660,12 @@ Focus on the first node that exhibited problems or the node with the highest ind
 If logs are too sparse, increase verbosity:
 
 ```bash
-NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug" \
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
+LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
 cargo run -p runner-examples --bin local_runner
 ```
 
-If metric updates are polluting your logs (fields like `counter.*` / `gauge.*`), move those events to a dedicated `tracing` target (e.g. `target: "nomos_metrics"`) and set `NOMOS_LOG_FILTER="nomos_metrics=off,..."` so they don’t get formatted into log output.
+If metric updates are polluting your logs (fields like `counter.*` / `gauge.*`), move those events to a dedicated `tracing` target (e.g. `target: "nomos_metrics"`) and set `LOGOS_BLOCKCHAIN_LOG_FILTER="nomos_metrics=off,..."` so they don’t get formatted into log output.
 
 ### 5. Verify Observability Endpoints
 
@@ -689,22 +683,22 @@ curl http://localhost:18080/consensus/info  # Adjust port per node
 
 ### 6. Compare with Known-Good Scenario
 
-Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it passes, the issue is in your workload or topology configuration.
+Run a minimal baseline test (e.g., 2 nodes, consensus liveness only). If it passes, the issue is in your workload or topology configuration.
 
 ## Common Error Messages
 
 ### "Consensus liveness expectation failed"
 
 - **Cause**: Not enough blocks produced during the run window, missing
-  `POL_PROOF_DEV_MODE=true` (causes slow proof generation), or missing KZG
-  assets for DA workloads.
+  `POL_PROOF_DEV_MODE=true` (causes slow proof generation), or missing circuit
+  assets.
 - **Fix**:
   1. Verify `POL_PROOF_DEV_MODE=true` is set (REQUIRED for all runners).
-  2. Verify KZG assets exist at
-     `testing-framework/assets/stack/kzgrs_test_params/` (for DA workloads).
+  2. Verify circuit assets exist at the path referenced by
+     `LOGOS_BLOCKCHAIN_CIRCUITS`.
   3. Extend `with_run_duration()` to allow more blocks.
-  4. Check node logs for proof generation or DA errors.
-  5. Reduce transaction/DA rate if nodes are overwhelmed.
+  4. Check node logs for proof generation or circuit asset errors.
+  5. Reduce transaction rate if nodes are overwhelmed.
 
 ### "Wallet seeding failed"
 
@@ -730,50 +724,50 @@ Run a minimal baseline test (e.g., 2 validators, consensus liveness only). If it
      it, proof generation is too slow).
   2. Check node logs for startup errors (port conflicts, missing assets).
   3. Verify network connectivity between nodes.
-  4. For DA workloads, ensure KZG circuit assets are present.
+  4. Ensure circuit assets are present and `LOGOS_BLOCKCHAIN_CIRCUITS` points to them.
 
 ### "ERROR: versions.env missing"
 
-- **Cause**: Helper scripts (`run-examples.sh`, `build-bundle.sh`, `setup-circuits-stack.sh`) require `versions.env` file at repository root.
+- **Cause**: Helper scripts (`run-examples.sh`, `build-bundle.sh`, `setup-logos-blockchain-circuits.sh`) require `versions.env` file at repository root.
 - **Fix**: Ensure you're running from the repository root directory. The `versions.env` file should already exist and contains:
 ```text
   VERSION=<circuit release tag>
-  NOMOS_NODE_REV=<nomos-node git revision>
-  NOMOS_BUNDLE_VERSION=<bundle schema version>
+  LOGOS_BLOCKCHAIN_NODE_REV=<logos-blockchain-node git revision>
+  LOGOS_BLOCKCHAIN_BUNDLE_VERSION=<bundle schema version>
   ```
   Use the checked-in `versions.env` at the repository root as the source of truth.
 
 ### "Port already in use"
 
 - **Cause**: Previous test didn't clean up, or another process holds the port.
-- **Fix**: Kill orphaned processes (`pkill nomos-node`), wait for Docker cleanup
+- **Fix**: Kill orphaned processes (`pkill logos-blockchain-node`), wait for Docker cleanup
   (`docker compose down`), or restart Docker.
 
 ### "Image not found: logos-blockchain-testing:local"
 
-- **Cause**: Docker image not built for Compose/K8s runners, or KZG assets not
+- **Cause**: Docker image not built for Compose/K8s runners, or circuit assets not
   baked into the image.
 - **Fix (recommended)**: Use run-examples.sh which handles everything:
   ```bash
-  scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
+  scripts/run/run-examples.sh -t 60 -n 1 compose
   ```
 - **Fix (manual)**:
   1. Build bundle: `scripts/build/build-bundle.sh --platform linux`
-  2. Set bundle path: `export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz`
+  2. Set bundle path: `export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz`
   3. Build image: `scripts/build/build_test_image.sh`
-  4. **kind/minikube:** load the image into the cluster nodes (e.g. `kind load docker-image logos-blockchain-testing:local`, or `minikube image load ...`), or push to a registry and set `NOMOS_TESTNET_IMAGE` accordingly.
+  4. **kind/minikube:** load the image into the cluster nodes (e.g. `kind load docker-image logos-blockchain-testing:local`, or `minikube image load ...`), or push to a registry and set `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` accordingly.
 
-### "Failed to load KZG parameters" or "Circuit file not found"
+### "Circuit file not found"
 
-- **Cause**: DA workload requires KZG circuit assets. The file `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` (note repeated filename) must exist. Inside containers, it's at `/kzgrs_test_params/kzgrs_test_params`.
+- **Cause**: Circuit assets are missing or `LOGOS_BLOCKCHAIN_CIRCUITS` points to a non-existent directory. Inside containers, assets are expected at `/opt/circuits`.
 - **Fix (recommended)**: Use run-examples.sh which handles setup:
   ```bash
-  scripts/run/run-examples.sh -t 60 -v 1 -e 1 <mode>
+  scripts/run/run-examples.sh -t 60 -n 1 <mode>
   ```
 - **Fix (manual)**:
-  1. Fetch assets: `scripts/setup/setup-nomos-circuits.sh v0.3.1 /tmp/nomos-circuits`
-  2. Copy to expected path: `cp -r /tmp/nomos-circuits/* testing-framework/assets/stack/kzgrs_test_params/`
-  3. Verify file exists: `ls -lh testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params`
+  1. Fetch assets: `scripts/setup/setup-logos-blockchain-circuits.sh v0.3.1 ~/.logos-blockchain-circuits`
+  2. Set `LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits`
+  3. Verify directory exists: `ls -lh $LOGOS_BLOCKCHAIN_CIRCUITS`
   4. For Compose/K8s: rebuild image with assets baked in
 
 For detailed logging configuration and observability setup, see [Logging & Observability](logging-observability.md).

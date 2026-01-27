@@ -37,7 +37,7 @@ impl<'a> ReadinessCheck<'a> for NetworkReadiness<'a> {
     type Data = Vec<NodeNetworkStatus>;
 
     async fn collect(&'a self) -> Self::Data {
-        collect_validator_statuses(self).await
+        collect_node_statuses(self).await
     }
 
     fn is_ready(&self, data: &Self::Data) -> bool {
@@ -101,10 +101,10 @@ impl<'a> ReadinessCheck<'a> for HttpNetworkReadiness<'a> {
     }
 }
 
-async fn collect_validator_statuses(readiness: &NetworkReadiness<'_>) -> Vec<NodeNetworkStatus> {
-    let validator_futures = readiness
+async fn collect_node_statuses(readiness: &NetworkReadiness<'_>) -> Vec<NodeNetworkStatus> {
+    let node_futures = readiness
         .topology
-        .validators
+        .nodes
         .iter()
         .enumerate()
         .map(|(idx, node)| {
@@ -112,7 +112,7 @@ async fn collect_validator_statuses(readiness: &NetworkReadiness<'_>) -> Vec<Nod
                 .labels
                 .get(idx)
                 .cloned()
-                .unwrap_or_else(|| format!("validator#{idx}"));
+                .unwrap_or_else(|| format!("node#{idx}"));
             let expected_peers = readiness.expected_peer_counts.get(idx).copied();
             async move {
                 let result = node
@@ -128,7 +128,7 @@ async fn collect_validator_statuses(readiness: &NetworkReadiness<'_>) -> Vec<Nod
             }
         });
 
-    futures::future::join_all(validator_futures).await
+    futures::future::join_all(node_futures).await
 }
 
 pub async fn try_fetch_network_info(

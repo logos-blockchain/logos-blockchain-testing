@@ -8,11 +8,6 @@ fi
 # shellcheck disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/common.sh"
 
-readonly DEFAULT_KZG_DIR_REL="testing-framework/assets/stack/kzgrs_test_params"
-readonly DEFAULT_KZG_FILE="kzgrs_test_params"
-readonly DEFAULT_KZG_CONTAINER_PATH="/kzgrs_test_params/kzgrs_test_params"
-readonly DEFAULT_KZG_IN_IMAGE_PARAMS_PATH="/opt/nomos/kzg-params/kzgrs_test_params"
-
 readonly DEFAULT_LOCAL_IMAGE="logos-blockchain-testing:local"
 readonly DEFAULT_PUBLIC_ECR_REGISTRY="public.ecr.aws/r4s5t9y4"
 readonly DEFAULT_PUBLIC_ECR_REPO="logos/logos-blockchain"
@@ -44,37 +39,38 @@ Modes:
 
 Options:
   -t, --run-seconds N     Duration to run the demo (required)
-  -v, --validators N      Number of validators (required)
-  --bundle PATH           Convenience alias for setting NOMOS_BINARIES_TAR=PATH
+  -n, --nodes N           Number of nodes (required)
+  --bundle PATH           Convenience alias for setting LOGOS_BLOCKCHAIN_BINARIES_TAR=PATH
   --metrics-query-url URL         PromQL base URL the runner process can query (optional)
   --metrics-otlp-ingest-url URL   Full OTLP HTTP ingest URL for node metrics export (optional)
   --external-prometheus URL            Alias for --metrics-query-url
   --external-otlp-metrics-endpoint URL  Alias for --metrics-otlp-ingest-url
   --local                 Use a local Docker image tag (default for docker-desktop k8s)
-  --no-image-build        Skip rebuilding the compose/k8s image (sets NOMOS_SKIP_IMAGE_BUILD=1)
+  --no-image-build        Skip rebuilding the compose/k8s image (sets LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1)
 
 Environment:
-  VERSION                          Circuits version (default from versions.env)
+  VERSION                          Bundle version (default from versions.env)
   CONSENSUS_SLOT_TIME              Consensus slot duration in seconds (default 2)
   CONSENSUS_ACTIVE_SLOT_COEFF      Probability a slot is active (default 0.9); expected block interval ≈ slot_time / coeff
-  NOMOS_TESTNET_IMAGE              Image reference (overridden by --local/--ecr selection)
+  LOGOS_BLOCKCHAIN_TESTNET_IMAGE              Image reference (overridden by --local/--ecr selection)
   ECR_IMAGE                        Full image reference for --ecr (overrides ECR_REGISTRY/ECR_REPO/TAG)
   ECR_REGISTRY                     Registry hostname for --ecr (default ${DEFAULT_PUBLIC_ECR_REGISTRY})
   ECR_REPO                         Repository path for --ecr (default ${DEFAULT_PUBLIC_ECR_REPO})
   TAG                              Tag for --ecr (default ${DEFAULT_ECR_TAG})
-  NOMOS_TESTNET_IMAGE_PULL_POLICY  K8s imagePullPolicy (default ${DEFAULT_PULL_POLICY_LOCAL}; set to ${DEFAULT_PULL_POLICY_ECR} for --ecr)
-  NOMOS_BINARIES_TAR               Path to prebuilt binaries/circuits tarball (default .tmp/nomos-binaries-<platform>-<version>.tar.gz)
-  NOMOS_SKIP_IMAGE_BUILD           Set to 1 to skip rebuilding the compose/k8s image
-  NOMOS_FORCE_IMAGE_BUILD          Set to 1 to force image rebuild even for k8s ECR mode
-  NOMOS_METRICS_QUERY_URL           PromQL base URL for the runner process (optional)
-  NOMOS_METRICS_OTLP_INGEST_URL     Full OTLP HTTP ingest URL for node metrics export (optional)
-  NOMOS_GRAFANA_URL                 Grafana base URL for printing/logging (optional)
+  LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY  K8s imagePullPolicy (default ${DEFAULT_PULL_POLICY_LOCAL}; set to ${DEFAULT_PULL_POLICY_ECR} for --ecr)
+  LOGOS_BLOCKCHAIN_BINARIES_TAR               Path to prebuilt binaries tarball (default .tmp/nomos-binaries-<platform>-<version>.tar.gz)
+  LOGOS_BLOCKCHAIN_CIRCUITS        Directory containing circuits assets (defaults to ~/.logos-blockchain-circuits)
+  LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD           Set to 1 to skip rebuilding the compose/k8s image
+  LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD          Set to 1 to force image rebuild even for k8s ECR mode
+  LOGOS_BLOCKCHAIN_METRICS_QUERY_URL           PromQL base URL for the runner process (optional)
+  LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL     Full OTLP HTTP ingest URL for node metrics export (optional)
+  LOGOS_BLOCKCHAIN_GRAFANA_URL                 Grafana base URL for printing/logging (optional)
 
 Notes:
   - For k8s runs on non-docker-desktop clusters (e.g. EKS), a locally built Docker image is not
     visible to the cluster. By default, this script skips local image rebuilds in that case.
     If you need a custom image, run scripts/build/build_test_image.sh and push it to a registry the
-    cluster can pull from, then set NOMOS_TESTNET_IMAGE accordingly.
+    cluster can pull from, then set LOGOS_BLOCKCHAIN_TESTNET_IMAGE accordingly.
 EOF
 }
 
@@ -96,11 +92,6 @@ run_examples::load_env() {
   DEFAULT_VERSION="${VERSION:?Missing VERSION in versions.env}"
   VERSION="${VERSION:-${DEFAULT_VERSION}}"
 
-  KZG_DIR_REL="${NOMOS_KZG_DIR_REL:-${DEFAULT_KZG_DIR_REL}}"
-  KZG_FILE="${NOMOS_KZG_FILE:-${DEFAULT_KZG_FILE}}"
-  KZG_CONTAINER_PATH="${NOMOS_KZG_CONTAINER_PATH:-${DEFAULT_KZG_CONTAINER_PATH}}"
-  HOST_KZG_DIR="${ROOT_DIR}/${KZG_DIR_REL}"
-  HOST_KZG_FILE="${HOST_KZG_DIR}/${KZG_FILE}"
 }
 
 run_examples::select_bin() {
@@ -115,7 +106,7 @@ run_examples::select_bin() {
 run_examples::parse_args() {
   MODE="compose"
   RUN_SECS_RAW=""
-  DEMO_VALIDATORS=""
+  DEMO_NODES=""
   IMAGE_SELECTION_MODE="auto"
   METRICS_QUERY_URL=""
   METRICS_OTLP_INGEST_URL=""
@@ -138,22 +129,22 @@ run_examples::parse_args() {
         RUN_SECS_RAW="${1#*=}"
         shift
         ;;
-      -v|--validators)
-        DEMO_VALIDATORS="${2:-}"
+      -n|--nodes)
+        DEMO_NODES="${2:-}"
         shift 2
         ;;
-      --validators=*)
-        DEMO_VALIDATORS="${1#*=}"
+      --nodes=*)
+        DEMO_NODES="${1#*=}"
         shift
         ;;
       --bundle)
-        NOMOS_BINARIES_TAR="${2:-}"
-        export NOMOS_BINARIES_TAR
+        LOGOS_BLOCKCHAIN_BINARIES_TAR="${2:-}"
+        export LOGOS_BLOCKCHAIN_BINARIES_TAR
         shift 2
         ;;
       --bundle=*)
-        NOMOS_BINARIES_TAR="${1#*=}"
-        export NOMOS_BINARIES_TAR
+        LOGOS_BLOCKCHAIN_BINARIES_TAR="${1#*=}"
+        export LOGOS_BLOCKCHAIN_BINARIES_TAR
         shift
         ;;
       --metrics-query-url)
@@ -193,8 +184,8 @@ run_examples::parse_args() {
         shift
         ;;
       --no-image-build)
-        NOMOS_SKIP_IMAGE_BUILD=1
-        export NOMOS_SKIP_IMAGE_BUILD
+        LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1
+        export LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD
         shift
         ;;
       compose|host|k8s)
@@ -213,8 +204,8 @@ run_examples::parse_args() {
     esac
   done
 
-  if [ -n "${NOMOS_BINARIES_TAR:-}" ] && [ ! -f "${NOMOS_BINARIES_TAR}" ]; then
-    run_examples::fail_with_usage "NOMOS_BINARIES_TAR is set but missing: ${NOMOS_BINARIES_TAR}"
+  if [ -n "${LOGOS_BLOCKCHAIN_BINARIES_TAR:-}" ] && [ ! -f "${LOGOS_BLOCKCHAIN_BINARIES_TAR}" ]; then
+    run_examples::fail_with_usage "LOGOS_BLOCKCHAIN_BINARIES_TAR is set but missing: ${LOGOS_BLOCKCHAIN_BINARIES_TAR}"
   fi
 
   if ! common::is_uint "${RUN_SECS_RAW}" || [ "${RUN_SECS_RAW}" -le 0 ]; then
@@ -222,11 +213,11 @@ run_examples::parse_args() {
   fi
   RUN_SECS="${RUN_SECS_RAW}"
 
-  if [ -z "${DEMO_VALIDATORS}" ] ]; then
-    run_examples::fail_with_usage "validators must be provided via -v/--validators"
+  if [ -z "${DEMO_NODES}" ]; then
+    run_examples::fail_with_usage "nodes must be provided via -n/--nodes"
   fi
-  if ! common::is_uint "${DEMO_VALIDATORS}" ; then
-    run_examples::fail_with_usage "validators must be a non-negative integer (pass -v/--validators)"
+  if ! common::is_uint "${DEMO_NODES}" ; then
+    run_examples::fail_with_usage "nodes must be a non-negative integer (pass -n/--nodes)"
   fi
 }
 
@@ -248,8 +239,8 @@ run_examples::select_image() {
   fi
 
   if [ "${selection}" = "local" ]; then
-    IMAGE="${NOMOS_TESTNET_IMAGE:-${DEFAULT_LOCAL_IMAGE}}"
-    export NOMOS_TESTNET_IMAGE_PULL_POLICY="${NOMOS_TESTNET_IMAGE_PULL_POLICY:-${DEFAULT_PULL_POLICY_LOCAL}}"
+    IMAGE="${LOGOS_BLOCKCHAIN_TESTNET_IMAGE:-${DEFAULT_LOCAL_IMAGE}}"
+    export LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY="${LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY:-${DEFAULT_PULL_POLICY_LOCAL}}"
   elif [ "${selection}" = "ecr" ]; then
     local tag="${TAG:-${DEFAULT_ECR_TAG}}"
     if [ -n "${ECR_IMAGE:-}" ]; then
@@ -268,40 +259,35 @@ run_examples::select_image() {
       local repo="${ECR_REPO:-${DEFAULT_PUBLIC_ECR_REPO}}"
       IMAGE="${registry}/${repo}:${tag}"
     fi
-    export NOMOS_TESTNET_IMAGE_PULL_POLICY="${NOMOS_TESTNET_IMAGE_PULL_POLICY:-${DEFAULT_PULL_POLICY_ECR}}"
+    export LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY="${LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY:-${DEFAULT_PULL_POLICY_ECR}}"
   else
     run_examples::fail_with_usage "Unknown image selection mode: ${selection}"
   fi
 
-  export NOMOS_IMAGE_SELECTION="${selection}"
+  export LOGOS_BLOCKCHAIN_IMAGE_SELECTION="${selection}"
   export IMAGE_TAG="${IMAGE}"
-  export NOMOS_TESTNET_IMAGE="${IMAGE}"
+  export LOGOS_BLOCKCHAIN_TESTNET_IMAGE="${IMAGE}"
 
-  if [ "${MODE}" = "k8s" ]; then
-    if [ "${selection}" = "ecr" ]; then
-      export NOMOS_KZG_MODE="${NOMOS_KZG_MODE:-inImage}"
-      # A locally built Docker image isn't visible to remote clusters (e.g. EKS). Default to
-      # skipping the local rebuild, unless the user explicitly set NOMOS_SKIP_IMAGE_BUILD or
-      # overrides via NOMOS_FORCE_IMAGE_BUILD=1.
-      if [ "${NOMOS_FORCE_IMAGE_BUILD:-0}" != "1" ]; then
-        NOMOS_SKIP_IMAGE_BUILD="${NOMOS_SKIP_IMAGE_BUILD:-${DEFAULT_K8S_ECR_SKIP_IMAGE_BUILD}}"
-        export NOMOS_SKIP_IMAGE_BUILD
-      fi
-    else
-      export NOMOS_KZG_MODE="${NOMOS_KZG_MODE:-hostPath}"
+  if [ "${MODE}" = "k8s" ] && [ "${selection}" = "ecr" ]; then
+    # A locally built Docker image isn't visible to remote clusters (e.g. EKS). Default to
+    # skipping the local rebuild, unless the user explicitly set LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD or
+    # overrides via LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD=1.
+    if [ "${LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD:-0}" != "1" ]; then
+      LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD="${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-${DEFAULT_K8S_ECR_SKIP_IMAGE_BUILD}}"
+      export LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD
     fi
   fi
 }
 
 run_examples::default_tar_path() {
-  if [ -n "${NOMOS_BINARIES_TAR:-}" ]; then
-    echo "${NOMOS_BINARIES_TAR}"
+  if [ -n "${LOGOS_BLOCKCHAIN_BINARIES_TAR:-}" ]; then
+    echo "${LOGOS_BLOCKCHAIN_BINARIES_TAR}"
     return
   fi
   case "${MODE}" in
     host) echo "${ROOT_DIR}/.tmp/nomos-binaries-host-${VERSION}.tar.gz" ;;
     compose|k8s)
-      if [ "${NOMOS_SKIP_IMAGE_BUILD:-}" = "1" ]; then
+      if [ "${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-}" = "1" ]; then
         echo "${ROOT_DIR}/.tmp/nomos-binaries-host-${VERSION}.tar.gz"
       else
         echo "${ROOT_DIR}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
@@ -314,7 +300,7 @@ run_examples::default_tar_path() {
 run_examples::bundle_matches_expected() {
   local tar_path="$1"
   [ -f "${tar_path}" ] || return 1
-  [ -z "${NOMOS_NODE_REV:-}" ] && return 0
+  [ -z "${LOGOS_BLOCKCHAIN_NODE_REV:-}" ] && return 0
 
   local meta tar_rev tar_head
   meta="$(tar -xOzf "${tar_path}" artifacts/nomos-bundle-meta.env 2>/dev/null || true)"
@@ -324,13 +310,13 @@ run_examples::bundle_matches_expected() {
   fi
   tar_rev="$(echo "${meta}" | sed -n 's/^nomos_node_rev=//p' | head -n 1)"
   tar_head="$(echo "${meta}" | sed -n 's/^nomos_node_git_head=//p' | head -n 1)"
-  if [ -n "${tar_rev}" ] && [ "${tar_rev}" != "${NOMOS_NODE_REV}" ]; then
-    echo "Bundle ${tar_path} is for logos-blockchain-node rev ${tar_rev}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+  if [ -n "${tar_rev}" ] && [ "${tar_rev}" != "${LOGOS_BLOCKCHAIN_NODE_REV}" ]; then
+    echo "Bundle ${tar_path} is for logos-blockchain-node rev ${tar_rev}, expected ${LOGOS_BLOCKCHAIN_NODE_REV}; rebuilding." >&2
     return 1
   fi
-  if [ -n "${tar_head}" ] && echo "${NOMOS_NODE_REV}" | grep -Eq '^[0-9a-f]{7,40}$'; then
-    if [ "${tar_head}" != "${NOMOS_NODE_REV}" ]; then
-      echo "Bundle ${tar_path} is for logos-blockchain-node git head ${tar_head}, expected ${NOMOS_NODE_REV}; rebuilding." >&2
+  if [ -n "${tar_head}" ] && echo "${LOGOS_BLOCKCHAIN_NODE_REV}" | grep -Eq '^[0-9a-f]{7,40}$'; then
+    if [ "${tar_head}" != "${LOGOS_BLOCKCHAIN_NODE_REV}" ]; then
+      echo "Bundle ${tar_path} is for logos-blockchain-node git head ${tar_head}, expected ${LOGOS_BLOCKCHAIN_NODE_REV}; rebuilding." >&2
       return 1
     fi
   fi
@@ -368,13 +354,10 @@ run_examples::restore_binaries_from_tar() {
 
   local src="${extract_dir}/artifacts"
   local bin_dst="${ROOT_DIR}/testing-framework/assets/stack/bin"
-  local circuits_src="${src}/circuits"
-  local circuits_dst="${HOST_KZG_DIR}"
-
   RESTORED_BIN_DIR="${src}"
   export RESTORED_BIN_DIR
 
-  if [ ! -f "${src}/logos-blockchain-node" ] || [ ! -f "${src}/logos-blockchain-cli" ]; then
+  if [ ! -f "${src}/logos-blockchain-node" ]; then
     echo "Binaries missing in ${tar_path}; provide a prebuilt binaries tarball." >&2
     return 1
   fi
@@ -383,25 +366,11 @@ run_examples::restore_binaries_from_tar() {
   if [ "${MODE}" != "host" ] && ! run_examples::host_bin_matches_arch "${src}/logos-blockchain-node"; then
     echo "Bundled binaries do not match host arch; skipping copy so containers rebuild from source."
     copy_bins=0
-    rm -f "${bin_dst}/logos-blockchain-node" "${bin_dst}/logos-blockchain-cli"
+    rm -f "${bin_dst}/logos-blockchain-node"
   fi
   if [ "${copy_bins}" -eq 1 ]; then
     mkdir -p "${bin_dst}"
-    cp "${src}/logos-blockchain-node" "${src}/logos-blockchain-cli" "${bin_dst}/"
-  fi
-
-  if [ -d "${circuits_src}" ] && [ -f "${circuits_src}/${KZG_FILE}" ]; then
-    rm -rf "${circuits_dst}"
-    mkdir -p "${circuits_dst}"
-    if command -v rsync >/dev/null 2>&1; then
-      rsync -a --delete "${circuits_src}/" "${circuits_dst}/"
-    else
-      rm -rf "${circuits_dst:?}/"*
-      cp -a "${circuits_src}/." "${circuits_dst}/"
-    fi
-  else
-    echo "Circuits missing in ${tar_path}; provide a prebuilt binaries/circuits tarball." >&2
-    return 1
+    cp "${src}/logos-blockchain-node" "${bin_dst}/"
   fi
 
   RESTORED_BINARIES=1
@@ -412,7 +381,7 @@ run_examples::ensure_binaries_tar() {
   local platform="$1"
   local tar_path="$2"
   echo "==> Building fresh binaries bundle (${platform}) at ${tar_path}"
-  "${ROOT_DIR}/scripts/build/build-bundle.sh" --platform "${platform}" --output "${tar_path}" --rev "${NOMOS_NODE_REV}"
+  "${ROOT_DIR}/scripts/build/build-bundle.sh" --platform "${platform}" --output "${tar_path}" --rev "${LOGOS_BLOCKCHAIN_NODE_REV}"
 }
 
 run_examples::prepare_bundles() {
@@ -428,7 +397,7 @@ run_examples::prepare_bundles() {
   fi
 
   # On non-Linux compose/k8s runs, use the Linux bundle for image build, then restore host bundle for the runner.
-  if [ "${MODE}" != "host" ] && [ "$(uname -s)" != "Linux" ] && [ "${NOMOS_SKIP_IMAGE_BUILD:-0}" = "0" ] && [ -f "${LINUX_TAR}" ]; then
+  if [ "${MODE}" != "host" ] && [ "$(uname -s)" != "Linux" ] && [ "${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-0}" = "0" ] && [ -f "${LINUX_TAR}" ]; then
     NEED_HOST_RESTORE_AFTER_IMAGE=1
     run_examples::restore_binaries_from_tar "${LINUX_TAR}" || {
       run_examples::ensure_binaries_tar linux "${LINUX_TAR}"
@@ -442,7 +411,7 @@ run_examples::prepare_bundles() {
     case "${MODE}" in
       host) run_examples::ensure_binaries_tar host "${tar_path}" ;;
       compose|k8s)
-        if [ "${NOMOS_SKIP_IMAGE_BUILD:-0}" = "1" ]; then
+        if [ "${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-0}" = "1" ]; then
           run_examples::ensure_binaries_tar host "${tar_path}"
         else
           run_examples::ensure_binaries_tar linux "${tar_path}"
@@ -452,7 +421,7 @@ run_examples::prepare_bundles() {
     esac
 
     run_examples::restore_binaries_from_tar "${tar_path}" || common::die \
-      "Missing or invalid binaries tarball. Provide it via --bundle/NOMOS_BINARIES_TAR or place it at $(run_examples::default_tar_path)."
+      "Missing or invalid binaries tarball. Provide it via --bundle/LOGOS_BLOCKCHAIN_BINARIES_TAR or place it at $(run_examples::default_tar_path)."
   fi
 }
 
@@ -461,14 +430,13 @@ run_examples::maybe_rebuild_image() {
     return 0
   fi
 
-  if [ "${NOMOS_SKIP_IMAGE_BUILD:-0}" = "1" ]; then
-    echo "==> Skipping testnet image rebuild (NOMOS_SKIP_IMAGE_BUILD=1)"
+  if [ "${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-0}" = "1" ]; then
+    echo "==> Skipping testnet image rebuild (LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1)"
     return 0
   fi
 
   echo "==> Rebuilding testnet image (${IMAGE})"
-  IMAGE_TAG="${IMAGE}" COMPOSE_CIRCUITS_PLATFORM="${COMPOSE_CIRCUITS_PLATFORM:-}" \
-    bash "${ROOT_DIR}/scripts/build/build_test_image.sh"
+  IMAGE_TAG="${IMAGE}" bash "${ROOT_DIR}/scripts/build/build_test_image.sh"
 }
 
 run_examples::maybe_restore_host_after_image() {
@@ -484,21 +452,11 @@ run_examples::maybe_restore_host_after_image() {
 }
 
 run_examples::validate_restored_bundle() {
-  HOST_BUNDLE_PATH="${HOST_KZG_DIR}"
-  KZG_HOST_PATH="${HOST_BUNDLE_PATH}/${KZG_FILE}"
-
-  if [ ! -x "${HOST_BUNDLE_PATH}/zksign/witness_generator" ]; then
-    common::die "Missing zksign/witness_generator in restored bundle; ensure the tarball contains host-compatible circuits."
-  fi
-  if [ ! -f "${KZG_HOST_PATH}" ]; then
-    common::die "KZG params missing at ${KZG_HOST_PATH}; ensure the tarball contains circuits."
-  fi
-
   if [ "${MODE}" = "host" ] && ! { [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ]; }; then
-    local tar_node tar_exec
+    local tar_node
     tar_node="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/logos-blockchain-node"
 
-    [ -x "${tar_node}" ] && [ -x "${tar_exec}" ] || common::die \
+    [ -x "${tar_node}" ] || common::die \
       "Restored tarball missing host executables; provide a host-compatible binaries tarball."
     run_examples::host_bin_matches_arch "${tar_node}" || common::die \
       "Restored executables do not match host architecture; provide a host-compatible binaries tarball."
@@ -509,59 +467,40 @@ run_examples::validate_restored_bundle() {
   fi
 }
 
-run_examples::kzg_path_for_mode() {
-  if [ "${MODE}" = "compose" ] || [ "${MODE}" = "k8s" ]; then
-    if [ "${MODE}" = "k8s" ] && [ "${NOMOS_KZG_MODE:-hostPath}" = "inImage" ]; then
-      echo "${NOMOS_KZG_IN_IMAGE_PARAMS_PATH:-${DEFAULT_KZG_IN_IMAGE_PARAMS_PATH}}"
-    else
-      echo "${KZG_CONTAINER_PATH}"
+run_examples::ensure_circuits() {
+  if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS:-}" ]; then
+    if [ -d "${LOGOS_BLOCKCHAIN_CIRCUITS}" ]; then
+      return 0
     fi
-  else
-    echo "${KZG_HOST_PATH}"
+    common::die "LOGOS_BLOCKCHAIN_CIRCUITS is set to '${LOGOS_BLOCKCHAIN_CIRCUITS}', but the directory does not exist"
   fi
-}
 
-run_examples::ensure_compose_circuits_platform_default() {
-  if [ "${MODE}" != "compose" ] || [ -n "${COMPOSE_CIRCUITS_PLATFORM:-}" ]; then
+  local default_dir="${HOME}/.logos-blockchain-circuits"
+  if [ -d "${default_dir}" ]; then
+    LOGOS_BLOCKCHAIN_CIRCUITS="${default_dir}"
+    export LOGOS_BLOCKCHAIN_CIRCUITS
     return 0
   fi
 
-  local arch
-  arch="$(uname -m)"
-  case "${arch}" in
-    x86_64) COMPOSE_CIRCUITS_PLATFORM="linux-x86_64" ;;
-    arm64|aarch64) COMPOSE_CIRCUITS_PLATFORM="linux-x86_64" ;;
-    *) COMPOSE_CIRCUITS_PLATFORM="linux-x86_64" ;;
-  esac
-  export COMPOSE_CIRCUITS_PLATFORM
-}
-
-run_examples::maybe_set_docker_platform() {
-  if [ "${MODE}" != "compose" ] || [ -n "${DOCKER_DEFAULT_PLATFORM:-}" ]; then
-    return 0
-  fi
-
-  case "${COMPOSE_CIRCUITS_PLATFORM:-}" in
-    linux-x86_64) DOCKER_DEFAULT_PLATFORM="linux/amd64" ;;
-    linux-aarch64) DOCKER_DEFAULT_PLATFORM="linux/arm64" ;;
-    *) return 0 ;;
-  esac
-
-  export DOCKER_DEFAULT_PLATFORM
+  echo "==> Circuits not found; installing to ${default_dir}"
+  bash "${ROOT_DIR}/scripts/setup/setup-logos-blockchain-circuits.sh" "${VERSION}" "${default_dir}"
+  LOGOS_BLOCKCHAIN_CIRCUITS="${default_dir}"
+  export LOGOS_BLOCKCHAIN_CIRCUITS
 }
 
 run_examples::run() {
-  local kzg_path
-  kzg_path="$(run_examples::kzg_path_for_mode)"
-
-  export NOMOS_DEMO_RUN_SECS="${RUN_SECS}"
-  export NOMOS_DEMO_VALIDATORS="${DEMO_VALIDATORS}"
+  export LOGOS_BLOCKCHAIN_DEMO_RUN_SECS="${RUN_SECS}"
+  export LOGOS_BLOCKCHAIN_DEMO_NODES="${DEMO_NODES}"
 
   if [ -n "${METRICS_QUERY_URL}" ]; then
-    export NOMOS_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
+    export LOGOS_BLOCKCHAIN_METRICS_QUERY_URL="${METRICS_QUERY_URL}"
   fi
   if [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
-    export NOMOS_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
+    export LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
+  fi
+
+  if [ "${MODE}" = "host" ]; then
+    run_examples::ensure_circuits
   fi
 
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"
@@ -569,12 +508,8 @@ run_examples::run() {
 
   POL_PROOF_DEV_MODE=true \
   TESTNET_PRINT_ENDPOINTS=1 \
-  NOMOS_TESTNET_IMAGE="${IMAGE}" \
-  NOMOS_CIRCUITS="${HOST_BUNDLE_PATH}" \
-  LOGOS_BLOCKCHAIN_CIRCUITS="${HOST_BUNDLE_PATH}" \
-  LOGOS_BLOCKCHAIN_KZGRS_PARAMS_PATH="${kzg_path}" \
+  LOGOS_BLOCKCHAIN_TESTNET_IMAGE="${IMAGE}" \
   LOGOS_BLOCKCHAIN_NODE_BIN="${LOGOS_BLOCKCHAIN_NODE_BIN:-}" \
-  COMPOSE_CIRCUITS_PLATFORM="${COMPOSE_CIRCUITS_PLATFORM:-}" \
     cargo run -p runner-examples --bin "${BIN}"
 }
 
@@ -585,12 +520,10 @@ run_examples::main() {
   run_examples::select_image
 
   run_examples::prepare_bundles
-  echo "==> Using restored circuits/binaries bundle"
+  echo "==> Using restored binaries bundle"
 
   SETUP_OUT="$(common::tmpfile nomos-setup-output.XXXXXX)"
 
-  run_examples::ensure_compose_circuits_platform_default
-  run_examples::maybe_set_docker_platform
   run_examples::maybe_rebuild_image
   run_examples::maybe_restore_host_after_image
   run_examples::validate_restored_bundle

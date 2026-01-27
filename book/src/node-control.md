@@ -10,7 +10,7 @@ provides:
 
 ## BlockFeed: Observing Block Production
 
-The `BlockFeed` is a broadcast stream of block observations that allows workloads and expectations to monitor blockchain progress in real-time. It polls a validator node continuously and broadcasts new blocks to all subscribers.
+The `BlockFeed` is a broadcast stream of block observations that allows workloads and expectations to monitor blockchain progress in real-time. It polls a node continuously and broadcasts new blocks to all subscribers.
 
 ### What BlockFeed Provides
 
@@ -134,7 +134,7 @@ async fn start_capture(ctx: &RunContext) -> Result<(), DynError> {
                         "observed block"
                     );
                     
-                    // Process transactions, DA blobs, etc.
+                    // Process transactions or other block data.
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 Err(_) => continue,
@@ -204,7 +204,7 @@ async fn generate_request() -> Option<()> {
 }
 
 async fn start(ctx: &RunContext) -> Result<(), DynError> {
-    let clients = ctx.node_clients().validator_clients();
+    let clients = ctx.node_clients().node_clients();
     let mut receiver = ctx.block_feed().subscribe();
     let mut pending_requests: Vec<()> = Vec::new();
 
@@ -249,7 +249,7 @@ Example direct polling in expectations:
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {
-    let client = &ctx.node_clients().validator_clients()[0];
+    let client = &ctx.node_clients().node_clients()[0];
     
     // Poll current height once
     let info = client.consensus_info().await?;
@@ -311,7 +311,6 @@ async fn evaluate(ctx: &RunContext, expected_min: u64) -> Result<(), DynError> {
 The framework's built-in expectations use BlockFeed extensively:
 
 - **`ConsensusLiveness`**: Doesn't directly subscribe but uses block feed stats to verify progress
-- **`DataAvailabilityExpectation`**: Subscribes to inspect DA blobs in each block and track inscription/dispersal
 - **`TransactionInclusion`**: Subscribes to find specific transactions in blocks
 
 See [Examples](examples.md) and [Workloads & Expectations](workloads.md) for more patterns.
@@ -324,7 +323,7 @@ The framework currently supports **process-level chaos** (node restarts) for
 resilience testing:
 
 **Supported:**
-- Restart validators (`restart_validator`)
+- Restart nodes (`restart_node`)
 - Random restart workload via `.chaos().restart()`
 
 **Not Yet Supported:**
@@ -354,8 +353,8 @@ impl Workload for RestartWorkload {
 
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
         if let Some(control) = ctx.node_control() {
-            // Restart the first validator (index 0) if supported.
-            control.restart_validator(0).await?;
+            // Restart the first node (index 0) if supported.
+            control.restart_node(0).await?;
         }
         Ok(())
     }
@@ -375,7 +374,7 @@ use testing_framework_core::scenario::DynError;
 
 #[async_trait]
 pub trait NodeControlHandle: Send + Sync {
-    async fn restart_validator(&self, index: usize) -> Result<(), DynError>;
+    async fn restart_node(&self, index: usize) -> Result<(), DynError>;
 }
 ```
 

@@ -30,7 +30,7 @@ Usage: scripts/build/build-bundle.sh [--platform host|linux] [--output PATH]
 Options:
   --platform        Target platform for binaries (default: host)
   --output          Output path for the tarball (default: .tmp/nomos-binaries-<platform>-<version>.tar.gz)
-  --rev             logos-blockchain-node git revision to build (overrides NOMOS_NODE_REV)
+  --rev             logos-blockchain-node git revision to build (overrides LOGOS_BLOCKCHAIN_NODE_REV)
   --path            Use local logos-blockchain-node checkout at DIR (skip fetch/checkout)
   --features        Extra cargo features to enable (comma-separated); base always includes "testing"
   --docker-platform Docker platform for Linux bundle when running on non-Linux host (default: auto; linux/arm64 on Apple silicon Docker Desktop, else linux/amd64)
@@ -40,7 +40,7 @@ Notes:
     run inside a Linux Docker container to produce Linux binaries.
   - On Apple silicon, Docker defaults to linux/arm64; for compose/k8s you likely
     want linux/amd64 (the default here). Override with --docker-platform.
-  - VERSION, NOMOS_NODE_REV, and optional NOMOS_NODE_PATH env vars are honored (defaults align with run-examples.sh).
+  - VERSION, LOGOS_BLOCKCHAIN_NODE_REV, and optional LOGOS_BLOCKCHAIN_NODE_PATH env vars are honored (defaults align with run-examples.sh).
 USAGE
 }
 
@@ -52,17 +52,17 @@ build_bundle::fail() {
 build_bundle::apply_nomos_node_patches() {
   local node_src="$1"
 
-  local apply="${NOMOS_NODE_APPLY_PATCHES:-1}"
+  local apply="${LOGOS_BLOCKCHAIN_NODE_APPLY_PATCHES:-1}"
   if [ "${apply}" = "0" ]; then
     return 0
   fi
 
-  local patch_dir="${NOMOS_NODE_PATCH_DIR:-${ROOT_DIR}/patches/logos-blockchain-node}"
+  local patch_dir="${LOGOS_BLOCKCHAIN_NODE_PATCH_DIR:-${ROOT_DIR}/patches/logos-blockchain-node}"
   if [ ! -d "${patch_dir}" ]; then
     return 0
   fi
 
-  local level="${NOMOS_NODE_PATCH_LEVEL:-}"
+  local level="${LOGOS_BLOCKCHAIN_NODE_PATCH_LEVEL:-}"
   if [ -z "${level}" ]; then
     level="all"
   fi
@@ -84,7 +84,7 @@ build_bundle::apply_nomos_node_patches() {
     fi
     if [ "${level}" != "all" ] && [ "${level}" != "ALL" ]; then
       if ! [[ "${level}" =~ ^[0-9]+$ ]]; then
-        build_bundle::fail "Invalid NOMOS_NODE_PATCH_LEVEL: ${level} (expected integer or 'all')"
+        build_bundle::fail "Invalid LOGOS_BLOCKCHAIN_NODE_PATCH_LEVEL: ${level} (expected integer or 'all')"
       fi
       if [ -n "${phase}" ] && [ "${phase}" -gt "${level}" ]; then
         continue
@@ -104,11 +104,11 @@ build_bundle::load_env() {
   . "${ROOT_DIR}/versions.env"
 
   DEFAULT_VERSION="${VERSION:?Missing VERSION in versions.env}"
-  DEFAULT_NODE_REV="${NOMOS_NODE_REV:-}"
-  DEFAULT_NODE_PATH="${NOMOS_NODE_PATH:-}"
+  DEFAULT_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV:-}"
+  DEFAULT_NODE_PATH="${LOGOS_BLOCKCHAIN_NODE_PATH:-}"
 
-  NOMOS_EXTRA_FEATURES="${NOMOS_EXTRA_FEATURES:-}"
-  DOCKER_PLATFORM="${NOMOS_BUNDLE_DOCKER_PLATFORM:-${NOMOS_BIN_PLATFORM:-}}"
+  LOGOS_BLOCKCHAIN_EXTRA_FEATURES="${LOGOS_BLOCKCHAIN_EXTRA_FEATURES:-}"
+  DOCKER_PLATFORM="${LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM:-${LOGOS_BLOCKCHAIN_BIN_PLATFORM:-}}"
   BUNDLE_RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN:-}"
 
   if [ -z "${BUNDLE_RUSTUP_TOOLCHAIN}" ] && command -v rustup >/dev/null 2>&1 && [ -f "${ROOT_DIR}/rust-toolchain.toml" ]; then
@@ -153,8 +153,8 @@ build_bundle::parse_args() {
       --rev) REV_OVERRIDE="${2:-}"; shift 2 ;;
       --path=*) PATH_OVERRIDE="${1#*=}"; shift ;;
       --path) PATH_OVERRIDE="${2:-}"; shift 2 ;;
-      --features=*) NOMOS_EXTRA_FEATURES="${1#*=}"; shift ;;
-      --features) NOMOS_EXTRA_FEATURES="${2:-}"; shift 2 ;;
+      --features=*) LOGOS_BLOCKCHAIN_EXTRA_FEATURES="${1#*=}"; shift ;;
+      --features) LOGOS_BLOCKCHAIN_EXTRA_FEATURES="${2:-}"; shift 2 ;;
       --docker-platform=*) DOCKER_PLATFORM="${1#*=}"; shift ;;
       --docker-platform) DOCKER_PLATFORM="${2:-}"; shift 2 ;;
       *) build_bundle::fail "Unknown argument: $1" ;;
@@ -174,11 +174,11 @@ build_bundle::validate_and_finalize() {
     build_bundle::fail "Use either --rev or --path, not both"
   fi
   if [ -z "${REV_OVERRIDE}" ] && [ -z "${PATH_OVERRIDE}" ] && [ -z "${DEFAULT_NODE_REV}" ] && [ -z "${DEFAULT_NODE_PATH}" ]; then
-    build_bundle::fail "Provide --rev, --path, or set NOMOS_NODE_REV/NOMOS_NODE_PATH in versions.env"
+    build_bundle::fail "Provide --rev, --path, or set LOGOS_BLOCKCHAIN_NODE_REV/LOGOS_BLOCKCHAIN_NODE_PATH in versions.env"
   fi
-  NOMOS_NODE_REV="${REV_OVERRIDE:-${DEFAULT_NODE_REV}}"
-  NOMOS_NODE_PATH="${PATH_OVERRIDE:-${DEFAULT_NODE_PATH}}"
-  export NOMOS_NODE_REV NOMOS_NODE_PATH
+  LOGOS_BLOCKCHAIN_NODE_REV="${REV_OVERRIDE:-${DEFAULT_NODE_REV}}"
+  LOGOS_BLOCKCHAIN_NODE_PATH="${PATH_OVERRIDE:-${DEFAULT_NODE_PATH}}"
+  export LOGOS_BLOCKCHAIN_NODE_REV LOGOS_BLOCKCHAIN_NODE_PATH
 
   build_bundle::default_docker_platform
   DOCKER_PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
@@ -223,16 +223,16 @@ build_bundle::maybe_run_linux_build_in_docker() {
   command -v docker >/dev/null 2>&1 || build_bundle::fail "Docker is required to build a Linux bundle from non-Linux host"
   [ -n "${DOCKER_PLATFORM}" ] || build_bundle::fail "--docker-platform must not be empty"
 
-  local node_path_env="${NOMOS_NODE_PATH}"
+  local node_path_env="${LOGOS_BLOCKCHAIN_NODE_PATH}"
   local -a extra_mounts=()
-  if [ -n "${NOMOS_NODE_PATH}" ]; then
-    case "${NOMOS_NODE_PATH}" in
+  if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
+    case "${LOGOS_BLOCKCHAIN_NODE_PATH}" in
       "${ROOT_DIR}"/*)
-        node_path_env="/workspace${NOMOS_NODE_PATH#"${ROOT_DIR}"}"
+        node_path_env="/workspace${LOGOS_BLOCKCHAIN_NODE_PATH#"${ROOT_DIR}"}"
         ;;
       /*)
         node_path_env="/external/logos-blockchain-node"
-        extra_mounts+=("-v" "${NOMOS_NODE_PATH}:${node_path_env}")
+        extra_mounts+=("-v" "${LOGOS_BLOCKCHAIN_NODE_PATH}:${node_path_env}")
         ;;
       *)
         build_bundle::fail "--path must be absolute when cross-building in Docker"
@@ -248,27 +248,23 @@ build_bundle::maybe_run_linux_build_in_docker() {
   mkdir -p "${ROOT_DIR}/.tmp/cargo-linux" "${host_target_dir}"
 
   local -a features_args=()
-  if [ -n "${NOMOS_EXTRA_FEATURES:-}" ]; then
-    features_args+=(--features "${NOMOS_EXTRA_FEATURES}")
+  if [ -n "${LOGOS_BLOCKCHAIN_EXTRA_FEATURES:-}" ]; then
+    features_args+=(--features "${LOGOS_BLOCKCHAIN_EXTRA_FEATURES}")
   fi
 
   local -a src_args=()
   if [ -n "${node_path_env}" ]; then
     src_args+=(--path "${node_path_env}")
   else
-    src_args+=(--rev "${NOMOS_NODE_REV}")
+    src_args+=(--rev "${LOGOS_BLOCKCHAIN_NODE_REV}")
   fi
 
   docker run --rm --platform "${DOCKER_PLATFORM}" \
     -e VERSION="${VERSION}" \
-    -e NOMOS_NODE_REV="${NOMOS_NODE_REV}" \
-    -e NOMOS_NODE_PATH="${node_path_env}" \
-    -e NOMOS_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
-    -e NOMOS_CIRCUITS="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e LOGOS_BLOCKCHAIN_CIRCUITS="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e STACK_DIR="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e HOST_DIR="/workspace/.tmp/logos-blockchain-circuits-linux" \
-    -e NOMOS_EXTRA_FEATURES="${NOMOS_EXTRA_FEATURES:-}" \
+    -e LOGOS_BLOCKCHAIN_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV}" \
+    -e LOGOS_BLOCKCHAIN_NODE_PATH="${node_path_env}" \
+    -e LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
+    -e LOGOS_BLOCKCHAIN_EXTRA_FEATURES="${LOGOS_BLOCKCHAIN_EXTRA_FEATURES:-}" \
     -e BUNDLE_IN_CONTAINER=1 \
     -e CARGO_HOME=/workspace/.tmp/cargo-linux \
     -e CARGO_TARGET_DIR="/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}" \
@@ -284,26 +280,24 @@ build_bundle::maybe_run_linux_build_in_docker() {
 }
 
 build_bundle::prepare_circuits() {
-  echo "==> Preparing circuits (version ${VERSION})"
+  echo "==> Preparing build workspace (version ${VERSION})"
   if [ "${PLATFORM}" = "host" ]; then
-    CIRCUITS_DIR="${ROOT_DIR}/.tmp/logos-blockchain-circuits-host"
     NODE_TARGET="${ROOT_DIR}/.tmp/logos-blockchain-node-host-target"
   else
-    CIRCUITS_DIR="${ROOT_DIR}/.tmp/logos-blockchain-circuits-linux"
     # When building Linux bundles in Docker, avoid reusing the same target dir
     # across different container architectures (e.g. linux/arm64 vs linux/amd64),
     # as the native-host `target/debug` layout would otherwise get mixed.
     local target_suffix=""
     if [ -n "${BUNDLE_IN_CONTAINER:-}" ]; then
-      target_suffix="$(build_bundle::docker_platform_suffix "${NOMOS_BUNDLE_DOCKER_PLATFORM:-}")"
+      target_suffix="$(build_bundle::docker_platform_suffix "${LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM:-}")"
     fi
     NODE_TARGET="${ROOT_DIR}/.tmp/logos-blockchain-node-linux-target${target_suffix}"
   fi
 
   NODE_SRC_DEFAULT="${ROOT_DIR}/.tmp/logos-blockchain-node-${PLATFORM}-src"
-  NODE_SRC="${NOMOS_NODE_PATH:-${NODE_SRC_DEFAULT}}"
-  if [ -n "${NOMOS_NODE_PATH}" ]; then
-    [ -d "${NODE_SRC}" ] || build_bundle::fail "NOMOS_NODE_PATH does not exist: ${NODE_SRC}"
+  NODE_SRC="${LOGOS_BLOCKCHAIN_NODE_PATH:-${NODE_SRC_DEFAULT}}"
+  if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
+    [ -d "${NODE_SRC}" ] || build_bundle::fail "LOGOS_BLOCKCHAIN_NODE_PATH does not exist: ${NODE_SRC}"
     rm -rf "${NODE_SRC_DEFAULT}"
     if [ -d "${NODE_TARGET}" ]; then
       find "${NODE_TARGET}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
@@ -311,18 +305,7 @@ build_bundle::prepare_circuits() {
     NODE_TARGET="${NODE_TARGET}-local"
   fi
 
-  export NOMOS_CIRCUITS="${CIRCUITS_DIR}"
-  export LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}"
-  mkdir -p "${ROOT_DIR}/.tmp" "${CIRCUITS_DIR}"
-  if [ -f "${CIRCUITS_DIR}/${KZG_FILE:-kzgrs_test_params}" ]; then
-    echo "Circuits already present at ${CIRCUITS_DIR}; skipping download"
-  else
-    STACK_DIR="${CIRCUITS_DIR}" HOST_DIR="${CIRCUITS_DIR}" \
-      "${ROOT_DIR}/scripts/setup/setup-circuits-stack.sh" "${VERSION}" </dev/null
-  fi
-
   NODE_BIN="${NODE_TARGET}/debug/logos-blockchain-node"
-  CLI_BIN="${NODE_TARGET}/debug/logos-blockchain-cli"
 }
 
 build_bundle::build_binaries() {
@@ -331,41 +314,32 @@ build_bundle::build_binaries() {
   mkdir -p "${NODE_SRC}"
   (
     cd "${NODE_SRC}"
-    if [ -n "${NOMOS_NODE_PATH}" ]; then
+    if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
       echo "Using local logos-blockchain-node checkout at ${NODE_SRC} (no fetch/checkout)"
     else
       if [ ! -d "${NODE_SRC}/.git" ]; then
         git clone https://github.com/logos-co/nomos-node.git "${NODE_SRC}"
       fi
-      git fetch --depth 1 origin "${NOMOS_NODE_REV}"
-      git checkout "${NOMOS_NODE_REV}"
+      git fetch --depth 1 origin "${LOGOS_BLOCKCHAIN_NODE_REV}"
+      git checkout "${LOGOS_BLOCKCHAIN_NODE_REV}"
       git reset --hard
       git clean -fdx
     fi
 
-    if [ -z "${NOMOS_NODE_PATH}" ]; then
+    if [ -z "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
       build_bundle::apply_nomos_node_patches "${NODE_SRC}"
     fi
-    if [ -f "${CIRCUITS_DIR}/zksign/verification_key.json" ] \
-      || [ -f "${CIRCUITS_DIR}/pol/verification_key.json" ] \
-      || [ -f "${CIRCUITS_DIR}/poq/verification_key.json" ] \
-      || [ -f "${CIRCUITS_DIR}/poc/verification_key.json" ]; then
-      export CARGO_FEATURE_BUILD_VERIFICATION_KEY=1
-    else
-      unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
-    fi
+    unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
-      RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
-        LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
+      RUSTFLAGS='--cfg feature="pol-dev-mode"' \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
         cargo build --all-features \
-        -p logos-blockchain-node -p logos-blockchain-cli \
+        -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
     else
-      RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS="${CIRCUITS_DIR}" \
-        LOGOS_BLOCKCHAIN_CIRCUITS="${CIRCUITS_DIR}" \
+      RUSTFLAGS='--cfg feature="pol-dev-mode"' \
         cargo build --all-features \
-        -p logos-blockchain-node -p logos-blockchain-cli \
+        -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
     fi
   )
@@ -375,14 +349,11 @@ build_bundle::package_bundle() {
   echo "==> Packaging bundle"
   local bundle_dir="${ROOT_DIR}/.tmp/nomos-bundle"
   rm -rf "${bundle_dir}"
-  mkdir -p "${bundle_dir}/artifacts/circuits"
-  cp -a "${CIRCUITS_DIR}/." "${bundle_dir}/artifacts/circuits/"
   mkdir -p "${bundle_dir}/artifacts"
   cp "${NODE_BIN}" "${bundle_dir}/artifacts/logos-blockchain-node"
-  cp "${CLI_BIN}" "${bundle_dir}/artifacts/logos-blockchain-cli"
   {
-    echo "nomos_node_path=${NOMOS_NODE_PATH:-}"
-    echo "nomos_node_rev=${NOMOS_NODE_REV:-}"
+    echo "nomos_node_path=${LOGOS_BLOCKCHAIN_NODE_PATH:-}"
+    echo "nomos_node_rev=${LOGOS_BLOCKCHAIN_NODE_REV:-}"
     if [ -d "${NODE_SRC}/.git" ] && command -v git >/dev/null 2>&1; then
       echo "nomos_node_git_head=$(git -C "${NODE_SRC}" rev-parse HEAD 2>/dev/null || true)"
     fi

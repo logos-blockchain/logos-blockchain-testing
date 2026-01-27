@@ -20,7 +20,7 @@ use thiserror::Error;
 
 use crate::topology::{
     configs::{GeneralConfig, time::default_time_config},
-    generation::{GeneratedNodeConfig, GeneratedTopology, NodeRole},
+    generation::{GeneratedNodeConfig, GeneratedTopology},
     utils::{TopologyResolveError, create_kms_configs, resolve_ids, resolve_ports},
 };
 
@@ -51,7 +51,7 @@ pub enum TopologyBuildError {
 /// High-level topology settings used to generate node configs for a scenario.
 #[derive(Clone)]
 pub struct TopologyConfig {
-    pub n_validators: usize,
+    pub n_nodes: usize,
     pub consensus_params: ConsensusParams,
     pub network_params: NetworkParams,
     pub wallet_config: WalletConfig,
@@ -62,7 +62,7 @@ impl TopologyConfig {
     #[must_use]
     pub fn empty() -> Self {
         Self {
-            n_validators: 0,
+            n_nodes: 0,
             consensus_params: ConsensusParams::default_for_participants(1),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
@@ -70,10 +70,10 @@ impl TopologyConfig {
     }
 
     #[must_use]
-    /// Convenience config with two validators for consensus-only scenarios.
-    pub fn two_validators() -> Self {
+    /// Convenience config with two nodes for consensus-only scenarios.
+    pub fn two_nodes() -> Self {
         Self {
-            n_validators: 2,
+            n_nodes: 2,
             consensus_params: ConsensusParams::default_for_participants(2),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
@@ -81,12 +81,12 @@ impl TopologyConfig {
     }
 
     #[must_use]
-    /// Build a topology with explicit validator counts.
-    pub fn with_node_numbers(validators: usize) -> Self {
-        let participants = validators;
+    /// Build a topology with explicit node counts.
+    pub fn with_node_numbers(nodes: usize) -> Self {
+        let participants = nodes;
 
         Self {
-            n_validators: validators,
+            n_nodes: nodes,
             consensus_params: ConsensusParams::default_for_participants(participants),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
@@ -133,15 +133,9 @@ impl TopologyBuilder {
     }
 
     #[must_use]
-    pub const fn with_validator_count(mut self, validators: usize) -> Self {
-        self.config.n_validators = validators;
-        self
-    }
-
-    #[must_use]
-    /// Set validator counts.
-    pub const fn with_node_counts(mut self, validators: usize) -> Self {
-        self.config.n_validators = validators;
+    /// Set node counts.
+    pub const fn with_node_count(mut self, nodes: usize) -> Self {
+        self.config.n_nodes = nodes;
         self
     }
 
@@ -197,7 +191,7 @@ impl TopologyBuilder {
 
         let kms_configs = create_kms_configs(&blend_configs, &config.wallet_config.accounts);
 
-        let validators = build_node_descriptors(
+        let nodes = build_node_descriptors(
             &config,
             n_participants,
             &ids,
@@ -212,7 +206,7 @@ impl TopologyBuilder {
             &time_config,
         )?;
 
-        Ok(GeneratedTopology { config, validators })
+        Ok(GeneratedTopology { config, nodes })
     }
 
     #[must_use]
@@ -222,7 +216,7 @@ impl TopologyBuilder {
 }
 
 fn participant_count(config: &TopologyConfig) -> Result<usize, TopologyBuildError> {
-    let n_participants = config.n_validators;
+    let n_participants = config.n_nodes;
     if n_participants == 0 {
         return Err(TopologyBuildError::EmptyParticipants);
     }
@@ -298,7 +292,7 @@ fn build_node_descriptors(
     kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
     time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
 ) -> Result<Vec<GeneratedNodeConfig>, TopologyBuildError> {
-    let mut validators = Vec::with_capacity(config.n_validators);
+    let mut nodes = Vec::with_capacity(config.n_nodes);
 
     for i in 0..n_participants {
         let consensus_config =
@@ -325,21 +319,17 @@ fn build_node_descriptors(
             kms_config,
         };
 
-        let (role, index) = (NodeRole::Validator, i);
         let descriptor = GeneratedNodeConfig {
-            role,
-            index,
+            index: i,
             id,
             general,
             blend_port,
         };
 
-        match role {
-            NodeRole::Validator => validators.push(descriptor),
-        }
+        nodes.push(descriptor);
     }
 
-    Ok(validators)
+    Ok(nodes)
 }
 
 fn get_cloned<T: Clone>(

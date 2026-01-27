@@ -14,8 +14,8 @@ without changing the plan.
 - Understand when to use each runner (Host, Compose, Kubernetes)
 
 **Author and Run Scenarios**
-- Define multi-node topologies with validators
-- Configure transaction and DA workloads with appropriate rates
+- Define multi-node topologies with nodes
+- Configure transaction workloads with appropriate rates
 - Add consensus liveness and inclusion expectations
 - Run scenarios across all three deployment modes
 - Use BlockFeed to monitor block production in real-time
@@ -56,8 +56,8 @@ without changing the plan.
 
 ## What This Book Does NOT Cover
 
-- **Logos node internals** — This book focuses on testing infrastructure, not the blockchain protocol implementation. See the Logos node repository (`nomos-node`) for protocol documentation.
-- **Consensus algorithm theory** — We assume familiarity with basic blockchain concepts (validators, blocks, transactions, data availability).
+- **Logos node internals** — This book focuses on testing infrastructure, not the blockchain protocol implementation. See the Logos node repository (`logos-blockchain-node`) for protocol documentation.
+- **Consensus algorithm theory** — We assume familiarity with basic blockchain concepts (nodes, blocks, transactions).
 - **Rust language basics** — Examples use Rust, but we don't teach the language. See [The Rust Book](https://doc.rust-lang.org/book/) if you're new to Rust.
 - **Kubernetes administration** — We show how to use the K8s runner, but don't cover cluster setup, networking, or operations.
 - **Docker fundamentals** — We assume basic Docker/Compose knowledge for the Compose runner.

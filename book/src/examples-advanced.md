@@ -13,9 +13,9 @@ Realistic advanced scenarios demonstrating framework capabilities for production
 
 | Example | Topology | Workloads | Deployer | Key Feature |
 |---------|----------|-----------|----------|-------------|
-| Load Progression | 3 validators  | Increasing tx rate | Compose | Dynamic load testing |
-| Sustained Load | 4 validators  | High tx + DA rate | Compose | Stress testing |
-| Aggressive Chaos | 4 validators  | Frequent restarts + traffic | Compose | Resilience validation |
+| Load Progression | 3 nodes  | Increasing tx rate | Compose | Dynamic load testing |
+| Sustained Load | 4 nodes  | High tx rate | Compose | Stress testing |
+| Aggressive Chaos | 4 nodes  | Frequent restarts + traffic | Compose | Resilience validation |
 
 ## Load Progression Test
 
@@ -34,7 +34,7 @@ pub async fn load_progression_test() -> Result<()> {
         println!("Testing with rate: {}", rate);
 
         let mut plan =
-            ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+            ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
                 .wallets(50)
                 .transactions_with(|txs| txs.rate(rate).users(20))
                 .expect_consensus_liveness()
@@ -54,7 +54,7 @@ pub async fn load_progression_test() -> Result<()> {
 
 ## Sustained Load Test
 
-Run high transaction and DA load for extended duration:
+Run high transaction load for extended duration:
 
 ```rust,ignore
 use std::time::Duration;
@@ -65,10 +65,9 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn sustained_load_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(4))
         .wallets(100)
         .transactions_with(|txs| txs.rate(15).users(50))
-        .da_with(|da| da.channel_rate(2).blob_rate(3))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(300))
         .build();
@@ -96,7 +95,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub async fn aggressive_chaos_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(4))
         .enable_node_control()
         .wallets(50)
         .transactions_with(|txs| txs.rate(10).users(20))
@@ -143,7 +142,7 @@ These scenarios require custom implementations but demonstrate framework extensi
 
 #### Cross-Validator Mempool Divergence & Convergence
 
-**Concept:** Drive different transaction subsets into different validators (or differing arrival orders) to create temporary mempool divergence, then verify mempools/blocks converge to contain the union (no permanent divergence).
+**Concept:** Drive different transaction subsets into different nodes (or differing arrival orders) to create temporary mempool divergence, then verify mempools/blocks converge to contain the union (no permanent divergence).
 
 **Requirements:**
 - **Custom workload:** Targets specific nodes via `ctx.node_clients()` with disjoint or jittered transaction batches
@@ -238,7 +237,7 @@ These scenarios require custom implementations but demonstrate framework extensi
 
 **Requirements:**
 - Needs `block_peer()` / `unblock_peer()` methods in `NodeControlHandle`
-- Partition subsets of validators, wait, then restore connectivity
+- Partition subsets of nodes, wait, then restore connectivity
 - Verify chain convergence after partition heals
 
 **Why useful:** Tests the most realistic failure mode in distributed systems.

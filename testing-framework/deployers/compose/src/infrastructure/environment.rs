@@ -6,7 +6,6 @@ use std::{
 
 use anyhow::anyhow;
 use reqwest::Url;
-use testing_framework_config::constants::KZG_PARAMS_FILENAME;
 use testing_framework_core::{
     adjust_timeout, scenario::CleanupGuard, topology::generation::GeneratedTopology,
 };
@@ -37,7 +36,6 @@ pub struct WorkspaceState {
     pub workspace: ComposeWorkspace,
     pub root: PathBuf,
     pub cfgsync_path: PathBuf,
-    pub use_kzg: bool,
 }
 
 /// Holds paths and handles for a running docker-compose stack.
@@ -133,13 +131,13 @@ impl StackEnvironment {
     }
 }
 
-/// Verifies the topology has at least one validator so compose can start.
+/// Verifies the topology has at least one node so compose can start.
 pub fn ensure_supported_topology(
     descriptors: &GeneratedTopology,
 ) -> Result<(), ComposeRunnerError> {
-    let validators = descriptors.validators().len();
-    if validators == 0 {
-        return Err(ComposeRunnerError::MissingValidator { validators });
+    let nodes = descriptors.nodes().len();
+    if nodes == 0 {
+        return Err(ComposeRunnerError::MissingNode { nodes });
     }
     Ok(())
 }
@@ -149,19 +147,15 @@ pub fn prepare_workspace_state() -> Result<WorkspaceState, WorkspaceError> {
     let workspace = ComposeWorkspace::create().map_err(WorkspaceError::new)?;
     let root = workspace.root_path().to_path_buf();
     let cfgsync_path = workspace.stack_dir().join("cfgsync.yaml");
-    let use_kzg = workspace.root_path().join(KZG_PARAMS_FILENAME).exists();
-
     let state = WorkspaceState {
         workspace,
         root,
         cfgsync_path,
-        use_kzg,
     };
 
     debug!(
         root = %state.root.display(),
         cfgsync = %state.cfgsync_path.display(),
-        use_kzg = state.use_kzg,
         "prepared compose workspace state"
     );
 
@@ -215,7 +209,6 @@ pub fn configure_cfgsync(
     update_cfgsync_config(
         &workspace.cfgsync_path,
         descriptors,
-        workspace.use_kzg,
         cfgsync_port,
         metrics_otlp_ingest_url,
     )
@@ -315,7 +308,6 @@ pub fn write_compose_artifacts(
         "building compose descriptor"
     );
     let descriptor = ComposeDescriptor::builder(descriptors)
-        .with_kzg_mount(workspace.use_kzg)
         .with_cfgsync_port(cfgsync_port)
         .build();
 

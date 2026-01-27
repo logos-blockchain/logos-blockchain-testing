@@ -7,7 +7,7 @@ use crate::SnippetResult;
 
 pub fn determinism_first() -> SnippetResult<()> {
     // Separate: functional test (deterministic)
-    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(2))
+    let _plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
         })
@@ -15,7 +15,7 @@ pub fn determinism_first() -> SnippetResult<()> {
         .build()?;
 
     // Separate: chaos test (introduces randomness)
-    let _chaos_plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let _chaos_plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .enable_node_control()
         .chaos_with(|c| {
             c.restart()

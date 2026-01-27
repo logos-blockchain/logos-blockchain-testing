@@ -6,8 +6,8 @@ use tracing::warn;
 
 pub const CONSENSUS_PROCESSED_BLOCKS: &str = "consensus_processed_blocks";
 pub const CONSENSUS_TRANSACTIONS_TOTAL: &str = "consensus_transactions_total";
-const CONSENSUS_TRANSACTIONS_VALIDATOR_QUERY: &str =
-    r#"sum(consensus_transactions_total{job=~"validator-.*"})"#;
+const CONSENSUS_TRANSACTIONS_NODE_QUERY: &str =
+    r#"sum(consensus_transactions_total{job=~"node-.*"})"#;
 
 /// Telemetry handles available during a run.
 #[derive(Clone, Default)]
@@ -71,21 +71,21 @@ impl Metrics {
             .prometheus()
             .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))?;
 
-        match handle.instant_samples(CONSENSUS_TRANSACTIONS_VALIDATOR_QUERY) {
+        match handle.instant_samples(CONSENSUS_TRANSACTIONS_NODE_QUERY) {
             Ok(samples) if !samples.is_empty() => {
                 return Ok(samples.into_iter().map(|sample| sample.value).sum());
             }
             Ok(_) => {
                 warn!(
-                    query = CONSENSUS_TRANSACTIONS_VALIDATOR_QUERY,
-                    "validator-specific consensus transaction metric returned no samples; falling back to aggregate counter"
+                    query = CONSENSUS_TRANSACTIONS_NODE_QUERY,
+                    "node-specific consensus transaction metric returned no samples; falling back to aggregate counter"
                 );
             }
             Err(err) => {
                 warn!(
-                    query = CONSENSUS_TRANSACTIONS_VALIDATOR_QUERY,
+                    query = CONSENSUS_TRANSACTIONS_NODE_QUERY,
                     error = %err,
-                    "failed to query validator-specific consensus transaction metric; falling back to aggregate counter"
+                    "failed to query node-specific consensus transaction metric; falling back to aggregate counter"
                 );
             }
         }

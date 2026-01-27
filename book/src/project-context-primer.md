@@ -2,7 +2,7 @@
 
 **Declarative, multi-node blockchain testing for the Logos network**
 
-The Logos Testing Framework enables you to test consensus, data availability, and transaction workloads across local processes, Docker Compose, and Kubernetes deployments—all with a unified scenario API.
+The Logos Testing Framework enables you to test consensus and transaction workloads across local processes, Docker Compose, and Kubernetes deployments—all with a unified scenario API.
 
 [**Get Started**](quickstart.md)
 
@@ -13,8 +13,8 @@ The Logos Testing Framework enables you to test consensus, data availability, an
 **Everything in this framework is a Scenario.**
 
 A Scenario is a controlled experiment over time, composed of:
-- **Topology** — The cluster shape (validators, network layout)
-- **Workloads** — Traffic and conditions that exercise the system (transactions, DA, chaos)
+- **Topology** — The cluster shape (nodes, network layout)
+- **Workloads** — Traffic and conditions that exercise the system (transactions, chaos)
 - **Expectations** — Success criteria verified after execution (liveness, inclusion, recovery)
 - **Duration** — The time window for the experiment
 
@@ -37,8 +37,8 @@ flowchart LR
 ```
 
 1. **Define Scenario** — Describe your test: topology, workloads, and success criteria
-2. **Deploy Topology** — Launch validators using host, compose, or k8s runners
-3. **Run Workloads** — Drive transactions, DA traffic, and chaos operations
+2. **Deploy Topology** — Launch nodes using host, compose, or k8s runners
+3. **Run Workloads** — Drive transactions and chaos operations
 4. **Check Expectations** — Verify consensus liveness, inclusion, and system health
 
 ---
@@ -57,7 +57,6 @@ flowchart LR
 
 **Built-in Workloads**
 - Transaction submission with configurable rates
-- Data availability (DA) blob dispersal and sampling
 - Chaos testing with controlled node restarts
 
 **Comprehensive Observability**
@@ -81,7 +80,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 async fn main() -> anyhow::Result<()> {
     let mut scenario = ScenarioBuilder::topology_with(|t| {
         t.network_star()
-            .validators(3)
+            .nodes(3)
     })
     .transactions_with(|tx| tx.rate(10).users(5))
     .expect_consensus_liveness()
@@ -122,11 +121,9 @@ Check the **[Developer Reference](part-iii.md)** to implement custom workloads, 
 
 ## Project Context
 
-**Logos** is a modular blockchain protocol composed of validators, and a data-availability (DA) subsystem:
+**Logos** is a modular blockchain protocol composed of nodes that participate in consensus and produce blocks.
 
-- **Validators** participate in consensus and produce blocks
-
-These roles interact tightly, which is why meaningful testing must be performed in multi-node environments that include real networking, timing, and DA interaction.
+Meaningful testing must be performed in multi-node environments that include real networking and timing behavior.
 
 The Logos Testing Framework provides the infrastructure to orchestrate these multi-node scenarios reliably across development, CI, and production-like environments.
 

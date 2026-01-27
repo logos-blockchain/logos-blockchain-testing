@@ -18,33 +18,42 @@ fn env_duration(key: &str, default: u64) -> Duration {
 }
 
 pub fn dispersal_timeout() -> Duration {
-    env_duration("NOMOS_DISPERSAL_TIMEOUT_SECS", DISPERSAL_TIMEOUT_SECS)
+    env_duration(
+        "LOGOS_BLOCKCHAIN_DISPERSAL_TIMEOUT_SECS",
+        DISPERSAL_TIMEOUT_SECS,
+    )
 }
 
 pub fn retry_cooldown() -> Duration {
-    env_duration("NOMOS_RETRY_COOLDOWN_SECS", RETRY_COOLDOWN_SECS)
+    env_duration("LOGOS_BLOCKCHAIN_RETRY_COOLDOWN_SECS", RETRY_COOLDOWN_SECS)
 }
 
 pub fn grace_period() -> Duration {
-    env_duration("NOMOS_GRACE_PERIOD_SECS", GRACE_PERIOD_SECS)
+    env_duration("LOGOS_BLOCKCHAIN_GRACE_PERIOD_SECS", GRACE_PERIOD_SECS)
 }
 
 pub fn prune_duration() -> Duration {
-    env_duration("NOMOS_PRUNE_DURATION_SECS", PRUNE_DURATION_SECS)
+    env_duration("LOGOS_BLOCKCHAIN_PRUNE_DURATION_SECS", PRUNE_DURATION_SECS)
 }
 
 pub fn prune_interval() -> Duration {
-    env_duration("NOMOS_PRUNE_INTERVAL_SECS", PRUNE_INTERVAL_SECS)
+    env_duration("LOGOS_BLOCKCHAIN_PRUNE_INTERVAL_SECS", PRUNE_INTERVAL_SECS)
 }
 
 pub fn share_duration() -> Duration {
-    env_duration("NOMOS_SHARE_DURATION_SECS", SHARE_DURATION_SECS)
+    env_duration("LOGOS_BLOCKCHAIN_SHARE_DURATION_SECS", SHARE_DURATION_SECS)
 }
 
 pub fn commitments_wait() -> Duration {
-    env_duration("NOMOS_COMMITMENTS_WAIT_SECS", COMMITMENTS_WAIT_SECS)
+    env_duration(
+        "LOGOS_BLOCKCHAIN_COMMITMENTS_WAIT_SECS",
+        COMMITMENTS_WAIT_SECS,
+    )
 }
 
 pub fn sdp_trigger_delay() -> Duration {
-    env_duration("NOMOS_SDP_TRIGGER_DELAY_SECS", SDP_TRIGGER_DELAY_SECS)
+    env_duration(
+        "LOGOS_BLOCKCHAIN_SDP_TRIGGER_DELAY_SECS",
+        SDP_TRIGGER_DELAY_SECS,
+    )
 }

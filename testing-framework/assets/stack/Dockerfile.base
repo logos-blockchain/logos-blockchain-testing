@@ -3,10 +3,7 @@
 # Ignore warnings about sensitive information as this is test data.
 
 ARG VERSION
-ARG CIRCUITS_OVERRIDE
-ARG NOMOS_NODE_REV
-ARG CIRCUITS_PLATFORM
-ARG RAPIDSNARK_FORCE_REBUILD
+ARG LOGOS_BLOCKCHAIN_NODE_REV
 
 # ===========================
 # BUILD IMAGE
@@ -15,10 +12,7 @@ ARG RAPIDSNARK_FORCE_REBUILD
 FROM rust:1.91.0-slim-bookworm AS builder
 
 ARG VERSION
-ARG CIRCUITS_OVERRIDE
-ARG NOMOS_NODE_REV
-ARG CIRCUITS_PLATFORM
-ARG RAPIDSNARK_FORCE_REBUILD
+ARG LOGOS_BLOCKCHAIN_NODE_REV
 
 LABEL maintainer="augustinas@status.im" \
     source="https://github.com/logos-co/nomos-node" \
@@ -29,8 +23,7 @@ COPY . .
 
 # Reduce debug artifact size.
 ENV CARGO_PROFILE_DEV_DEBUG=0
-ENV NOMOS_NODE_REV=${NOMOS_NODE_REV}
-ENV RAPIDSNARK_FORCE_REBUILD=${RAPIDSNARK_FORCE_REBUILD}
+ENV LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV}
 
 # Install dependencies needed for building RocksDB and for circuit tooling.
 RUN apt-get update && apt-get install -yq \
@@ -38,16 +31,13 @@ RUN apt-get update && apt-get install -yq \
     && rm -rf /var/lib/apt/lists/*
 
 RUN chmod +x \
-      /workspace/testing-framework/assets/stack/scripts/docker/prepare_circuits.sh \
       /workspace/testing-framework/assets/stack/scripts/docker/prepare_binaries.sh \
       /workspace/testing-framework/assets/stack/scripts/docker/build_cfgsync.sh \
-      /workspace/scripts/build/build-rapidsnark.sh \
-      /workspace/scripts/setup/setup-logos-blockchain-circuits.sh \
+      /workspace/testing-framework/assets/stack/scripts/setup-logos-blockchain-circuits.sh \
     || true
 
-RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_circuits.sh
+RUN /workspace/testing-framework/assets/stack/scripts/setup-logos-blockchain-circuits.sh "${VERSION}" /opt/circuits
 
-ENV NOMOS_CIRCUITS=/opt/circuits
 ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
 
 RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_binaries.sh
@@ -75,18 +65,8 @@ RUN apt-get update && apt-get install -yq \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/circuits /opt/circuits
-
-# Provide a stable in-image location for the KZG test parameters so EKS runs do
-# not rely on hostPath volumes.
-COPY --from=builder /workspace/testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params /opt/nomos/kzg-params/kzgrs_test_params
-
 COPY --from=builder /workspace/artifacts/logos-blockchain-node /usr/bin/logos-blockchain-node
-COPY --from=builder /workspace/artifacts/logos-blockchain-cli /usr/bin/logos-blockchain-cli
 COPY --from=builder /workspace/artifacts/cfgsync-server /usr/bin/cfgsync-server
 COPY --from=builder /workspace/artifacts/cfgsync-client /usr/bin/cfgsync-client
-
-ENV NOMOS_CIRCUITS=/opt/circuits
-ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
 
 EXPOSE 3000 8080 9000 60000

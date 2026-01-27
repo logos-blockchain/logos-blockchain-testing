@@ -159,8 +159,8 @@ cargo doc --no-deps --document-private-items
 **When:** New environment variable added, changed, or removed
 
 **Examples:**
-- New: `NOMOS_NEW_FEATURE_ENABLED`
-- Changed: `NOMOS_LOG_LEVEL` accepts new values
+- New: `LOGOS_BLOCKCHAIN_NEW_FEATURE_ENABLED`
+- Changed: `LOGOS_BLOCKCHAIN_LOG_LEVEL` accepts new values
 - Deprecated: `OLD_FEATURE_FLAG`
 
 **Update these pages:**
@@ -235,7 +235,7 @@ rg "scripts/" book/src/ --no-heading
 ```bash
 - [ ] src/prerequisites.md             # Image build instructions
 - [ ] src/runners.md                   # Compose/K8s prerequisites
-- [ ] src/environment-variables.md     # NOMOS_TESTNET_IMAGE, NOMOS_BINARIES_TAR
+- [ ] src/environment-variables.md     # LOGOS_BLOCKCHAIN_TESTNET_IMAGE, LOGOS_BLOCKCHAIN_BINARIES_TAR
 - [ ] src/architecture-overview.md     # Assets and Images section
 ```
 
@@ -247,7 +247,7 @@ rg "scripts/" book/src/ --no-heading
 
 ```bash
 - [ ] src/logging-observability.md     # Primary documentation
-- [ ] src/environment-variables.md     # NOMOS_METRICS_*, NOMOS_OTLP_*
+- [ ] src/environment-variables.md     # LOGOS_BLOCKCHAIN_METRICS_*, LOGOS_BLOCKCHAIN_OTLP_*
 - [ ] src/architecture-overview.md     # Observability section
 - [ ] src/runners.md                   # Runner observability support
 ```

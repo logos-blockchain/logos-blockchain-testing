@@ -59,7 +59,7 @@ impl ClientBuilder {
                 .await);
             }
         };
-        info!("block feed connected to validator");
+        info!("block feed connected to node");
         Ok(pair)
     }
 }

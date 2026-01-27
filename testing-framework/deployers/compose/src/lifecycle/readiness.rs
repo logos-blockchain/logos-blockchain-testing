@@ -3,26 +3,26 @@ use std::time::Duration;
 use reqwest::Url;
 use testing_framework_core::{
     nodes::ApiClient,
-    scenario::{NodeClients, http_probe::NodeRole as HttpNodeRole},
-    topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
+    scenario::{NodeClients, http_probe::NODE_ROLE},
+    topology::generation::GeneratedTopology,
 };
 use tokio::time::sleep;
 
 use crate::{
     errors::{NodeClientError, StackReadinessError},
     infrastructure::ports::{HostPortMapping, NodeHostPorts},
-    lifecycle::wait::wait_for_validators,
+    lifecycle::wait::wait_for_nodes,
 };
 
 const DISABLED_READINESS_SLEEP: Duration = Duration::from_secs(5);
 
-/// Wait until all validators respond on their API ports.
-pub async fn ensure_validators_ready_with_ports(ports: &[u16]) -> Result<(), StackReadinessError> {
+/// Wait until all nodes respond on their API ports.
+pub async fn ensure_nodes_ready_with_ports(ports: &[u16]) -> Result<(), StackReadinessError> {
     if ports.is_empty() {
         return Ok(());
     }
 
-    wait_for_validators(ports).await.map_err(Into::into)
+    wait_for_nodes(ports).await.map_err(Into::into)
 }
 
 /// Allow a brief pause when readiness probes are disabled.
@@ -38,18 +38,18 @@ pub fn build_node_clients_with_ports(
     mapping: &HostPortMapping,
     host: &str,
 ) -> Result<NodeClients, NodeClientError> {
-    let validators = descriptors
-        .validators()
+    let nodes = descriptors
+        .nodes()
         .iter()
-        .zip(mapping.validators.iter())
-        .map(|(node, ports)| api_client_from_host_ports(to_http_role(node.role()), ports, host))
+        .zip(mapping.nodes.iter())
+        .map(|(_node, ports)| api_client_from_host_ports(NODE_ROLE, ports, host))
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(NodeClients::new(validators))
+    Ok(NodeClients::new(nodes))
 }
 
 fn api_client_from_host_ports(
-    role: HttpNodeRole,
+    role: &'static str,
     ports: &NodeHostPorts,
     host: &str,
 ) -> Result<ApiClient, NodeClientError> {
@@ -71,12 +71,6 @@ fn api_client_from_host_ports(
         );
 
     Ok(ApiClient::from_urls(base_url, testing_url))
-}
-
-fn to_http_role(role: TopologyNodeRole) -> testing_framework_core::scenario::http_probe::NodeRole {
-    match role {
-        TopologyNodeRole::Validator => HttpNodeRole::Validator,
-    }
 }
 
 fn localhost_url(port: u16, host: &str) -> Result<Url, url::ParseError> {

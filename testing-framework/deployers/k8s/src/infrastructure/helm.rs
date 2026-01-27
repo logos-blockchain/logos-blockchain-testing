@@ -1,10 +1,10 @@
-use std::{io, path::Path, process::Stdio};
+use std::{io, process::Stdio};
 
 use thiserror::Error;
 use tokio::process::Command;
 use tracing::{debug, info};
 
-use crate::infrastructure::assets::{KzgMode, RunnerAssets, cfgsync_port_value, workspace_root};
+use crate::infrastructure::assets::{RunnerAssets, cfgsync_port_value, workspace_root};
 
 /// Errors returned from Helm invocations.
 #[derive(Debug, Error)]
@@ -15,8 +15,6 @@ pub enum HelmError {
         #[source]
         source: io::Error,
     },
-    #[error("kzg_path must be present for HostPath mode")]
-    MissingKzgPath,
     #[error("{command} exited with status {status:?}\nstderr:\n{stderr}\nstdout:\n{stdout}")]
     Failed {
         command: String,
@@ -31,23 +29,20 @@ pub async fn install_release(
     assets: &RunnerAssets,
     release: &str,
     namespace: &str,
-    validators: usize,
+    nodes: usize,
 ) -> Result<(), HelmError> {
-    let kzg = resolve_kzg_install_args(assets)?;
     info!(
         release,
         namespace,
-        validators,
+        nodes,
         image = %assets.image,
         cfgsync_port = cfgsync_port_value(),
-        kzg_mode = ?assets.kzg_mode,
-        kzg = %kzg.display(),
         values = %assets.values_file.display(),
         "installing helm release"
     );
 
     let command = format!("helm install {release}");
-    let cmd = build_install_command(assets, release, namespace, validators, &kzg, &command);
+    let cmd = build_install_command(assets, release, namespace, nodes, &command);
     let output = run_helm_command(cmd, &command).await?;
 
     maybe_log_install_output(&command, &output);
@@ -56,49 +51,11 @@ pub async fn install_release(
     Ok(())
 }
 
-struct KzgInstallArgs<'a> {
-    mode: &'static str,
-    host_path: Option<&'a Path>,
-    host_path_type: Option<&'static str>,
-}
-
-impl KzgInstallArgs<'_> {
-    fn display(&self) -> String {
-        self.host_path
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "<in-image>".to_string())
-    }
-}
-
-fn resolve_kzg_install_args(assets: &RunnerAssets) -> Result<KzgInstallArgs<'_>, HelmError> {
-    match assets.kzg_mode {
-        KzgMode::HostPath => {
-            let host_path = assets.kzg_path.as_ref().ok_or(HelmError::MissingKzgPath)?;
-            let host_path_type = if host_path.is_dir() {
-                "Directory"
-            } else {
-                "File"
-            };
-            Ok(KzgInstallArgs {
-                mode: "kzg.mode=hostPath",
-                host_path: Some(host_path),
-                host_path_type: Some(host_path_type),
-            })
-        }
-        KzgMode::InImage => Ok(KzgInstallArgs {
-            mode: "kzg.mode=inImage",
-            host_path: None,
-            host_path_type: None,
-        }),
-    }
-}
-
 fn build_install_command(
     assets: &RunnerAssets,
     release: &str,
     namespace: &str,
-    validators: usize,
-    kzg: &KzgInstallArgs<'_>,
+    nodes: usize,
     command: &str,
 ) -> Command {
     let mut cmd = Command::new("helm");
@@ -114,13 +71,11 @@ fn build_install_command(
         .arg("--set")
         .arg(format!("image={}", assets.image))
         .arg("--set")
-        .arg(format!("validators.count={validators}"))
+        .arg(format!("nodes.count={nodes}"))
         .arg("--set")
         .arg(format!("cfgsync.port={}", cfgsync_port_value()))
         .arg("-f")
         .arg(&assets.values_file)
-        .arg("--set")
-        .arg(kzg.mode)
         .arg("--set-file")
         .arg(format!("cfgsync.config={}", assets.cfgsync_file.display()))
         .arg("--set-file")
@@ -140,13 +95,6 @@ fn build_install_command(
         ))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-
-    if let (Some(host_path), Some(host_path_type)) = (kzg.host_path, kzg.host_path_type) {
-        cmd.arg("--set")
-            .arg(format!("kzg.hostPath={}", host_path.display()))
-            .arg("--set")
-            .arg(format!("kzg.hostPathType={host_path_type}"));
-    }
 
     if let Ok(root) = workspace_root() {
         cmd.current_dir(root);

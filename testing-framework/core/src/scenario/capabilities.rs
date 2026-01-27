@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Url;
 
 use super::DynError;
-use crate::{nodes::ApiClient, topology::generation::NodeRole};
+use crate::nodes::ApiClient;
 
 /// Marker type used by scenario builders to request node control support.
 #[derive(Clone, Copy, Debug, Default)]
@@ -69,18 +69,18 @@ impl RequiresNodeControl for ObservabilityCapability {
 /// Interface exposed by runners that can restart nodes at runtime.
 #[async_trait]
 pub trait NodeControlHandle: Send + Sync {
-    async fn restart_validator(&self, index: usize) -> Result<(), DynError>;
+    async fn restart_node(&self, index: usize) -> Result<(), DynError>;
 
-    async fn start_validator(&self, _name: &str) -> Result<StartedNode, DynError> {
-        Err("start_validator not supported by this deployer".into())
+    async fn start_node(&self, _name: &str) -> Result<StartedNode, DynError> {
+        Err("start_node not supported by this deployer".into())
     }
 
-    async fn start_validator_with(
+    async fn start_node_with(
         &self,
         _name: &str,
         _options: StartNodeOptions,
     ) -> Result<StartedNode, DynError> {
-        Err("start_validator_with not supported by this deployer".into())
+        Err("start_node_with not supported by this deployer".into())
     }
 
     fn node_client(&self, _name: &str) -> Option<ApiClient> {
@@ -91,6 +91,5 @@ pub trait NodeControlHandle: Send + Sync {
 #[derive(Clone)]
 pub struct StartedNode {
     pub name: String,
-    pub role: NodeRole,
     pub api: ApiClient,
 }

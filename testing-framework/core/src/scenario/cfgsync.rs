@@ -5,7 +5,6 @@ use nomos_tracing_service::TracingSettings;
 use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use testing_framework_config::constants::kzg_container_path;
 use tracing::debug;
 
 use crate::topology::{configs::wallet::WalletConfig, generation::GeneratedTopology};
@@ -32,7 +31,6 @@ pub struct CfgSyncConfig {
     pub old_blobs_check_interval: Duration,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
     pub blobs_validity_duration: Duration,
-    pub global_params_path: String,
     pub min_dispersal_peers: usize,
     pub min_replication_peers: usize,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
@@ -65,16 +63,12 @@ pub fn render_cfgsync_yaml(cfg: &CfgSyncConfig) -> Result<String> {
     serde_yaml::to_string(&serializable).context("rendering cfgsync yaml")
 }
 
-pub fn apply_topology_overrides(
-    cfg: &mut CfgSyncConfig,
-    topology: &GeneratedTopology,
-    use_kzg_mount: bool,
-) {
+pub fn apply_topology_overrides(cfg: &mut CfgSyncConfig, topology: &GeneratedTopology) {
     debug!(
-        validators = topology.validators().len(),
-        use_kzg_mount, "applying topology overrides to cfgsync config"
+        nodes = topology.nodes().len(),
+        "applying topology overrides to cfgsync config"
     );
-    let hosts = topology.validators().len();
+    let hosts = topology.nodes().len();
     cfg.n_hosts = hosts;
 
     let consensus = &topology.config().consensus_params;
@@ -83,14 +77,14 @@ pub fn apply_topology_overrides(
 
     let config = topology.config();
     cfg.wallet = config.wallet_config.clone();
-    cfg.ids = Some(topology.nodes().map(|node| node.id).collect());
-    cfg.blend_ports = Some(topology.nodes().map(|node| node.blend_port).collect());
-
-    if use_kzg_mount {
-        // Compose mounts the bundle at /kzgrs_test_params; the proving key lives under
-        // pol/.
-        cfg.global_params_path = kzg_container_path()
-    };
+    cfg.ids = Some(topology.nodes().iter().map(|node| node.id).collect());
+    cfg.blend_ports = Some(
+        topology
+            .nodes()
+            .iter()
+            .map(|node| node.blend_port)
+            .collect(),
+    );
 }
 
 #[serde_as]
@@ -114,7 +108,6 @@ struct SerializableCfgSyncConfig {
     old_blobs_check_interval: Duration,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
     blobs_validity_duration: Duration,
-    global_params_path: String,
     min_dispersal_peers: usize,
     min_replication_peers: usize,
     #[serde_as(as = "MinimalBoundedDuration<0, SECOND>")]
@@ -143,7 +136,6 @@ impl From<&CfgSyncConfig> for SerializableCfgSyncConfig {
             num_subnets: cfg.num_subnets,
             old_blobs_check_interval: cfg.old_blobs_check_interval,
             blobs_validity_duration: cfg.blobs_validity_duration,
-            global_params_path: cfg.global_params_path.clone(),
             min_dispersal_peers: cfg.min_dispersal_peers,
             min_replication_peers: cfg.min_replication_peers,
             monitor_failure_time_window: cfg.monitor_failure_time_window,

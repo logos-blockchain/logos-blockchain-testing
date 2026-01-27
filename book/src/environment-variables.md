@@ -31,19 +31,19 @@ Control which runner to use and the test topology:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_DEMO_VALIDATORS` | 1 | Number of validators (all runners) |
-| `NOMOS_DEMO_RUN_SECS` | 60 | Run duration in seconds (all runners) |
-| `LOCAL_DEMO_VALIDATORS` | — | Legacy: Number of validators (host runner only) |
+| `LOGOS_BLOCKCHAIN_DEMO_NODES` | 1 | Number of nodes (all runners) |
+| `LOGOS_BLOCKCHAIN_DEMO_RUN_SECS` | 60 | Run duration in seconds (all runners) |
+| `LOCAL_DEMO_NODES` | — | Legacy: Number of nodes (host runner only) |
 | `LOCAL_DEMO_RUN_SECS` | — | Legacy: Run duration (host runner only) |
-| `COMPOSE_NODE_PAIRS` | — | Compose-specific topology format: "validators" (e.g., `3`) |
+| `COMPOSE_NODE_PAIRS` | — | Compose-specific topology format: "nodes" (e.g., `3`) |
 
 **Example:**
 
 ```bash
-# Run with 5 validators, for 120 seconds
-NOMOS_DEMO_VALIDATORS=5 \
-NOMOS_DEMO_RUN_SECS=120 \
-scripts/run/run-examples.sh -t 120 -v 5 host
+# Run with 5 nodes, for 120 seconds
+LOGOS_BLOCKCHAIN_DEMO_NODES=5 \
+LOGOS_BLOCKCHAIN_DEMO_RUN_SECS=120 \
+scripts/run/run-examples.sh -t 120 -n 5 host
 ```
 
 ---
@@ -54,13 +54,13 @@ Required for host runner when not using helper scripts:
 
 | Variable | Required | Default | Effect |
 |----------|----------|---------|--------|
-| `NOMOS_NODE_BIN` | Yes (host) | — | Path to `nomos-node` binary |
-| `NOMOS_NODE_PATH` | No | — | Path to nomos-node git checkout (dev workflow) |
+| `LOGOS_BLOCKCHAIN_NODE_BIN` | Yes (host) | — | Path to `logos-blockchain-node` binary |
+| `LOGOS_BLOCKCHAIN_NODE_PATH` | No | — | Path to logos-blockchain-node git checkout (dev workflow) |
 
 **Example:**
 
 ```bash
-export NOMOS_NODE_BIN=/path/to/nomos-node/target/release/nomos-node
+export LOGOS_BLOCKCHAIN_NODE_BIN=/path/to/logos-blockchain-node/target/release/logos-blockchain-node
 ```
 
 ---
@@ -71,53 +71,47 @@ Required for compose and k8s runners:
 
 | Variable | Required | Default | Effect |
 |----------|----------|---------|--------|
-| `NOMOS_TESTNET_IMAGE` | Yes (compose/k8s) | `logos-blockchain-testing:local` | Docker image tag for node containers |
-| `NOMOS_TESTNET_IMAGE_PULL_POLICY` | No | `IfNotPresent` (local) / `Always` (ECR) | K8s `imagePullPolicy` used by the runner |
-| `NOMOS_BINARIES_TAR` | No | — | Path to prebuilt bundle (`.tar.gz`) for image build |
-| `NOMOS_SKIP_IMAGE_BUILD` | No | 0 | Skip image rebuild (compose/k8s); assumes image already exists |
-| `NOMOS_FORCE_IMAGE_BUILD` | No | 0 | Force rebuilding the image even when the script would normally skip it (e.g. non-local k8s) |
+| `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | Yes (compose/k8s) | `logos-blockchain-testing:local` | Docker image tag for node containers |
+| `LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY` | No | `IfNotPresent` (local) / `Always` (ECR) | K8s `imagePullPolicy` used by the runner |
+| `LOGOS_BLOCKCHAIN_BINARIES_TAR` | No | — | Path to prebuilt bundle (`.tar.gz`) for image build |
+| `LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD` | No | 0 | Skip image rebuild (compose/k8s); assumes image already exists |
+| `LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD` | No | 0 | Force rebuilding the image even when the script would normally skip it (e.g. non-local k8s) |
 
 **Example:**
 
 ```bash
 # Using prebuilt bundle
-export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-export NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local
+export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
+export LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local
 scripts/build/build_test_image.sh
 
 # Using pre-existing image (skip build)
-export NOMOS_SKIP_IMAGE_BUILD=1
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+export LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1
+scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 ---
 
-## Circuit Assets (KZG Parameters)
+## Circuit Assets
 
-Circuit asset configuration for DA workloads:
+Circuit asset configuration used by local runs and image builds:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_KZGRS_PARAMS_PATH` | `testing-framework/assets/stack/kzgrs_test_params/kzgrs_test_params` | Path to KZG proving key file |
-| `NOMOS_KZG_DIR_REL` | `testing-framework/assets/stack/kzgrs_test_params` | Directory containing KZG assets (relative to workspace root) |
-| `NOMOS_KZG_FILE` | `kzgrs_test_params` | Filename of the proving key within `NOMOS_KZG_DIR_REL` |
-| `NOMOS_KZG_CONTAINER_PATH` | `/kzgrs_test_params/kzgrs_test_params` | File path where the node expects KZG params inside containers |
-| `NOMOS_KZG_MODE` | Runner-specific | K8s only: `hostPath` (mount from host) or `inImage` (embed into image) |
-| `NOMOS_KZG_IN_IMAGE_PARAMS_PATH` | `/opt/nomos/kzg-params/kzgrs_test_params` | K8s `inImage` mode: where the proving key is stored inside the image |
+| `LOGOS_BLOCKCHAIN_CIRCUITS` | `~/.logos-blockchain-circuits` | Directory containing circuit assets |
 | `VERSION` | From `versions.env` | Circuit release tag (used by helper scripts) |
-| `NOMOS_CIRCUITS` | — | Directory containing fetched circuit bundles (set by `scripts/setup/setup-circuits-stack.sh`) |
-| `NOMOS_CIRCUITS_VERSION` | — | Legacy alias for `VERSION` (supported by some build scripts) |
-| `NOMOS_CIRCUITS_PLATFORM` | Auto-detected | Override circuits platform (e.g. `linux-x86_64`, `macos-aarch64`) |
-| `NOMOS_CIRCUITS_HOST_DIR_REL` | `.tmp/nomos-circuits-host` | Output dir for host circuits bundle (relative to repo root) |
-| `NOMOS_CIRCUITS_LINUX_DIR_REL` | `.tmp/nomos-circuits-linux` | Output dir for linux circuits bundle (relative to repo root) |
-| `NOMOS_CIRCUITS_NONINTERACTIVE` | 0 | Set to `1` to overwrite outputs without prompting in setup scripts |
-| `NOMOS_CIRCUITS_REBUILD_RAPIDSNARK` | 0 | Set to `1` to force rebuilding rapidsnark (host bundle only) |
+| `LOGOS_BLOCKCHAIN_CIRCUITS_VERSION` | — | Legacy alias for `VERSION` (supported by some build scripts) |
+| `LOGOS_BLOCKCHAIN_CIRCUITS_PLATFORM` | Auto-detected | Override circuits platform (e.g. `linux-x86_64`, `macos-aarch64`) |
+| `LOGOS_BLOCKCHAIN_CIRCUITS_HOST_DIR_REL` | `.tmp/logos-blockchain-circuits-host` | Output dir for host circuit bundle (relative to repo root) |
+| `LOGOS_BLOCKCHAIN_CIRCUITS_LINUX_DIR_REL` | `.tmp/logos-blockchain-circuits-linux` | Output dir for linux circuit bundle (relative to repo root) |
+| `LOGOS_BLOCKCHAIN_CIRCUITS_NONINTERACTIVE` | 0 | Set to `1` to overwrite outputs without prompting in setup scripts |
+| `LOGOS_BLOCKCHAIN_CIRCUITS_REBUILD_RAPIDSNARK` | 0 | Set to `1` to force rebuilding rapidsnark (host bundle only) |
 
 **Example:**
 
 ```bash
 # Use custom circuit assets
-NOMOS_KZGRS_PARAMS_PATH=/custom/path/to/kzgrs_test_params \
+LOGOS_BLOCKCHAIN_CIRCUITS=/custom/path/to/circuits \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -129,28 +123,28 @@ Control node log output (not framework runner logs):
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_LOG_LEVEL` | `info` | Global log level: `error`, `warn`, `info`, `debug`, `trace` |
-| `NOMOS_LOG_FILTER` | — | Fine-grained module filtering (e.g., `cryptarchia=trace,nomos_da_sampling=debug`) |
-| `NOMOS_LOG_DIR` | — | Host runner: directory for per-node log files (persistent). Compose/k8s: use `cfgsync.yaml` for file logging. |
-| `NOMOS_TESTS_KEEP_LOGS` | 0 | Keep per-run temporary directories (useful for debugging/CI artifacts) |
-| `NOMOS_TESTS_TRACING` | false | Enable debug tracing preset (combine with `NOMOS_LOG_DIR` unless external tracing backends configured) |
+| `LOGOS_BLOCKCHAIN_LOG_LEVEL` | `info` | Global log level: `error`, `warn`, `info`, `debug`, `trace` |
+| `LOGOS_BLOCKCHAIN_LOG_FILTER` | — | Fine-grained module filtering (e.g., `cryptarchia=trace`) |
+| `LOGOS_BLOCKCHAIN_LOG_DIR` | — | Host runner: directory for per-node log files (persistent). Compose/k8s: use `cfgsync.yaml` for file logging. |
+| `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS` | 0 | Keep per-run temporary directories (useful for debugging/CI artifacts) |
+| `LOGOS_BLOCKCHAIN_TESTS_TRACING` | false | Enable debug tracing preset (combine with `LOGOS_BLOCKCHAIN_LOG_DIR` unless external tracing backends configured) |
 
-**Important:** Node logging ignores `RUST_LOG`; use `NOMOS_LOG_LEVEL` and `NOMOS_LOG_FILTER` for node logs.
+**Important:** Node logging ignores `RUST_LOG`; use `LOGOS_BLOCKCHAIN_LOG_LEVEL` and `LOGOS_BLOCKCHAIN_LOG_FILTER` for node logs.
 
 **Example:**
 
 ```bash
 # Debug logging to files
-NOMOS_LOG_DIR=/tmp/test-logs \
-NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug" \
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
+LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # Inspect logs
 ls /tmp/test-logs/
-# nomos-node-0.2024-12-18T14-30-00.log
-# nomos-node-1.2024-12-18T14-30-00.log
+# logos-blockchain-node-0.2024-12-18T14-30-00.log
+# logos-blockchain-node-1.2024-12-18T14-30-00.log
 ```
 
 **Common filter targets:**
@@ -158,9 +152,6 @@ ls /tmp/test-logs/
 | Target Prefix | Subsystem |
 |---------------|-----------|
 | `cryptarchia` | Consensus (Cryptarchia) |
-| `nomos_da_sampling` | DA sampling service |
-| `nomos_da_dispersal` | DA dispersal service |
-| `nomos_da_verifier` | DA verification |
 | `nomos_blend` | Mix network/privacy layer |
 | `chain_service` | Chain service (node APIs/state) |
 | `chain_network` | P2P networking |
@@ -174,21 +165,21 @@ Optional observability integration:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_METRICS_QUERY_URL` | — | Prometheus-compatible base URL for runner to query (e.g., `http://localhost:9090`) |
-| `NOMOS_METRICS_OTLP_INGEST_URL` | — | Full OTLP HTTP ingest URL for node metrics export (e.g., `http://localhost:9090/api/v1/otlp/v1/metrics`) |
-| `NOMOS_GRAFANA_URL` | — | Grafana base URL for printing/logging (e.g., `http://localhost:3000`) |
-| `NOMOS_OTLP_ENDPOINT` | — | OTLP trace endpoint (optional) |
-| `NOMOS_OTLP_METRICS_ENDPOINT` | — | OTLP metrics endpoint (optional) |
+| `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` | — | Prometheus-compatible base URL for runner to query (e.g., `http://localhost:9090`) |
+| `LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL` | — | Full OTLP HTTP ingest URL for node metrics export (e.g., `http://localhost:9090/api/v1/otlp/v1/metrics`) |
+| `LOGOS_BLOCKCHAIN_GRAFANA_URL` | — | Grafana base URL for printing/logging (e.g., `http://localhost:3000`) |
+| `LOGOS_BLOCKCHAIN_OTLP_ENDPOINT` | — | OTLP trace endpoint (optional) |
+| `LOGOS_BLOCKCHAIN_OTLP_METRICS_ENDPOINT` | — | OTLP metrics endpoint (optional) |
 
 **Example:**
 
 ```bash
 # Enable Prometheus querying
-export NOMOS_METRICS_QUERY_URL=http://localhost:9090
-export NOMOS_METRICS_OTLP_INGEST_URL=http://localhost:9090/api/v1/otlp/v1/metrics
-export NOMOS_GRAFANA_URL=http://localhost:3000
+export LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://localhost:9090
+export LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL=http://localhost:9090/api/v1/otlp/v1/metrics
+export LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000
 
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 ---
@@ -210,7 +201,7 @@ Variables specific to Docker Compose deployment:
 ```bash
 # Keep containers after test for debugging
 COMPOSE_RUNNER_PRESERVE=1 \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 3 compose
 
 # Containers remain running
 docker ps --filter "name=nomos-compose-"
@@ -243,11 +234,11 @@ Variables specific to Kubernetes deployment:
 K8S_RUNNER_NAMESPACE=nomos-test-debug \
 K8S_RUNNER_PRESERVE=1 \
 K8S_RUNNER_DEBUG=1 \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
+scripts/run/run-examples.sh -t 60 -n 3 k8s
 
 # Inspect resources
 kubectl get pods -n nomos-test-debug
-kubectl logs -n nomos-test-debug -l nomos/logical-role=validator
+kubectl logs -n nomos-test-debug -l nomos/logical-role=node
 ```
 
 ---
@@ -258,19 +249,19 @@ Platform-specific build configuration:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_BUNDLE_DOCKER_PLATFORM` | Host arch | Docker platform for bundle builds: `linux/arm64` or `linux/amd64` (macOS/Windows hosts) |
-| `NOMOS_BIN_PLATFORM` | — | Legacy alias for `NOMOS_BUNDLE_DOCKER_PLATFORM` |
+| `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM` | Host arch | Docker platform for bundle builds: `linux/arm64` or `linux/amd64` (macOS/Windows hosts) |
+| `LOGOS_BLOCKCHAIN_BIN_PLATFORM` | — | Legacy alias for `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM` |
 | `COMPOSE_CIRCUITS_PLATFORM` | Host arch | Circuits platform for image builds: `linux-aarch64` or `linux-x86_64` |
-| `NOMOS_EXTRA_FEATURES` | — | Extra cargo features to enable when building bundles (used by `scripts/build/build-bundle.sh`) |
+| `LOGOS_BLOCKCHAIN_EXTRA_FEATURES` | — | Extra cargo features to enable when building bundles (used by `scripts/build/build-bundle.sh`) |
 
 **macOS / Apple Silicon:**
 
 ```bash
 # Native performance (recommended for local testing)
-export NOMOS_BUNDLE_DOCKER_PLATFORM=linux/arm64
+export LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/arm64
 
 # Or target amd64 (slower via emulation)
-export NOMOS_BUNDLE_DOCKER_PLATFORM=linux/amd64
+export LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/amd64
 ```
 
 ---
@@ -283,36 +274,28 @@ Timeout and performance tuning:
 |----------|---------|--------|
 | `SLOW_TEST_ENV` | false | Doubles built-in readiness timeouts (useful in CI / constrained laptops) |
 | `TESTNET_PRINT_ENDPOINTS` | 0 | Print `TESTNET_ENDPOINTS` / `TESTNET_PPROF` lines during deploy (set automatically by `scripts/run/run-examples.sh`) |
-| `NOMOS_DISPERSAL_TIMEOUT_SECS` | 20 | DA dispersal timeout (seconds) |
-| `NOMOS_RETRY_COOLDOWN_SECS` | 3 | Cooldown between retries (seconds) |
-| `NOMOS_GRACE_PERIOD_SECS` | 1200 | Grace period before enforcing strict time-based expectations (seconds) |
-| `NOMOS_PRUNE_DURATION_SECS` | 30 | Prune step duration (seconds) |
-| `NOMOS_PRUNE_INTERVAL_SECS` | 5 | Interval between prune cycles (seconds) |
-| `NOMOS_SHARE_DURATION_SECS` | 5 | Share duration (seconds) |
-| `NOMOS_COMMITMENTS_WAIT_SECS` | 1 | Commitments wait duration (seconds) |
-| `NOMOS_SDP_TRIGGER_DELAY_SECS` | 5 | SDP trigger delay (seconds) |
 
 **Example:**
 
 ```bash
 # Increase timeouts for slow environments
 SLOW_TEST_ENV=true \
-scripts/run/run-examples.sh -t 120 -v 5 -e 2 compose
+scripts/run/run-examples.sh -t 120 -n 5 compose
 ```
 
 ---
 
 ## Node Configuration (Advanced)
 
-Node-level configuration passed through to nomos-node:
+Node-level configuration passed through to logos-blockchain-node:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `CONSENSUS_SLOT_TIME` | — | Consensus slot time (seconds) |
 | `CONSENSUS_ACTIVE_SLOT_COEFF` | — | Active slot coefficient (0.0-1.0) |
-| `NOMOS_USE_AUTONAT` | Unset | If set, use AutoNAT instead of a static loopback address for libp2p NAT settings |
-| `NOMOS_CFGSYNC_PORT` | 4400 | Port used for cfgsync service inside the stack |
-| `NOMOS_TIME_BACKEND` | `monotonic` | Select time backend (used by compose/k8s stack scripts and deployers) |
+| `LOGOS_BLOCKCHAIN_USE_AUTONAT` | Unset | If set, use AutoNAT instead of a static loopback address for libp2p NAT settings |
+| `LOGOS_BLOCKCHAIN_CFGSYNC_PORT` | 4400 | Port used for cfgsync service inside the stack |
+| `LOGOS_BLOCKCHAIN_TIME_BACKEND` | `monotonic` | Select time backend (used by compose/k8s stack scripts and deployers) |
 
 **Example:**
 
@@ -353,12 +336,12 @@ Variables used by helper scripts (`scripts/run/run-examples.sh`, etc.):
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_NODE_REV` | From `versions.env` | nomos-node git revision to build/fetch |
-| `NOMOS_BUNDLE_VERSION` | From `versions.env` | Bundle schema version |
-| `NOMOS_IMAGE_SELECTION` | — | Internal: image selection mode set by `run-examples.sh` (`local`/`ecr`/`auto`) |
-| `NOMOS_NODE_APPLY_PATCHES` | 1 | Set to `0` to disable applying local patches when building bundles |
-| `NOMOS_NODE_PATCH_DIR` | `patches/nomos-node` | Patch directory applied to nomos-node checkout during bundle builds |
-| `NOMOS_NODE_PATCH_LEVEL` | — | Patch application level (`all` or an integer) for bundle builds |
+| `LOGOS_BLOCKCHAIN_NODE_REV` | From `versions.env` | logos-blockchain-node git revision to build/fetch |
+| `LOGOS_BLOCKCHAIN_BUNDLE_VERSION` | From `versions.env` | Bundle schema version |
+| `LOGOS_BLOCKCHAIN_IMAGE_SELECTION` | — | Internal: image selection mode set by `run-examples.sh` (`local`/`ecr`/`auto`) |
+| `LOGOS_BLOCKCHAIN_NODE_APPLY_PATCHES` | 1 | Set to `0` to disable applying local patches when building bundles |
+| `LOGOS_BLOCKCHAIN_NODE_PATCH_DIR` | `patches/logos-blockchain-node` | Patch directory applied to logos-blockchain-node checkout during bundle builds |
+| `LOGOS_BLOCKCHAIN_NODE_PATCH_LEVEL` | — | Patch application level (`all` or an integer) for bundle builds |
 
 ---
 
@@ -368,26 +351,26 @@ Variables used by helper scripts (`scripts/run/run-examples.sh`, etc.):
 
 ```bash
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
 ### Debug Logging (Host)
 
 ```bash
 POL_PROOF_DEV_MODE=true \
-NOMOS_LOG_DIR=/tmp/logs \
-NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="cryptarchia=trace" \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/logs \
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
+LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
+scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
 ### Compose with Observability
 
 ```bash
 POL_PROOF_DEV_MODE=true \
-NOMOS_METRICS_QUERY_URL=http://localhost:9090 \
-NOMOS_GRAFANA_URL=http://localhost:3000 \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://localhost:9090 \
+LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000 \
+scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 ### K8s with Debug
@@ -397,7 +380,7 @@ POL_PROOF_DEV_MODE=true \
 K8S_RUNNER_NAMESPACE=nomos-debug \
 K8S_RUNNER_DEBUG=1 \
 K8S_RUNNER_PRESERVE=1 \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
+scripts/run/run-examples.sh -t 60 -n 3 k8s
 ```
 
 ### CI Environment
@@ -406,7 +389,7 @@ scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
 env:
   POL_PROOF_DEV_MODE: true
   RUST_BACKTRACE: 1
-  NOMOS_TESTS_KEEP_LOGS: 1
+  LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS: 1
 ```
 
 ---

@@ -6,7 +6,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn simple_consensus() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(30))
         .build()?;

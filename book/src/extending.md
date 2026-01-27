@@ -61,15 +61,15 @@ impl Workload for MyWorkload {
         _run_metrics: &RunMetrics,
     ) -> Result<(), DynError> {
         // Validate prerequisites (e.g., enough nodes, wallet data present)
-        if topology.validators().is_empty() {
-            return Err("no validators available".into());
+        if topology.nodes().is_empty() {
+            return Err("no nodes available".into());
         }
         Ok(())
     }
 
     async fn start(&self, ctx: &RunContext) -> Result<(), DynError> {
         // Drive async activity: submit transactions, query nodes, etc.
-        let clients = ctx.node_clients().validator_clients();
+        let clients = ctx.node_clients().node_clients();
         
         for client in clients {
             let info = client.consensus_info().await?;
@@ -126,8 +126,8 @@ impl Expectation for MyExpectation {
 
     async fn start_capture(&mut self, ctx: &RunContext) -> Result<(), DynError> {
         // Optional: capture baseline state before workloads start
-        let client = ctx.node_clients().validator_clients().first()
-            .ok_or("no validators")?;
+        let client = ctx.node_clients().node_clients().first()
+            .ok_or("no nodes")?;
         
         let info = client.consensus_info().await?;
         self.captured_baseline = Some(info.height);
@@ -138,8 +138,8 @@ impl Expectation for MyExpectation {
 
     async fn evaluate(&mut self, ctx: &RunContext) -> Result<(), DynError> {
         // Assert the expected condition holds after workloads finish
-        let client = ctx.node_clients().validator_clients().first()
-            .ok_or("no validators")?;
+        let client = ctx.node_clients().node_clients().first()
+            .ok_or("no nodes")?;
         
         let info = client.consensus_info().await?;
         let final_height = info.height;
@@ -201,7 +201,7 @@ impl Deployer<()> for MyDeployer {
     async fn deploy(&self, scenario: &Scenario<()>) -> Result<Runner, Self::Error> {
         // 1. Launch nodes using scenario.topology()
         // 2. Wait for readiness (e.g., consensus info endpoint responds)
-        // 3. Build NodeClients for validators
+        // 3. Build NodeClients for nodes
         // 4. Spawn a block feed for expectations (optional but recommended)
         // 5. Create NodeControlHandle if you support restarts (optional)
         // 6. Return a Runner wrapping RunContext + CleanupGuard
@@ -345,7 +345,7 @@ impl MyWorkloadDsl for ScenarioBuilder {
 Users can then call:
 
 ```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
     .my_workload_with(|w| {
         w.target_rate(10)
          .some_option(true)

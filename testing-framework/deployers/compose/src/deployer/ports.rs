@@ -17,13 +17,13 @@ impl PortManager {
         descriptors: &GeneratedTopology,
     ) -> Result<HostPortMapping, ComposeRunnerError> {
         debug!(
-            validators = descriptors.validators().len(),
+            nodes = descriptors.nodes().len(),
             "resolving host ports for compose services"
         );
         match discover_host_ports(environment, descriptors).await {
             Ok(mapping) => {
                 info!(
-                    validator_ports = ?mapping.validator_api_ports(),
+                    node_ports = ?mapping.node_api_ports(),
                     "resolved container host ports"
                 );
                 Ok(mapping)

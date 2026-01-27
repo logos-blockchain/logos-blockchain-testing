@@ -1,5 +1,5 @@
 services:
-{% for node in validators %}
+{% for node in nodes %}
   {{ node.name }}:
     image: {{ node.image }}
 {% if node.platform %}    platform: {{ node.platform }}

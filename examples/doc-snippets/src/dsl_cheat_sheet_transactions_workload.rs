@@ -4,7 +4,7 @@ use testing_framework_workflows::ScenarioBuilderExt;
 use crate::SnippetResult;
 
 pub fn transactions_plan() -> SnippetResult<Scenario<()>> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .wallets(50)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block

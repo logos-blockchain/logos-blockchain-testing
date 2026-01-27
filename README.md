@@ -113,7 +113,7 @@ For compose/k8s deployments, you can create prebuilt bundles to speed up image b
 scripts/build/build-bundle.sh --platform linux
 
 # Use the bundle when building images
-export NOMOS_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
+export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
 scripts/build/build_test_image.sh
 ```
 
@@ -124,10 +124,10 @@ Key environment variables for customization:
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `POL_PROOF_DEV_MODE=true` | **Required** — Disable expensive proof generation (set automatically by `scripts/run/run-examples.sh`) | (none) |
-| `NOMOS_TESTNET_IMAGE` | Docker image tag for compose/k8s | `logos-blockchain-testing:local` |
-| `NOMOS_DEMO_VALIDATORS` | Number of validator nodes | Varies by example |
-| `NOMOS_LOG_DIR` | Directory for persistent log files | (temporary) |
-| `NOMOS_LOG_LEVEL` | Logging verbosity | `info` |
+| `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | Docker image tag for compose/k8s | `logos-blockchain-testing:local` |
+| `LOGOS_BLOCKCHAIN_DEMO_NODES` | Number of nodes | Varies by example |
+| `LOGOS_BLOCKCHAIN_LOG_DIR` | Directory for persistent log files | (temporary) |
+| `LOGOS_BLOCKCHAIN_LOG_LEVEL` | Logging verbosity | `info` |
 
 See [Operations Guide](https://logos-blockchain.github.io/logos-blockchain-testing/operations.html) for complete configuration reference.
 

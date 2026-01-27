@@ -60,9 +60,9 @@ impl ObservabilityInputs {
     /// vars are also accepted as aliases for backwards compatibility.
     pub fn from_env() -> Result<Self, MetricsError> {
         Ok(Self {
-            metrics_query_url: read_url_var(&["NOMOS_METRICS_QUERY_URL"])?,
-            metrics_otlp_ingest_url: read_url_var(&["NOMOS_METRICS_OTLP_INGEST_URL"])?,
-            grafana_url: read_url_var(&["NOMOS_GRAFANA_URL"])?,
+            metrics_query_url: read_url_var(&["LOGOS_BLOCKCHAIN_METRICS_QUERY_URL"])?,
+            metrics_otlp_ingest_url: read_url_var(&["LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL"])?,
+            grafana_url: read_url_var(&["LOGOS_BLOCKCHAIN_GRAFANA_URL"])?,
         })
     }
 

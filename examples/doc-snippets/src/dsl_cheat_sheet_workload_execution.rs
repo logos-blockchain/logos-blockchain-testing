@@ -4,7 +4,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn execution() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .expect_consensus_liveness()
         .build()?;
 

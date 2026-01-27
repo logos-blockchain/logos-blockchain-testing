@@ -17,10 +17,9 @@ use std::time::Duration;
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
-let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+let plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(5)
     .transactions_with(|txs| txs.rate(5).users(3))
-    .da_with(|da| da.channel_rate(1).blob_rate(1).headroom_percent(20))
     .expect_consensus_liveness()
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -36,30 +35,23 @@ Direct instantiation gives you explicit control over the concrete types you atta
 
 ```rust,ignore
 use std::{
-    num::{NonZeroU64, NonZeroUsize},
+    num::NonZeroUsize,
     time::Duration,
 };
 
 use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::{
     expectations::ConsensusLiveness,
-    workloads::{da, transaction},
+    workloads::transaction,
 };
 
 let tx_workload = transaction::Workload::with_rate(5)
     .expect("transaction rate must be non-zero")
     .with_user_limit(NonZeroUsize::new(3));
 
-let da_workload = da::Workload::with_rate(
-    NonZeroU64::new(1).unwrap(),  // blob rate per block
-    NonZeroU64::new(1).unwrap(),  // channel rate per block
-    da::Workload::default_headroom_percent(),
-);
-
-let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+let plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(5)
     .with_workload(tx_workload)
-    .with_workload(da_workload)
     .with_expectation(ConsensusLiveness::default())
     .with_run_duration(Duration::from_secs(60))
     .build();
@@ -75,7 +67,6 @@ let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
 | High-Level DSL | Low-Level Direct |
 |----------------|------------------|
 | `.transactions_with(\|txs\| txs.rate(5).users(3))` | `.with_workload(transaction::Workload::with_rate(5).expect(...).with_user_limit(...))` |
-| `.da_with(\|da\| da.blob_rate(1).channel_rate(1))` | `.with_workload(da::Workload::with_rate(...))` |
 | `.expect_consensus_liveness()` | `.with_expectation(ConsensusLiveness::default())` |
 
 ## Bundled Expectations (Important)
@@ -97,7 +88,7 @@ use testing_framework_workflows::{ScenarioBuilderExt, workloads::transaction};
 let tx_workload = transaction::Workload::with_rate(5)
     .expect("transaction rate must be non-zero");
 
-let plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+let plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
     .wallets(5)
     .with_workload(tx_workload)          // direct instantiation
     .expect_consensus_liveness()         // DSL

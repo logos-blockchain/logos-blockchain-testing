@@ -3,9 +3,7 @@ use std::time::Duration;
 use anyhow::{Context as _, anyhow};
 use reqwest::Url;
 use testing_framework_core::{
-    adjust_timeout,
-    scenario::http_probe::NodeRole as HttpNodeRole,
-    topology::generation::{GeneratedTopology, NodeRole as TopologyNodeRole},
+    adjust_timeout, scenario::http_probe::NODE_ROLE, topology::generation::GeneratedTopology,
 };
 use tokio::{process::Command, time::timeout};
 use tracing::{debug, info};
@@ -25,16 +23,16 @@ pub struct NodeHostPorts {
     pub testing: u16,
 }
 
-/// All host port mappings for validators.
+/// All host port mappings for nodes.
 #[derive(Clone, Debug)]
 pub struct HostPortMapping {
-    pub validators: Vec<NodeHostPorts>,
+    pub nodes: Vec<NodeHostPorts>,
 }
 
 impl HostPortMapping {
-    /// Returns API ports for all validators.
-    pub fn validator_api_ports(&self) -> Vec<u16> {
-        self.validators.iter().map(|ports| ports.api).collect()
+    /// Returns API ports for all nodes.
+    pub fn node_api_ports(&self) -> Vec<u16> {
+        self.nodes.iter().map(|ports| ports.api).collect()
     }
 }
 
@@ -46,21 +44,21 @@ pub async fn discover_host_ports(
     debug!(
         compose_file = %environment.compose_path().display(),
         project = environment.project_name(),
-        validators = descriptors.validators().len(),
+        nodes = descriptors.nodes().len(),
         "resolving compose host ports"
     );
-    let mut validators = Vec::new();
-    for node in descriptors.validators() {
-        let service = node_identifier(TopologyNodeRole::Validator, node.index());
+    let mut nodes = Vec::new();
+    for node in descriptors.nodes() {
+        let service = node_identifier(node.index());
         let api = resolve_service_port(environment, &service, node.api_port()).await?;
         let testing = resolve_service_port(environment, &service, node.testing_http_port()).await?;
-        validators.push(NodeHostPorts { api, testing });
+        nodes.push(NodeHostPorts { api, testing });
     }
 
-    let mapping = HostPortMapping { validators };
+    let mapping = HostPortMapping { nodes };
 
     info!(
-        validator_ports = ?mapping.validators,
+        node_ports = ?mapping.nodes,
         "compose host ports resolved"
     );
 
@@ -130,19 +128,19 @@ pub async fn ensure_remote_readiness_with_ports(
     descriptors: &GeneratedTopology,
     mapping: &HostPortMapping,
 ) -> Result<(), StackReadinessError> {
-    let validator_urls = mapping
-        .validators
+    let node_urls = mapping
+        .nodes
         .iter()
-        .map(|ports| readiness_url(HttpNodeRole::Validator, ports.api))
+        .map(|ports| readiness_url(NODE_ROLE, ports.api))
         .collect::<Result<Vec<_>, _>>()?;
 
     descriptors
-        .wait_remote_readiness(&validator_urls)
+        .wait_remote_readiness(&node_urls)
         .await
         .map_err(|source| StackReadinessError::Remote { source })
 }
 
-fn readiness_url(role: HttpNodeRole, port: u16) -> Result<Url, StackReadinessError> {
+fn readiness_url(role: &'static str, port: u16) -> Result<Url, StackReadinessError> {
     localhost_url(port).map_err(|source| StackReadinessError::Endpoint { role, port, source })
 }
 
@@ -150,10 +148,8 @@ fn localhost_url(port: u16) -> Result<Url, ParseError> {
     Url::parse(&format!("http://{}:{port}/", compose_runner_host()))
 }
 
-fn node_identifier(role: TopologyNodeRole, index: usize) -> String {
-    match role {
-        TopologyNodeRole::Validator => format!("validator-{index}"),
-    }
+fn node_identifier(index: usize) -> String {
+    format!("node-{index}")
 }
 
 pub(crate) fn compose_runner_host() -> String {

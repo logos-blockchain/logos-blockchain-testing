@@ -9,9 +9,9 @@ Comprehensive guide to log collection, metrics, and debugging across all runners
 | Component | Controlled By | Purpose |
 |-----------|--------------|---------|
 | **Framework binaries** (`cargo run -p runner-examples --bin local_runner`) | `RUST_LOG` | Runner orchestration, deployment logs |
-| **Node processes** (validators spawned by runner) | `NOMOS_LOG_LEVEL`, `NOMOS_LOG_FILTER` (+ `NOMOS_LOG_DIR` on host runner) | Consensus, DA, mempool, network logs |
+| **Node processes** (nodes spawned by runner) | `LOGOS_BLOCKCHAIN_LOG_LEVEL`, `LOGOS_BLOCKCHAIN_LOG_FILTER` (+ `LOGOS_BLOCKCHAIN_LOG_DIR` on host runner) | Consensus, mempool, network logs |
 
-**Common mistake:** Setting `RUST_LOG=debug` only increases verbosity of the runner binary itself. Node logs remain at their default level unless you also set `NOMOS_LOG_LEVEL=debug`.
+**Common mistake:** Setting `RUST_LOG=debug` only increases verbosity of the runner binary itself. Node logs remain at their default level unless you also set `LOGOS_BLOCKCHAIN_LOG_LEVEL=debug`.
 
 **Example:**
 
@@ -20,10 +20,10 @@ Comprehensive guide to log collection, metrics, and debugging across all runners
 RUST_LOG=debug cargo run -p runner-examples --bin local_runner
 
 # This makes the NODES verbose:
-NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_runner
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug cargo run -p runner-examples --bin local_runner
 
 # Both verbose (typically not needed):
-RUST_LOG=debug NOMOS_LOG_LEVEL=debug cargo run -p runner-examples --bin local_runner
+RUST_LOG=debug LOGOS_BLOCKCHAIN_LOG_LEVEL=debug cargo run -p runner-examples --bin local_runner
 ```
 
 ## Logging Environment Variables
@@ -32,47 +32,44 @@ See [Environment Variables Reference](environment-variables.md) for complete det
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `NOMOS_LOG_DIR` | None (console only) | Host runner: directory for per-node log files. Compose/k8s: use `cfgsync.yaml` |
-| `NOMOS_LOG_LEVEL` | `info` | Global log level: `error`, `warn`, `info`, `debug`, `trace` |
-| `NOMOS_LOG_FILTER` | None | Fine-grained target filtering (e.g., `cryptarchia=trace,nomos_da_sampling=debug`) |
-| `NOMOS_TESTS_TRACING` | false | Enable debug tracing preset |
-| `NOMOS_OTLP_ENDPOINT` | None | OTLP trace endpoint (optional) |
-| `NOMOS_OTLP_METRICS_ENDPOINT` | None | OTLP metrics endpoint (optional) |
+| `LOGOS_BLOCKCHAIN_LOG_DIR` | None (console only) | Host runner: directory for per-node log files. Compose/k8s: use `cfgsync.yaml` |
+| `LOGOS_BLOCKCHAIN_LOG_LEVEL` | `info` | Global log level: `error`, `warn`, `info`, `debug`, `trace` |
+| `LOGOS_BLOCKCHAIN_LOG_FILTER` | None | Fine-grained target filtering (e.g., `cryptarchia=trace`) |
+| `LOGOS_BLOCKCHAIN_TESTS_TRACING` | false | Enable debug tracing preset |
+| `LOGOS_BLOCKCHAIN_OTLP_ENDPOINT` | None | OTLP trace endpoint (optional) |
+| `LOGOS_BLOCKCHAIN_OTLP_METRICS_ENDPOINT` | None | OTLP metrics endpoint (optional) |
 
 **Example:** Full debug logging to files:
 
 ```bash
-NOMOS_TESTS_TRACING=true \
-NOMOS_LOG_DIR=/tmp/test-logs \
-NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug,nomos_da_dispersal=debug,nomos_da_verifier=debug" \
+LOGOS_BLOCKCHAIN_TESTS_TRACING=true \
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
+LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=info" \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
 
 ## Per-Node Log Files
 
-When `NOMOS_LOG_DIR` is set, each node writes logs to separate files:
+When `LOGOS_BLOCKCHAIN_LOG_DIR` is set, each node writes logs to separate files:
 
 **File naming pattern:**
-- **Validators**: Prefix `nomos-node-0`, `nomos-node-1`, etc. (may include timestamp suffix)
+- **Validators**: Prefix `logos-blockchain-node-0`, `logos-blockchain-node-1`, etc. (may include timestamp suffix)
 
 **Example filenames:**
-- `nomos-node-0.2024-12-18T14-30-00.log`
-- `nomos-node-1.2024-12-18T14-30-00.log`
+- `logos-blockchain-node-0.2024-12-18T14-30-00.log`
+- `logos-blockchain-node-1.2024-12-18T14-30-00.log`
 
-**Local runner note:** The local runner uses per-run temporary directories under the current working directory and removes them after the run unless `NOMOS_TESTS_KEEP_LOGS=1`. Use `NOMOS_LOG_DIR=/path/to/logs` to write per-node log files to a stable location.
+**Local runner note:** The local runner uses per-run temporary directories under the current working directory and removes them after the run unless `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`. Use `LOGOS_BLOCKCHAIN_LOG_DIR=/path/to/logs` to write per-node log files to a stable location.
 
 ## Filter Target Names
 
-Common target prefixes for `NOMOS_LOG_FILTER`:
+Common target prefixes for `LOGOS_BLOCKCHAIN_LOG_FILTER`:
 
 | Target Prefix | Subsystem |
 |---------------|-----------|
 | `cryptarchia` | Consensus (Cryptarchia) |
-| `nomos_da_sampling` | DA sampling service |
-| `nomos_da_dispersal` | DA dispersal service |
-| `nomos_da_verifier` | DA verification |
 | `nomos_blend` | Mix network/privacy layer |
 | `chain_service` | Chain service (node APIs/state) |
 | `chain_network` | P2P networking |
@@ -81,7 +78,7 @@ Common target prefixes for `NOMOS_LOG_FILTER`:
 **Example filter:**
 
 ```bash
-NOMOS_LOG_FILTER="cryptarchia=trace,nomos_da_sampling=debug,chain_service=info,chain_network=info"
+LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=info"
 ```
 
 ---
@@ -101,17 +98,17 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 **Persistent file output:**
 
 ```bash
-NOMOS_LOG_DIR=/tmp/local-logs \
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/local-logs \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # After test completes:
 ls /tmp/local-logs/
-# Files with prefix: nomos-node-0*, nomos-node-1*
+# Files with prefix: logos-blockchain-node-0*, logos-blockchain-node-1*
 # May include timestamps in filename
 ```
 
-**Tip:** Use `NOMOS_LOG_DIR` for persistent per-node log files, and `NOMOS_TESTS_KEEP_LOGS=1` if you want to keep the per-run temporary directories (configs/state) for post-mortem inspection.
+**Tip:** Use `LOGOS_BLOCKCHAIN_LOG_DIR` for persistent per-node log files, and `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1` if you want to keep the per-run temporary directories (configs/state) for post-mortem inspection.
 
 ### Compose Runner (Docker Containers)
 
@@ -125,7 +122,7 @@ docker ps --filter "name=nomos-compose-"
 docker logs -f <container-id-or-name>
 
 # Or use name pattern matching:
-docker logs -f $(docker ps --filter "name=nomos-compose-.*-validator-0" -q | head -1)
+docker logs -f $(docker ps --filter "name=nomos-compose-.*-node-0" -q | head -1)
 
 # Show last 100 lines
 docker logs --tail 100 <container-id>
@@ -139,7 +136,7 @@ To write per-node log files inside containers, set `tracing_settings.logger: !Fi
 
 ```bash
 # Ensure cfgsync.yaml is configured to log to /logs
-NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
 POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 
@@ -161,7 +158,7 @@ volumes:
 
 ```bash
 COMPOSE_RUNNER_PRESERVE=1 \
-NOMOS_TESTNET_IMAGE=logos-blockchain-testing:local \
+LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
 cargo run -p runner-examples --bin compose_runner
 # Containers remain running after test—inspect with docker logs or docker exec
 ```
@@ -172,7 +169,7 @@ cargo run -p runner-examples --bin compose_runner
 - `TESTNET_RUNNER_PRESERVE=1` — alias for `COMPOSE_RUNNER_PRESERVE=1`
 - `COMPOSE_RUNNER_HTTP_TIMEOUT_SECS=<secs>` — override HTTP readiness timeout
 
-**Note:** Container names follow pattern `nomos-compose-{uuid}-validator-{index}-1` where `{uuid}` changes per run.
+**Note:** Container names follow pattern `nomos-compose-{uuid}-node-{index}-1` where `{uuid}` changes per run.
 
 ### K8s Runner (Kubernetes Pods)
 
@@ -184,25 +181,25 @@ kubectl get pods
 
 # Stream logs using label selectors (recommended)
 # Helm chart labels:
-# - nomos/logical-role=validator
-# - nomos/validator-index
-kubectl logs -l nomos/logical-role=validator -f
+# - nomos/logical-role=node
+# - nomos/node-index
+kubectl logs -l nomos/logical-role=node -f
 
 # Stream logs from specific pod
-kubectl logs -f nomos-validator-0
+kubectl logs -f logos-blockchain-node-0
 
 # Previous logs from crashed pods
-kubectl logs --previous -l nomos/logical-role=validator
+kubectl logs --previous -l nomos/logical-role=node
 ```
 
 **Download logs for offline analysis:**
 
 ```bash
 # Using label selectors
-kubectl logs -l nomos/logical-role=validator --tail=1000 > all-validators.log
+kubectl logs -l nomos/logical-role=node --tail=1000 > all-nodes.log
 
 # Specific pods
-kubectl logs nomos-validator-0 > validator-0.log
+kubectl logs logos-blockchain-node-0 > node-0.log
 ```
 
 **K8s debugging variables:**
@@ -214,7 +211,7 @@ kubectl logs nomos-validator-0 > validator-0.log
 **Specify namespace (if not using default):**
 
 ```bash
-kubectl logs -n my-namespace -l nomos/logical-role=validator -f
+kubectl logs -n my-namespace -l nomos/logical-role=node -f
 ```
 
 **Note:** K8s runner is optimized for local clusters (Docker Desktop K8s, minikube, kind). Remote clusters require additional setup.
@@ -228,8 +225,8 @@ kubectl logs -n my-namespace -l nomos/logical-role=validator -f
 **To enable OTLP:**
 
 ```bash
-NOMOS_OTLP_ENDPOINT=http://localhost:4317 \
-NOMOS_OTLP_METRICS_ENDPOINT=http://localhost:4318 \
+LOGOS_BLOCKCHAIN_OTLP_ENDPOINT=http://localhost:4317 \
+LOGOS_BLOCKCHAIN_OTLP_METRICS_ENDPOINT=http://localhost:4318 \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -247,7 +244,7 @@ Runners expose metrics and node HTTP endpoints for expectation code and debuggin
 - For a ready-to-run stack, use `scripts/setup/setup-observability.sh`:
   - Compose: `scripts/setup/setup-observability.sh compose up` then `scripts/setup/setup-observability.sh compose env`
   - K8s: `scripts/setup/setup-observability.sh k8s install` then `scripts/setup/setup-observability.sh k8s env`
-- Provide `NOMOS_METRICS_QUERY_URL` (PromQL base URL) to enable `ctx.telemetry()` queries
+- Provide `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` (PromQL base URL) to enable `ctx.telemetry()` queries
 - Access from expectations when configured: `ctx.telemetry().prometheus().map(|p| p.base_url())`
 
 **Example:**
@@ -261,13 +258,13 @@ eval $(scripts/setup/setup-observability.sh compose env)
 
 # Run scenario with metrics
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 ### Grafana (Optional)
 
 - Runners do **not** provision Grafana automatically (but `scripts/setup/setup-observability.sh` can)
-- If you set `NOMOS_GRAFANA_URL`, the deployer prints it in `TESTNET_ENDPOINTS`
+- If you set `LOGOS_BLOCKCHAIN_GRAFANA_URL`, the deployer prints it in `TESTNET_ENDPOINTS`
 - Dashboards live in `testing-framework/assets/stack/monitoring/grafana/dashboards/` (the bundled stack auto-provisions them)
 
 **Example:**
@@ -277,16 +274,16 @@ scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
 scripts/setup/setup-observability.sh compose up
 eval $(scripts/setup/setup-observability.sh compose env)
 
-export NOMOS_GRAFANA_URL=http://localhost:3000
-POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+export LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000
+POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 **Default bundled Grafana login:** `admin` / `admin` (see `scripts/observability/compose/docker-compose.yml`).
 
 ### Node APIs
 
-- Access from expectations: `ctx.node_clients().validator_clients().get(0)`
-- Endpoints: consensus info, network info, DA membership, etc.
+- Access from expectations: `ctx.node_clients().node_clients().get(0)`
+- Endpoints: consensus info, network info, etc.
 - See `testing-framework/core/src/nodes/api_client.rs` for available methods
 
 **Example usage in expectations:**
@@ -295,10 +292,10 @@ POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
 use testing_framework_core::scenario::{DynError, RunContext};
 
 async fn evaluate(ctx: &RunContext) -> Result<(), DynError> {
-    let client = &ctx.node_clients().validator_clients()[0];
+    let client = &ctx.node_clients().node_clients()[0];
 
     let info = client.consensus_info().await?;
-    tracing::info!(height = info.height, "consensus info from validator 0");
+    tracing::info!(height = info.height, "consensus info from node 0");
 
     Ok(())
 }
@@ -322,11 +319,11 @@ flowchart TD
 ### Debug Logging (Host)
 
 ```bash
-NOMOS_LOG_DIR=/tmp/logs \
-NOMOS_LOG_LEVEL=debug \
-NOMOS_LOG_FILTER="cryptarchia=trace" \
+LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/logs \
+LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
+LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 host
+scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
 ### Compose with Observability
@@ -338,7 +335,7 @@ eval $(scripts/setup/setup-observability.sh compose env)
 
 # Run with metrics
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 compose
+scripts/run/run-examples.sh -t 60 -n 3 compose
 
 # Access Grafana at http://localhost:3000
 ```
@@ -350,10 +347,10 @@ K8S_RUNNER_NAMESPACE=nomos-debug \
 K8S_RUNNER_DEBUG=1 \
 K8S_RUNNER_PRESERVE=1 \
 POL_PROOF_DEV_MODE=true \
-scripts/run/run-examples.sh -t 60 -v 3 -e 1 k8s
+scripts/run/run-examples.sh -t 60 -n 3 k8s
 
 # Inspect logs
-kubectl logs -n nomos-debug -l nomos/logical-role=validator
+kubectl logs -n nomos-debug -l nomos/logical-role=node
 ```
 
 ---

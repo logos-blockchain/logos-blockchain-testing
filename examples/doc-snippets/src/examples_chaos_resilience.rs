@@ -6,7 +6,7 @@ use testing_framework_runner_compose::ComposeDeployer;
 use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub async fn chaos_resilience() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(4))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(4))
         .enable_node_control()
         .wallets(20)
         .transactions_with(|txs| txs.rate(3).users(10))

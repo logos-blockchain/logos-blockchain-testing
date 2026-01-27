@@ -13,18 +13,18 @@ Operational readiness focuses on prerequisites, environment fit, and clear signa
 
 **Prerequisites:**
 - `versions.env` file at repository root (required by helper scripts)
-- Node binaries (`nomos-node`) available or built on demand
+- Node binaries (`logos-blockchain-node`) available or built on demand
 - Platform requirements met (Docker for compose, cluster access for k8s)
-- Circuit assets for DA workloads
+- Circuit assets for proof generation
 
 **Artifacts:**
-- KZG parameters (circuit assets) for Data Availability scenarios
+- Circuit parameters required by the node binary
 - Docker images for compose/k8s deployments
 - Binary bundles for reproducible builds
 
 **Environment Configuration:**
 - `POL_PROOF_DEV_MODE=true` is **REQUIRED for all runners** to avoid expensive proof generation
-- Logging configured via `NOMOS_LOG_*` variables
+- Logging configured via `LOGOS_BLOCKCHAIN_LOG_*` variables
 - Observability endpoints (Prometheus, Grafana) optional but useful
 
 **Readiness & Health:**
@@ -78,4 +78,3 @@ This Operations & Deployment section covers:
 - [Logging & Observability](logging-observability.md) — Log collection, metrics, and debugging
 
 **Philosophy:** Treat operational hygiene—assets present, prerequisites satisfied, observability reachable—as the first step to reliable scenario outcomes.
-

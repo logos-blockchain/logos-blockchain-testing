@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use testing_framework_core::{
-    scenario::{
-        MetricsError,
-        http_probe::{HttpReadinessError, NodeRole},
-    },
+    scenario::{MetricsError, http_probe::HttpReadinessError},
     topology::readiness::ReadinessError,
 };
 use url::ParseError;
@@ -14,8 +11,8 @@ use crate::{docker::commands::ComposeCommandError, infrastructure::template::Tem
 #[derive(Debug, thiserror::Error)]
 /// Top-level compose runner errors.
 pub enum ComposeRunnerError {
-    #[error("compose runner requires at least one validator (validators={validators})")]
-    MissingValidator { validators: usize },
+    #[error("compose runner requires at least one node (nodes={nodes})")]
+    MissingNode { nodes: usize },
     #[error("docker does not appear to be available on this host")]
     DockerUnavailable,
     #[error("failed to resolve host port for {service} container port {container_port}: {source}")]
@@ -37,7 +34,7 @@ pub enum ComposeRunnerError {
     NodeClients(#[from] NodeClientError),
     #[error(transparent)]
     Telemetry(#[from] MetricsError),
-    #[error("block feed requires at least one validator client")]
+    #[error("block feed requires at least one node client")]
     BlockFeedMissing,
     #[error("failed to start block feed: {source}")]
     BlockFeed {
@@ -45,7 +42,7 @@ pub enum ComposeRunnerError {
         source: anyhow::Error,
     },
     #[error(
-        "docker image '{image}' is not available; set NOMOS_TESTNET_IMAGE or build the image manually"
+        "docker image '{image}' is not available; set LOGOS_BLOCKCHAIN_TESTNET_IMAGE or build the image manually"
     )]
     MissingImage { image: String },
     #[error("failed to prepare docker image: {source}")]
@@ -103,9 +100,9 @@ pub enum ConfigError {
 pub enum StackReadinessError {
     #[error(transparent)]
     Http(#[from] HttpReadinessError),
-    #[error("failed to build readiness URL for {role} port {port}: {source}", role = role.label())]
+    #[error("failed to build readiness URL for {role} port {port}: {source}")]
     Endpoint {
-        role: NodeRole,
+        role: &'static str,
         port: u16,
         #[source]
         source: ParseError,
@@ -120,12 +117,9 @@ pub enum StackReadinessError {
 #[derive(Debug, thiserror::Error)]
 /// Node client construction failures.
 pub enum NodeClientError {
-    #[error(
-        "failed to build {endpoint} client URL for {role} port {port}: {source}",
-        role = role.label()
-    )]
+    #[error("failed to build {endpoint} client URL for {role} port {port}: {source}")]
     Endpoint {
-        role: NodeRole,
+        role: &'static str,
         endpoint: &'static str,
         port: u16,
         #[source]

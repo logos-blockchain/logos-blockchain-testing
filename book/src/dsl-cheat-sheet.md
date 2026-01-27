@@ -22,7 +22,7 @@ use testing_framework_core::scenario::{Builder, ScenarioBuilder};
 pub fn topology() -> Builder<()> {
     ScenarioBuilder::topology_with(|t| {
         t.network_star() // Star topology (all connect to seed node)
-            .validators(3) // Number of validator nodes
+            .nodes(3) // Number of nodes
     })
 }
 ```
@@ -34,7 +34,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn wallets_plan() -> testing_framework_core::scenario::Scenario<()> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .wallets(50) // Seed 50 funded wallet accounts
         .build()
 }
@@ -47,30 +47,12 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn transactions_plan() -> testing_framework_core::scenario::Scenario<()> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .wallets(50)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
                 .users(20) // Use 20 of the seeded wallets
         }) // Finish transaction workload config
-        .build()
-}
-```
-
-## DA Workload
-
-```rust,ignore
-use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::ScenarioBuilderExt;
-
-pub fn da_plan() -> testing_framework_core::scenario::Scenario<()> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
-        .wallets(50)
-        .da_with(|da| {
-            da.channel_rate(1) // number of DA channels to run
-                .blob_rate(2) // target 2 blobs per block (headroom applied)
-                .headroom_percent(20) // optional headroom when sizing channels
-        }) // Finish DA workload config
         .build()
 }
 ```
@@ -84,7 +66,7 @@ use testing_framework_core::scenario::{NodeControlCapability, ScenarioBuilder};
 use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub fn chaos_plan() -> testing_framework_core::scenario::Scenario<NodeControlCapability> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .enable_node_control() // Enable node control capability
         .chaos_with(|c| {
             c.restart() // Random restart chaos
@@ -104,7 +86,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn expectations_plan() -> testing_framework_core::scenario::Scenario<()> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .expect_consensus_liveness() // Assert blocks are produced continuously
         .build()
 }
@@ -119,7 +101,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn run_duration_plan() -> testing_framework_core::scenario::Scenario<()> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .with_run_duration(Duration::from_secs(120)) // Run for 120 seconds
         .build()
 }
@@ -132,7 +114,7 @@ use testing_framework_core::scenario::ScenarioBuilder;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub fn build_plan() -> testing_framework_core::scenario::Scenario<()> {
-    ScenarioBuilder::topology_with(|t| t.network_star().validators(1)).build() // Construct the final Scenario
+    ScenarioBuilder::topology_with(|t| t.network_star().nodes(1)).build() // Construct the final Scenario
 }
 ```
 
@@ -164,7 +146,7 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn execution() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(1))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
         .expect_consensus_liveness()
         .build();
 
@@ -187,16 +169,11 @@ use testing_framework_runner_local::LocalDeployer;
 use testing_framework_workflows::ScenarioBuilderExt;
 
 pub async fn run_test() -> Result<()> {
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().validators(3))
+    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
         .wallets(50)
         .transactions_with(|txs| {
             txs.rate(5) // 5 transactions per block
                 .users(20)
-        })
-        .da_with(|da| {
-            da.channel_rate(1) // number of DA channels
-                .blob_rate(2) // target 2 blobs per block
-                .headroom_percent(20) // optional channel headroom
         })
         .expect_consensus_liveness()
         .with_run_duration(Duration::from_secs(90))

@@ -23,6 +23,7 @@
   - [RunContext: BlockFeed & Node Control](node-control.md)
   - [Chaos Workloads](chaos.md)
   - [Topology & Chaos Patterns](topology-chaos.md)
+  - [Manual Clusters: Imperative Control](manual-cluster.md)
 - [Part III — Developer Reference](part-iii.md)
   - [Scenario Model (Developer Level)](scenario-model.md)
   - [API Levels: Builder DSL vs. Direct](api-levels.md)

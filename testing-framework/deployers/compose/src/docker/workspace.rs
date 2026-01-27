@@ -5,10 +5,7 @@ use std::{
 
 use anyhow::{Context as _, Result};
 use tempfile::TempDir;
-use testing_framework_config::constants::{
-    DEFAULT_ASSETS_STACK_DIR, DEFAULT_KZG_HOST_DIR, KZG_PARAMS_FILENAME,
-};
-use testing_framework_env;
+use testing_framework_config::constants::DEFAULT_ASSETS_STACK_DIR;
 use tracing::{debug, info};
 
 /// Copy the repository stack assets into a scenario-specific temp dir.
@@ -52,40 +49,6 @@ impl ComposeWorkspace {
         let scripts_source = stack_scripts_root(&repo_root);
         if scripts_source.exists() {
             copy_dir_recursive(&scripts_source, &temp.path().join("stack/scripts"))?;
-        }
-
-        let kzg_source = repo_root.join(
-            testing_framework_env::nomos_kzg_dir_rel()
-                .unwrap_or_else(|| DEFAULT_KZG_HOST_DIR.to_string()),
-        );
-        let target = temp.path().join(KZG_PARAMS_FILENAME);
-        if kzg_source.exists() {
-            if kzg_source.is_dir() {
-                copy_dir_recursive(&kzg_source, &target)?;
-            } else {
-                fs::copy(&kzg_source, &target).with_context(|| {
-                    format!("copying {} -> {}", kzg_source.display(), target.display())
-                })?;
-            }
-        }
-        // Fail fast if the KZG bundle is missing or empty; DA verifier will panic
-        // otherwise.
-        if !target.exists()
-            || fs::read_dir(&target)
-                .ok()
-                .map(|mut it| it.next().is_none())
-                .unwrap_or(true)
-        {
-            anyhow::bail!(
-                "\nKZG params missing in stack assets (expected files in {})\
-                \nrepo_root: {}\
-                \ntarget: {}\
-                \nnomos_kzg_dir_rel(): {:?}\n",
-                kzg_source.display(),
-                repo_root.display(),
-                target.display(),
-                testing_framework_env::nomos_kzg_dir_rel(),
-            );
         }
 
         info!(root = %temp.path().display(), "compose workspace created");

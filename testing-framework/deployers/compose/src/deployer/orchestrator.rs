@@ -50,7 +50,7 @@ impl DeploymentOrchestrator {
         } = setup.prepare_workspace(&observability).await?;
 
         tracing::info!(
-            validators = descriptors.validators().len(),
+            nodes = descriptors.nodes().len(),
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
             metrics_query_url = observability.metrics_query_url.as_ref().map(|u| u.as_str()),
@@ -62,7 +62,7 @@ impl DeploymentOrchestrator {
             "compose deployment starting"
         );
 
-        let validator_count = descriptors.validators().len();
+        let node_count = descriptors.nodes().len();
         let host_ports = PortManager::prepare(&mut environment, &descriptors).await?;
 
         wait_for_readiness_or_grace_period(
@@ -102,7 +102,7 @@ impl DeploymentOrchestrator {
         );
 
         info!(
-            validators = validator_count,
+            nodes = node_count,
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
             host,
@@ -195,22 +195,22 @@ fn maybe_print_endpoints(observability: &ObservabilityInputs, host: &str, ports:
 }
 
 fn log_profiling_urls(host: &str, ports: &HostPortMapping) {
-    for (idx, node) in ports.validators.iter().enumerate() {
+    for (idx, node) in ports.nodes.iter().enumerate() {
         tracing::info!(
-            validator = idx,
+            node = idx,
             profiling_url = %format!(
                 "http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
                 host, node.api
             ),
-            "validator profiling endpoint (profiling feature required)"
+            "node profiling endpoint (profiling feature required)"
         );
     }
 }
 
 fn print_profiling_urls(host: &str, ports: &HostPortMapping) {
-    for (idx, node) in ports.validators.iter().enumerate() {
+    for (idx, node) in ports.nodes.iter().enumerate() {
         println!(
-            "TESTNET_PPROF validator_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
+            "TESTNET_PPROF node_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
             idx, host, node.api
         );
     }

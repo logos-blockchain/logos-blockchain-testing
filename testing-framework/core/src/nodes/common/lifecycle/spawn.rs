@@ -12,8 +12,8 @@ use tracing::debug;
 
 use crate::nodes::common::config::injection::normalize_ed25519_sigs;
 
-/// Configure tracing logger to write into `NOMOS_LOG_DIR` if set, else into the
-/// provided base dir.
+/// Configure tracing logger to write into `LOGOS_BLOCKCHAIN_LOG_DIR` if set,
+/// else into the provided base dir.
 pub fn configure_logging<F>(base_dir: &Path, prefix: &str, set_logger: F)
 where
     F: FnOnce(FileConfig),

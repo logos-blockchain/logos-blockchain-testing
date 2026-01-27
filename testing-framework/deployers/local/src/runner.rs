@@ -19,10 +19,12 @@ use crate::{
     manual::{LocalManualCluster, ManualClusterError},
     node_control::{LocalDynamicNodes, LocalDynamicSeed},
 };
-/// Spawns validators as local processes, reusing the existing
+/// Spawns nodes as local processes, reusing the existing
 /// integration harness.
 #[derive(Clone)]
-pub struct LocalDeployer {}
+pub struct LocalDeployer {
+    membership_check: bool,
+}
 
 /// Errors surfaced by the local deployer while driving a scenario.
 #[derive(Debug, Error)]
@@ -66,10 +68,10 @@ impl Deployer<()> for LocalDeployer {
 
     async fn deploy(&self, scenario: &Scenario<()>) -> Result<Runner, Self::Error> {
         info!(
-            validators = scenario.topology().validators().len(),
+            nodes = scenario.topology().nodes().len(),
             "starting local deployment"
         );
-        let topology = Self::prepare_topology(scenario).await?;
+        let topology = Self::prepare_topology(scenario, self.membership_check).await?;
         let node_clients = NodeClients::from_topology(scenario.topology(), &topology);
 
         let (block_feed, block_feed_guard) = spawn_block_feed_with(&node_clients).await?;
@@ -97,11 +99,11 @@ impl Deployer<NodeControlCapability> for LocalDeployer {
         scenario: &Scenario<NodeControlCapability>,
     ) -> Result<Runner, Self::Error> {
         info!(
-            validators = scenario.topology().validators().len(),
+            nodes = scenario.topology().nodes().len(),
             "starting local deployment with node control"
         );
 
-        let topology = Self::prepare_topology(scenario).await?;
+        let topology = Self::prepare_topology(scenario, self.membership_check).await?;
         let node_clients = NodeClients::from_topology(scenario.topology(), &topology);
         let node_control = Arc::new(LocalDynamicNodes::new_with_seed(
             scenario.topology().clone(),
@@ -132,6 +134,14 @@ impl LocalDeployer {
         Self::default()
     }
 
+    #[must_use]
+    /// Configure whether the deployer should enforce membership readiness
+    /// checks.
+    pub fn with_membership_check(mut self, enabled: bool) -> Self {
+        self.membership_check = enabled;
+        self
+    }
+
     /// Build a manual cluster using this deployer's local implementation.
     pub fn manual_cluster(
         &self,
@@ -142,13 +152,11 @@ impl LocalDeployer {
 
     async fn prepare_topology<Caps>(
         scenario: &Scenario<Caps>,
+        membership_check: bool,
     ) -> Result<Topology, LocalDeployerError> {
         let descriptors = scenario.topology();
 
-        info!(
-            validators = descriptors.validators().len(),
-            "spawning local validators"
-        );
+        info!(nodes = descriptors.nodes().len(), "spawning local nodes");
 
         let topology = descriptors
             .clone()
@@ -156,12 +164,16 @@ impl LocalDeployer {
             .await
             .map_err(|source| LocalDeployerError::Spawn { source })?;
 
-        wait_for_readiness(&topology).await.map_err(|source| {
-            debug!(error = ?source, "local readiness failed");
-            LocalDeployerError::ReadinessFailed { source }
-        })?;
+        if membership_check {
+            wait_for_readiness(&topology).await.map_err(|source| {
+                debug!(error = ?source, "local readiness failed");
+                LocalDeployerError::ReadinessFailed { source }
+            })?;
 
-        info!("local nodes are ready");
+            info!("local nodes are ready");
+        } else {
+            info!("skipping local membership readiness checks");
+        }
 
         Ok(topology)
     }
@@ -169,7 +181,9 @@ impl LocalDeployer {
 
 impl Default for LocalDeployer {
     fn default() -> Self {
-        Self {}
+        Self {
+            membership_check: true,
+        }
     }
 }
 
@@ -184,13 +198,13 @@ async fn spawn_block_feed_with(
     node_clients: &NodeClients,
 ) -> Result<(BlockFeed, BlockFeedTask), LocalDeployerError> {
     debug!(
-        validators = node_clients.validator_clients().len(),
-        "selecting validator client for local block feed"
+        nodes = node_clients.node_clients().len(),
+        "selecting node client for local block feed"
     );
 
-    let Some(block_source_client) = node_clients.random_validator() else {
+    let Some(block_source_client) = node_clients.random_node() else {
         return Err(LocalDeployerError::WorkloadFailed {
-            source: "block feed requires at least one validator".into(),
+            source: "block feed requires at least one node".into(),
         });
     };
 

@@ -14,7 +14,7 @@ environment and operational considerations, see [Operations Overview](operations
 - **Can run in CI** for fast smoke tests.
 - **Node control:** Not supported (chaos workloads not available)
 
-**Run with:** `scripts/run/run-examples.sh -t 60 -v 1 -e 1 host`
+**Run with:** `scripts/run/run-examples.sh -t 60 -n 1 host`
 
 ## Docker Compose runner
 - Starts nodes in containers to provide a reproducible multi-node stack on a
@@ -25,7 +25,7 @@ environment and operational considerations, see [Operations Overview](operations
 - **Recommended for CI pipelines** (isolated environment, reproducible).
 - **Node control:** Supported (can restart nodes for chaos testing)
 
-**Run with:** `scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose`
+**Run with:** `scripts/run/run-examples.sh -t 60 -n 1 compose`
 
 ## Kubernetes runner
 - Deploys nodes onto a cluster for higher-fidelity, longer-running scenarios (via `K8sDeployer`).
@@ -34,10 +34,10 @@ environment and operational considerations, see [Operations Overview](operations
   and scheduling matter.
 - **Node control:** Not supported yet (chaos workloads not available)
 
-**Run with:** `scripts/run/run-examples.sh -t 60 -v 1 -e 1 k8s`
+**Run with:** `scripts/run/run-examples.sh -t 60 -n 1 k8s`
 
 ### Common expectations
-- All runners require at least one validator and, for transaction scenarios,
+- All runners require at least one node and, for transaction scenarios,
   access to seeded wallets.
 - Readiness probes gate workload start so traffic begins only after nodes are
   reachable.

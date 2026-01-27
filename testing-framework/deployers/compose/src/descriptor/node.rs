@@ -1,9 +1,11 @@
 use serde::Serialize;
 use testing_framework_core::topology::generation::GeneratedNodeConfig;
 
-use super::{ComposeNodeKind, base_environment, base_volumes, default_extra_hosts};
+use super::{
+    NODE_ENTRYPOINT, base_environment, base_volumes, default_extra_hosts, node_instance_name,
+};
 
-/// Describes a validator container in the compose stack.
+/// Describes a node container in the compose stack.
 #[derive(Clone, Debug, Serialize)]
 pub struct NodeDescriptor {
     name: String,
@@ -45,16 +47,14 @@ impl EnvEntry {
 
 impl NodeDescriptor {
     pub(crate) fn from_node(
-        kind: ComposeNodeKind,
         index: usize,
         node: &GeneratedNodeConfig,
         image: &str,
         platform: Option<&str>,
-        use_kzg_mount: bool,
         cfgsync_port: u16,
     ) -> Self {
-        let mut environment = base_environment(cfgsync_port, use_kzg_mount);
-        let identifier = kind.instance_name(index);
+        let mut environment = base_environment(cfgsync_port);
+        let identifier = node_instance_name(index);
         let api_port = node.general.api_config.address.port();
         let testing_port = node.general.api_config.testing_http_address.port();
         environment.extend([
@@ -77,10 +77,10 @@ impl NodeDescriptor {
         ];
 
         Self {
-            name: kind.instance_name(index),
+            name: node_instance_name(index),
             image: image.to_owned(),
-            entrypoint: kind.entrypoint().to_owned(),
-            volumes: base_volumes(use_kzg_mount),
+            entrypoint: NODE_ENTRYPOINT.to_owned(),
+            volumes: base_volumes(),
             extra_hosts: default_extra_hosts(),
             ports,
             environment,

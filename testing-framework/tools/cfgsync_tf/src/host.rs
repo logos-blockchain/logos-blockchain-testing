@@ -6,7 +6,7 @@ use testing_framework_config::constants::{
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub enum HostKind {
-    Validator,
+    Node,
 }
 
 #[derive(Eq, PartialEq, Hash, Clone)]
@@ -42,8 +42,8 @@ impl Host {
     }
 
     #[must_use]
-    pub fn validator_from_ip(ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
-        Self::from_parts(HostKind::Validator, ip, identifier, ports)
+    pub fn node_from_ip(ip: Ipv4Addr, identifier: String, ports: PortOverrides) -> Self {
+        Self::from_parts(HostKind::Node, ip, identifier, ports)
     }
 }
 
@@ -57,7 +57,7 @@ pub fn sort_hosts(mut hosts: Vec<Host>) -> Vec<Host> {
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(0);
         let kind = match host.kind {
-            HostKind::Validator => 0,
+            HostKind::Node => 0,
         };
         (kind, index)
     });

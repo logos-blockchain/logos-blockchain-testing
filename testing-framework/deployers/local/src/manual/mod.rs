@@ -49,19 +49,19 @@ impl LocalManualCluster {
         self.nodes.node_client(name)
     }
 
-    pub async fn start_validator(&self, name: &str) -> Result<StartedNode, ManualClusterError> {
+    pub async fn start_node(&self, name: &str) -> Result<StartedNode, ManualClusterError> {
         Ok(self
             .nodes
-            .start_validator_with(name, StartNodeOptions::default())
+            .start_node_with(name, StartNodeOptions::default())
             .await?)
     }
 
-    pub async fn start_validator_with(
+    pub async fn start_node_with(
         &self,
         name: &str,
         options: StartNodeOptions,
     ) -> Result<StartedNode, ManualClusterError> {
-        Ok(self.nodes.start_validator_with(name, options).await?)
+        Ok(self.nodes.start_node_with(name, options).await?)
     }
 
     pub fn stop_all(&self) {
@@ -94,12 +94,12 @@ impl Drop for LocalManualCluster {
 
 #[async_trait::async_trait]
 impl ManualClusterHandle for LocalManualCluster {
-    async fn start_validator_with(
+    async fn start_node_with(
         &self,
         name: &str,
         options: StartNodeOptions,
     ) -> Result<StartedNode, DynError> {
-        self.start_validator_with(name, options)
+        self.start_node_with(name, options)
             .await
             .map_err(|err| err.into())
     }

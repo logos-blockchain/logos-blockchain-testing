@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NOMOS_NODE_REV="${NOMOS_NODE_REV:?NOMOS_NODE_REV build arg missing}"
+LOGOS_BLOCKCHAIN_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV:?LOGOS_BLOCKCHAIN_NODE_REV build arg missing}"
 
 mkdir -p /workspace/artifacts
 
@@ -9,7 +9,7 @@ TARGET_ARCH="$(uname -m)"
 
 have_prebuilt() {
   [ -f testing-framework/assets/stack/bin/logos-blockchain-node ] && \
-  [ -f testing-framework/assets/stack/bin/logos-blockchain-cli ]
+  [ -f testing-framework/assets/stack/bin/logos-blockchain-node ]
 }
 
 bin_matches_arch() {
@@ -33,7 +33,6 @@ bin_matches_arch() {
 if have_prebuilt && bin_matches_arch; then
   echo "Using prebuilt logos-blockchain binaries from testing-framework/assets/stack/bin"
   cp testing-framework/assets/stack/bin/logos-blockchain-node /workspace/artifacts/logos-blockchain-node
-  cp testing-framework/assets/stack/bin/logos-blockchain-cli /workspace/artifacts/logos-blockchain-cli
   exit 0
 fi
 
@@ -43,31 +42,18 @@ else
   echo "Prebuilt logos-blockchain binaries missing; building from source"
 fi
 
-echo "Building logos-blockchain binaries from source (rev ${NOMOS_NODE_REV})"
+echo "Building logos-blockchain binaries from source (rev ${LOGOS_BLOCKCHAIN_NODE_REV})"
 git clone https://github.com/logos-co/nomos-node.git /tmp/nomos-node
 cd /tmp/nomos-node
-git fetch --depth 1 origin "${NOMOS_NODE_REV}"
-git checkout "${NOMOS_NODE_REV}"
+git fetch --depth 1 origin "${LOGOS_BLOCKCHAIN_NODE_REV}"
+git checkout "${LOGOS_BLOCKCHAIN_NODE_REV}"
 git reset --hard
 git clean -fdx
 
-# Enable real verification keys when available.
-if [ -f "/opt/circuits/zksign/verification_key.json" ] \
-  || [ -f "/opt/circuits/pol/verification_key.json" ] \
-  || [ -f "/opt/circuits/poq/verification_key.json" ] \
-  || [ -f "/opt/circuits/poc/verification_key.json" ]; then
-  export CARGO_FEATURE_BUILD_VERIFICATION_KEY=1
-else
-  unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
-fi
-
 # Enable pol-dev-mode via cfg to let POL_PROOF_DEV_MODE short-circuit proofs in tests.
-RUSTFLAGS='--cfg feature="pol-dev-mode"' NOMOS_CIRCUITS=/opt/circuits \
-  LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits \
-  cargo build --features "testing" \
-  -p logos-blockchain-node -p logos-blockchain-cli
+RUSTFLAGS='--cfg feature="pol-dev-mode"' \
+  cargo build --features "testing" -p logos-blockchain-node
 
 cp /tmp/nomos-node/target/debug/logos-blockchain-node /workspace/artifacts/logos-blockchain-node
-cp /tmp/nomos-node/target/debug/logos-blockchain-cli /workspace/artifacts/logos-blockchain-cli
 
 rm -rf /tmp/nomos-node/target/debug/incremental

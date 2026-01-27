@@ -4,7 +4,7 @@ use testing_framework_env as tf_env;
 use tracing::debug;
 
 /// Select the compose image and optional platform, honoring
-/// NOMOS_TESTNET_IMAGE.
+/// LOGOS_BLOCKCHAIN_TESTNET_IMAGE.
 pub fn resolve_image() -> (String, Option<String>) {
     let image = tf_env::nomos_testnet_image()
         .unwrap_or_else(|| String::from("logos-blockchain-testing:local"));

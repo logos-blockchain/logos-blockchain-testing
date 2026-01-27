@@ -4,10 +4,7 @@ use std::{
 };
 
 use serde::Serialize;
-use testing_framework_core::{
-    kzg::KzgParamsSpec,
-    topology::generation::{GeneratedNodeConfig, GeneratedTopology},
-};
+use testing_framework_core::topology::generation::{GeneratedNodeConfig, GeneratedTopology};
 use testing_framework_env as tf_env;
 
 use crate::docker::platform::{host_gateway_entry, resolve_image};
@@ -20,7 +17,7 @@ use testing_framework_config::constants::DEFAULT_CFGSYNC_PORT;
 /// Top-level docker-compose descriptor built from a GeneratedTopology.
 #[derive(Clone, Debug, Serialize)]
 pub struct ComposeDescriptor {
-    validators: Vec<NodeDescriptor>,
+    nodes: Vec<NodeDescriptor>,
 }
 
 impl ComposeDescriptor {
@@ -31,8 +28,8 @@ impl ComposeDescriptor {
     }
 
     #[cfg(test)]
-    pub fn validators(&self) -> &[NodeDescriptor] {
-        &self.validators
+    pub fn nodes(&self) -> &[NodeDescriptor] {
+        &self.nodes
     }
 }
 
@@ -40,7 +37,6 @@ impl ComposeDescriptor {
 /// template.
 pub struct ComposeDescriptorBuilder<'a> {
     topology: &'a GeneratedTopology,
-    use_kzg_mount: bool,
     cfgsync_port: Option<u16>,
 }
 
@@ -48,16 +44,8 @@ impl<'a> ComposeDescriptorBuilder<'a> {
     const fn new(topology: &'a GeneratedTopology) -> Self {
         Self {
             topology,
-            use_kzg_mount: false,
             cfgsync_port: None,
         }
-    }
-
-    #[must_use]
-    /// Mount KZG parameters into nodes when enabled.
-    pub const fn with_kzg_mount(mut self, enabled: bool) -> Self {
-        self.use_kzg_mount = enabled;
-        self
     }
 
     #[must_use]
@@ -74,68 +62,38 @@ impl<'a> ComposeDescriptorBuilder<'a> {
 
         let (image, platform) = resolve_image();
 
-        let validators = build_nodes(
-            self.topology.validators(),
-            ComposeNodeKind::Validator,
+        let nodes = build_nodes(
+            self.topology.nodes(),
             &image,
             platform.as_deref(),
-            self.use_kzg_mount,
             cfgsync_port,
         );
 
-        ComposeDescriptor { validators }
+        ComposeDescriptor { nodes }
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum ComposeNodeKind {
-    Validator,
-}
+const NODE_ENTRYPOINT: &str = "/etc/nomos/scripts/run_nomos_node.sh";
 
-impl ComposeNodeKind {
-    fn instance_name(self, index: usize) -> String {
-        match self {
-            Self::Validator => format!("validator-{index}"),
-        }
-    }
-
-    const fn entrypoint(self) -> &'static str {
-        match self {
-            Self::Validator => "/etc/nomos/scripts/run_nomos_node.sh",
-        }
-    }
+pub(crate) fn node_instance_name(index: usize) -> String {
+    format!("node-{index}")
 }
 
 fn build_nodes(
     nodes: &[GeneratedNodeConfig],
-    kind: ComposeNodeKind,
     image: &str,
     platform: Option<&str>,
-    use_kzg_mount: bool,
     cfgsync_port: u16,
 ) -> Vec<NodeDescriptor> {
     nodes
         .iter()
         .enumerate()
-        .map(|(index, node)| {
-            NodeDescriptor::from_node(
-                kind,
-                index,
-                node,
-                image,
-                platform,
-                use_kzg_mount,
-                cfgsync_port,
-            )
-        })
+        .map(|(index, node)| NodeDescriptor::from_node(index, node, image, platform, cfgsync_port))
         .collect()
 }
 
-fn base_volumes(use_kzg_mount: bool) -> Vec<String> {
+fn base_volumes() -> Vec<String> {
     let mut volumes = vec!["./stack:/etc/nomos".into()];
-    if use_kzg_mount {
-        volumes.push("./kzgrs_test_params:/kzgrs_test_params:z".into());
-    }
     if let Some(host_log_dir) = repo_root()
         .map(|root| root.join("tmp").join("node-logs"))
         .map(|dir| dir.display().to_string())
@@ -160,18 +118,16 @@ fn default_extra_hosts() -> Vec<String> {
     host_gateway_entry().into_iter().collect()
 }
 
-fn base_environment(cfgsync_port: u16, use_kzg_mount: bool) -> Vec<EnvEntry> {
+fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
     let pol_mode = tf_env::pol_proof_dev_mode().unwrap_or_else(|| "true".to_string());
     let rust_log = tf_env::rust_log().unwrap_or_else(|| "info".to_string());
     let nomos_log_level = tf_env::nomos_log_level().unwrap_or_else(|| "info".to_string());
     let time_backend = tf_env::nomos_time_backend().unwrap_or_else(|| "monotonic".into());
-    let kzg_path = KzgParamsSpec::for_compose(use_kzg_mount).node_params_path;
     vec![
         EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),
-        EnvEntry::new("NOMOS_LOG_LEVEL", nomos_log_level),
-        EnvEntry::new("NOMOS_TIME_BACKEND", time_backend),
-        EnvEntry::new("LOGOS_BLOCKCHAIN_KZGRS_PARAMS_PATH", kzg_path),
+        EnvEntry::new("LOGOS_BLOCKCHAIN_LOG_LEVEL", nomos_log_level),
+        EnvEntry::new("LOGOS_BLOCKCHAIN_TIME_BACKEND", time_backend),
         EnvEntry::new(
             "CFG_SERVER_ADDR",
             format!("http://host.docker.internal:{cfgsync_port}"),
