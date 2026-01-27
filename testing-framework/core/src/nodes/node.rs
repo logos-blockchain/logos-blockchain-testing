@@ -1,6 +1,6 @@
 use std::{ops::Deref, path::PathBuf, time::Duration};
 
-use nomos_node::Config;
+use nomos_node::config::RunConfig;
 use nomos_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::node::create_node_config;
 use tracing::{debug, info};
@@ -31,11 +31,11 @@ fn binary_path() -> PathBuf {
 }
 
 pub struct Node {
-    handle: NodeHandle<Config>,
+    handle: NodeHandle<RunConfig>,
 }
 
 impl Deref for Node {
-    type Target = NodeHandle<Config>;
+    type Target = NodeHandle<RunConfig>;
 
     fn deref(&self) -> &Self::Target {
         &self.handle
@@ -67,7 +67,7 @@ impl Node {
         self.handle.wait_for_exit(timeout).await
     }
 
-    pub async fn spawn(config: Config, label: &str) -> Result<Self, SpawnNodeError> {
+    pub async fn spawn(config: RunConfig, label: &str) -> Result<Self, SpawnNodeError> {
         let log_prefix = format!("{LOGS_PREFIX}-{label}");
         let handle = spawn_node(
             config,
@@ -84,19 +84,19 @@ impl Node {
     }
 }
 
-impl NodeConfigCommon for Config {
+impl NodeConfigCommon for RunConfig {
     fn set_logger(&mut self, logger: LoggerLayer) {
-        self.tracing.logger = logger;
+        self.user.tracing.logger = logger;
     }
 
     fn set_paths(&mut self, base: &std::path::Path) {
-        self.storage.db_path = base.join("db");
+        self.user.storage.db_path = base.join("db");
     }
 
     fn addresses(&self) -> NodeAddresses {
         (
-            self.http.backend_settings.address,
-            Some(self.testing_http.backend_settings.address),
+            self.user.http.backend_settings.address,
+            Some(self.user.testing_http.backend_settings.address),
         )
     }
 }

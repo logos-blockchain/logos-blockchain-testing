@@ -4,7 +4,7 @@ use cfgsync_tf::{
     client::{FetchedConfig, get_config},
     server::ClientIp,
 };
-use nomos_node::Config as NodeConfig;
+use nomos_node::config::RunConfig as NodeConfig;
 use serde::{Serialize, de::DeserializeOwned};
 use testing_framework_config::constants::cfgsync_port as default_cfgsync_port;
 use testing_framework_core::nodes::common::config::injection::{

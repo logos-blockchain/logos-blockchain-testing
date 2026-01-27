@@ -107,7 +107,7 @@ impl Topology {
     fn node_listen_ports(&self) -> Vec<u16> {
         self.nodes
             .iter()
-            .map(|node| node.config().network.backend.swarm.port)
+            .map(|node| node.config().user.network.backend.swarm.port)
             .collect()
     }
 
@@ -116,6 +116,7 @@ impl Topology {
             .iter()
             .map(|node| {
                 node.config()
+                    .user
                     .network
                     .backend
                     .initial_peers
@@ -130,7 +131,12 @@ impl Topology {
         self.nodes
             .iter()
             .enumerate()
-            .map(|(idx, node)| format!("node#{idx}@{}", node.config().network.backend.swarm.port))
+            .map(|(idx, node)| {
+                format!(
+                    "node#{idx}@{}",
+                    node.config().user.network.backend.swarm.port
+                )
+            })
             .collect()
     }
 }
