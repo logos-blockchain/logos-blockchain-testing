@@ -11,7 +11,7 @@ use testing_framework_config::topology::configs::{
 use testing_framework_core::{
     scenario::{PeerSelection, StartNodeOptions},
     topology::{
-        config::TopologyConfig,
+        config::{NodeConfigPatch, TopologyConfig},
         configs::GeneralConfig,
         generation::{GeneratedNodeConfig, GeneratedTopology},
     },
@@ -27,7 +27,7 @@ pub(super) fn build_general_config_for(
     peer_ports_by_name: &HashMap<String, u16>,
     options: &StartNodeOptions,
     peer_ports: &[u16],
-) -> Result<(GeneralConfig, u16), LocalDynamicError> {
+) -> Result<(GeneralConfig, u16, Option<NodeConfigPatch>), LocalDynamicError> {
     if let Some(node) = descriptor_for(descriptors, index) {
         let mut config = node.general.clone();
         let initial_peers = resolve_initial_peers(
@@ -40,7 +40,7 @@ pub(super) fn build_general_config_for(
 
         config.network_config.backend.initial_peers = initial_peers;
 
-        return Ok((config, node.network_port()));
+        return Ok((config, node.network_port(), node.config_patch.clone()));
     }
 
     let id = random_node_id();
@@ -61,7 +61,7 @@ pub(super) fn build_general_config_for(
     )
     .map_err(|source| LocalDynamicError::Config { source })?;
 
-    Ok((general_config, network_port))
+    Ok((general_config, network_port, None))
 }
 
 fn descriptor_for(descriptors: &GeneratedTopology, index: usize) -> Option<&GeneratedNodeConfig> {

@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use reqwest::Url;
 
 use super::DynError;
-use crate::nodes::ApiClient;
+use crate::{nodes::ApiClient, topology::config::NodeConfigPatch};
 
 /// Marker type used by scenario builders to request node control support.
 #[derive(Clone, Copy, Debug, Default)]
@@ -34,17 +36,30 @@ pub enum PeerSelection {
 }
 
 /// Options for dynamically starting a node.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct StartNodeOptions {
     /// How to select initial peers on startup.
     pub peers: PeerSelection,
+    /// Optional node config patch applied before spawn.
+    pub config_patch: Option<NodeConfigPatch>,
 }
 
 impl Default for StartNodeOptions {
     fn default() -> Self {
         Self {
             peers: PeerSelection::DefaultLayout,
+            config_patch: None,
         }
+    }
+}
+
+impl StartNodeOptions {
+    pub fn create_patch<F>(mut self, f: F) -> Self
+    where
+        F: Fn(nomos_node::Config) -> Result<nomos_node::Config, DynError> + Send + Sync + 'static,
+    {
+        self.config_patch = Some(Arc::new(f));
+        self
     }
 }
 

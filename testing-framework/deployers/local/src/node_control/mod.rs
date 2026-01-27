@@ -8,7 +8,7 @@ use testing_framework_config::topology::configs::{consensus, time};
 use testing_framework_core::{
     nodes::{
         ApiClient,
-        node::{Node, create_node_config},
+        node::{Node, apply_node_config_patch, create_node_config},
     },
     scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
     topology::{
@@ -41,6 +41,8 @@ pub enum LocalDynamicError {
     InvalidArgument { message: String },
     #[error("{message}")]
     PortAllocation { message: String },
+    #[error("node config patch failed: {message}")]
+    ConfigPatch { message: String },
 }
 
 pub struct LocalDynamicNodes {
@@ -230,7 +232,7 @@ impl LocalDynamicNodes {
             )
         };
 
-        let (general_config, network_port) = build_general_config_for(
+        let (general_config, network_port, descriptor_patch) = build_general_config_for(
             &self.descriptors,
             &self.base_consensus,
             &self.base_time,
@@ -240,7 +242,12 @@ impl LocalDynamicNodes {
             &peer_ports,
         )?;
 
-        let config = create_node_config(general_config);
+        let config = build_node_config(
+            general_config,
+            descriptor_patch.as_ref(),
+            options.config_patch.as_ref(),
+        )?;
+
         let api_client = self
             .spawn_and_register_node(&node_name, network_port, config)
             .await?;
@@ -273,6 +280,31 @@ impl LocalDynamicNodes {
 
         Ok(client)
     }
+}
+
+fn build_node_config(
+    general_config: testing_framework_config::topology::configs::GeneralConfig,
+    descriptor_patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
+    options_patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
+) -> Result<NodeConfig, LocalDynamicError> {
+    let mut config = create_node_config(general_config);
+    config = apply_patch_if_needed(config, descriptor_patch)?;
+    config = apply_patch_if_needed(config, options_patch)?;
+
+    Ok(config)
+}
+
+fn apply_patch_if_needed(
+    config: NodeConfig,
+    patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
+) -> Result<NodeConfig, LocalDynamicError> {
+    let Some(patch) = patch else {
+        return Ok(config);
+    };
+
+    apply_node_config_patch(config, patch).map_err(|err| LocalDynamicError::ConfigPatch {
+        message: err.to_string(),
+    })
 }
 
 #[async_trait::async_trait]

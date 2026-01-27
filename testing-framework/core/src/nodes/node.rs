@@ -16,6 +16,8 @@ use crate::{
             node::{NodeAddresses, NodeConfigCommon, NodeHandle, SpawnNodeError, spawn_node},
         },
     },
+    scenario::DynError,
+    topology::config::NodeConfigPatch,
 };
 
 const BIN_PATH: &str = "target/debug/logos-blockchain-node";
@@ -32,6 +34,23 @@ fn binary_path() -> PathBuf {
 
 pub struct Node {
     handle: NodeHandle<Config>,
+}
+
+pub fn apply_node_config_patches<'a>(
+    mut config: Config,
+    patches: impl IntoIterator<Item = &'a NodeConfigPatch>,
+) -> Result<Config, DynError> {
+    for patch in patches {
+        config = patch(config)?;
+    }
+    Ok(config)
+}
+
+pub fn apply_node_config_patch(
+    config: Config,
+    patch: &NodeConfigPatch,
+) -> Result<Config, DynError> {
+    apply_node_config_patches(config, [patch])
 }
 
 impl Deref for Node {

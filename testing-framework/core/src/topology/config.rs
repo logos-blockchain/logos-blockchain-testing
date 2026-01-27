@@ -1,7 +1,10 @@
+use std::{collections::HashMap, sync::Arc};
+
 use nomos_core::{
     mantle::GenesisTx as _,
     sdp::{Locator, ServiceType},
 };
+use nomos_node::Config as NodeConfig;
 use testing_framework_config::topology::{
     configs::{
         api::{ApiConfigError, create_api_configs},
@@ -18,11 +21,17 @@ use testing_framework_config::topology::{
 };
 use thiserror::Error;
 
-use crate::topology::{
-    configs::{GeneralConfig, time::default_time_config},
-    generation::{GeneratedNodeConfig, GeneratedTopology},
-    utils::{TopologyResolveError, create_kms_configs, resolve_ids, resolve_ports},
+use crate::{
+    scenario::DynError,
+    topology::{
+        configs::{GeneralConfig, time::default_time_config},
+        generation::{GeneratedNodeConfig, GeneratedTopology},
+        utils::{TopologyResolveError, create_kms_configs, resolve_ids, resolve_ports},
+    },
 };
+
+/// Per-node config patch applied after the default node config is generated.
+pub type NodeConfigPatch = Arc<dyn Fn(NodeConfig) -> Result<NodeConfig, DynError> + Send + Sync>;
 
 #[derive(Debug, Error)]
 pub enum TopologyBuildError {
@@ -55,6 +64,7 @@ pub struct TopologyConfig {
     pub consensus_params: ConsensusParams,
     pub network_params: NetworkParams,
     pub wallet_config: WalletConfig,
+    pub node_config_patches: HashMap<usize, NodeConfigPatch>,
 }
 
 impl TopologyConfig {
@@ -66,6 +76,7 @@ impl TopologyConfig {
             consensus_params: ConsensusParams::default_for_participants(1),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
+            node_config_patches: HashMap::new(),
         }
     }
 
@@ -77,6 +88,7 @@ impl TopologyConfig {
             consensus_params: ConsensusParams::default_for_participants(2),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
+            node_config_patches: HashMap::new(),
         }
     }
 
@@ -90,12 +102,24 @@ impl TopologyConfig {
             consensus_params: ConsensusParams::default_for_participants(participants),
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
+            node_config_patches: HashMap::new(),
         }
     }
 
     #[must_use]
     pub const fn wallet(&self) -> &WalletConfig {
         &self.wallet_config
+    }
+
+    #[must_use]
+    pub fn node_config_patch(&self, index: usize) -> Option<&NodeConfigPatch> {
+        self.node_config_patches.get(&index)
+    }
+
+    #[must_use]
+    pub fn with_node_config_patch(mut self, index: usize, patch: NodeConfigPatch) -> Self {
+        self.node_config_patches.insert(index, patch);
+        self
     }
 }
 
@@ -129,6 +153,13 @@ impl TopologyBuilder {
     /// Override blend ports for nodes in order.
     pub fn with_blend_ports(mut self, ports: Vec<u16>) -> Self {
         self.blend_ports = Some(ports);
+        self
+    }
+
+    #[must_use]
+    /// Apply a config patch for a specific node index.
+    pub fn with_node_config_patch(mut self, index: usize, patch: NodeConfigPatch) -> Self {
+        self.config.node_config_patches.insert(index, patch);
         self
     }
 
@@ -204,6 +235,7 @@ impl TopologyBuilder {
             &tracing_configs,
             &kms_configs,
             &time_config,
+            &config.node_config_patches,
         )?;
 
         Ok(GeneratedTopology { config, nodes })
@@ -291,6 +323,7 @@ fn build_node_descriptors(
     tracing_configs: &[testing_framework_config::topology::configs::tracing::GeneralTracingConfig],
     kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
     time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
+    node_config_patches: &HashMap<usize, NodeConfigPatch>,
 ) -> Result<Vec<GeneratedNodeConfig>, TopologyBuildError> {
     let mut nodes = Vec::with_capacity(config.n_nodes);
 
@@ -324,6 +357,7 @@ fn build_node_descriptors(
             id,
             general,
             blend_port,
+            config_patch: node_config_patches.get(&i).cloned(),
         };
 
         nodes.push(descriptor);

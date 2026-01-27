@@ -5,12 +5,12 @@ use thiserror::Error;
 use crate::{
     nodes::{
         common::node::SpawnNodeError,
-        node::{Node, create_node_config},
+        node::{Node, apply_node_config_patch, create_node_config},
     },
+    scenario,
     topology::{
         config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
-        configs::GeneralConfig,
-        generation::find_expected_peer_counts,
+        generation::{GeneratedNodeConfig, find_expected_peer_counts},
         readiness::{NetworkReadiness, ReadinessCheck, ReadinessError},
         utils::multiaddr_port,
     },
@@ -29,18 +29,17 @@ pub enum SpawnTopologyError {
     Build(#[from] TopologyBuildError),
     #[error(transparent)]
     Node(#[from] SpawnNodeError),
+    #[error("node config patch failed for node-{index}: {source}")]
+    ConfigPatch {
+        index: usize,
+        source: scenario::DynError,
+    },
 }
 
 impl Topology {
     pub async fn spawn(config: TopologyConfig) -> Result<Self, SpawnTopologyError> {
         let generated = TopologyBuilder::new(config.clone()).build()?;
-        let n_nodes = config.n_nodes;
-        let node_configs = generated
-            .iter()
-            .map(|node| node.general.clone())
-            .collect::<Vec<_>>();
-
-        let nodes = Self::spawn_nodes(node_configs, n_nodes).await?;
+        let nodes = Self::spawn_nodes(generated.nodes()).await?;
 
         Ok(Self { nodes })
     }
@@ -55,28 +54,32 @@ impl Topology {
             .with_blend_ports(blend_ports.to_vec())
             .build()?;
 
-        let node_configs = generated
-            .iter()
-            .map(|node| node.general.clone())
-            .collect::<Vec<_>>();
-
-        let nodes = Self::spawn_nodes(node_configs, config.n_nodes).await?;
+        let nodes = Self::spawn_nodes(generated.nodes()).await?;
 
         Ok(Self { nodes })
     }
 
     pub(crate) async fn spawn_nodes(
-        config: Vec<GeneralConfig>,
-        n_nodes: usize,
+        nodes: &[GeneratedNodeConfig],
     ) -> Result<DeployedNodes, SpawnTopologyError> {
-        let mut nodes = Vec::new();
-        for i in 0..n_nodes {
-            let config = create_node_config(config[i].clone());
-            let label = format!("node-{i}");
-            nodes.push(Node::spawn(config, &label).await?);
+        let mut spawned = Vec::new();
+        for node in nodes {
+            let mut config = create_node_config(node.general.clone());
+
+            if let Some(patch) = node.config_patch.as_ref() {
+                config = apply_node_config_patch(config, patch).map_err(|source| {
+                    SpawnTopologyError::ConfigPatch {
+                        index: node.index,
+                        source,
+                    }
+                })?;
+            }
+
+            let label = format!("node-{}", node.index);
+            spawned.push(Node::spawn(config, &label).await?);
         }
 
-        Ok(nodes)
+        Ok(spawned)
     }
 
     #[must_use]

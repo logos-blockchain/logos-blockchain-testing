@@ -1,5 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
+use nomos_node::Config as NodeConfig;
 use thiserror::Error;
 use tracing::{debug, info};
 
@@ -8,7 +9,7 @@ use super::{
     workload::Workload,
 };
 use crate::topology::{
-    config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
+    config::{NodeConfigPatch, TopologyBuildError, TopologyBuilder, TopologyConfig},
     configs::{network::Libp2pNetworkLayout, wallet::WalletConfig},
     generation::GeneratedTopology,
 };
@@ -302,16 +303,37 @@ impl<Caps> TopologyConfigurator<Caps> {
         self
     }
 
+    /// Apply a config patch for a specific node index.
+    #[must_use]
+    pub fn node_config_patch(mut self, index: usize, patch: NodeConfigPatch) -> Self {
+        self.builder.topology = self.builder.topology.with_node_config_patch(index, patch);
+        self
+    }
+
+    /// Apply a config patch for a specific node index.
+    #[must_use]
+    pub fn node_config_patch_with<F>(mut self, index: usize, f: F) -> Self
+    where
+        F: Fn(NodeConfig) -> Result<NodeConfig, DynError> + Send + Sync + 'static,
+    {
+        self.builder.topology = self
+            .builder
+            .topology
+            .with_node_config_patch(index, Arc::new(f));
+        self
+    }
+
     /// Finalize and return the underlying scenario builder.
     #[must_use]
     pub fn apply(self) -> Builder<Caps> {
-        let mut config = TopologyConfig::with_node_numbers(self.nodes);
-        if self.network_star {
-            config.network_params.libp2p_network_layout = Libp2pNetworkLayout::Star;
-        }
-
         let mut builder = self.builder;
-        builder.topology = TopologyBuilder::new(config);
+        builder.topology = builder.topology.with_node_count(self.nodes);
+
+        if self.network_star {
+            builder.topology = builder
+                .topology
+                .with_network_layout(Libp2pNetworkLayout::Star);
+        }
         builder
     }
 }
