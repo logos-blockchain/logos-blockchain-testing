@@ -2,6 +2,7 @@
 
 mod capabilities;
 pub mod cfgsync;
+mod control;
 mod definition;
 mod expectation;
 pub mod http_probe;
@@ -12,9 +13,10 @@ mod workload;
 pub type DynError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub use capabilities::{
-    NodeControlCapability, NodeControlHandle, ObservabilityCapability, PeerSelection,
-    RequiresNodeControl, StartNodeOptions, StartedNode,
+    NodeControlCapability, ObservabilityCapability, PeerSelection, RequiresNodeControl,
+    StartNodeOptions, StartedNode,
 };
+pub use control::NodeControlHandle;
 pub use definition::{
     Builder, Scenario, ScenarioBuildError, ScenarioBuilder, TopologyConfigurator,
 };

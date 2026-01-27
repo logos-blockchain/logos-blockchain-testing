@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
-use crate::scenario::{DynError, StartNodeOptions, StartedNode};
+use crate::scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode};
 
 /// Interface for imperative, deployer-backed manual clusters.
 #[async_trait]
-pub trait ManualClusterHandle: Send + Sync {
+pub trait ManualClusterHandle: NodeControlHandle {
     async fn start_node_with(
         &self,
         name: &str,

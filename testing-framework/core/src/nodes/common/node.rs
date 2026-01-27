@@ -195,7 +195,7 @@ fn write_node_config<C: Serialize>(config: &C, config_path: &Path) -> Result<(),
     })
 }
 
-fn spawn_node_process(
+pub(crate) fn spawn_node_process(
     binary_path: &Path,
     config_path: &Path,
     workdir: &Path,
@@ -213,7 +213,9 @@ fn spawn_node_process(
         })
 }
 
-async fn wait_for_consensus_readiness(api: &ApiClient) -> Result<(), time::error::Elapsed> {
+pub(crate) async fn wait_for_consensus_readiness(
+    api: &ApiClient,
+) -> Result<(), time::error::Elapsed> {
     time::timeout(STARTUP_TIMEOUT, async {
         loop {
             if api.consensus_info().await.is_ok() {

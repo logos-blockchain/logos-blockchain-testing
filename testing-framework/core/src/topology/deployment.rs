@@ -1,16 +1,9 @@
 use std::collections::HashSet;
 
-use thiserror::Error;
-
 use crate::{
-    nodes::{
-        common::node::SpawnNodeError,
-        node::{Node, apply_node_config_patch, create_node_config},
-    },
-    scenario,
+    nodes::node::Node,
     topology::{
-        config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
-        generation::{GeneratedNodeConfig, find_expected_peer_counts},
+        generation::find_expected_peer_counts,
         readiness::{NetworkReadiness, ReadinessCheck, ReadinessError},
         utils::multiaddr_port,
     },
@@ -21,70 +14,21 @@ pub struct Topology {
     pub(crate) nodes: Vec<Node>,
 }
 
-pub type DeployedNodes = Vec<Node>;
-
-#[derive(Debug, Error)]
-pub enum SpawnTopologyError {
-    #[error(transparent)]
-    Build(#[from] TopologyBuildError),
-    #[error(transparent)]
-    Node(#[from] SpawnNodeError),
-    #[error("node config patch failed for node-{index}: {source}")]
-    ConfigPatch {
-        index: usize,
-        source: scenario::DynError,
-    },
-}
-
 impl Topology {
-    pub async fn spawn(config: TopologyConfig) -> Result<Self, SpawnTopologyError> {
-        let generated = TopologyBuilder::new(config.clone()).build()?;
-        let nodes = Self::spawn_nodes(generated.nodes()).await?;
-
-        Ok(Self { nodes })
-    }
-
-    pub async fn spawn_with_empty_membership(
-        config: TopologyConfig,
-        ids: &[[u8; 32]],
-        blend_ports: &[u16],
-    ) -> Result<Self, SpawnTopologyError> {
-        let generated = TopologyBuilder::new(config.clone())
-            .with_ids(ids.to_vec())
-            .with_blend_ports(blend_ports.to_vec())
-            .build()?;
-
-        let nodes = Self::spawn_nodes(generated.nodes()).await?;
-
-        Ok(Self { nodes })
-    }
-
-    pub(crate) async fn spawn_nodes(
-        nodes: &[GeneratedNodeConfig],
-    ) -> Result<DeployedNodes, SpawnTopologyError> {
-        let mut spawned = Vec::new();
-        for node in nodes {
-            let mut config = create_node_config(node.general.clone());
-
-            if let Some(patch) = node.config_patch.as_ref() {
-                config = apply_node_config_patch(config, patch).map_err(|source| {
-                    SpawnTopologyError::ConfigPatch {
-                        index: node.index,
-                        source,
-                    }
-                })?;
-            }
-
-            let label = format!("node-{}", node.index);
-            spawned.push(Node::spawn(config, &label).await?);
-        }
-
-        Ok(spawned)
+    /// Construct a topology from already-spawned nodes.
+    #[must_use]
+    pub fn from_nodes(nodes: Vec<Node>) -> Self {
+        Self { nodes }
     }
 
     #[must_use]
     pub fn nodes(&self) -> &[Node] {
         &self.nodes
+    }
+
+    #[must_use]
+    pub fn into_nodes(self) -> Vec<Node> {
+        self.nodes
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
