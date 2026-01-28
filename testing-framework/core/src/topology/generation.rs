@@ -5,7 +5,6 @@ use reqwest::{Client, Url};
 use crate::topology::{
     config::{NodeConfigPatch, TopologyConfig},
     configs::{GeneralConfig, wallet::WalletAccount},
-    deployment::{SpawnTopologyError, Topology},
     readiness::{HttpNetworkReadiness, ReadinessCheck, ReadinessError},
 };
 
@@ -80,12 +79,6 @@ impl GeneratedTopology {
     /// Wallet accounts configured for this topology.
     pub fn wallet_accounts(&self) -> &[WalletAccount] {
         &self.config.wallet_config.accounts
-    }
-
-    pub async fn spawn_local(&self) -> Result<Topology, SpawnTopologyError> {
-        let nodes = Topology::spawn_nodes(self.nodes()).await?;
-
-        Ok(Topology { nodes })
     }
 
     pub async fn wait_remote_readiness(

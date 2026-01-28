@@ -60,6 +60,7 @@ Environment:
   LOGOS_BLOCKCHAIN_TESTNET_IMAGE_PULL_POLICY  K8s imagePullPolicy (default ${DEFAULT_PULL_POLICY_LOCAL}; set to ${DEFAULT_PULL_POLICY_ECR} for --ecr)
   LOGOS_BLOCKCHAIN_BINARIES_TAR               Path to prebuilt binaries tarball (default .tmp/nomos-binaries-<platform>-<version>.tar.gz)
   LOGOS_BLOCKCHAIN_CIRCUITS        Directory containing circuits assets (defaults to ~/.logos-blockchain-circuits)
+  CARGO_FEATURE_BUILD_VERIFICATION_KEY  Build flag to embed Groth16 verification keys in node binaries (recommended for host)
   LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD           Set to 1 to skip rebuilding the compose/k8s image
   LOGOS_BLOCKCHAIN_FORCE_IMAGE_BUILD          Set to 1 to force image rebuild even for k8s ECR mode
   LOGOS_BLOCKCHAIN_METRICS_QUERY_URL           PromQL base URL for the runner process (optional)
@@ -301,8 +302,9 @@ run_examples::bundle_matches_expected() {
   local tar_path="$1"
   [ -f "${tar_path}" ] || return 1
   [ -z "${LOGOS_BLOCKCHAIN_NODE_REV:-}" ] && return 0
+  local expected_features="${RUN_EXAMPLES_EXPECTED_BUNDLE_FEATURES:-all,pol-dev-mode,verification-keys}"
 
-  local meta tar_rev tar_head
+  local meta tar_rev tar_head tar_features
   meta="$(tar -xOzf "${tar_path}" artifacts/nomos-bundle-meta.env 2>/dev/null || true)"
   if [ -z "${meta}" ]; then
     echo "Bundle meta missing in ${tar_path}; treating as stale and rebuilding." >&2
@@ -310,6 +312,11 @@ run_examples::bundle_matches_expected() {
   fi
   tar_rev="$(echo "${meta}" | sed -n 's/^nomos_node_rev=//p' | head -n 1)"
   tar_head="$(echo "${meta}" | sed -n 's/^nomos_node_git_head=//p' | head -n 1)"
+  tar_features="$(echo "${meta}" | sed -n 's/^features=//p' | head -n 1)"
+  if [ -n "${expected_features}" ] && [ "${tar_features}" != "${expected_features}" ]; then
+    echo "Bundle ${tar_path} features '${tar_features}' do not match expected '${expected_features}'; rebuilding." >&2
+    return 1
+  fi
   if [ -n "${tar_rev}" ] && [ "${tar_rev}" != "${LOGOS_BLOCKCHAIN_NODE_REV}" ]; then
     echo "Bundle ${tar_path} is for logos-blockchain-node rev ${tar_rev}, expected ${LOGOS_BLOCKCHAIN_NODE_REV}; rebuilding." >&2
     return 1
@@ -501,6 +508,8 @@ run_examples::run() {
 
   if [ "${MODE}" = "host" ]; then
     run_examples::ensure_circuits
+    # Ensure Groth16 verification keys are embedded when building local node binaries.
+    export CARGO_FEATURE_BUILD_VERIFICATION_KEY=1
   fi
 
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"

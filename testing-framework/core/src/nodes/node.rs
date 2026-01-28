@@ -13,7 +13,10 @@ use crate::{
         common::{
             binary::{BinaryConfig, BinaryResolver},
             lifecycle::{kill::kill_child, monitor::is_running},
-            node::{NodeAddresses, NodeConfigCommon, NodeHandle, SpawnNodeError, spawn_node},
+            node::{
+                NodeAddresses, NodeConfigCommon, NodeHandle, SpawnNodeError, spawn_node,
+                spawn_node_process, wait_for_consensus_readiness,
+            },
         },
     },
     scenario::DynError,
@@ -21,6 +24,7 @@ use crate::{
 };
 
 const BIN_PATH: &str = "target/debug/logos-blockchain-node";
+const RESTART_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn binary_path() -> PathBuf {
     let cfg = BinaryConfig {
@@ -75,6 +79,12 @@ impl Drop for Node {
 }
 
 impl Node {
+    /// Return the current process id for the running node.
+    #[must_use]
+    pub fn pid(&self) -> u32 {
+        self.handle.child.id()
+    }
+
     /// Check if the node process is still running
     pub fn is_running(&mut self) -> bool {
         is_running(&mut self.handle.child)
@@ -100,6 +110,40 @@ impl Node {
         info!("node spawned and ready");
 
         Ok(Self { handle })
+    }
+
+    /// Restart the node process using the existing config and data directory.
+    pub async fn restart(&mut self) -> Result<(), SpawnNodeError> {
+        let old_pid = self.pid();
+        debug!(old_pid, "restarting node process");
+
+        kill_child(&mut self.handle.child);
+        let _ = self.wait_for_exit(RESTART_SHUTDOWN_TIMEOUT).await;
+
+        let config_path = self.handle.tempdir.path().join("node.yaml");
+        let child = spawn_node_process(&binary_path(), &config_path, self.handle.tempdir.path())?;
+        self.handle.child = child;
+
+        let new_pid = self.pid();
+        wait_for_consensus_readiness(&self.handle.api)
+            .await
+            .map_err(|source| SpawnNodeError::Readiness { source })?;
+
+        info!(
+            old_pid,
+            new_pid, "node restart readiness confirmed via consensus_info"
+        );
+
+        Ok(())
+    }
+
+    /// Stop the node process without restarting it.
+    pub async fn stop(&mut self) {
+        let pid = self.pid();
+        debug!(pid, "stopping node process");
+
+        kill_child(&mut self.handle.child);
+        let _ = self.wait_for_exit(RESTART_SHUTDOWN_TIMEOUT).await;
     }
 }
 

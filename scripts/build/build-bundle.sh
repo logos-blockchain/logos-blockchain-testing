@@ -309,11 +309,14 @@ build_bundle::prepare_circuits() {
 }
 
 build_bundle::build_binaries() {
-  BUILD_FEATURES_LABEL="all"
+  BUILD_FEATURES_LABEL="all,pol-dev-mode,verification-keys"
   echo "==> Building binaries (platform=${PLATFORM})"
   mkdir -p "${NODE_SRC}"
   (
     cd "${NODE_SRC}"
+    if [ -d "${NODE_TARGET}" ]; then
+      rm -rf "${NODE_TARGET}"
+    fi
     if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
       echo "Using local logos-blockchain-node checkout at ${NODE_SRC} (no fetch/checkout)"
     else
@@ -326,18 +329,16 @@ build_bundle::build_binaries() {
       git clean -fdx
     fi
 
-    if [ -z "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
-      build_bundle::apply_nomos_node_patches "${NODE_SRC}"
-    fi
-    unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
-      RUSTFLAGS='--cfg feature="pol-dev-mode"' \
+      RUSTFLAGS='--cfg feature="pol-dev-mode" --cfg feature="build-verification-key"' \
+        CARGO_FEATURE_BUILD_VERIFICATION_KEY=1 \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
         cargo build --all-features \
         -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
     else
-      RUSTFLAGS='--cfg feature="pol-dev-mode"' \
+      RUSTFLAGS='--cfg feature="pol-dev-mode" --cfg feature="build-verification-key"' \
+        CARGO_FEATURE_BUILD_VERIFICATION_KEY=1 \
         cargo build --all-features \
         -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
