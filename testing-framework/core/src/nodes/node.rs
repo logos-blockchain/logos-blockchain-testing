@@ -133,7 +133,17 @@ impl Node {
             old_pid,
             new_pid, "node restart readiness confirmed via consensus_info"
         );
+
         Ok(())
+    }
+
+    /// Stop the node process without restarting it.
+    pub async fn stop(&mut self) {
+        let pid = self.pid();
+        debug!(pid, "stopping node process");
+
+        kill_child(&mut self.handle.child);
+        let _ = self.wait_for_exit(RESTART_SHUTDOWN_TIMEOUT).await;
     }
 }
 

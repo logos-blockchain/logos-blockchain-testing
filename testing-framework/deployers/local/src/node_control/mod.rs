@@ -170,12 +170,17 @@ impl LocalNodeManager {
 
     #[must_use]
     pub fn node_pid(&self, index: usize) -> Option<u32> {
-        let state = self
+        let mut state = self
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        state.nodes.get(index).map(|node| node.pid())
+        let node = state.nodes.get_mut(index)?;
+        if node.is_running() {
+            Some(node.pid())
+        } else {
+            None
+        }
     }
 
     pub fn stop_all(&self) {
@@ -361,6 +366,35 @@ impl LocalNodeManager {
         Ok(())
     }
 
+    pub async fn stop_node(&self, index: usize) -> Result<(), LocalNodeManagerError> {
+        let mut node = {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+            if index >= state.nodes.len() {
+                return Err(LocalNodeManagerError::NodeIndex { index });
+            }
+
+            state.nodes.remove(index)
+        };
+
+        node.stop().await;
+
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        if index <= state.nodes.len() {
+            state.nodes.insert(index, node);
+        } else {
+            state.nodes.push(node);
+        }
+        Ok(())
+    }
+
     async fn spawn_and_register_node(
         &self,
         node_name: &str,
@@ -414,6 +448,10 @@ fn apply_patch_if_needed(
 impl NodeControlHandle for LocalNodeManager {
     async fn restart_node(&self, index: usize) -> Result<(), DynError> {
         self.restart_node(index).await.map_err(|err| err.into())
+    }
+
+    async fn stop_node(&self, index: usize) -> Result<(), DynError> {
+        self.stop_node(index).await.map_err(|err| err.into())
     }
 
     async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {

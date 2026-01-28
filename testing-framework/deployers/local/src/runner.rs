@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use testing_framework_core::{
+    nodes::common::node::SpawnNodeError,
     scenario::{
         BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, NodeControlCapability,
         RunContext, Runner, Scenario, ScenarioError, spawn_block_feed,
@@ -28,7 +29,7 @@ pub enum LocalDeployerError {
     #[error("failed to spawn local topology: {source}")]
     Spawn {
         #[source]
-        source: testing_framework_core::nodes::common::node::SpawnNodeError,
+        source: SpawnNodeError,
     },
     #[error("readiness probe failed: {source}")]
     ReadinessFailed {
@@ -105,11 +106,14 @@ impl Deployer<NodeControlCapability> for LocalDeployer {
 
         if self.membership_check {
             let topology = Topology::from_nodes(nodes);
+
             wait_for_readiness(&topology).await.map_err(|source| {
                 debug!(error = ?source, "local readiness failed");
                 LocalDeployerError::ReadinessFailed { source }
             })?;
+
             nodes = topology.into_nodes();
+
             info!("local nodes are ready");
         } else {
             info!("skipping local membership readiness checks");
@@ -120,6 +124,7 @@ impl Deployer<NodeControlCapability> for LocalDeployer {
             NodeClients::default(),
             LocalNodeManagerSeed::from_topology(scenario.topology()),
         ));
+
         node_control.initialize_with_nodes(nodes);
         let node_clients = node_control.node_clients();
 

@@ -77,6 +77,10 @@ impl LocalManualCluster {
         Ok(self.nodes.restart_node(index).await?)
     }
 
+    pub async fn stop_node(&self, index: usize) -> Result<(), ManualClusterError> {
+        Ok(self.nodes.stop_node(index).await?)
+    }
+
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
         let nodes = self.nodes.readiness_nodes();
         if self.is_singleton(&nodes) {
@@ -108,6 +112,10 @@ impl NodeControlHandle for LocalManualCluster {
             .restart_node(index)
             .await
             .map_err(|err| err.into())
+    }
+
+    async fn stop_node(&self, index: usize) -> Result<(), DynError> {
+        self.nodes.stop_node(index).await.map_err(|err| err.into())
     }
 
     async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {

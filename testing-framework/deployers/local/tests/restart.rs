@@ -5,10 +5,12 @@ use testing_framework_core::{
     topology::config::TopologyConfig,
 };
 use testing_framework_runner_local::LocalDeployer;
+use tracing_subscriber::fmt::try_init;
 
 #[tokio::test]
 #[ignore = "requires local node binary and open ports"]
 async fn local_restart_node() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let _ = try_init();
     let mut scenario = ScenarioBuilder::topology_with(|t| t.nodes(1))
         .enable_node_control()
         .with_run_duration(Duration::from_secs(1))
@@ -27,11 +29,11 @@ async fn local_restart_node() -> Result<(), Box<dyn std::error::Error + Send + S
     let new_pid = control.node_pid(0).ok_or("missing node pid")?;
     assert_ne!(old_pid, new_pid, "expected a new process after restart");
 
-    let client = context
-        .node_clients()
-        .any_client()
-        .ok_or("no node clients available")?;
-    client.consensus_info().await?;
+    control.stop_node(0).await?;
+    assert!(
+        control.node_pid(0).is_none(),
+        "expected node pid to be absent after stop"
+    );
 
     let _handle = runner.run(&mut scenario).await?;
 
@@ -41,6 +43,7 @@ async fn local_restart_node() -> Result<(), Box<dyn std::error::Error + Send + S
 #[tokio::test]
 #[ignore = "requires local node binary and open ports"]
 async fn manual_cluster_restart_node() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let _ = try_init();
     let deployer = LocalDeployer::default();
     let cluster = deployer.manual_cluster(TopologyConfig::with_node_numbers(1))?;
 
@@ -53,8 +56,11 @@ async fn manual_cluster_restart_node() -> Result<(), Box<dyn std::error::Error +
     let new_pid = cluster.node_pid(0).ok_or("missing node pid")?;
     assert_ne!(old_pid, new_pid, "expected a new process after restart");
 
-    let client = cluster.node_client("node-a").ok_or("missing node client")?;
-    client.consensus_info().await?;
+    cluster.stop_node(0).await?;
+    assert!(
+        cluster.node_pid(0).is_none(),
+        "expected node pid to be absent after stop"
+    );
 
     Ok(())
 }
