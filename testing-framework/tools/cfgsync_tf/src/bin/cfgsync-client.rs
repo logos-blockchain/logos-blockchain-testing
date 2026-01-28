@@ -4,7 +4,7 @@ use cfgsync_tf::{
     client::{FetchedConfig, get_config},
     server::ClientIp,
 };
-use nomos_node::Config as NodeConfig;
+use nomos_node::UserConfig;
 use serde::{Serialize, de::DeserializeOwned};
 use testing_framework_config::constants::cfgsync_port as default_cfgsync_port;
 use testing_framework_core::nodes::common::config::injection::{
@@ -70,7 +70,7 @@ async fn main() {
     let node_config_endpoint = format!("{server_addr}/node");
 
     let config_result =
-        pull_to_file::<NodeConfig>(payload, &node_config_endpoint, &config_file_path).await;
+        pull_to_file::<UserConfig>(payload, &node_config_endpoint, &config_file_path).await;
 
     // Handle error if the config request fails
     if let Err(err) = config_result {
