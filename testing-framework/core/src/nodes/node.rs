@@ -37,9 +37,9 @@ pub struct Node {
 }
 
 pub fn apply_node_config_patches<'a>(
-    mut config: Config,
+    mut config: RunConfig,
     patches: impl IntoIterator<Item = &'a NodeConfigPatch>,
-) -> Result<Config, DynError> {
+) -> Result<RunConfig, DynError> {
     for patch in patches {
         config = patch(config)?;
     }
@@ -47,9 +47,9 @@ pub fn apply_node_config_patches<'a>(
 }
 
 pub fn apply_node_config_patch(
-    config: Config,
+    config: RunConfig,
     patch: &NodeConfigPatch,
-) -> Result<Config, DynError> {
+) -> Result<RunConfig, DynError> {
     apply_node_config_patches(config, [patch])
 }
 

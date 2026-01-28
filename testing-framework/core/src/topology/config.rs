@@ -4,7 +4,7 @@ use nomos_core::{
     mantle::GenesisTx as _,
     sdp::{Locator, ServiceType},
 };
-use nomos_node::Config as NodeConfig;
+use nomos_node::config::RunConfig;
 use testing_framework_config::topology::{
     configs::{
         api::{ApiConfigError, create_api_configs},
@@ -31,7 +31,7 @@ use crate::{
 };
 
 /// Per-node config patch applied after the default node config is generated.
-pub type NodeConfigPatch = Arc<dyn Fn(NodeConfig) -> Result<NodeConfig, DynError> + Send + Sync>;
+pub type NodeConfigPatch = Arc<dyn Fn(RunConfig) -> Result<RunConfig, DynError> + Send + Sync>;
 
 #[derive(Debug, Error)]
 pub enum TopologyBuildError {
