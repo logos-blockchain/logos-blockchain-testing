@@ -5,12 +5,19 @@ pub mod readiness;
 pub mod setup;
 
 use async_trait::async_trait;
-use testing_framework_core::scenario::{
-    BlockFeedTask, CleanupGuard, Deployer, ObservabilityCapabilityProvider, RequiresNodeControl,
-    Runner, Scenario,
+use testing_framework_core::{
+    scenario::{
+        BlockFeedTask, CleanupGuard, Deployer, ObservabilityCapabilityProvider,
+        RequiresNodeControl, Runner, Scenario,
+    },
+    topology::config::TopologyConfig,
 };
 
-use crate::{errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
+use crate::{
+    errors::ComposeRunnerError,
+    lifecycle::cleanup::RunnerCleanup,
+    manual::{ComposeManualCluster, ManualClusterError},
+};
 
 /// Docker Compose-based deployer for Logos test scenarios.
 #[derive(Clone, Copy)]
@@ -36,6 +43,14 @@ impl ComposeDeployer {
     pub const fn with_readiness(mut self, enabled: bool) -> Self {
         self.readiness_checks = enabled;
         self
+    }
+
+    /// Build a manual cluster using this deployer's compose implementation.
+    pub async fn manual_cluster(
+        &self,
+        config: TopologyConfig,
+    ) -> Result<ComposeManualCluster, ManualClusterError> {
+        ComposeManualCluster::from_config(config).await
     }
 }
 

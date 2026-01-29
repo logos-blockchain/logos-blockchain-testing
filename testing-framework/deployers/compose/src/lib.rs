@@ -4,6 +4,7 @@ pub mod docker;
 pub mod errors;
 pub mod infrastructure;
 pub mod lifecycle;
+pub mod manual;
 
 pub use deployer::ComposeDeployer;
 pub use descriptor::{ComposeDescriptor, ComposeDescriptorBuilder, EnvEntry, NodeDescriptor};
@@ -16,3 +17,4 @@ pub use infrastructure::{
     ports::{HostPortMapping, NodeHostPorts},
     template::{TemplateError, repository_root, write_compose_file},
 };
+pub use manual::{ComposeManualCluster, ManualClusterError};

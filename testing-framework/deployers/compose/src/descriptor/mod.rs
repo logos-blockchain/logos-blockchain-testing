@@ -123,6 +123,8 @@ fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
     let rust_log = tf_env::rust_log().unwrap_or_else(|| "info".to_string());
     let nomos_log_level = tf_env::nomos_log_level().unwrap_or_else(|| "info".to_string());
     let time_backend = tf_env::nomos_time_backend().unwrap_or_else(|| "monotonic".into());
+    let cfgsync_host =
+        env::var("LOGOS_BLOCKCHAIN_CFGSYNC_HOST").unwrap_or_else(|_| "cfgsync".to_string());
     vec![
         EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),
@@ -130,7 +132,7 @@ fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
         EnvEntry::new("LOGOS_BLOCKCHAIN_TIME_BACKEND", time_backend),
         EnvEntry::new(
             "CFG_SERVER_ADDR",
-            format!("http://host.docker.internal:{cfgsync_port}"),
+            format!("http://{cfgsync_host}:{cfgsync_port}"),
         ),
         EnvEntry::new("OTEL_METRIC_EXPORT_INTERVAL", "5000"),
     ]

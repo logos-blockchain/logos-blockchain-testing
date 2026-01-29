@@ -6513,6 +6513,7 @@ dependencies = [
  "logos-blockchain-groth16",
  "logos-blockchain-key-management-system-service",
  "logos-blockchain-ledger",
+ "logos-blockchain-network-service",
  "logos-blockchain-tracing",
  "logos-blockchain-tracing-service",
  "logos-blockchain-zksign",

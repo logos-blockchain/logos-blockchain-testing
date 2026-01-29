@@ -110,6 +110,11 @@ impl RunnerCleanup {
             info!(path = %keep.display(), "preserving docker state");
         }
 
+        if let Some(mut cfgsync) = self.cfgsync.take() {
+            cfgsync.mark_preserved();
+            self.cfgsync = Some(cfgsync);
+        }
+
         info!("compose preserve flag set; skipping docker compose down");
     }
 

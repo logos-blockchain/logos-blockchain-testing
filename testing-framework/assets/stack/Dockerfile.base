@@ -40,6 +40,8 @@ RUN /workspace/testing-framework/assets/stack/scripts/setup-logos-blockchain-cir
 
 ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
 
+RUN /workspace/scripts/build/build-rapidsnark.sh /opt/circuits
+
 RUN /workspace/testing-framework/assets/stack/scripts/docker/prepare_binaries.sh
 
 # Strip local path patches so container builds use git sources.
@@ -68,5 +70,8 @@ RUN apt-get update && apt-get install -yq \
 COPY --from=builder /workspace/artifacts/logos-blockchain-node /usr/bin/logos-blockchain-node
 COPY --from=builder /workspace/artifacts/cfgsync-server /usr/bin/cfgsync-server
 COPY --from=builder /workspace/artifacts/cfgsync-client /usr/bin/cfgsync-client
+COPY --from=builder /opt/circuits /opt/circuits
+
+ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
 
 EXPOSE 3000 8080 9000 60000

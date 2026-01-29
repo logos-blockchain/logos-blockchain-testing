@@ -4,16 +4,12 @@ use testing_framework_core::{
     scenario::{DynError, StartNodeOptions, StartedNode},
     topology::{
         config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
-        readiness::{ReadinessCheck, ReadinessError},
+        readiness::{ManualNetworkReadiness, ReadinessCheck, ReadinessError, ReadinessNode},
     },
 };
 use thiserror::Error;
 
-use crate::node_control::{LocalDynamicError, LocalDynamicNodes, ReadinessNode};
-
-mod readiness;
-
-use readiness::ManualNetworkReadiness;
+use crate::node_control::{LocalDynamicError, LocalDynamicNodes};
 
 #[derive(Debug, Error)]
 pub enum ManualClusterError {

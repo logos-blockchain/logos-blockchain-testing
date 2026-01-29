@@ -164,6 +164,10 @@ build_test_image::docker_build() {
       linux-aarch64) target_platform="linux/arm64" ;;
     esac
   fi
+  if [ -z "${target_platform}" ] && [ "${host_platform}" = "linux/arm64" ]; then
+    # Default to amd64 so circuits download matches available release artifacts.
+    target_platform="linux/amd64"
+  fi
 
   local -a base_build_args=(
     -f "${BASE_DOCKERFILE_PATH}"

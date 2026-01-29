@@ -1,7 +1,11 @@
+pub mod manual_network;
 pub mod network;
 
 use std::time::Duration;
 
+pub use manual_network::{
+    ManualNetworkReadiness, ManualNetworkStatus, ReadinessNode, build_readiness_nodes,
+};
 pub use network::{HttpNetworkReadiness, NetworkReadiness};
 use thiserror::Error;
 use tokio::time::{sleep, timeout};

@@ -51,6 +51,7 @@ git reset --hard
 git clean -fdx
 
 # Enable pol-dev-mode via cfg to let POL_PROOF_DEV_MODE short-circuit proofs in tests.
+# Build with default features disabled for proof crates (dummy verification keys).
 RUSTFLAGS='--cfg feature="pol-dev-mode"' \
   cargo build --features "testing" -p logos-blockchain-node
 

@@ -170,8 +170,7 @@ async fn wait_for_network_readiness(
 
     let listen_ports = topology.listen_ports();
     let initial_peer_ports = topology.initial_peer_ports();
-    let expected_peer_counts =
-        crate::topology::generation::find_expected_peer_counts(&listen_ports, &initial_peer_ports);
+    let expected_peer_counts = find_expected_peer_counts(&listen_ports, &initial_peer_ports);
 
     let network_check = HttpNetworkReadiness {
         client,

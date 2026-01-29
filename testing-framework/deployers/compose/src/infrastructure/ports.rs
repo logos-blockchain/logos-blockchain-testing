@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use anyhow::{Context as _, anyhow};
 use reqwest::Url;
@@ -70,16 +70,33 @@ async fn resolve_service_port(
     service: &str,
     container_port: u16,
 ) -> Result<u16, ComposeRunnerError> {
+    resolve_service_port_with(
+        environment.compose_path(),
+        environment.project_name(),
+        environment.root(),
+        service,
+        container_port,
+    )
+    .await
+}
+
+pub(crate) async fn resolve_service_port_with(
+    compose_path: &Path,
+    project_name: &str,
+    root: &Path,
+    service: &str,
+    container_port: u16,
+) -> Result<u16, ComposeRunnerError> {
     let mut cmd = Command::new("docker");
     cmd.arg("compose")
         .arg("-f")
-        .arg(environment.compose_path())
+        .arg(compose_path)
         .arg("-p")
-        .arg(environment.project_name())
+        .arg(project_name)
         .arg("port")
         .arg(service)
         .arg(container_port.to_string())
-        .current_dir(environment.root());
+        .current_dir(root);
 
     let output = timeout(adjust_timeout(COMPOSE_PORT_DISCOVERY_TIMEOUT), cmd.output())
         .await
@@ -148,7 +165,7 @@ fn localhost_url(port: u16) -> Result<Url, ParseError> {
     Url::parse(&format!("http://{}:{port}/", compose_runner_host()))
 }
 
-fn node_identifier(index: usize) -> String {
+pub(crate) fn node_identifier(index: usize) -> String {
     format!("node-{index}")
 }
 

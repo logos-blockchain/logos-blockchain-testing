@@ -9,14 +9,18 @@ use reqwest::Url;
 use testing_framework_core::{
     adjust_timeout, scenario::CleanupGuard, topology::generation::GeneratedTopology,
 };
-use tokio::process::Command;
-use tracing::{debug, error, info};
+use tokio::{
+    net::TcpStream,
+    process::Command,
+    time::{Instant, sleep},
+};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::{
     descriptor::ComposeDescriptor,
     docker::{
-        commands::{compose_up, dump_compose_logs, run_docker_command},
+        commands::{compose_create, compose_up, dump_compose_logs, run_docker_command},
         ensure_compose_image,
         platform::resolve_image,
         workspace::ComposeWorkspace,
@@ -30,6 +34,8 @@ use crate::{
 };
 
 const CFGSYNC_START_TIMEOUT: Duration = Duration::from_secs(180);
+const CFGSYNC_READY_TIMEOUT: Duration = Duration::from_secs(60);
+const CFGSYNC_READY_POLL: Duration = Duration::from_secs(2);
 
 /// Paths and flags describing the prepared compose workspace.
 pub struct WorkspaceState {
@@ -136,9 +142,11 @@ pub fn ensure_supported_topology(
     descriptors: &GeneratedTopology,
 ) -> Result<(), ComposeRunnerError> {
     let nodes = descriptors.nodes().len();
+
     if nodes == 0 {
         return Err(ComposeRunnerError::MissingNode { nodes });
     }
+
     Ok(())
 }
 
@@ -192,10 +200,17 @@ pub fn update_cfgsync_logged(
 pub async fn start_cfgsync_stage(
     workspace: &WorkspaceState,
     cfgsync_port: u16,
+    project_name: &str,
 ) -> Result<CfgsyncServerHandle, ComposeRunnerError> {
     info!(cfgsync_port = cfgsync_port, "launching cfgsync server");
-    let handle = launch_cfgsync(&workspace.cfgsync_path, cfgsync_port).await?;
+
+    let network = compose_network_name(project_name);
+    let handle = launch_cfgsync(&workspace.cfgsync_path, cfgsync_port, &network).await?;
+
+    wait_for_cfgsync_ready(cfgsync_port, Some(&handle)).await?;
+
     debug!(container = ?handle, "cfgsync server launched");
+
     Ok(handle)
 }
 
@@ -231,7 +246,9 @@ pub fn allocate_cfgsync_port() -> Result<u16, ConfigError> {
             source: source.into(),
         })?
         .port();
+
     debug!(port, "allocated cfgsync port");
+
     Ok(port)
 }
 
@@ -239,6 +256,7 @@ pub fn allocate_cfgsync_port() -> Result<u16, ConfigError> {
 pub async fn launch_cfgsync(
     cfgsync_path: &Path,
     port: u16,
+    network: &str,
 ) -> Result<CfgsyncServerHandle, ConfigError> {
     let testnet_dir = cfgsync_path
         .parent()
@@ -246,8 +264,10 @@ pub async fn launch_cfgsync(
             port,
             source: anyhow!("cfgsync path {cfgsync_path:?} has no parent directory"),
         })?;
+
     let (image, _) = resolve_image();
     let container_name = format!("nomos-cfgsync-{}", Uuid::new_v4());
+
     debug!(
         container = %container_name,
         image,
@@ -262,6 +282,10 @@ pub async fn launch_cfgsync(
         .arg("-d")
         .arg("--name")
         .arg(&container_name)
+        .arg("--network")
+        .arg(network)
+        .arg("--network-alias")
+        .arg("cfgsync")
         .arg("--entrypoint")
         .arg("cfgsync-server")
         .arg("-p")
@@ -273,9 +297,31 @@ pub async fn launch_cfgsync(
                 .canonicalize()
                 .unwrap_or_else(|_| testnet_dir.to_path_buf())
                 .display()
-        ))
-        .arg(&image)
-        .arg("/etc/nomos/cfgsync.yaml");
+        ));
+    let circuits_dir = std::env::var("LOGOS_BLOCKCHAIN_CIRCUITS_DOCKER")
+        .ok()
+        .or_else(|| std::env::var("LOGOS_BLOCKCHAIN_CIRCUITS").ok());
+    if let Some(circuits_dir) = circuits_dir {
+        let host_path = PathBuf::from(&circuits_dir);
+        if host_path.exists() {
+            command
+                .arg("-e")
+                .arg(format!("LOGOS_BLOCKCHAIN_CIRCUITS={circuits_dir}"))
+                .arg("-v")
+                .arg(format!(
+                    "{}:{circuits_dir}:ro",
+                    host_path.canonicalize().unwrap_or(host_path).display()
+                ));
+        }
+    }
+
+    if let Ok(pol_mode) = std::env::var("POL_PROOF_DEV_MODE") {
+        command
+            .arg("-e")
+            .arg(format!("POL_PROOF_DEV_MODE={pol_mode}"));
+    }
+
+    command.arg(&image).arg("/etc/nomos/cfgsync.yaml");
 
     run_docker_command(
         command,
@@ -372,7 +418,8 @@ pub async fn prepare_environment(
     let compose_path = render_compose_logged(&workspace, descriptors, cfgsync_port)?;
 
     let project_name = format!("nomos-compose-{}", Uuid::new_v4());
-    let mut cfgsync_handle = start_cfgsync_stage(&workspace, cfgsync_port).await?;
+    compose_create(&compose_path, &project_name, &workspace.root).await?;
+    let mut cfgsync_handle = start_cfgsync_stage(&workspace, cfgsync_port, &project_name).await?;
 
     if let Err(err) = bring_up_stack_logged(
         &compose_path,
@@ -400,4 +447,107 @@ pub async fn prepare_environment(
         project_name,
         Some(cfgsync_handle),
     ))
+}
+
+/// Prepare workspace, cfgsync, and compose artifacts without starting services.
+pub async fn prepare_environment_manual(
+    descriptors: &GeneratedTopology,
+    metrics_otlp_ingest_url: Option<&Url>,
+) -> Result<StackEnvironment, ComposeRunnerError> {
+    let workspace = prepare_workspace_logged()?;
+    let cfgsync_port = allocate_cfgsync_port()?;
+
+    update_cfgsync_logged(
+        &workspace,
+        descriptors,
+        cfgsync_port,
+        metrics_otlp_ingest_url,
+    )?;
+    ensure_compose_image().await?;
+    let compose_path = render_compose_logged(&workspace, descriptors, cfgsync_port)?;
+
+    let project_name = format!("nomos-compose-{}", Uuid::new_v4());
+    compose_create(&compose_path, &project_name, &workspace.root).await?;
+    let cfgsync_handle = start_cfgsync_stage(&workspace, cfgsync_port, &project_name).await?;
+
+    info!(
+        project = %project_name,
+        compose_file = %compose_path.display(),
+        cfgsync_port,
+        "compose manual environment prepared"
+    );
+
+    Ok(StackEnvironment::from_workspace(
+        workspace,
+        compose_path,
+        project_name,
+        Some(cfgsync_handle),
+    ))
+}
+
+async fn wait_for_cfgsync_ready(
+    port: u16,
+    handle: Option<&CfgsyncServerHandle>,
+) -> Result<(), ComposeRunnerError> {
+    let deadline = Instant::now() + CFGSYNC_READY_TIMEOUT;
+    let addr = format!("127.0.0.1:{port}");
+
+    loop {
+        match TcpStream::connect(&addr).await {
+            Ok(_) => {
+                info!(port, "cfgsync server is reachable");
+                return Ok(());
+            }
+            Err(err) => {
+                if Instant::now() >= deadline {
+                    dump_cfgsync_logs(handle).await;
+                    return Err(ComposeRunnerError::Config(ConfigError::CfgsyncStart {
+                        port,
+                        source: anyhow!("cfgsync not reachable: {err}"),
+                    }));
+                }
+            }
+        }
+        sleep(CFGSYNC_READY_POLL).await;
+    }
+}
+
+async fn dump_cfgsync_logs(handle: Option<&CfgsyncServerHandle>) {
+    let Some(name) = handle.and_then(cfgsync_container_name) else {
+        return;
+    };
+
+    let mut cmd = Command::new("docker");
+    cmd.arg("logs").arg(name);
+
+    match cmd.output().await {
+        Ok(output) => {
+            if !output.stdout.is_empty() {
+                warn!(
+                    logs = %String::from_utf8_lossy(&output.stdout),
+                    container = name,
+                    "cfgsync stdout"
+                );
+            }
+
+            if !output.stderr.is_empty() {
+                warn!(
+                    logs = %String::from_utf8_lossy(&output.stderr),
+                    container = name,
+                    "cfgsync stderr"
+                );
+            }
+        }
+        Err(err) => warn!(error = ?err, container = name, "failed to collect cfgsync logs"),
+    }
+}
+
+fn cfgsync_container_name(handle: &CfgsyncServerHandle) -> Option<&str> {
+    match handle {
+        CfgsyncServerHandle::Container { name, .. } => Some(name.as_str()),
+    }
+}
+
+fn compose_network_name(project_name: &str) -> String {
+    format!("{project_name}_default")
 }

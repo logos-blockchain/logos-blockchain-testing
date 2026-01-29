@@ -12,7 +12,8 @@ use testing_framework_core::{
     },
     scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
     topology::{
-        generation::{GeneratedTopology, find_expected_peer_counts},
+        generation::GeneratedTopology,
+        readiness::{ReadinessNode, build_readiness_nodes},
         utils::multiaddr_port,
     },
 };
@@ -82,12 +83,6 @@ impl LocalDynamicSeed {
             peer_ports_by_name,
         }
     }
-}
-
-pub(crate) struct ReadinessNode {
-    pub(crate) label: String,
-    pub(crate) expected_peers: Option<usize>,
-    pub(crate) api: ApiClient,
 }
 
 impl LocalDynamicNodes {
@@ -166,38 +161,26 @@ impl LocalDynamicNodes {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-        let listen_ports = state
-            .nodes
-            .iter()
-            .map(|node| node.config().network.backend.swarm.port)
-            .collect::<Vec<_>>();
+        let iter = state.nodes.iter().enumerate().map(|(idx, node)| {
+            let config = node.config();
+            let port = config.network.backend.swarm.port;
+            let initial_peers = config
+                .network
+                .backend
+                .initial_peers
+                .iter()
+                .filter_map(multiaddr_port)
+                .collect::<HashSet<u16>>();
 
-        let initial_peer_ports = state
-            .nodes
-            .iter()
-            .map(|node| {
-                node.config()
-                    .network
-                    .backend
-                    .initial_peers
-                    .iter()
-                    .filter_map(multiaddr_port)
-                    .collect::<HashSet<u16>>()
-            })
-            .collect::<Vec<_>>();
+            (
+                format!("node#{idx}@{port}"),
+                node.api().clone(),
+                port,
+                initial_peers,
+            )
+        });
 
-        let expected_peer_counts = find_expected_peer_counts(&listen_ports, &initial_peer_ports);
-
-        state
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| ReadinessNode {
-                label: format!("node#{idx}@{}", node.config().network.backend.swarm.port),
-                expected_peers: expected_peer_counts.get(idx).copied(),
-                api: node.api().clone(),
-            })
-            .collect::<Vec<_>>()
+        build_readiness_nodes(iter)
     }
 
     async fn start_node(

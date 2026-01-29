@@ -27,6 +27,15 @@ impl CfgsyncServerHandle {
             _ => {}
         }
     }
+
+    /// Prevent automatic shutdown for preserved runs.
+    pub fn mark_preserved(&mut self) {
+        match self {
+            Self::Container { stopped, .. } => {
+                *stopped = true;
+            }
+        }
+    }
 }
 
 fn remove_container(name: &str) {

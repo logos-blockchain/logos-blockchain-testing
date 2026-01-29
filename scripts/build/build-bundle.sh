@@ -132,6 +132,23 @@ build_bundle::default_docker_platform() {
   esac
 }
 
+build_bundle::ensure_circuits() {
+  if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS:-}" ]; then
+    [ -d "${LOGOS_BLOCKCHAIN_CIRCUITS}" ] || build_bundle::fail \
+      "LOGOS_BLOCKCHAIN_CIRCUITS is set but missing: ${LOGOS_BLOCKCHAIN_CIRCUITS}"
+    return 0
+  fi
+
+  local default_dir="${HOME}/.logos-blockchain-circuits"
+  if [ ! -d "${default_dir}" ]; then
+    echo "==> Circuits not found; installing to ${default_dir}"
+    bash "${ROOT_DIR}/scripts/setup/setup-logos-blockchain-circuits.sh" "${VERSION}" "${default_dir}"
+  fi
+
+  LOGOS_BLOCKCHAIN_CIRCUITS="${default_dir}"
+  export LOGOS_BLOCKCHAIN_CIRCUITS
+}
+
 build_bundle::parse_args() {
   PLATFORM="host"
   OUTPUT=""
@@ -239,6 +256,9 @@ build_bundle::maybe_run_linux_build_in_docker() {
         ;;
     esac
   fi
+  if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS:-}" ] && [ -d "${LOGOS_BLOCKCHAIN_CIRCUITS}" ]; then
+    extra_mounts+=("-v" "${LOGOS_BLOCKCHAIN_CIRCUITS}:/root/.logos-blockchain-circuits:ro")
+  fi
 
   echo "==> Building Linux bundle inside Docker"
   local container_output="/workspace${OUTPUT#"${ROOT_DIR}"}"
@@ -263,6 +283,7 @@ build_bundle::maybe_run_linux_build_in_docker() {
     -e VERSION="${VERSION}" \
     -e LOGOS_BLOCKCHAIN_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV}" \
     -e LOGOS_BLOCKCHAIN_NODE_PATH="${node_path_env}" \
+    -e LOGOS_BLOCKCHAIN_CIRCUITS="/root/.logos-blockchain-circuits" \
     -e LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
     -e LOGOS_BLOCKCHAIN_EXTRA_FEATURES="${LOGOS_BLOCKCHAIN_EXTRA_FEATURES:-}" \
     -e BUNDLE_IN_CONTAINER=1 \
@@ -329,14 +350,15 @@ build_bundle::build_binaries() {
     if [ -z "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
       build_bundle::apply_nomos_node_patches "${NODE_SRC}"
     fi
-    unset CARGO_FEATURE_BUILD_VERIFICATION_KEY
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
+      CARGO_FEATURE_BUILD_VERIFICATION_KEY=1 \
       RUSTFLAGS='--cfg feature="pol-dev-mode"' \
         RUSTUP_TOOLCHAIN="${BUNDLE_RUSTUP_TOOLCHAIN}" \
         cargo build --all-features \
         -p logos-blockchain-node \
         --target-dir "${NODE_TARGET}"
     else
+      CARGO_FEATURE_BUILD_VERIFICATION_KEY=1 \
       RUSTFLAGS='--cfg feature="pol-dev-mode"' \
         cargo build --all-features \
         -p logos-blockchain-node \
@@ -385,6 +407,7 @@ build_bundle::main() {
   build_bundle::clean_cargo_linux_cache
   build_bundle::parse_args "$@"
   build_bundle::validate_and_finalize
+  build_bundle::ensure_circuits
   build_bundle::maybe_run_linux_build_in_docker
   build_bundle::prepare_circuits
   build_bundle::build_binaries

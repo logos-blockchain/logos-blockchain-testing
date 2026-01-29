@@ -47,15 +47,8 @@ pub async fn compose_up(
     project_name: &str,
     root: &Path,
 ) -> Result<(), ComposeCommandError> {
-    let mut cmd = Command::new("docker");
-    cmd.arg("compose")
-        .arg("-f")
-        .arg(compose_path)
-        .arg("-p")
-        .arg(project_name)
-        .arg("up")
-        .arg("-d")
-        .current_dir(root);
+    let mut cmd = compose_command(compose_path, project_name, root);
+    cmd.arg("up").arg("-d");
 
     info!(
         compose_file = %compose_path.display(),
@@ -67,21 +60,64 @@ pub async fn compose_up(
     run_compose_command(cmd, adjust_timeout(COMPOSE_UP_TIMEOUT), "docker compose up").await
 }
 
+/// Runs `docker compose up --no-start` for the generated stack.
+pub async fn compose_create(
+    compose_path: &Path,
+    project_name: &str,
+    root: &Path,
+) -> Result<(), ComposeCommandError> {
+    let mut cmd = compose_command(compose_path, project_name, root);
+    cmd.arg("up").arg("--no-start");
+
+    info!(
+        compose_file = %compose_path.display(),
+        project = project_name,
+        root = %root.display(),
+        "running docker compose create"
+    );
+
+    run_compose_command(
+        cmd,
+        adjust_timeout(COMPOSE_UP_TIMEOUT),
+        "docker compose create",
+    )
+    .await
+}
+
+/// Runs `docker compose up -d --no-deps <service>` for a single service.
+pub async fn compose_up_service(
+    compose_path: &Path,
+    project_name: &str,
+    root: &Path,
+    service: &str,
+) -> Result<(), ComposeCommandError> {
+    let mut cmd = compose_command(compose_path, project_name, root);
+    cmd.arg("up").arg("-d").arg("--no-deps").arg(service);
+
+    info!(
+        compose_file = %compose_path.display(),
+        project = project_name,
+        root = %root.display(),
+        service,
+        "running docker compose up for service"
+    );
+
+    run_compose_command(
+        cmd,
+        adjust_timeout(COMPOSE_UP_TIMEOUT),
+        "docker compose up service",
+    )
+    .await
+}
+
 /// Runs `docker compose down --volumes` for the generated stack.
 pub async fn compose_down(
     compose_path: &Path,
     project_name: &str,
     root: &Path,
 ) -> Result<(), ComposeCommandError> {
-    let mut cmd = Command::new("docker");
-    cmd.arg("compose")
-        .arg("-f")
-        .arg(compose_path)
-        .arg("-p")
-        .arg(project_name)
-        .arg("down")
-        .arg("--volumes")
-        .current_dir(root);
+    let mut cmd = compose_command(compose_path, project_name, root);
+    cmd.arg("down").arg("--volumes");
 
     info!(
         compose_file = %compose_path.display(),
@@ -100,15 +136,8 @@ pub async fn compose_down(
 
 /// Dump docker compose logs to stderr for debugging failures.
 pub async fn dump_compose_logs(compose_file: &Path, project: &str, root: &Path) {
-    let mut cmd = Command::new("docker");
-    cmd.arg("compose")
-        .arg("-f")
-        .arg(compose_file)
-        .arg("-p")
-        .arg(project)
-        .arg("logs")
-        .arg("--no-color")
-        .current_dir(root);
+    let mut cmd = compose_command(compose_file, project, root);
+    cmd.arg("logs").arg("--no-color");
 
     match cmd.output().await {
         Ok(output) => print_logs(&output.stdout, &output.stderr),
@@ -144,6 +173,17 @@ async fn run_compose_command(
             timeout: timeout_duration,
         }),
     }
+}
+
+fn compose_command(compose_path: &Path, project_name: &str, root: &Path) -> Command {
+    let mut cmd = Command::new("docker");
+    cmd.arg("compose")
+        .arg("-f")
+        .arg(compose_path)
+        .arg("-p")
+        .arg(project_name)
+        .current_dir(root);
+    cmd
 }
 
 fn handle_compose_status(
