@@ -104,6 +104,7 @@ pub struct GeneralConsensusConfig {
     pub utxos: Vec<Utxo>,
     pub blend_notes: Vec<ServiceNote>,
     pub wallet_accounts: Vec<WalletAccount>,
+    pub funding_sk: ZkKey,
 }
 
 #[derive(Clone)]
@@ -205,21 +206,29 @@ pub fn create_consensus_configs(
 ) -> Result<Vec<GeneralConsensusConfig>, ConsensusConfigError> {
     let mut leader_keys = Vec::new();
     let mut blend_notes = Vec::new();
+    let mut sdp_notes = Vec::new();
 
-    let utxos = create_utxos_for_leader_and_services(ids, &mut leader_keys, &mut blend_notes);
+    let utxos = create_utxos_for_leader_and_services(
+        ids,
+        &mut leader_keys,
+        &mut blend_notes,
+        &mut sdp_notes,
+    );
     let utxos = append_wallet_utxos(utxos, wallet);
     let genesis_tx = create_genesis_tx(&utxos)?;
     let ledger_config = build_ledger_config(consensus_params)?;
 
     Ok(leader_keys
         .into_iter()
-        .map(|(pk, sk)| GeneralConsensusConfig {
+        .enumerate()
+        .map(|(i, (pk, sk))| GeneralConsensusConfig {
             leader_config: LeaderConfig { pk, sk },
             ledger_config: ledger_config.clone(),
             genesis_tx: genesis_tx.clone(),
             utxos: utxos.clone(),
             blend_notes: blend_notes.clone(),
             wallet_accounts: wallet.accounts.clone(),
+            funding_sk: sdp_notes[i].sk.clone(),
         })
         .collect())
 }
@@ -228,6 +237,7 @@ fn create_utxos_for_leader_and_services(
     ids: &[[u8; 32]],
     leader_keys: &mut Vec<(ZkPublicKey, UnsecuredZkKey)>,
     blend_notes: &mut Vec<ServiceNote>,
+    sdp_notes: &mut Vec<ServiceNote>,
 ) -> Vec<Utxo> {
     let mut utxos = Vec::new();
 
@@ -238,6 +248,7 @@ fn create_utxos_for_leader_and_services(
     for &id in ids {
         output_index = push_leader_utxo(id, leader_keys, &mut utxos, output_index);
         output_index = push_service_note(b"bn", id, blend_notes, &mut utxos, output_index);
+        output_index = push_service_note(b"sdp", id, sdp_notes, &mut utxos, output_index);
     }
 
     utxos

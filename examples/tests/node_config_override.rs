@@ -37,9 +37,10 @@ async fn manual_cluster_api_port_override() -> Result<()> {
             .create_patch(move |mut config| {
                 println!("overriding API port to {api_port}");
 
-                let current_addr = config.http.backend_settings.address;
+                let current_addr = config.user.http.backend_settings.address;
 
-                config.http.backend_settings.address = SocketAddr::new(current_addr.ip(), api_port);
+                config.user.http.backend_settings.address =
+                    SocketAddr::new(current_addr.ip(), api_port);
 
                 Ok(config)
             }),
@@ -73,9 +74,10 @@ async fn scenario_builder_api_port_override() -> Result<()> {
             .node_config_patch_with(0, move |mut config| {
                 println!("overriding API port to {api_port}");
 
-                let current_addr = config.http.backend_settings.address;
+                let current_addr = config.user.http.backend_settings.address;
 
-                config.http.backend_settings.address = SocketAddr::new(current_addr.ip(), api_port);
+                config.user.http.backend_settings.address =
+                    SocketAddr::new(current_addr.ip(), api_port);
 
                 Ok(config)
             })

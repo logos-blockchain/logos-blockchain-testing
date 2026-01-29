@@ -56,7 +56,10 @@ impl Default for StartNodeOptions {
 impl StartNodeOptions {
     pub fn create_patch<F>(mut self, f: F) -> Self
     where
-        F: Fn(nomos_node::Config) -> Result<nomos_node::Config, DynError> + Send + Sync + 'static,
+        F: Fn(nomos_node::config::RunConfig) -> Result<nomos_node::config::RunConfig, DynError>
+            + Send
+            + Sync
+            + 'static,
     {
         self.config_patch = Some(Arc::new(f));
         self
