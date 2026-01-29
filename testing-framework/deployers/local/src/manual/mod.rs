@@ -50,8 +50,8 @@ impl LocalManualCluster {
     }
 
     #[must_use]
-    pub fn node_pid(&self, index: usize) -> Option<u32> {
-        self.nodes.node_pid(index)
+    pub fn node_pid(&self, name: &str) -> Option<u32> {
+        self.nodes.node_pid(name)
     }
 
     pub async fn start_node(&self, name: &str) -> Result<StartedNode, ManualClusterError> {
@@ -73,12 +73,12 @@ impl LocalManualCluster {
         self.nodes.stop_all();
     }
 
-    pub async fn restart_node(&self, index: usize) -> Result<(), ManualClusterError> {
-        Ok(self.nodes.restart_node(index).await?)
+    pub async fn restart_node(&self, name: &str) -> Result<(), ManualClusterError> {
+        Ok(self.nodes.restart_node(name).await?)
     }
 
-    pub async fn stop_node(&self, index: usize) -> Result<(), ManualClusterError> {
-        Ok(self.nodes.stop_node(index).await?)
+    pub async fn stop_node(&self, name: &str) -> Result<(), ManualClusterError> {
+        Ok(self.nodes.stop_node(name).await?)
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
@@ -107,15 +107,15 @@ impl Drop for LocalManualCluster {
 
 #[async_trait::async_trait]
 impl NodeControlHandle for LocalManualCluster {
-    async fn restart_node(&self, index: usize) -> Result<(), DynError> {
+    async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.nodes
-            .restart_node(index)
+            .restart_node(name)
             .await
             .map_err(|err| err.into())
     }
 
-    async fn stop_node(&self, index: usize) -> Result<(), DynError> {
-        self.nodes.stop_node(index).await.map_err(|err| err.into())
+    async fn stop_node(&self, name: &str) -> Result<(), DynError> {
+        self.nodes.stop_node(name).await.map_err(|err| err.into())
     }
 
     async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {
@@ -138,8 +138,8 @@ impl NodeControlHandle for LocalManualCluster {
         self.node_client(name)
     }
 
-    fn node_pid(&self, index: usize) -> Option<u32> {
-        self.node_pid(index)
+    fn node_pid(&self, name: &str) -> Option<u32> {
+        self.node_pid(name)
     }
 }
 

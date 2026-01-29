@@ -45,13 +45,9 @@ pub struct ComposeNodeControl {
 
 #[async_trait::async_trait]
 impl NodeControlHandle for ComposeNodeControl {
-    async fn restart_node(&self, index: usize) -> Result<(), DynError> {
-        restart_compose_service(
-            &self.compose_file,
-            &self.project_name,
-            &format!("node-{index}"),
-        )
-        .await
-        .map_err(|err| format!("node restart failed: {err}").into())
+    async fn restart_node(&self, name: &str) -> Result<(), DynError> {
+        restart_compose_service(&self.compose_file, &self.project_name, name)
+            .await
+            .map_err(|err| format!("node restart failed: {err}").into())
     }
 }

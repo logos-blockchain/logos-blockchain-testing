@@ -8,7 +8,7 @@ use crate::{
 /// Deployer-agnostic control surface for runtime node operations.
 #[async_trait]
 pub trait NodeControlHandle: Send + Sync {
-    async fn restart_node(&self, _index: usize) -> Result<(), DynError> {
+    async fn restart_node(&self, _name: &str) -> Result<(), DynError> {
         Err("restart_node not supported by this deployer".into())
     }
 
@@ -24,7 +24,7 @@ pub trait NodeControlHandle: Send + Sync {
         Err("start_node_with not supported by this deployer".into())
     }
 
-    async fn stop_node(&self, _index: usize) -> Result<(), DynError> {
+    async fn stop_node(&self, _name: &str) -> Result<(), DynError> {
         Err("stop_node not supported by this deployer".into())
     }
 
@@ -32,7 +32,7 @@ pub trait NodeControlHandle: Send + Sync {
         None
     }
 
-    fn node_pid(&self, _index: usize) -> Option<u32> {
+    fn node_pid(&self, _name: &str) -> Option<u32> {
         None
     }
 }

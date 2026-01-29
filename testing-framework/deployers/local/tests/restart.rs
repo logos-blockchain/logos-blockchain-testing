@@ -22,16 +22,17 @@ async fn local_restart_node() -> Result<(), Box<dyn std::error::Error + Send + S
 
     let control = context.node_control().ok_or("node control not available")?;
 
-    let old_pid = control.node_pid(0).ok_or("missing node pid")?;
+    let node_name = "node-0";
+    let old_pid = control.node_pid(node_name).ok_or("missing node pid")?;
 
-    control.restart_node(0).await?;
+    control.restart_node(node_name).await?;
 
-    let new_pid = control.node_pid(0).ok_or("missing node pid")?;
+    let new_pid = control.node_pid(node_name).ok_or("missing node pid")?;
     assert_ne!(old_pid, new_pid, "expected a new process after restart");
 
-    control.stop_node(0).await?;
+    control.stop_node(node_name).await?;
     assert!(
-        control.node_pid(0).is_none(),
+        control.node_pid(node_name).is_none(),
         "expected node pid to be absent after stop"
     );
 
@@ -47,18 +48,18 @@ async fn manual_cluster_restart_node() -> Result<(), Box<dyn std::error::Error +
     let deployer = LocalDeployer::default();
     let cluster = deployer.manual_cluster(TopologyConfig::with_node_numbers(1))?;
 
-    cluster.start_node("a").await?;
+    let node_name = cluster.start_node("a").await?.name;
 
-    let old_pid = cluster.node_pid(0).ok_or("missing node pid")?;
+    let old_pid = cluster.node_pid(&node_name).ok_or("missing node pid")?;
 
-    cluster.restart_node(0).await?;
+    cluster.restart_node(&node_name).await?;
 
-    let new_pid = cluster.node_pid(0).ok_or("missing node pid")?;
+    let new_pid = cluster.node_pid(&node_name).ok_or("missing node pid")?;
     assert_ne!(old_pid, new_pid, "expected a new process after restart");
 
-    cluster.stop_node(0).await?;
+    cluster.stop_node(&node_name).await?;
     assert!(
-        cluster.node_pid(0).is_none(),
+        cluster.node_pid(&node_name).is_none(),
         "expected node pid to be absent after stop"
     );
 

@@ -44,8 +44,8 @@ pub enum LocalNodeManagerError {
     PortAllocation { message: String },
     #[error("node config patch failed: {message}")]
     ConfigPatch { message: String },
-    #[error("node index {index} is out of bounds")]
-    NodeIndex { index: usize },
+    #[error("node name '{name}' is unknown")]
+    NodeName { name: String },
     #[error("failed to restart node: {source}")]
     Restart {
         #[source]
@@ -145,6 +145,7 @@ impl LocalNodeManager {
             peer_ports: seed.peer_ports.clone(),
             peer_ports_by_name: seed.peer_ports_by_name.clone(),
             clients_by_name: HashMap::new(),
+            indices_by_name: HashMap::new(),
             nodes: Vec::new(),
         };
 
@@ -169,12 +170,13 @@ impl LocalNodeManager {
     }
 
     #[must_use]
-    pub fn node_pid(&self, index: usize) -> Option<u32> {
+    pub fn node_pid(&self, name: &str) -> Option<u32> {
         let mut state = self
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+        let index = *state.indices_by_name.get(name)?;
         let node = state.nodes.get_mut(index)?;
         if node.is_running() {
             Some(node.pid())
@@ -195,6 +197,7 @@ impl LocalNodeManager {
             .peer_ports_by_name
             .clone_from(&self.seed.peer_ports_by_name);
         state.clients_by_name.clear();
+        state.indices_by_name.clear();
         state.node_count = self.seed.node_count;
         self.node_clients.clear();
     }
@@ -211,6 +214,7 @@ impl LocalNodeManager {
         state.peer_ports.clear();
         state.peer_ports_by_name.clear();
         state.clients_by_name.clear();
+        state.indices_by_name.clear();
         state.node_count = 0;
 
         for (idx, node) in nodes.into_iter().enumerate() {
@@ -290,6 +294,8 @@ impl LocalNodeManager {
             let index = state.node_count;
             let label = if name.trim().is_empty() {
                 Self::default_label(index)
+            } else if name.starts_with("node-") {
+                name.to_string()
             } else {
                 format!("node-{name}")
             };
@@ -334,18 +340,27 @@ impl LocalNodeManager {
         })
     }
 
-    pub async fn restart_node(&self, index: usize) -> Result<(), LocalNodeManagerError> {
-        let mut node = {
+    pub async fn restart_node(&self, name: &str) -> Result<(), LocalNodeManagerError> {
+        let (index, mut node) = {
             let mut state = self
                 .state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+            let Some(index) = state.indices_by_name.get(name).copied() else {
+                return Err(LocalNodeManagerError::NodeName {
+                    name: name.to_string(),
+                });
+            };
+
             if index >= state.nodes.len() {
-                return Err(LocalNodeManagerError::NodeIndex { index });
+                return Err(LocalNodeManagerError::NodeName {
+                    name: name.to_string(),
+                });
             }
 
-            state.nodes.remove(index)
+            let node = state.nodes.remove(index);
+            (index, node)
         };
 
         node.restart()
@@ -366,18 +381,27 @@ impl LocalNodeManager {
         Ok(())
     }
 
-    pub async fn stop_node(&self, index: usize) -> Result<(), LocalNodeManagerError> {
-        let mut node = {
+    pub async fn stop_node(&self, name: &str) -> Result<(), LocalNodeManagerError> {
+        let (index, mut node) = {
             let mut state = self
                 .state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+            let Some(index) = state.indices_by_name.get(name).copied() else {
+                return Err(LocalNodeManagerError::NodeName {
+                    name: name.to_string(),
+                });
+            };
+
             if index >= state.nodes.len() {
-                return Err(LocalNodeManagerError::NodeIndex { index });
+                return Err(LocalNodeManagerError::NodeName {
+                    name: name.to_string(),
+                });
             }
 
-            state.nodes.remove(index)
+            let node = state.nodes.remove(index);
+            (index, node)
         };
 
         node.stop().await;
@@ -446,12 +470,12 @@ fn apply_patch_if_needed(
 
 #[async_trait::async_trait]
 impl NodeControlHandle for LocalNodeManager {
-    async fn restart_node(&self, index: usize) -> Result<(), DynError> {
-        self.restart_node(index).await.map_err(|err| err.into())
+    async fn restart_node(&self, name: &str) -> Result<(), DynError> {
+        self.restart_node(name).await.map_err(|err| err.into())
     }
 
-    async fn stop_node(&self, index: usize) -> Result<(), DynError> {
-        self.stop_node(index).await.map_err(|err| err.into())
+    async fn stop_node(&self, name: &str) -> Result<(), DynError> {
+        self.stop_node(name).await.map_err(|err| err.into())
     }
 
     async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {
@@ -474,7 +498,7 @@ impl NodeControlHandle for LocalNodeManager {
         self.node_client(name)
     }
 
-    fn node_pid(&self, index: usize) -> Option<u32> {
-        self.node_pid(index)
+    fn node_pid(&self, name: &str) -> Option<u32> {
+        self.node_pid(name)
     }
 }
