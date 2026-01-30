@@ -1,6 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
 
-use nomos_node::Config as NodeConfig;
+use nomos_node::config::RunConfig;
 use thiserror::Error;
 use tracing::{debug, info};
 
@@ -314,7 +314,7 @@ impl<Caps> TopologyConfigurator<Caps> {
     #[must_use]
     pub fn node_config_patch_with<F>(mut self, index: usize, f: F) -> Self
     where
-        F: Fn(NodeConfig) -> Result<NodeConfig, DynError> + Send + Sync + 'static,
+        F: Fn(RunConfig) -> Result<RunConfig, DynError> + Send + Sync + 'static,
     {
         self.builder.topology = self
             .builder

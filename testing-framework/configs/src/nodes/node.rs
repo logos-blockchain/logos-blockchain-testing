@@ -1,7 +1,10 @@
+use key_management_system_service::keys::secured_key::SecuredKey as _;
+use nomos_core::mantle::Value;
 use nomos_node::{
-    Config as NodeConfig, RocksBackendSettings, config::deployment::DeploymentSettings,
+    RocksBackendSettings, UserConfig,
+    config::{RunConfig, deployment::DeploymentSettings},
 };
-use nomos_sdp::SdpSettings;
+use nomos_sdp::{SdpSettings, wallet::SdpWalletConfig};
 
 use crate::{
     nodes::{
@@ -16,7 +19,7 @@ use crate::{
 };
 
 #[must_use]
-pub fn create_node_config(config: GeneralConfig) -> NodeConfig {
+pub fn create_node_config(config: GeneralConfig) -> RunConfig {
     let network_config = config.network_config.clone();
     let (blend_user_config, blend_deployment, network_deployment) =
         build_blend_service_config(&config.blend_config);
@@ -24,20 +27,30 @@ pub fn create_node_config(config: GeneralConfig) -> NodeConfig {
     let deployment_settings =
         build_node_deployment_settings(&config, blend_deployment, network_deployment);
 
-    NodeConfig {
+    let user_settings = UserConfig {
         network: network_config,
         blend: blend_user_config,
-        deployment: deployment_settings,
         cryptarchia: cryptarchia_config(&config),
         tracing: tracing_settings(&config),
         http: http_config(&config),
         storage: rocks_storage_settings(),
         time: time_config(&config),
         mempool: mempool_config(),
-        sdp: SdpSettings { declaration: None },
+        sdp: SdpSettings {
+            declaration: None,
+            wallet_config: SdpWalletConfig {
+                max_tx_fee: Value::MAX,
+                funding_pk: config.consensus_config.funding_sk.as_public_key(),
+            },
+        },
         testing_http: testing_http_config(&config),
         wallet: wallet_settings(&config),
         key_management: config.kms_config.clone(),
+    };
+
+    RunConfig {
+        deployment: deployment_settings,
+        user: user_settings,
     }
 }
 
@@ -46,13 +59,13 @@ fn build_node_deployment_settings(
     blend_deployment: nomos_node::config::blend::deployment::Settings,
     network_deployment: nomos_node::config::network::deployment::Settings,
 ) -> DeploymentSettings {
-    DeploymentSettings::new_custom(
-        blend_deployment,
-        network_deployment,
-        cryptarchia_deployment(config),
-        time_deployment(config),
-        mempool_deployment(),
-    )
+    DeploymentSettings {
+        blend: blend_deployment,
+        network: network_deployment,
+        cryptarchia: cryptarchia_deployment(config),
+        time: time_deployment(config),
+        mempool: mempool_deployment(),
+    }
 }
 
 fn rocks_storage_settings() -> RocksBackendSettings {

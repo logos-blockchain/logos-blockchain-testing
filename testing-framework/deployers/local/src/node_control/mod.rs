@@ -3,7 +3,7 @@ use std::{
     sync::Mutex,
 };
 
-use nomos_node::Config as NodeConfig;
+use nomos_node::config::RunConfig;
 use testing_framework_config::topology::configs::{consensus, time};
 use testing_framework_core::{
     nodes::{
@@ -249,7 +249,7 @@ impl LocalNodeManager {
         let listen_ports = state
             .nodes
             .iter()
-            .map(|node| node.config().network.backend.swarm.port)
+            .map(|node| node.config().user.network.backend.swarm.port)
             .collect::<Vec<_>>();
 
         let initial_peer_ports = state
@@ -257,6 +257,7 @@ impl LocalNodeManager {
             .iter()
             .map(|node| {
                 node.config()
+                    .user
                     .network
                     .backend
                     .initial_peers
@@ -273,7 +274,10 @@ impl LocalNodeManager {
             .iter()
             .enumerate()
             .map(|(idx, node)| ReadinessNode {
-                label: format!("node#{idx}@{}", node.config().network.backend.swarm.port),
+                label: format!(
+                    "node#{idx}@{}",
+                    node.config().user.network.backend.swarm.port
+                ),
                 expected_peers: expected_peer_counts.get(idx).copied(),
                 api: node.api().clone(),
             })
@@ -456,7 +460,7 @@ fn build_node_config(
 }
 
 fn apply_patch_if_needed(
-    config: NodeConfig,
+    config: RunConfig,
     patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
 ) -> Result<NodeConfig, LocalNodeManagerError> {
     let Some(patch) = patch else {
