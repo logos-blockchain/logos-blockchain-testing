@@ -219,7 +219,7 @@ impl LocalNodeManager {
 
         for (idx, node) in nodes.into_iter().enumerate() {
             let name = Self::default_label(idx);
-            let port = node.config().network.backend.swarm.port;
+            let port = node.config().user.network.backend.swarm.port;
             let client = node.api().clone();
 
             self.node_clients.add_node(client.clone());
@@ -427,7 +427,7 @@ impl LocalNodeManager {
         &self,
         node_name: &str,
         network_port: u16,
-        config: NodeConfig,
+        config: RunConfig,
     ) -> Result<ApiClient, LocalNodeManagerError> {
         let node = Node::spawn(config, node_name)
             .await
@@ -449,9 +449,9 @@ impl LocalNodeManager {
 
 fn build_node_config(
     general_config: testing_framework_config::topology::configs::GeneralConfig,
-    descriptor_patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
-    options_patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
-) -> Result<NodeConfig, LocalNodeManagerError> {
+    descriptor_patch: Option<&config::NodeConfigPatch>,
+    options_patch: Option<&config::NodeConfigPatch>,
+) -> Result<RunConfig, LocalNodeManagerError> {
     let mut config = create_node_config(general_config);
     config = apply_patch_if_needed(config, descriptor_patch)?;
     config = apply_patch_if_needed(config, options_patch)?;
@@ -461,8 +461,8 @@ fn build_node_config(
 
 fn apply_patch_if_needed(
     config: RunConfig,
-    patch: Option<&testing_framework_core::topology::config::NodeConfigPatch>,
-) -> Result<NodeConfig, LocalNodeManagerError> {
+    patch: Option<&config::NodeConfigPatch>,
+) -> Result<RunConfig, LocalNodeManagerError> {
     let Some(patch) = patch else {
         return Ok(config);
     };

@@ -8,7 +8,7 @@ use testing_framework_config::topology::configs::{
     runtime::{build_general_config_for_node, build_initial_peers},
     time::GeneralTimeConfig,
 };
-use testing_framework_core::{
+pub(crate) use testing_framework_core::{
     scenario::{PeerSelection, StartNodeOptions},
     topology::{
         config::{NodeConfigPatch, TopologyConfig},
