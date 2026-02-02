@@ -13,7 +13,7 @@ build_linux_binaries::usage() {
 Usage: scripts/build/build-linux-binaries.sh [options]
 
 Builds a Linux bundle via scripts/build/build-bundle.sh, then stages artifacts into:
-  - testing-framework/assets/stack/bin
+  - logos/infra/assets/stack/bin
 
 Options:
   --rev REV              logos-blockchain-node git revision to build (overrides LOGOS_BLOCKCHAIN_NODE_REV)
@@ -124,15 +124,14 @@ build_linux_binaries::stage_from_bundle() {
   local tar_path="$1"
   local extract_dir
   extract_dir="$(common::tmpdir nomos-linux-bundle.XXXXXX)"
-  cleanup() { rm -rf "${extract_dir}" 2>/dev/null || true; }
-  trap cleanup EXIT
+  trap "rm -rf '${extract_dir}' 2>/dev/null || true" EXIT
 
   echo "==> Extracting ${tar_path}"
   tar -xzf "${tar_path}" -C "${extract_dir}"
 
   local artifacts="${extract_dir}/artifacts"
   [ -f "${artifacts}/logos-blockchain-node" ] || common::die "Missing logos-blockchain-node in bundle: ${tar_path}"
-  local bin_out="${ROOT_DIR}/testing-framework/assets/stack/bin"
+  local bin_out="${ROOT_DIR}/logos/infra/assets/stack/bin"
 
   echo "==> Staging binaries to ${bin_out}"
   mkdir -p "${bin_out}"
@@ -148,7 +147,7 @@ build_linux_binaries::main() {
   build_linux_binaries::stage_from_bundle "${BUNDLE_TAR}"
 
   echo
-  echo "Binaries staged in ${ROOT_DIR}/testing-framework/assets/stack/bin"
+  echo "Binaries staged in ${ROOT_DIR}/logos/infra/assets/stack/bin"
   echo "Bundle tarball: ${BUNDLE_TAR}"
 }
 

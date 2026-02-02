@@ -96,7 +96,7 @@ k8s_apply_dashboards() {
 
   local ns dash_dir
   ns="$(k8s_namespace)"
-  dash_dir="${ROOT}/testing-framework/assets/stack/monitoring/grafana/dashboards"
+  dash_dir="${ROOT}/logos/infra/assets/stack/monitoring/grafana/dashboards"
 
   [ -d "${dash_dir}" ] || common::die "Missing dashboards directory: ${dash_dir}"
 

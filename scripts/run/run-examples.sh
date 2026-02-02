@@ -33,9 +33,9 @@ run_examples::usage() {
 Usage: scripts/run/run-examples.sh [options] [compose|host|k8s]
 
 Modes:
-  compose   Run examples/src/bin/compose_runner.rs (default)
-  host      Run examples/src/bin/local_runner.rs
-  k8s       Run examples/src/bin/k8s_runner.rs
+  compose   Run logos/examples/src/bin/compose_runner.rs (default)
+  host      Run logos/examples/src/bin/local_runner.rs
+  k8s       Run logos/examples/src/bin/k8s_runner.rs
 
 Options:
   -t, --run-seconds N     Duration to run the demo (required)
@@ -85,14 +85,46 @@ run_examples::load_env() {
   ROOT_DIR="$(common::repo_root)"
   export ROOT_DIR
 
+  local env_version="${VERSION:-}"
+  local env_node_rev="${LOGOS_BLOCKCHAIN_NODE_REV:-}"
+  local env_node_path="${LOGOS_BLOCKCHAIN_NODE_PATH:-}"
+
   common::require_file "${ROOT_DIR}/versions.env"
   # shellcheck disable=SC1091
   . "${ROOT_DIR}/versions.env"
   common::maybe_source "${ROOT_DIR}/paths.env"
 
+  if [ -n "${env_version}" ]; then
+    VERSION="${env_version}"
+  fi
+  if [ -n "${env_node_rev}" ]; then
+    LOGOS_BLOCKCHAIN_NODE_REV="${env_node_rev}"
+  fi
+  if [ -n "${env_node_path}" ]; then
+    LOGOS_BLOCKCHAIN_NODE_PATH="${env_node_path}"
+  fi
+
   DEFAULT_VERSION="${VERSION:?Missing VERSION in versions.env}"
   VERSION="${VERSION:-${DEFAULT_VERSION}}"
 
+}
+
+run_examples::apply_platform_defaults() {
+  local arch
+  arch="$(uname -m)"
+
+  case "${arch}" in
+    arm64|aarch64)
+      if [ "${MODE}" != "host" ]; then
+        if [ -z "${LOGOS_BLOCKCHAIN_BIN_PLATFORM:-}" ]; then
+          export LOGOS_BLOCKCHAIN_BIN_PLATFORM="linux/arm64"
+        fi
+        if [ -z "${COMPOSE_CIRCUITS_PLATFORM:-}" ]; then
+          export COMPOSE_CIRCUITS_PLATFORM="linux-aarch64"
+        fi
+      fi
+      ;;
+  esac
 }
 
 run_examples::select_bin() {
@@ -360,7 +392,7 @@ run_examples::restore_binaries_from_tar() {
   tar -xzf "${tar_path}" -C "${extract_dir}" || common::die "Failed to extract ${tar_path}"
 
   local src="${extract_dir}/artifacts"
-  local bin_dst="${ROOT_DIR}/testing-framework/assets/stack/bin"
+  local bin_dst="${ROOT_DIR}/logos/infra/assets/stack/bin"
   RESTORED_BIN_DIR="${src}"
   export RESTORED_BIN_DIR
 
@@ -388,7 +420,11 @@ run_examples::ensure_binaries_tar() {
   local platform="$1"
   local tar_path="$2"
   echo "==> Building fresh binaries bundle (${platform}) at ${tar_path}"
-  "${ROOT_DIR}/scripts/build/build-bundle.sh" --platform "${platform}" --output "${tar_path}" --rev "${LOGOS_BLOCKCHAIN_NODE_REV}"
+  if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH:-}" ]; then
+    "${ROOT_DIR}/scripts/build/build-bundle.sh" --platform "${platform}" --output "${tar_path}" --path "${LOGOS_BLOCKCHAIN_NODE_PATH}"
+  else
+    "${ROOT_DIR}/scripts/build/build-bundle.sh" --platform "${platform}" --output "${tar_path}" --rev "${LOGOS_BLOCKCHAIN_NODE_REV}"
+  fi
 }
 
 run_examples::prepare_bundles() {
@@ -401,6 +437,14 @@ run_examples::prepare_bundles() {
   if [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN}" ]; then
     echo "==> Using pre-specified host binaries (LOGOS_BLOCKCHAIN_NODE_BIN); skipping tarball restore"
     return 0
+  fi
+
+  if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH:-}" ]; then
+    echo "==> Using local logos-blockchain-node checkout at ${LOGOS_BLOCKCHAIN_NODE_PATH}"
+    if [ "${LOGOS_BLOCKCHAIN_FORCE_BUNDLE_REBUILD:-0}" = "1" ]; then
+      echo "==> Forcing local bundle rebuild (LOGOS_BLOCKCHAIN_FORCE_BUNDLE_REBUILD=1)"
+      rm -f "${HOST_TAR}" "${LINUX_TAR}"
+    fi
   fi
 
   # On non-Linux compose/k8s runs, use the Linux bundle for image build, then restore host bundle for the runner.
@@ -461,7 +505,7 @@ run_examples::maybe_restore_host_after_image() {
 run_examples::validate_restored_bundle() {
   if [ "${MODE}" = "host" ] && ! { [ -n "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ] && [ -x "${LOGOS_BLOCKCHAIN_NODE_BIN:-}" ]; }; then
     local tar_node
-    tar_node="${RESTORED_BIN_DIR:-${ROOT_DIR}/testing-framework/assets/stack/bin}/logos-blockchain-node"
+    tar_node="${RESTORED_BIN_DIR:-${ROOT_DIR}/logos/infra/assets/stack/bin}/logos-blockchain-node"
 
     [ -x "${tar_node}" ] || common::die \
       "Restored tarball missing host executables; provide a host-compatible binaries tarball."
@@ -475,24 +519,32 @@ run_examples::validate_restored_bundle() {
 }
 
 run_examples::ensure_circuits() {
+  local circuits_dir
+  local setup_script
+  local platform
+
   if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS:-}" ]; then
-    if [ -d "${LOGOS_BLOCKCHAIN_CIRCUITS}" ]; then
-      return 0
-    fi
-    common::die "LOGOS_BLOCKCHAIN_CIRCUITS is set to '${LOGOS_BLOCKCHAIN_CIRCUITS}', but the directory does not exist"
+    circuits_dir="${LOGOS_BLOCKCHAIN_CIRCUITS}"
+  else
+    circuits_dir="${ROOT_DIR}/${LOGOS_BLOCKCHAIN_CIRCUITS_HOST_DIR_REL:-.tmp/logos-blockchain-circuits-host}"
+    platform="${LOGOS_BLOCKCHAIN_CIRCUITS_PLATFORM:-}"
+    export LOGOS_BLOCKCHAIN_CIRCUITS="${circuits_dir}"
   fi
 
-  local default_dir="${HOME}/.logos-blockchain-circuits"
-  if [ -d "${default_dir}" ]; then
-    LOGOS_BLOCKCHAIN_CIRCUITS="${default_dir}"
-    export LOGOS_BLOCKCHAIN_CIRCUITS
+  if [ -d "${circuits_dir}" ]; then
     return 0
   fi
 
-  echo "==> Circuits not found; installing to ${default_dir}"
-  bash "${ROOT_DIR}/scripts/setup/setup-logos-blockchain-circuits.sh" "${VERSION}" "${default_dir}"
-  LOGOS_BLOCKCHAIN_CIRCUITS="${default_dir}"
-  export LOGOS_BLOCKCHAIN_CIRCUITS
+  setup_script="${ROOT_DIR}/logos/infra/assets/stack/scripts/setup-logos-blockchain-circuits.sh"
+  if [ ! -x "${setup_script}" ]; then
+    common::die "Missing circuits setup script at ${setup_script}"
+  fi
+
+  if [ -n "${platform:-}" ]; then
+    LOGOS_BLOCKCHAIN_CIRCUITS_PLATFORM="${platform}" "${setup_script}" "${VERSION}" "${circuits_dir}"
+  else
+    "${setup_script}" "${VERSION}" "${circuits_dir}"
+  fi
 }
 
 run_examples::run() {
@@ -504,12 +556,6 @@ run_examples::run() {
   fi
   if [ -n "${METRICS_OTLP_INGEST_URL}" ]; then
     export LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL="${METRICS_OTLP_INGEST_URL}"
-  fi
-
-  if [ "${MODE}" = "host" ]; then
-    run_examples::ensure_circuits
-    # Ensure Groth16 verification keys are embedded when building local node binaries.
-    export CARGO_FEATURE_BUILD_VERIFICATION_KEY=1
   fi
 
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"
@@ -526,7 +572,7 @@ run_examples::main() {
   run_examples::parse_args "$@"
   run_examples::select_bin
   run_examples::select_image
-
+  run_examples::apply_platform_defaults
   run_examples::prepare_bundles
   echo "==> Using restored binaries bundle"
 

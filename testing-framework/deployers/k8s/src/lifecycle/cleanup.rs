@@ -1,11 +1,12 @@
-use std::thread;
+use std::{io, process::Output, thread};
 
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{Api, Client, api::DeleteParams};
 use testing_framework_core::scenario::CleanupGuard;
 use tokio::{
     process::Command,
-    time::{Duration, sleep},
+    runtime::{Handle, Runtime},
+    time::{Duration, error::Elapsed, sleep, timeout},
 };
 use tracing::{info, warn};
 
@@ -52,25 +53,10 @@ impl RunnerCleanup {
     }
 
     fn blocking_cleanup_success(&self) -> bool {
-        match tokio::runtime::Runtime::new() {
-            Ok(rt) => match rt.block_on(async {
-                tokio::time::timeout(CLEANUP_TIMEOUT, self.cleanup_async()).await
-            }) {
-                Ok(()) => true,
-                Err(err) => {
-                    warn!(
-                        error = ?err,
-                        "cleanup timed out after {}s; falling back to background thread",
-                        CLEANUP_TIMEOUT.as_secs()
-                    );
-                    false
-                }
-            },
-            Err(err) => {
-                warn!(error = ?err, "unable to create cleanup runtime; falling back to background thread");
-                false
-            }
-        }
+        run_cleanup_with_runtime(self).unwrap_or_else(|error| {
+            warn!(error = ?error, "unable to complete blocking cleanup; falling back to background thread");
+            false
+        })
     }
 
     fn spawn_cleanup_thread(self: Box<Self>) {
@@ -83,9 +69,23 @@ impl RunnerCleanup {
                     warn!(error = ?err, "cleanup thread panicked");
                 }
             }
+
             Err(err) => warn!(error = ?err, "failed to spawn cleanup thread"),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum BlockingCleanupError {
+    #[error("failed to create tokio runtime: {source}")]
+    RuntimeInit { source: io::Error },
+}
+
+fn run_cleanup_with_runtime(cleanup: &RunnerCleanup) -> Result<bool, BlockingCleanupError> {
+    let runtime = Runtime::new().map_err(|source| BlockingCleanupError::RuntimeInit { source })?;
+    let result =
+        runtime.block_on(async { timeout(CLEANUP_TIMEOUT, cleanup.cleanup_async()).await });
+    Ok(cleanup_completed(result))
 }
 
 async fn uninstall_release_and_namespace(client: &Client, release: &str, namespace: &str) {
@@ -99,27 +99,24 @@ async fn uninstall_release_and_namespace(client: &Client, release: &str, namespa
 }
 
 fn run_background_cleanup(cleanup: Box<RunnerCleanup>) {
-    match tokio::runtime::Runtime::new() {
+    match Runtime::new() {
         Ok(rt) => {
-            if let Err(err) = rt.block_on(async {
-                tokio::time::timeout(CLEANUP_TIMEOUT, cleanup.cleanup_async()).await
-            }) {
-                warn!("[k8s-runner] background cleanup timed out: {err}");
+            if let Err(err) =
+                rt.block_on(async { timeout(CLEANUP_TIMEOUT, cleanup.cleanup_async()).await })
+            {
+                warn!(error = ?err, "background cleanup timed out");
             }
         }
-        Err(err) => warn!("[k8s-runner] unable to create cleanup runtime: {err}"),
+
+        Err(err) => warn!(error = ?err, "unable to create cleanup runtime"),
     }
 }
 
 async fn delete_namespace(client: &Client, namespace: &str) {
     let namespaces: Api<Namespace> = Api::all(client.clone());
+    let deleted = try_delete_namespace(&namespaces, namespace).await;
 
-    if delete_namespace_via_api(&namespaces, namespace).await {
-        wait_for_namespace_termination(&namespaces, namespace).await;
-        return;
-    }
-
-    if delete_namespace_via_cli(namespace).await {
+    if deleted {
         wait_for_namespace_termination(&namespaces, namespace).await;
     } else {
         warn!(
@@ -129,9 +126,17 @@ async fn delete_namespace(client: &Client, namespace: &str) {
     }
 }
 
+async fn try_delete_namespace(namespaces: &Api<Namespace>, namespace: &str) -> bool {
+    if delete_namespace_via_api(namespaces, namespace).await {
+        return true;
+    }
+
+    delete_namespace_via_cli(namespace).await
+}
+
 async fn delete_namespace_via_api(namespaces: &Api<Namespace>, namespace: &str) -> bool {
     info!(namespace, "invoking kubernetes API to delete namespace");
-    match tokio::time::timeout(
+    match timeout(
         NAMESPACE_DELETE_TIMEOUT,
         namespaces.delete(namespace, &DeleteParams::default()),
     )
@@ -144,10 +149,12 @@ async fn delete_namespace_via_api(namespaces: &Api<Namespace>, namespace: &str) 
             );
             true
         }
+
         Ok(Err(err)) => {
             warn!(namespace, error = ?err, "failed to delete namespace via API");
             false
         }
+
         Err(_) => {
             warn!(
                 namespace,
@@ -160,33 +167,43 @@ async fn delete_namespace_via_api(namespaces: &Api<Namespace>, namespace: &str) 
 
 async fn delete_namespace_via_cli(namespace: &str) -> bool {
     info!(namespace, "invoking kubectl delete namespace fallback");
-    let output = Command::new("kubectl")
-        .arg("delete")
-        .arg("namespace")
-        .arg(namespace)
-        .arg("--wait=true")
-        .output()
-        .await;
+    let output = run_kubectl_delete_namespace(namespace).await;
 
     match output {
         Ok(result) if result.status.success() => {
             info!(namespace, "kubectl delete namespace completed successfully");
             true
         }
+
         Ok(result) => {
-            warn!(
-                namespace,
-                stderr = %String::from_utf8_lossy(&result.stderr),
-                stdout = %String::from_utf8_lossy(&result.stdout),
-                "kubectl delete namespace failed"
-            );
+            log_kubectl_delete_failure(namespace, &result.stdout, &result.stderr);
             false
         }
+
         Err(err) => {
             warn!(namespace, error = ?err, "failed to spawn kubectl delete namespace");
             false
         }
     }
+}
+
+async fn run_kubectl_delete_namespace(namespace: &str) -> Result<Output, io::Error> {
+    Command::new("kubectl")
+        .arg("delete")
+        .arg("namespace")
+        .arg(namespace)
+        .arg("--wait=true")
+        .output()
+        .await
+}
+
+fn log_kubectl_delete_failure(namespace: &str, stdout: &[u8], stderr: &[u8]) {
+    warn!(
+        namespace,
+        stderr = %String::from_utf8_lossy(stderr),
+        stdout = %String::from_utf8_lossy(stdout),
+        "kubectl delete namespace failed"
+    );
 }
 
 async fn wait_for_namespace_termination(namespaces: &Api<Namespace>, namespace: &str) {
@@ -200,10 +217,7 @@ async fn wait_for_namespace_termination(namespaces: &Api<Namespace>, namespace: 
         sleep(NAMESPACE_TERMINATION_POLL_INTERVAL).await;
     }
 
-    warn!(
-        "[k8s-runner] namespace `{}` still present after waiting for deletion",
-        namespace
-    );
+    warn_namespace_still_present(namespace);
 }
 
 async fn namespace_deleted(namespaces: &Api<Namespace>, namespace: &str, attempt: u32) -> bool {
@@ -219,10 +233,12 @@ async fn namespace_deleted(namespaces: &Api<Namespace>, namespace: &str, attempt
             }
             false
         }
+
         Ok(None) => {
             info!(namespace, "namespace deleted");
             true
         }
+
         Err(err) => {
             warn!(namespace, error = ?err, "namespace poll failed");
             true
@@ -230,9 +246,30 @@ async fn namespace_deleted(namespaces: &Api<Namespace>, namespace: &str, attempt
     }
 }
 
+fn warn_namespace_still_present(namespace: &str) {
+    warn!(
+        namespace,
+        "namespace still present after waiting for deletion"
+    );
+}
+
+fn cleanup_completed(result: Result<(), Elapsed>) -> bool {
+    match result {
+        Ok(()) => true,
+        Err(error) => {
+            warn!(
+                error = ?error,
+                timeout_secs = CLEANUP_TIMEOUT.as_secs(),
+                "cleanup timed out; falling back to background thread"
+            );
+            false
+        }
+    }
+}
+
 impl CleanupGuard for RunnerCleanup {
     fn cleanup(self: Box<Self>) {
-        if tokio::runtime::Handle::try_current().is_err() && self.blocking_cleanup_success() {
+        if Handle::try_current().is_err() && self.blocking_cleanup_success() {
             return;
         }
         self.spawn_cleanup_thread();

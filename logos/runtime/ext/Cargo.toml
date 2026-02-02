@@ -1,0 +1,33 @@
+[package]
+description = { workspace = true }
+edition     = { workspace = true }
+license     = { workspace = true }
+name        = "lb-ext"
+version     = { workspace = true }
+
+[dependencies]
+# Workspace crates
+cfgsync_runtime                  = { workspace = true }
+lb-framework                     = { workspace = true }
+testing-framework-core           = { workspace = true }
+testing-framework-env            = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+
+# Logos / Nomos deps
+lb_http_api_common = { workspace = true }
+lb_tracing         = { workspace = true }
+lb_tracing_service = { workspace = true }
+
+# External
+anyhow      = "1"
+async-trait = { workspace = true }
+kube        = { default-features = false, features = ["client", "rustls-tls"], version = "0.87" }
+reqwest     = { features = ["json"], workspace = true }
+serde       = { workspace = true }
+serde_yaml  = { workspace = true }
+tempfile    = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { features = ["macros", "process", "rt-multi-thread", "time"], workspace = true }
+tracing     = { workspace = true }
+uuid        = { features = ["v4"], workspace = true }

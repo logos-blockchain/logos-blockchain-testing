@@ -1,158 +1,137 @@
-use std::{
-    pin::Pin,
-    sync::{Arc, RwLock},
-};
+use std::sync::Arc;
 
-use rand::{Rng as _, seq::SliceRandom as _, thread_rng};
+use parking_lot::RwLock;
+use rand::{seq::SliceRandom as _, thread_rng};
 
-use crate::{
-    nodes::ApiClient,
-    scenario::DynError,
-    topology::{deployment::Topology, generation::GeneratedTopology},
-};
+use crate::scenario::{Application, DynError};
 
 /// Collection of API clients for the node set.
-#[derive(Clone, Default)]
-pub struct NodeClients {
-    inner: Arc<RwLock<NodeClientsInner>>,
+pub struct NodeClients<E: Application> {
+    inner: Arc<RwLock<NodeClientsInner<E>>>,
 }
 
-#[derive(Default)]
-struct NodeClientsInner {
-    nodes: Vec<ApiClient>,
+struct NodeClientsInner<E: Application> {
+    nodes: Vec<E::NodeClient>,
 }
 
-impl NodeClients {
+impl<E: Application> Default for NodeClients<E> {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(NodeClientsInner { nodes: Vec::new() })),
+        }
+    }
+}
+
+impl<E: Application> Clone for NodeClients<E> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+impl<E: Application> NodeClients<E> {
     #[must_use]
     /// Build clients from preconstructed vectors.
-    pub fn new(nodes: Vec<ApiClient>) -> Self {
+    pub fn new(nodes: Vec<E::NodeClient>) -> Self {
         Self {
             inner: Arc::new(RwLock::new(NodeClientsInner { nodes })),
         }
     }
 
     #[must_use]
-    /// Derive clients from a spawned topology.
-    pub fn from_topology(_descriptors: &GeneratedTopology, topology: &Topology) -> Self {
-        let node_clients = topology.nodes().iter().map(|node| {
-            let testing = node.testing_url();
-            ApiClient::from_urls(node.url(), testing)
-        });
+    /// Immutable client snapshot at the current moment.
+    ///
+    /// This clones the current vector so callers can iterate across `.await`
+    /// boundaries without holding the internal lock.
+    pub fn snapshot(&self) -> Vec<E::NodeClient> {
+        self.inner.read().nodes.clone()
+    }
 
-        Self::new(node_clients.collect())
+    /// Execute a synchronous read against the current client slice.
+    ///
+    /// Prefer this over `snapshot()` when no async boundary is involved.
+    pub fn with_clients<R>(&self, f: impl FnOnce(&[E::NodeClient]) -> R) -> R {
+        let guard = self.inner.read();
+        f(&guard.nodes)
     }
 
     #[must_use]
-    /// Node API clients.
-    pub fn node_clients(&self) -> Vec<ApiClient> {
-        self.inner
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .nodes
-            .clone()
+    /// Choose a random client from the current snapshot.
+    pub fn random_client(&self) -> Option<E::NodeClient> {
+        self.with_clients(|clients| clients.choose(&mut thread_rng()).cloned())
     }
 
     #[must_use]
-    /// Choose a random node client if present.
-    pub fn random_node(&self) -> Option<ApiClient> {
-        let nodes = self.node_clients();
-        if nodes.is_empty() {
-            return None;
-        }
-        let mut rng = thread_rng();
-        let idx = rng.gen_range(0..nodes.len());
-        nodes.get(idx).cloned()
-    }
-
-    /// Iterator over all clients.
-    pub fn all_clients(&self) -> Vec<ApiClient> {
-        let guard = self
-            .inner
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        guard.nodes.iter().cloned().collect()
+    pub fn len(&self) -> usize {
+        self.inner.read().nodes.len()
     }
 
     #[must_use]
-    /// Choose any random client from nodes.
-    pub fn any_client(&self) -> Option<ApiClient> {
-        let guard = self
-            .inner
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        let total = guard.nodes.len();
-        if total == 0 {
-            return None;
-        }
-        let mut rng = thread_rng();
-        let choice = rng.gen_range(0..total);
-        guard.nodes.get(choice).cloned()
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     #[must_use]
     /// Convenience wrapper for fan-out queries.
-    pub const fn cluster_client(&self) -> ClusterClient<'_> {
+    pub const fn cluster_client(&self) -> ClusterClient<'_, E> {
         ClusterClient::new(self)
     }
 
-    pub fn add_node(&self, client: ApiClient) {
-        let mut guard = self
-            .inner
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
+    pub fn add_node(&self, client: E::NodeClient) {
+        let mut guard = self.inner.write();
         guard.nodes.push(client);
     }
 
     pub fn clear(&self) {
-        let mut guard = self
-            .inner
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
+        let mut guard = self.inner.write();
         guard.nodes.clear();
+    }
+
+    fn shuffled_snapshot(&self) -> Vec<E::NodeClient> {
+        let mut clients = self.snapshot();
+        clients.shuffle(&mut thread_rng());
+        clients
     }
 }
 
-pub struct ClusterClient<'a> {
-    node_clients: &'a NodeClients,
+pub struct ClusterClient<'a, E: Application> {
+    node_clients: &'a NodeClients<E>,
 }
 
-impl<'a> ClusterClient<'a> {
+impl<'a, E: Application> ClusterClient<'a, E> {
     #[must_use]
-    /// Build a cluster client that can try multiple nodes.
-    pub const fn new(node_clients: &'a NodeClients) -> Self {
+    pub const fn new(node_clients: &'a NodeClients<E>) -> Self {
         Self { node_clients }
     }
 
-    /// Try all node clients until one call succeeds, shuffling order each time.
-    pub async fn try_all_clients<T, E>(
+    pub async fn try_all_clients<Value, ErrorType, Fut>(
         &self,
-        mut f: impl for<'b> FnMut(
-            &'b ApiClient,
-        ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'b>>
-        + Send,
-    ) -> Result<T, DynError>
+        mut f: impl for<'b> FnMut(&'b E::NodeClient) -> Fut + Send,
+    ) -> Result<Value, DynError>
     where
-        E: Into<DynError>,
+        for<'b> Fut: Future<Output = Result<Value, ErrorType>> + Send + 'b,
+        ErrorType: Into<DynError>,
     {
-        let mut clients = self.node_clients.all_clients();
+        // Snapshot once so retries can await without holding the internal lock.
+        let clients = self.node_clients.shuffled_snapshot();
+
         if clients.is_empty() {
             return Err("cluster client has no api clients".into());
         }
 
-        clients.shuffle(&mut thread_rng());
-
-        let mut last_err = None;
+        let mut last_error = None;
         for client in &clients {
             match f(client).await {
                 Ok(value) => return Ok(value),
-                Err(err) => last_err = Some(err.into()),
+                Err(error) => last_error = Some(error.into()),
             }
         }
 
-        Err(last_err.unwrap_or_else(|| "cluster client exhausted all nodes".into()))
+        if let Some(error) = last_error {
+            return Err(error);
+        }
+
+        Err("cluster client exhausted all nodes".into())
     }
 }

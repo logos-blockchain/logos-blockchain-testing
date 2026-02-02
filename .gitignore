@@ -15,7 +15,7 @@ ci-artifacts/
 tests/kzgrs/circuits_bundle/
 NOMOS_RUST_SOURCES_ONLY.txt
 dump.zsh
-testing-framework/assets/stack/bin/
+nomos/assets/stack/bin/
 testing-framework/assets/stack/kzgrs_test_params/
 null
 

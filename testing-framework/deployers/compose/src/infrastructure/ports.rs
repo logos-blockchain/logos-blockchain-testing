@@ -1,24 +1,25 @@
-use std::time::Duration;
+use std::{env, path::Path, process::Output, time::Duration};
 
 use anyhow::{Context as _, anyhow};
-use reqwest::Url;
-use testing_framework_core::{
-    adjust_timeout, scenario::http_probe::NODE_ROLE, topology::generation::GeneratedTopology,
-};
+use testing_framework_core::adjust_timeout;
 use tokio::{process::Command, time::timeout};
 use tracing::{debug, info};
-use url::ParseError;
 
-use crate::{
-    errors::{ComposeRunnerError, StackReadinessError},
-    infrastructure::environment::StackEnvironment,
-};
+use crate::{errors::ComposeRunnerError, infrastructure::environment::StackEnvironment};
 
 const COMPOSE_PORT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Host ports mapped for a single node.
 #[derive(Clone, Debug)]
 pub struct NodeHostPorts {
+    pub api: u16,
+    pub testing: u16,
+}
+
+/// Container ports for a single node.
+#[derive(Clone, Debug)]
+pub struct NodeContainerPorts {
+    pub index: usize,
     pub api: u16,
     pub testing: u16,
 }
@@ -39,23 +40,20 @@ impl HostPortMapping {
 /// Resolve host ports for all nodes from docker compose.
 pub async fn discover_host_ports(
     environment: &StackEnvironment,
-    descriptors: &GeneratedTopology,
+    nodes: &[NodeContainerPorts],
 ) -> Result<HostPortMapping, ComposeRunnerError> {
     debug!(
         compose_file = %environment.compose_path().display(),
         project = environment.project_name(),
-        nodes = descriptors.nodes().len(),
+        nodes = nodes.len(),
         "resolving compose host ports"
     );
-    let mut nodes = Vec::new();
-    for node in descriptors.nodes() {
-        let service = node_identifier(node.index());
-        let api = resolve_service_port(environment, &service, node.api_port()).await?;
-        let testing = resolve_service_port(environment, &service, node.testing_http_port()).await?;
-        nodes.push(NodeHostPorts { api, testing });
+    let mut host_nodes = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        host_nodes.push(resolve_node_ports(environment, node).await?);
     }
 
-    let mapping = HostPortMapping { nodes };
+    let mapping = HostPortMapping { nodes: host_nodes };
 
     info!(
         node_ports = ?mapping.nodes,
@@ -65,95 +63,136 @@ pub async fn discover_host_ports(
     Ok(mapping)
 }
 
+async fn resolve_node_ports(
+    environment: &StackEnvironment,
+    node: &NodeContainerPorts,
+) -> Result<NodeHostPorts, ComposeRunnerError> {
+    let service = node_identifier(node.index);
+    let api = resolve_service_port(environment, &service, node.api).await?;
+    let testing = resolve_service_port(environment, &service, node.testing).await?;
+
+    Ok(NodeHostPorts { api, testing })
+}
+
 async fn resolve_service_port(
     environment: &StackEnvironment,
     service: &str,
     container_port: u16,
 ) -> Result<u16, ComposeRunnerError> {
-    let mut cmd = Command::new("docker");
-    cmd.arg("compose")
-        .arg("-f")
-        .arg(environment.compose_path())
-        .arg("-p")
-        .arg(environment.project_name())
-        .arg("port")
-        .arg(service)
-        .arg(container_port.to_string())
-        .current_dir(environment.root());
-
-    let output = timeout(adjust_timeout(COMPOSE_PORT_DISCOVERY_TIMEOUT), cmd.output())
-        .await
-        .map_err(|_| ComposeRunnerError::PortDiscovery {
-            service: service.to_owned(),
-            container_port,
-            source: anyhow!("docker compose port timed out"),
-        })?
-        .with_context(|| format!("running docker compose port {service} {container_port}"))
-        .map_err(|source| ComposeRunnerError::PortDiscovery {
-            service: service.to_owned(),
-            container_port,
-            source,
-        })?;
-
-    if !output.status.success() {
-        return Err(ComposeRunnerError::PortDiscovery {
-            service: service.to_owned(),
-            container_port,
-            source: anyhow!("docker compose port exited with {}", output.status),
-        });
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(port_str) = line.rsplit(':').next()
-            && let Ok(port) = port_str.trim().parse::<u16>()
-        {
-            return Ok(port);
-        }
-    }
-
-    Err(ComposeRunnerError::PortDiscovery {
-        service: service.to_owned(),
+    resolve_service_port_with(
+        environment.compose_path(),
+        environment.project_name(),
+        environment.root(),
+        service,
         container_port,
-        source: anyhow!("unable to parse docker compose port output: {stdout}"),
-    })
+    )
+    .await
 }
 
-/// Wait for remote readiness using mapped host ports.
-pub async fn ensure_remote_readiness_with_ports(
-    descriptors: &GeneratedTopology,
-    mapping: &HostPortMapping,
-) -> Result<(), StackReadinessError> {
-    let node_urls = mapping
-        .nodes
-        .iter()
-        .map(|ports| readiness_url(NODE_ROLE, ports.api))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    descriptors
-        .wait_remote_readiness(&node_urls)
-        .await
-        .map_err(|source| StackReadinessError::Remote { source })
+pub(crate) async fn resolve_service_port_with(
+    compose_path: &Path,
+    project_name: &str,
+    root: &Path,
+    service: &str,
+    container_port: u16,
+) -> Result<u16, ComposeRunnerError> {
+    let mut cmd =
+        docker_compose_port_command(compose_path, project_name, root, service, container_port);
+    let output = run_port_discovery_command(&mut cmd, service, container_port).await?;
+    parse_port_from_output(service, container_port, &output)
 }
 
-fn readiness_url(role: &'static str, port: u16) -> Result<Url, StackReadinessError> {
-    localhost_url(port).map_err(|source| StackReadinessError::Endpoint { role, port, source })
-}
-
-fn localhost_url(port: u16) -> Result<Url, ParseError> {
-    Url::parse(&format!("http://{}:{port}/", compose_runner_host()))
-}
-
-fn node_identifier(index: usize) -> String {
+pub(crate) fn node_identifier(index: usize) -> String {
     format!("node-{index}")
 }
 
 pub(crate) fn compose_runner_host() -> String {
-    let host = std::env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let host = env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     debug!(host, "compose runner host resolved for readiness URLs");
     host
+}
+
+fn docker_compose_port_command(
+    compose_path: &Path,
+    project_name: &str,
+    root: &Path,
+    service: &str,
+    container_port: u16,
+) -> Command {
+    let mut cmd = Command::new("docker");
+    cmd.arg("compose")
+        .arg("-f")
+        .arg(compose_path)
+        .arg("-p")
+        .arg(project_name)
+        .arg("port")
+        .arg(service)
+        .arg(container_port.to_string())
+        .current_dir(root);
+    cmd
+}
+
+async fn run_port_discovery_command(
+    cmd: &mut Command,
+    service: &str,
+    container_port: u16,
+) -> Result<Output, ComposeRunnerError> {
+    timeout(adjust_timeout(COMPOSE_PORT_DISCOVERY_TIMEOUT), cmd.output())
+        .await
+        .map_err(|_| {
+            port_discovery_error(
+                service,
+                container_port,
+                anyhow!("docker compose port timed out"),
+            )
+        })?
+        .with_context(|| format!("running docker compose port {service} {container_port}"))
+        .map_err(|source| port_discovery_error(service, container_port, source))
+}
+
+fn parse_port_from_output(
+    service: &str,
+    container_port: u16,
+    output: &Output,
+) -> Result<u16, ComposeRunnerError> {
+    if !output.status.success() {
+        return Err(port_discovery_error(
+            service,
+            container_port,
+            anyhow!("docker compose port exited with {}", output.status),
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_mapped_port(&stdout).ok_or_else(|| {
+        port_discovery_error(
+            service,
+            container_port,
+            anyhow!("unable to parse docker compose port output: {stdout}"),
+        )
+    })
+}
+
+fn port_discovery_error(
+    service: &str,
+    container_port: u16,
+    source: anyhow::Error,
+) -> ComposeRunnerError {
+    ComposeRunnerError::PortDiscovery {
+        service: service.to_owned(),
+        container_port,
+        source,
+    }
+}
+
+fn parse_mapped_port(stdout: &str) -> Option<u16> {
+    stdout.lines().map(str::trim).find_map(parse_port_line)
+}
+
+fn parse_port_line(line: &str) -> Option<u16> {
+    if line.is_empty() {
+        return None;
+    }
+
+    line.rsplit(':').next()?.trim().parse::<u16>().ok()
 }

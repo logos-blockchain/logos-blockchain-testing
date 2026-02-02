@@ -1,81 +1,78 @@
-use std::{num::NonZeroUsize, path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use lb_node::config::RunConfig;
 use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    DynError, NodeControlCapability, expectation::Expectation, runtime::context::RunMetrics,
-    workload::Workload,
+    Application, DeploymentPolicy, DynError, HttpReadinessRequirement, NodeControlCapability,
+    ObservabilityCapability, builder_ops::CoreBuilderAccess, expectation::Expectation,
+    runtime::context::RunMetrics, workload::Workload,
 };
-use crate::topology::{
-    config::{NodeConfigPatch, TopologyBuildError, TopologyBuilder, TopologyConfig},
-    configs::{network::Libp2pNetworkLayout, wallet::WalletConfig},
-    generation::GeneratedTopology,
-};
+use crate::topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, DynTopologyError};
 
-const DEFAULT_FUNDS_PER_WALLET: u64 = 100;
-const MIN_EXPECTATION_BLOCKS: u32 = 2;
 const MIN_EXPECTATION_FALLBACK_SECS: u64 = 10;
+const MIN_RUN_DURATION_SECS: u64 = 10;
 
 #[derive(Debug, Error)]
 pub enum ScenarioBuildError {
-    #[error(transparent)]
-    Topology(#[from] TopologyBuildError),
-    #[error("wallet user count must be non-zero (got {users})")]
-    WalletUsersZero { users: usize },
-    #[error("wallet funds overflow for {users} users at {per_wallet} per wallet")]
-    WalletFundsOverflow { users: usize, per_wallet: u64 },
+    #[error("topology build failed: {0}")]
+    Topology(#[source] DynTopologyError),
     #[error("workload '{name}' failed to initialize")]
     WorkloadInit { name: String, source: DynError },
     #[error("expectation '{name}' failed to initialize")]
     ExpectationInit { name: String, source: DynError },
 }
 
-/// Immutable scenario definition shared between the runner, workloads, and
+/// Immutable scenario definition used by the runner, workloads, and
 /// expectations.
-pub struct Scenario<Caps = ()> {
-    topology: GeneratedTopology,
-    workloads: Vec<Arc<dyn Workload>>,
-    expectations: Vec<Box<dyn Expectation>>,
+pub struct Scenario<E: Application, Caps = ()> {
+    deployment: E::Deployment,
+    workloads: Vec<Arc<dyn Workload<E>>>,
+    expectations: Vec<Box<dyn Expectation<E>>>,
     duration: Duration,
+    expectation_cooldown: Duration,
+    deployment_policy: DeploymentPolicy,
     capabilities: Caps,
 }
 
-impl<Caps> Scenario<Caps> {
+impl<E: Application, Caps> Scenario<E, Caps> {
     fn new(
-        topology: GeneratedTopology,
-        workloads: Vec<Arc<dyn Workload>>,
-        expectations: Vec<Box<dyn Expectation>>,
+        deployment: E::Deployment,
+        workloads: Vec<Arc<dyn Workload<E>>>,
+        expectations: Vec<Box<dyn Expectation<E>>>,
         duration: Duration,
+        expectation_cooldown: Duration,
+        deployment_policy: DeploymentPolicy,
         capabilities: Caps,
     ) -> Self {
         Self {
-            topology,
+            deployment,
             workloads,
             expectations,
             duration,
+            expectation_cooldown,
+            deployment_policy,
             capabilities,
         }
     }
 
     #[must_use]
-    pub const fn topology(&self) -> &GeneratedTopology {
-        &self.topology
+    pub fn deployment(&self) -> &E::Deployment {
+        &self.deployment
     }
 
     #[must_use]
-    pub fn workloads(&self) -> &[Arc<dyn Workload>] {
+    pub fn workloads(&self) -> &[Arc<dyn Workload<E>>] {
         &self.workloads
     }
 
     #[must_use]
-    pub fn expectations(&self) -> &[Box<dyn Expectation>] {
+    pub fn expectations(&self) -> &[Box<dyn Expectation<E>>] {
         &self.expectations
     }
 
     #[must_use]
-    pub fn expectations_mut(&mut self) -> &mut [Box<dyn Expectation>] {
+    pub fn expectations_mut(&mut self) -> &mut [Box<dyn Expectation<E>>] {
         &mut self.expectations
     }
 
@@ -85,87 +82,324 @@ impl<Caps> Scenario<Caps> {
     }
 
     #[must_use]
+    pub const fn expectation_cooldown(&self) -> Duration {
+        self.expectation_cooldown
+    }
+
+    #[must_use]
+    pub const fn http_readiness_requirement(&self) -> HttpReadinessRequirement {
+        self.deployment_policy.readiness_requirement
+    }
+
+    #[must_use]
+    pub const fn deployment_policy(&self) -> DeploymentPolicy {
+        self.deployment_policy
+    }
+
+    #[must_use]
     pub const fn capabilities(&self) -> &Caps {
         &self.capabilities
     }
 }
 
-/// Builder used by callers to describe the desired scenario.
-pub struct Builder<Caps = ()> {
-    topology: TopologyBuilder,
-    workloads: Vec<Box<dyn Workload>>,
-    expectations: Vec<Box<dyn Expectation>>,
+/// Scenario builder entry point.
+pub struct Builder<E: Application, Caps = ()> {
+    deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
+    topology_seed: Option<DeploymentSeed>,
+    workloads: Vec<Box<dyn Workload<E>>>,
+    expectations: Vec<Box<dyn Expectation<E>>>,
     duration: Duration,
-    wallet_users: Option<usize>,
+    expectation_cooldown: Option<Duration>,
+    deployment_policy: DeploymentPolicy,
     capabilities: Caps,
 }
 
-pub type ScenarioBuilder = Builder<()>;
-
-/// Builder for shaping the scenario topology.
-pub struct TopologyConfigurator<Caps> {
-    builder: Builder<Caps>,
-    nodes: usize,
-    network_star: bool,
-    scenario_base_dir: Option<PathBuf>,
+pub struct ScenarioBuilder<E: Application> {
+    inner: Builder<E, ()>,
 }
 
-impl<Caps: Default> Builder<Caps> {
+pub struct NodeControlScenarioBuilder<E: Application> {
+    inner: Builder<E, NodeControlCapability>,
+}
+
+pub struct ObservabilityScenarioBuilder<E: Application> {
+    inner: Builder<E, ObservabilityCapability>,
+}
+
+macro_rules! impl_common_builder_methods {
+    ($builder:ident) => {
+        impl<E: Application> $builder<E> {
+            #[must_use]
+            pub fn map_deployment_provider(
+                self,
+                f: impl FnOnce(
+                    Box<dyn DeploymentProvider<E::Deployment>>,
+                ) -> Box<dyn DeploymentProvider<E::Deployment>>,
+            ) -> Self {
+                self.map_core_builder(|builder| builder.map_deployment_provider(f))
+            }
+
+            #[must_use]
+            pub fn with_deployment_provider(
+                self,
+                deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
+            ) -> Self {
+                self.map_core_builder(|builder| {
+                    builder.with_deployment_provider(deployment_provider)
+                })
+            }
+
+            #[must_use]
+            pub fn with_deployment_seed(self, seed: DeploymentSeed) -> Self {
+                self.map_core_builder(|builder| builder.with_deployment_seed(seed))
+            }
+
+            #[must_use]
+            pub fn with_workload<W>(self, workload: W) -> Self
+            where
+                W: Workload<E> + 'static,
+            {
+                self.map_core_builder(|builder| builder.with_workload(workload))
+            }
+
+            #[must_use]
+            pub fn with_workload_boxed(self, workload: Box<dyn Workload<E>>) -> Self {
+                self.map_core_builder(|builder| builder.with_workload_boxed(workload))
+            }
+
+            #[must_use]
+            pub fn with_expectation<Exp>(self, expectation: Exp) -> Self
+            where
+                Exp: Expectation<E> + 'static,
+            {
+                self.map_core_builder(|builder| builder.with_expectation(expectation))
+            }
+
+            #[must_use]
+            pub fn with_expectation_boxed(self, expectation: Box<dyn Expectation<E>>) -> Self {
+                self.map_core_builder(|builder| builder.with_expectation_boxed(expectation))
+            }
+
+            #[must_use]
+            pub fn with_run_duration(self, duration: Duration) -> Self {
+                self.map_core_builder(|builder| builder.with_run_duration(duration))
+            }
+
+            #[must_use]
+            pub fn with_expectation_cooldown(self, cooldown: Duration) -> Self {
+                self.map_core_builder(|builder| builder.with_expectation_cooldown(cooldown))
+            }
+
+            #[must_use]
+            pub fn with_http_readiness_requirement(
+                self,
+                requirement: HttpReadinessRequirement,
+            ) -> Self {
+                self.map_core_builder(|builder| {
+                    builder.with_http_readiness_requirement(requirement)
+                })
+            }
+
+            #[must_use]
+            pub fn with_deployment_policy(self, policy: DeploymentPolicy) -> Self {
+                self.map_core_builder(|builder| builder.with_deployment_policy(policy))
+            }
+
+            #[must_use]
+            pub fn run_duration(&self) -> Duration {
+                self.core_builder_ref().run_duration()
+            }
+        }
+    };
+}
+
+impl<E: Application> CoreBuilderAccess for ScenarioBuilder<E> {
+    type Env = E;
+    type Caps = ();
+
+    fn map_core_builder(
+        mut self,
+        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
+    ) -> Self {
+        self.inner = f(self.inner);
+        self
+    }
+
+    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps> {
+        &self.inner
+    }
+
+    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps> {
+        &mut self.inner
+    }
+}
+
+impl<E: Application> CoreBuilderAccess for NodeControlScenarioBuilder<E> {
+    type Env = E;
+    type Caps = NodeControlCapability;
+
+    fn map_core_builder(
+        mut self,
+        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
+    ) -> Self {
+        self.inner = f(self.inner);
+        self
+    }
+
+    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps> {
+        &self.inner
+    }
+
+    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps> {
+        &mut self.inner
+    }
+}
+
+impl<E: Application> CoreBuilderAccess for ObservabilityScenarioBuilder<E> {
+    type Env = E;
+    type Caps = ObservabilityCapability;
+
+    fn map_core_builder(
+        mut self,
+        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
+    ) -> Self {
+        self.inner = f(self.inner);
+        self
+    }
+
+    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps> {
+        &self.inner
+    }
+
+    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps> {
+        &mut self.inner
+    }
+}
+
+impl<E: Application, Caps: Default> Builder<E, Caps> {
     #[must_use]
-    /// Start a builder from a topology description.
-    pub fn new(topology: TopologyBuilder) -> Self {
+    /// Start a builder from a topology provider.
+    pub fn new(deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>) -> Self {
         Self {
-            topology,
+            deployment_provider,
+            topology_seed: None,
             workloads: Vec::new(),
             expectations: Vec::new(),
             duration: Duration::ZERO,
-            wallet_users: None,
+            expectation_cooldown: None,
+            deployment_policy: DeploymentPolicy::default(),
             capabilities: Caps::default(),
+        }
+    }
+}
+
+impl<E: Application> ScenarioBuilder<E> {
+    #[must_use]
+    pub fn new(deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>) -> Self {
+        Self {
+            inner: Builder::new(deployment_provider),
         }
     }
 
     #[must_use]
-    pub fn with_node_counts(nodes: usize) -> Self {
-        Self::new(TopologyBuilder::new(TopologyConfig::with_node_numbers(
-            nodes,
-        )))
+    pub fn enable_node_control(self) -> NodeControlScenarioBuilder<E> {
+        NodeControlScenarioBuilder {
+            inner: self.inner.with_capabilities(NodeControlCapability),
+        }
     }
 
-    /// Convenience constructor that immediately enters topology configuration,
-    /// letting callers set counts via `nodes`.
-    pub fn topology() -> TopologyConfigurator<Caps> {
-        TopologyConfigurator::new(Self::new(TopologyBuilder::new(TopologyConfig::empty())))
-    }
-
-    /// Configure topology via a closure and return the scenario builder.
     #[must_use]
-    pub fn topology_with(
-        f: impl FnOnce(TopologyConfigurator<Caps>) -> TopologyConfigurator<Caps>,
-    ) -> Builder<Caps> {
-        let configurator = Self::topology();
-        f(configurator).apply()
+    pub fn enable_observability(self) -> ObservabilityScenarioBuilder<E> {
+        ObservabilityScenarioBuilder {
+            inner: self
+                .inner
+                .with_capabilities(ObservabilityCapability::default()),
+        }
+    }
+
+    pub fn build(self) -> Result<Scenario<E>, ScenarioBuildError> {
+        self.inner.build()
+    }
+
+    pub(crate) fn with_observability(
+        self,
+        observability: ObservabilityCapability,
+    ) -> ObservabilityScenarioBuilder<E> {
+        ObservabilityScenarioBuilder {
+            inner: self.inner.with_capabilities(observability),
+        }
     }
 }
 
-impl<Caps> Builder<Caps> {
+impl_common_builder_methods!(ScenarioBuilder);
+
+impl<E: Application> NodeControlScenarioBuilder<E> {
+    pub fn build(self) -> Result<Scenario<E, NodeControlCapability>, ScenarioBuildError> {
+        self.inner.build()
+    }
+}
+
+impl_common_builder_methods!(NodeControlScenarioBuilder);
+
+impl<E: Application> ObservabilityScenarioBuilder<E> {
+    pub fn build(self) -> Result<Scenario<E, ObservabilityCapability>, ScenarioBuildError> {
+        self.inner.build()
+    }
+
+    pub(crate) fn capabilities_mut(&mut self) -> &mut ObservabilityCapability {
+        self.inner.capabilities_mut()
+    }
+}
+
+impl_common_builder_methods!(ObservabilityScenarioBuilder);
+
+impl<E: Application, Caps> Builder<E, Caps> {
     #[must_use]
-    /// Swap capabilities type carried with the scenario.
-    pub fn with_capabilities<NewCaps>(self, capabilities: NewCaps) -> Builder<NewCaps> {
+    /// Transform the existing deployment provider while preserving all
+    /// accumulated builder state.
+    pub fn map_deployment_provider(
+        mut self,
+        f: impl FnOnce(
+            Box<dyn DeploymentProvider<E::Deployment>>,
+        ) -> Box<dyn DeploymentProvider<E::Deployment>>,
+    ) -> Self {
+        self.deployment_provider = f(self.deployment_provider);
+        self
+    }
+
+    #[must_use]
+    /// Replace the topology provider while preserving all accumulated builder
+    /// state.
+    pub fn with_deployment_provider(
+        mut self,
+        deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
+    ) -> Self {
+        self.deployment_provider = deployment_provider;
+        self
+    }
+
+    #[must_use]
+    /// Internal capability transition helper.
+    pub(crate) fn with_capabilities<NewCaps>(self, capabilities: NewCaps) -> Builder<E, NewCaps> {
         let Self {
-            topology,
+            deployment_provider,
+            topology_seed,
             workloads,
             expectations,
             duration,
-            wallet_users,
+            expectation_cooldown,
+            deployment_policy,
             ..
         } = self;
 
         Builder {
-            topology,
+            deployment_provider,
+            topology_seed,
             workloads,
             expectations,
             duration,
-            wallet_users,
+            expectation_cooldown,
+            deployment_policy,
             capabilities,
         }
     }
@@ -181,22 +415,59 @@ impl<Caps> Builder<Caps> {
     }
 
     #[must_use]
+    pub const fn run_duration(&self) -> Duration {
+        self.duration
+    }
+
+    #[must_use]
+    pub const fn expectation_cooldown_override(&self) -> Option<Duration> {
+        self.expectation_cooldown
+    }
+
+    #[must_use]
+    pub const fn http_readiness_requirement(&self) -> HttpReadinessRequirement {
+        self.deployment_policy.readiness_requirement
+    }
+
+    #[must_use]
+    pub const fn deployment_policy(&self) -> DeploymentPolicy {
+        self.deployment_policy
+    }
+
+    #[must_use]
+    pub fn with_deployment_seed(mut self, seed: DeploymentSeed) -> Self {
+        self.topology_seed = Some(seed);
+        self
+    }
+
+    #[must_use]
     pub fn with_workload<W>(mut self, workload: W) -> Self
     where
-        W: Workload + 'static,
+        W: Workload<E> + 'static,
     {
-        self.expectations.extend(workload.expectations());
-        self.workloads.push(Box::new(workload));
+        self.add_workload(Box::new(workload));
+        self
+    }
+
+    #[must_use]
+    pub fn with_workload_boxed(mut self, workload: Box<dyn Workload<E>>) -> Self {
+        self.add_workload(workload);
         self
     }
 
     #[must_use]
     /// Add a standalone expectation not tied to a workload.
-    pub fn with_expectation<E>(mut self, expectation: E) -> Self
+    pub fn with_expectation<Exp>(mut self, expectation: Exp) -> Self
     where
-        E: Expectation + 'static,
+        Exp: Expectation<E> + 'static,
     {
-        self.expectations.push(Box::new(expectation));
+        self.add_expectation(Box::new(expectation));
+        self
+    }
+
+    #[must_use]
+    pub fn with_expectation_boxed(mut self, expectation: Box<dyn Expectation<E>>) -> Self {
+        self.add_expectation(expectation);
         self
     }
 
@@ -208,205 +479,211 @@ impl<Caps> Builder<Caps> {
     }
 
     #[must_use]
-    /// Transform the topology builder.
-    pub fn map_topology(mut self, f: impl FnOnce(TopologyBuilder) -> TopologyBuilder) -> Self {
-        self.topology = f(self.topology);
+    /// Override the expectation cooldown used by the runner.
+    pub const fn with_expectation_cooldown(mut self, cooldown: Duration) -> Self {
+        self.expectation_cooldown = Some(cooldown);
         self
     }
 
     #[must_use]
-    /// Override wallet config for the topology.
-    pub fn with_wallet_config(mut self, wallet: WalletConfig) -> Self {
-        self.topology = self.topology.with_wallet_config(wallet);
-        self.wallet_users = None;
+    pub const fn with_http_readiness_requirement(
+        mut self,
+        requirement: HttpReadinessRequirement,
+    ) -> Self {
+        self.deployment_policy.readiness_requirement = requirement;
         self
     }
 
     #[must_use]
-    pub fn wallets(self, users: usize) -> Self {
-        let mut builder = self;
-        builder.wallet_users = Some(users);
-        builder
+    pub const fn with_deployment_policy(mut self, policy: DeploymentPolicy) -> Self {
+        self.deployment_policy = policy;
+        self
+    }
+
+    fn add_workload(&mut self, workload: Box<dyn Workload<E>>) {
+        self.expectations.extend(workload.expectations());
+        self.workloads.push(workload);
+    }
+
+    fn add_expectation(&mut self, expectation: Box<dyn Expectation<E>>) {
+        self.expectations.push(expectation);
     }
 
     #[must_use]
     /// Finalize the scenario, computing run metrics and initializing
     /// components.
-    pub fn build(self) -> Result<Scenario<Caps>, ScenarioBuildError> {
-        let Self {
-            mut topology,
-            mut workloads,
-            mut expectations,
-            duration,
-            wallet_users,
-            capabilities,
-            ..
-        } = self;
+    pub fn build(self) -> Result<Scenario<E, Caps>, ScenarioBuildError> {
+        let mut parts = BuilderParts::from_builder(self);
+        let descriptors = parts.resolve_deployment()?;
+        let run_plan = parts.run_plan();
+        let run_metrics = RunMetrics::new(run_plan.duration);
 
-        if let Some(users) = wallet_users {
-            let user_count =
-                NonZeroUsize::new(users).ok_or(ScenarioBuildError::WalletUsersZero { users })?;
-            let total_funds = DEFAULT_FUNDS_PER_WALLET.checked_mul(users as u64).ok_or(
-                ScenarioBuildError::WalletFundsOverflow {
-                    users,
-                    per_wallet: DEFAULT_FUNDS_PER_WALLET,
-                },
-            )?;
-
-            let wallet = WalletConfig::uniform(total_funds, user_count);
-            topology = topology.with_wallet_config(wallet);
-        }
-
-        let generated = topology.build()?;
-        let duration = enforce_min_duration(&generated, duration);
-        let run_metrics = RunMetrics::from_topology(&generated, duration);
-        initialize_components(&generated, &run_metrics, &mut workloads, &mut expectations)?;
-        let workloads: Vec<Arc<dyn Workload>> = workloads.into_iter().map(Arc::from).collect();
+        initialize_components(
+            &descriptors,
+            &run_metrics,
+            &mut parts.workloads,
+            &mut parts.expectations,
+        )?;
+        let workloads: Vec<Arc<dyn Workload<E>>> =
+            parts.workloads.into_iter().map(Arc::from).collect();
 
         info!(
-            nodes = generated.nodes().len(),
-            duration_secs = duration.as_secs(),
+            nodes = descriptors.node_count(),
+            duration_secs = run_plan.duration.as_secs(),
             workloads = workloads.len(),
-            expectations = expectations.len(),
+            expectations = parts.expectations.len(),
             "scenario built"
         );
 
         Ok(Scenario::new(
-            generated,
+            descriptors,
             workloads,
-            expectations,
-            duration,
-            capabilities,
+            parts.expectations,
+            run_plan.duration,
+            run_plan.expectation_cooldown,
+            parts.deployment_policy,
+            parts.capabilities,
         ))
     }
 }
 
-impl<Caps> TopologyConfigurator<Caps> {
-    const fn new(builder: Builder<Caps>) -> Self {
+struct RunPlan {
+    duration: Duration,
+    expectation_cooldown: Duration,
+}
+
+struct BuilderParts<E: Application, Caps> {
+    deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
+    topology_seed: Option<DeploymentSeed>,
+    workloads: Vec<Box<dyn Workload<E>>>,
+    expectations: Vec<Box<dyn Expectation<E>>>,
+    duration: Duration,
+    expectation_cooldown: Option<Duration>,
+    deployment_policy: DeploymentPolicy,
+    capabilities: Caps,
+}
+
+impl<E: Application, Caps> BuilderParts<E, Caps> {
+    fn from_builder(builder: Builder<E, Caps>) -> Self {
+        let Builder {
+            deployment_provider,
+            topology_seed,
+            workloads,
+            expectations,
+            duration,
+            expectation_cooldown,
+            deployment_policy,
+            capabilities,
+            ..
+        } = builder;
+
         Self {
-            builder,
-            nodes: 0,
-            network_star: false,
-            scenario_base_dir: None,
+            deployment_provider,
+            topology_seed,
+            workloads,
+            expectations,
+            duration,
+            expectation_cooldown,
+            deployment_policy,
+            capabilities,
         }
     }
 
-    /// Set the number of nodes.
-    #[must_use]
-    pub fn nodes(mut self, count: usize) -> Self {
-        self.nodes = count;
-        self
+    fn resolve_deployment(&self) -> Result<E::Deployment, ScenarioBuildError> {
+        self.deployment_provider
+            .build(self.topology_seed.as_ref())
+            .map_err(ScenarioBuildError::Topology)
     }
 
-    /// Set a base scenario directory for nodes to persist data. If not set,
-    /// nodes will use
-    pub fn scenario_base_dir(mut self, path: PathBuf) -> Self {
-        self.scenario_base_dir = Some(path);
-        self
-    }
-
-    /// Use a star libp2p network layout.
-    #[must_use]
-    pub fn network_star(mut self) -> Self {
-        self.network_star = true;
-        self
-    }
-
-    /// Apply a config patch for a specific node index.
-    #[must_use]
-    pub fn node_config_patch(mut self, index: usize, patch: NodeConfigPatch) -> Self {
-        self.builder.topology = self.builder.topology.with_node_config_patch(index, patch);
-        self
-    }
-
-    /// Apply a config patch for a specific node index.
-    #[must_use]
-    pub fn node_config_patch_with<F>(mut self, index: usize, f: F) -> Self
-    where
-        F: Fn(RunConfig) -> Result<RunConfig, DynError> + Send + Sync + 'static,
-    {
-        self.builder.topology = self
-            .builder
-            .topology
-            .with_node_config_patch(index, Arc::new(f));
-        self
-    }
-
-    /// Finalize and return the underlying scenario builder.
-    #[must_use]
-    pub fn apply(self) -> Builder<Caps> {
-        let mut builder = self.builder;
-        builder.topology = builder
-            .topology
-            .with_node_count(self.nodes)
-            .with_scenario_base_dir(self.scenario_base_dir);
-
-        if self.network_star {
-            builder.topology = builder
-                .topology
-                .with_network_layout(Libp2pNetworkLayout::Star);
+    fn run_plan(&self) -> RunPlan {
+        RunPlan {
+            duration: enforce_min_duration(self.duration),
+            expectation_cooldown: expectation_cooldown_for(self.expectation_cooldown),
         }
-        builder
     }
 }
 
-impl Builder<()> {
+impl<E: Application> Builder<E, ()> {
     #[must_use]
-    pub fn enable_node_control(self) -> Builder<NodeControlCapability> {
+    pub fn enable_node_control(self) -> Builder<E, NodeControlCapability> {
         self.with_capabilities(NodeControlCapability)
     }
+
+    #[must_use]
+    pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
+        self.with_capabilities(ObservabilityCapability::default())
+    }
 }
 
-fn initialize_components(
-    descriptors: &GeneratedTopology,
+fn initialize_components<E: Application>(
+    descriptors: &E::Deployment,
     run_metrics: &RunMetrics,
-    workloads: &mut [Box<dyn Workload>],
-    expectations: &mut [Box<dyn Expectation>],
+    workloads: &mut [Box<dyn Workload<E>>],
+    expectations: &mut [Box<dyn Expectation<E>>],
 ) -> Result<(), ScenarioBuildError> {
     initialize_workloads(descriptors, run_metrics, workloads)?;
+
     initialize_expectations(descriptors, run_metrics, expectations)?;
+
     Ok(())
 }
 
-fn initialize_workloads(
-    descriptors: &GeneratedTopology,
+fn initialize_workloads<E: Application>(
+    descriptors: &E::Deployment,
     run_metrics: &RunMetrics,
-    workloads: &mut [Box<dyn Workload>],
+    workloads: &mut [Box<dyn Workload<E>>],
 ) -> Result<(), ScenarioBuildError> {
     for workload in workloads {
         debug!(workload = workload.name(), "initializing workload");
-        workload.init(descriptors, run_metrics).map_err(|source| {
-            ScenarioBuildError::WorkloadInit {
-                name: workload.name().to_owned(),
-                source,
-            }
-        })?;
+        let name = workload.name().to_owned();
+
+        workload
+            .init(descriptors, run_metrics)
+            .map_err(|source| workload_init_error(name, source))?;
     }
+
     Ok(())
 }
 
-fn initialize_expectations(
-    descriptors: &GeneratedTopology,
+fn initialize_expectations<E: Application>(
+    descriptors: &E::Deployment,
     run_metrics: &RunMetrics,
-    expectations: &mut [Box<dyn Expectation>],
+    expectations: &mut [Box<dyn Expectation<E>>],
 ) -> Result<(), ScenarioBuildError> {
     for expectation in expectations {
         debug!(expectation = expectation.name(), "initializing expectation");
+        let name = expectation.name().to_owned();
+
         expectation
             .init(descriptors, run_metrics)
-            .map_err(|source| ScenarioBuildError::ExpectationInit {
-                name: expectation.name().to_owned(),
-                source,
-            })?;
+            .map_err(|source| expectation_init_error(name, source))?;
     }
+
     Ok(())
 }
 
-fn enforce_min_duration(descriptors: &GeneratedTopology, requested: Duration) -> Duration {
-    let min_duration = descriptors.slot_duration().map_or_else(
-        || Duration::from_secs(MIN_EXPECTATION_FALLBACK_SECS),
-        |slot| slot * MIN_EXPECTATION_BLOCKS,
-    );
+fn workload_init_error(name: String, source: DynError) -> ScenarioBuildError {
+    ScenarioBuildError::WorkloadInit { name, source }
+}
+
+fn expectation_init_error(name: String, source: DynError) -> ScenarioBuildError {
+    ScenarioBuildError::ExpectationInit { name, source }
+}
+
+fn enforce_min_duration(requested: Duration) -> Duration {
+    let min_duration = min_run_duration();
 
     requested.max(min_duration)
+}
+
+fn default_expectation_cooldown() -> Duration {
+    Duration::from_secs(MIN_EXPECTATION_FALLBACK_SECS)
+}
+
+fn expectation_cooldown_for(override_value: Option<Duration>) -> Duration {
+    override_value.unwrap_or_else(default_expectation_cooldown)
+}
+
+fn min_run_duration() -> Duration {
+    Duration::from_secs(MIN_RUN_DURATION_SECS)
 }

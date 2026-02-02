@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use testing_framework_core::scenario::{BlockFeed, BlockFeedTask, NodeClients, spawn_block_feed};
+use testing_framework_core::scenario::{
+    Application, FeedHandle, FeedRuntime, NodeClients, spawn_feed,
+};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
@@ -9,27 +11,38 @@ use crate::errors::ComposeRunnerError;
 const BLOCK_FEED_MAX_ATTEMPTS: usize = 5;
 const BLOCK_FEED_RETRY_DELAY: Duration = Duration::from_secs(1);
 
-async fn spawn_block_feed_with(
-    node_clients: &NodeClients,
-) -> Result<(BlockFeed, BlockFeedTask), ComposeRunnerError> {
+async fn spawn_block_feed_with<E: Application>(
+    node_clients: &NodeClients<E>,
+) -> Result<
+    (
+        <<E as Application>::FeedRuntime as FeedRuntime>::Feed,
+        FeedHandle,
+    ),
+    ComposeRunnerError,
+> {
     debug!(
-        nodes = node_clients.node_clients().len(),
+        nodes = node_clients.len(),
         "selecting node client for block feed"
     );
 
     let block_source_client = node_clients
-        .random_node()
+        .random_client()
         .ok_or(ComposeRunnerError::BlockFeedMissing)?;
 
-    spawn_block_feed(block_source_client)
+    spawn_feed::<E>(block_source_client)
         .await
         .map_err(|source| ComposeRunnerError::BlockFeed { source })
 }
 
-pub async fn spawn_block_feed_with_retry(
-    node_clients: &NodeClients,
-) -> Result<(BlockFeed, BlockFeedTask), ComposeRunnerError> {
-    let mut last_err = None;
+pub async fn spawn_block_feed_with_retry<E: Application>(
+    node_clients: &NodeClients<E>,
+) -> Result<
+    (
+        <<E as Application>::FeedRuntime as FeedRuntime>::Feed,
+        FeedHandle,
+    ),
+    ComposeRunnerError,
+> {
     for attempt in 1..=BLOCK_FEED_MAX_ATTEMPTS {
         info!(attempt, "starting block feed");
         match spawn_block_feed_with(node_clients).await {
@@ -37,17 +50,17 @@ pub async fn spawn_block_feed_with_retry(
                 info!(attempt, "block feed established");
                 return Ok(result);
             }
-            Err(err) => {
-                last_err = Some(err);
-                if attempt < BLOCK_FEED_MAX_ATTEMPTS {
-                    warn!(attempt, "block feed initialization failed; retrying");
-                    sleep(BLOCK_FEED_RETRY_DELAY).await;
+
+            Err(error) => {
+                if attempt == BLOCK_FEED_MAX_ATTEMPTS {
+                    return Err(error);
                 }
+
+                warn!(attempt, "block feed initialization failed; retrying");
+                sleep(BLOCK_FEED_RETRY_DELAY).await;
             }
         }
     }
 
-    Err(last_err.unwrap_or(ComposeRunnerError::InternalInvariant {
-        message: "block feed retry exhausted without capturing an error",
-    }))
+    unreachable!("retry loop always returns on success or final failure")
 }

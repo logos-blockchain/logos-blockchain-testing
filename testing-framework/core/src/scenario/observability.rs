@@ -4,24 +4,18 @@ use reqwest::Url;
 
 use super::{Metrics, MetricsError, NodeControlCapability, ObservabilityCapability};
 
-/// Observability configuration inputs shared by deployers/runners.
-///
-/// All fields are optional; missing values only matter when a caller needs the
-/// corresponding capability (e.g. querying metrics from the runner process).
+/// Optional observability endpoints used by deployers and runners.
 #[derive(Clone, Debug, Default)]
 pub struct ObservabilityInputs {
-    /// Prometheus-compatible base URL used by the runner process to query
-    /// metrics (PromQL API endpoints).
+    /// Base URL used by the runner to query Prometheus.
     pub metrics_query_url: Option<Url>,
-    /// Full OTLP HTTP metrics ingest endpoint used by nodes to export metrics
-    /// (backend-specific host and path).
+    /// OTLP HTTP endpoint used by nodes to export metrics.
     pub metrics_otlp_ingest_url: Option<Url>,
-    /// Optional Grafana base URL for printing/logging (human access).
+    /// Optional Grafana URL for logs/output.
     pub grafana_url: Option<Url>,
 }
 
-/// Capability helper for deployers that are generic over scenario capability
-/// markers.
+/// Exposes observability capability from scenario capability markers.
 pub trait ObservabilityCapabilityProvider {
     fn observability_capability(&self) -> Option<&ObservabilityCapability>;
 }
@@ -54,10 +48,7 @@ impl ObservabilityInputs {
         }
     }
 
-    /// Load observability inputs from environment variables.
-    ///
-    /// The `NOMOS_*` namespace applies to all deployers. Runner-specific env
-    /// vars are also accepted as aliases for backwards compatibility.
+    /// Load observability inputs from `LOGOS_BLOCKCHAIN_*` environment vars.
     pub fn from_env() -> Result<Self, MetricsError> {
         Ok(Self {
             metrics_query_url: read_url_var(&["LOGOS_BLOCKCHAIN_METRICS_QUERY_URL"])?,
@@ -66,22 +57,24 @@ impl ObservabilityInputs {
         })
     }
 
-    /// Overlay non-empty values from `overrides` onto `self`.
+    /// Override `self` values with non-empty values from `overrides`.
     #[must_use]
     pub fn with_overrides(mut self, overrides: Self) -> Self {
         if overrides.metrics_query_url.is_some() {
             self.metrics_query_url = overrides.metrics_query_url;
         }
+
         if overrides.metrics_otlp_ingest_url.is_some() {
             self.metrics_otlp_ingest_url = overrides.metrics_otlp_ingest_url;
         }
+
         if overrides.grafana_url.is_some() {
             self.grafana_url = overrides.grafana_url;
         }
         self
     }
 
-    /// Build the telemetry handle exposed in `RunContext::telemetry()`.
+    /// Build the telemetry handle used in `RunContext`.
     pub fn telemetry_handle(&self) -> Result<Metrics, MetricsError> {
         match self.metrics_query_url.clone() {
             Some(url) => Metrics::from_prometheus(url),
@@ -99,9 +92,11 @@ fn read_url_var(keys: &[&'static str]) -> Result<Option<Url>, MetricsError> {
         if raw.is_empty() {
             continue;
         }
+
         return Url::parse(raw)
             .map(Some)
             .map_err(|err| MetricsError::new(format!("invalid {key}: {err}")));
     }
+
     Ok(None)
 }

@@ -16,32 +16,12 @@ workspace = true
 default = []
 
 [dependencies]
-anyhow                           = "1"
-async-trait                      = "0.1"
-futures                          = { default-features = false, version = "0.3" }
-hex                              = { default-features = false, version = "0.4.3" }
-lb-chain-service                 = { workspace = true }
-lb-common-http-client            = { workspace = true }
-lb-core                          = { workspace = true }
-lb-groth16                       = { workspace = true }
-lb-http-api-common               = { workspace = true }
-lb-key-management-system-service = { workspace = true }
-lb-libp2p                        = { workspace = true }
-lb-network-service               = { features = ["libp2p"], workspace = true }
-lb-node                          = { default-features = false, features = ["testing"], workspace = true }
-lb-tracing                       = { workspace = true }
-lb-tracing-service               = { workspace = true }
-lb-utils                         = { workspace = true }
-prometheus-http-query            = "0.8"
-rand                             = { workspace = true }
-reqwest                          = { features = ["json"], workspace = true }
-serde                            = { workspace = true }
-serde_json                       = { workspace = true }
-serde_with                       = { workspace = true }
-serde_yaml                       = { workspace = true }
-tempfile                         = { workspace = true }
-testing-framework-config         = { workspace = true }
-testing-framework-env            = { workspace = true }
-thiserror                        = { workspace = true }
-tokio                            = { features = ["macros", "process", "rt-multi-thread", "time"], workspace = true }
-tracing                          = { workspace = true }
+async-trait           = "0.1"
+futures               = { default-features = false, features = ["std"], version = "0.3" }
+parking_lot           = { workspace = true }
+prometheus-http-query = "0.8"
+rand                  = { workspace = true }
+reqwest               = { features = ["json"], workspace = true }
+thiserror             = { workspace = true }
+tokio                 = { features = ["macros", "process", "rt-multi-thread", "time"], workspace = true }
+tracing               = { workspace = true }

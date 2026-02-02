@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "logos-runner.fullname" . }}-cfgsync
+  labels:
+    {{- include "logos-runner.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logos-runner.selectorLabels" . | nindent 6 }}
+      logos/component: cfgsync
+  template:
+    metadata:
+      labels:
+        {{- include "logos-runner.selectorLabels" . | nindent 8 }}
+        logos/component: cfgsync
+    spec:
+      containers:
+        - name: cfgsync
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["/bin/sh", "/etc/logos/scripts/run_cfgsync.sh"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.cfgsync.port }}
+          env:
+            - name: RUST_LOG
+              value: debug
+          volumeMounts:
+            - name: assets
+              mountPath: /etc/logos
+              readOnly: true
+      volumes:
+        - name: assets
+          configMap:
+            name: {{ include "logos-runner.fullname" . }}-assets
+            defaultMode: 0755
+            items:
+              - key: cfgsync.yaml
+                path: cfgsync.yaml
+              - key: cfgsync.bundle.yaml
+                path: cfgsync.bundle.yaml
+              - key: run_cfgsync.sh
+                path: scripts/run_cfgsync.sh

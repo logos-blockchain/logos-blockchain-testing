@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use super::runner::Runner;
-use crate::scenario::{DynError, Scenario};
+use crate::scenario::{Application, DynError, Scenario};
 
 /// Error returned when executing workloads or expectations.
 #[derive(Debug, thiserror::Error)]
@@ -16,8 +16,8 @@ pub enum ScenarioError {
 
 /// Deploys a scenario into a target environment and returns a `Runner`.
 #[async_trait]
-pub trait Deployer<Caps = ()>: Send + Sync {
+pub trait Deployer<E: Application, Caps = ()>: Send + Sync {
     type Error;
 
-    async fn deploy(&self, scenario: &Scenario<Caps>) -> Result<Runner, Self::Error>;
+    async fn deploy(&self, scenario: &Scenario<E, Caps>) -> Result<Runner<E>, Self::Error>;
 }

@@ -18,7 +18,7 @@ fi
 #   scripts/setup/setup-logos-blockchain-circuits.sh v0.3.2
 #   scripts/setup/setup-logos-blockchain-circuits.sh v0.3.2 /opt/circuits
 
-DEFAULT_CIRCUITS_VERSION="v0.3.2"
+DEFAULT_CIRCUITS_VERSION="v0.4.1"
 DEFAULT_INSTALL_DIR="${HOME}/.logos-blockchain-circuits"
 REPO="logos-blockchain/logos-blockchain-circuits"
 
@@ -35,6 +35,9 @@ print_error() { echo -e "${RED}✗${NC} $1"; }
 
 VERSION="${1:-${DEFAULT_CIRCUITS_VERSION}}"
 INSTALL_DIR="${2:-${DEFAULT_INSTALL_DIR}}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+RAPIDSNARK_SKIP="${RAPIDSNARK_SKIP:-0}"
 
 # Detect OS and architecture
 # Outputs: os-arch like linux-x86_64, macos-aarch64
@@ -170,6 +173,41 @@ print_circuits() {
   done
 }
 
+ensure_rapidsnark() {
+  if [ -x "${INSTALL_DIR}/prover" ] && [ -x "${INSTALL_DIR}/verifier" ]; then
+    print_info "rapidsnark prover already present at ${INSTALL_DIR}"
+    return
+  fi
+
+  if [ "${RAPIDSNARK_SKIP}" = "1" ]; then
+    print_warning "Skipping rapidsnark build (RAPIDSNARK_SKIP=1). Proofs may fail without prover/verifier."
+    return
+  fi
+
+  local build_script="${REPO_ROOT}/scripts/build/build-rapidsnark.sh"
+  if [ ! -x "${build_script}" ]; then
+    print_error "rapidsnark build script not found or not executable: ${build_script}"
+    exit 1
+  fi
+
+  local missing=()
+  for tool in git cmake make gcc g++; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+      missing+=("${tool}")
+    fi
+  done
+
+  if [ "${#missing[@]}" -gt 0 ]; then
+    print_error "Missing build tools for rapidsnark: ${missing[*]}"
+    print_error "Install the required packages, or set RAPIDSNARK_SKIP=1 to skip the build."
+    exit 1
+  fi
+
+  print_info "Building rapidsnark prover into ${INSTALL_DIR}..."
+  bash "${build_script}" "${INSTALL_DIR}"
+  print_success "rapidsnark prover installed"
+}
+
 main() {
   print_info "Setting up logos-blockchain-circuits ${VERSION}"
   print_info "Installation directory: ${INSTALL_DIR}"
@@ -186,6 +224,9 @@ main() {
     echo
     handle_macos_quarantine
   fi
+
+  echo
+  ensure_rapidsnark
 
   echo
   print_success "Installation complete!"

@@ -17,7 +17,7 @@ Builds the compose/k8s test image (bakes in binaries).
 Options:
   --tag TAG                 Docker image tag (default: logos-blockchain-testing:local; or env IMAGE_TAG)
   --version VERSION         Bundle version tag (default: versions.env VERSION)
-  --dockerfile PATH         Dockerfile path (default: testing-framework/assets/stack/Dockerfile.runtime)
+  --dockerfile PATH         Dockerfile path (default: logos/infra/assets/stack/Dockerfile.runtime)
   --base-tag TAG            Base image tag (default: logos-blockchain-testing:base)
   --bundle-tar PATH         Bundle tar containing artifacts/{nomos-*} (default: .tmp/nomos-binaries-linux-<version>.tar.gz; or env LOGOS_BLOCKCHAIN_BINARIES_TAR)
   --no-restore              Do not restore binaries from bundle tar (forces Dockerfile to build/download as needed)
@@ -46,8 +46,8 @@ build_test_image::load_env() {
   . "${ROOT_DIR}/versions.env"
   common::maybe_source "${ROOT_DIR}/paths.env"
 
-  DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile.runtime"
-  BASE_DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/testing-framework/assets/stack/Dockerfile.base"
+  DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/logos/infra/assets/stack/Dockerfile.runtime"
+  BASE_DOCKERFILE_PATH_DEFAULT="${ROOT_DIR}/logos/infra/assets/stack/Dockerfile.base"
   IMAGE_TAG_DEFAULT="logos-blockchain-testing:local"
   BASE_IMAGE_TAG_DEFAULT="logos-blockchain-testing:base"
 
@@ -90,10 +90,23 @@ build_test_image::parse_args() {
     VERSION="${VERSION_DEFAULT}"
   fi
 
-  BIN_DST="${ROOT_DIR}/testing-framework/assets/stack/bin"
+  BIN_DST="${ROOT_DIR}/logos/infra/assets/stack/bin"
 
   DEFAULT_LINUX_TAR="${ROOT_DIR}/.tmp/nomos-binaries-linux-${VERSION}.tar.gz"
   TAR_PATH="${BUNDLE_TAR_PATH:-${DEFAULT_LINUX_TAR}}"
+
+  LOGOS_BLOCKCHAIN_NODE_PATH="${LOGOS_BLOCKCHAIN_NODE_PATH:-}"
+  if [ -z "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
+    # Prefer local checkout when available: this repo currently depends on
+    # lb-framework from nomos-node/tests/testing_framework.
+    local sibling_node_path="${ROOT_DIR}/../nomos-node"
+    if [ -d "${sibling_node_path}/tests/testing_framework" ]; then
+      LOGOS_BLOCKCHAIN_NODE_PATH="${sibling_node_path}"
+    fi
+  fi
+  if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ] && [ ! -d "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
+    build_test_image::fail "LOGOS_BLOCKCHAIN_NODE_PATH does not exist: ${LOGOS_BLOCKCHAIN_NODE_PATH}"
+  fi
 }
 
 build_test_image::print_config() {
@@ -103,6 +116,7 @@ build_test_image::print_config() {
   echo "Base image tag: ${BASE_IMAGE_TAG}"
   echo "Base Dockerfile: ${BASE_DOCKERFILE_PATH}"
   echo "Logos node rev: ${LOGOS_BLOCKCHAIN_NODE_REV}"
+  echo "Logos node path: ${LOGOS_BLOCKCHAIN_NODE_PATH:-<unset>}"
   echo "Binaries dir: ${BIN_DST}"
   echo "Bundle tar (if used): ${TAR_PATH}"
   echo "Restore from tar: $([ "${NO_RESTORE}" -eq 1 ] && echo "disabled" || echo "enabled")"
@@ -164,22 +178,32 @@ build_test_image::docker_build() {
       linux-aarch64) target_platform="linux/arm64" ;;
     esac
   fi
+  if [ -z "${target_platform}" ] && [ -n "${host_platform}" ]; then
+    # Prefer native builds to avoid emulation issues in rapidsnark/prover.
+    target_platform="${host_platform}"
+  fi
 
   local -a base_build_args=(
     -f "${BASE_DOCKERFILE_PATH}"
     -t "${BASE_IMAGE_TAG}"
     --build-arg "LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV}"
+    --build-arg "LOGOS_BLOCKCHAIN_NODE_USE_LOCAL_CONTEXT=$([ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ] && echo 1 || echo 0)"
     --build-arg "VERSION=${VERSION}"
-    "${ROOT_DIR}"
   )
+  local node_context_path="${LOGOS_BLOCKCHAIN_NODE_PATH:-${ROOT_DIR}}"
+  base_build_args+=(--build-context "nomos_node=${node_context_path}")
+  if [ -n "${LOGOS_BLOCKCHAIN_FORCE_BUILD:-}" ]; then
+    base_build_args+=(--build-arg "LOGOS_BLOCKCHAIN_FORCE_BUILD=${LOGOS_BLOCKCHAIN_FORCE_BUILD}")
+  fi
   if [ -n "${host_platform}" ] && [ -n "${target_platform}" ] && [ "${host_platform}" != "${target_platform}" ]; then
     base_build_args+=(--platform "${target_platform}")
   fi
+  base_build_args+=("${ROOT_DIR}")
 
   printf "Running:"
   printf " %q" docker build "${base_build_args[@]}"
   echo
-  docker build "${base_build_args[@]}"
+  build_test_image::docker_build_with_retry "${base_build_args[@]}"
 
   local -a final_build_args=(
     -f "${DOCKERFILE_PATH}"
@@ -193,7 +217,23 @@ build_test_image::docker_build() {
   printf "Running:"
   printf " %q" docker build "${final_build_args[@]}"
   echo
-  docker build "${final_build_args[@]}"
+  build_test_image::docker_build_with_retry "${final_build_args[@]}"
+}
+
+build_test_image::docker_build_with_retry() {
+  local max_attempts=3
+  local attempt
+  for attempt in $(seq 1 "${max_attempts}"); do
+    if docker build "$@"; then
+      return 0
+    fi
+    if [ "${attempt}" -lt "${max_attempts}" ]; then
+      local backoff=$((attempt * 5))
+      echo "docker build failed (attempt ${attempt}/${max_attempts}); retrying in ${backoff}s..."
+      sleep "${backoff}"
+    fi
+  done
+  build_test_image::fail "docker build failed after ${max_attempts} attempts"
 }
 
 build_test_image::main() {

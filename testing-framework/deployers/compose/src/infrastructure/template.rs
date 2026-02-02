@@ -1,5 +1,5 @@
 use std::{
-    env, fs,
+    env, fs, io,
     path::{Path, PathBuf},
 };
 
@@ -20,28 +20,28 @@ pub enum TemplateError {
         #[source]
         source: anyhow::Error,
     },
-    #[error("failed to read compose template at {path}: {source}")]
+    #[error("failed to read compose template at {path:?}: {source}")]
     Read {
         path: PathBuf,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[error("failed to serialise compose descriptor for templating: {source}")]
     Serialize {
         #[source]
         source: tera::Error,
     },
-    #[error("failed to render compose template at {path}: {source}")]
+    #[error("failed to render compose template at {path:?}: {source}")]
     Render {
         path: PathBuf,
         #[source]
         source: tera::Error,
     },
-    #[error("failed to write compose file at {path}: {source}")]
+    #[error("failed to write compose file at {path:?}: {source}")]
     Write {
         path: PathBuf,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
 }
 
