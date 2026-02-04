@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use chain_leader::LeaderConfig;
 use cryptarchia_engine::EpochConfig;
 use groth16::CompressedGroth16Proof;
 use key_management_system_service::keys::{
@@ -49,7 +48,7 @@ pub struct ConsensusParams {
 }
 
 impl ConsensusParams {
-    const DEFAULT_ACTIVE_SLOT_COEFF: f64 = 0.9;
+    const DEFAULT_ACTIVE_SLOT_COEFF: f64 = 1.0;
     const CONSENSUS_ACTIVE_SLOT_COEFF_VAR: &str = "CONSENSUS_ACTIVE_SLOT_COEFF";
 
     #[must_use]
@@ -98,7 +97,8 @@ impl ProviderInfo {
 /// be converted into a specific service or services configuration.
 #[derive(Clone)]
 pub struct GeneralConsensusConfig {
-    pub leader_config: LeaderConfig,
+    pub leader_pk: ZkPublicKey,
+    pub leader_sk: UnsecuredZkKey,
     pub ledger_config: nomos_ledger::Config,
     pub genesis_tx: GenesisTx,
     pub utxos: Vec<Utxo>,
@@ -115,7 +115,7 @@ pub struct ServiceNote {
     pub output_index: usize,
 }
 
-fn create_genesis_tx(utxos: &[Utxo]) -> Result<GenesisTx, ConsensusConfigError> {
+fn create_genesis_tx(utxos: &mut [Utxo]) -> Result<GenesisTx, ConsensusConfigError> {
     // Create a genesis inscription op (similar to config.yaml)
     let inscription = InscriptionOp {
         channel_id: ChannelId::from([0; 32]),
@@ -131,6 +131,12 @@ fn create_genesis_tx(utxos: &[Utxo]) -> Result<GenesisTx, ConsensusConfigError> 
     // Create ledger transaction with the utxos as outputs
     let outputs: Vec<Note> = utxos.iter().map(|u| u.note).collect();
     let ledger_tx = LedgerTx::new(vec![], outputs);
+    let ledger_tx_hash = ledger_tx.hash();
+
+    // Ensure utxo IDs match the ledger tx hash used at genesis.
+    for utxo in utxos {
+        utxo.tx_hash = ledger_tx_hash;
+    }
 
     // Create the mantle transaction
     let mantle_tx = MantleTx {
@@ -160,10 +166,10 @@ fn build_ledger_config(
             epoch_period_nonce_buffer: unsafe { NonZero::new_unchecked(3) },
             epoch_period_nonce_stabilization: unsafe { NonZero::new_unchecked(4) },
         },
-        consensus_config: cryptarchia_engine::Config {
-            security_param: consensus_params.security_param,
-            active_slot_coeff: consensus_params.active_slot_coeff,
-        },
+        consensus_config: cryptarchia_engine::Config::new(
+            consensus_params.security_param,
+            consensus_params.active_slot_coeff,
+        ),
         sdp_config: nomos_ledger::mantle::sdp::Config {
             service_params: Arc::new(
                 [(
@@ -192,6 +198,7 @@ fn build_ledger_config(
                     })?,
                     num_blend_layers: unsafe { NonZeroU64::new_unchecked(3) },
                     minimum_network_size: unsafe { NonZeroU64::new_unchecked(1) },
+                    data_replication_factor: 0,
                 },
             },
         },
@@ -214,15 +221,16 @@ pub fn create_consensus_configs(
         &mut blend_notes,
         &mut sdp_notes,
     );
-    let utxos = append_wallet_utxos(utxos, wallet);
-    let genesis_tx = create_genesis_tx(&utxos)?;
+    let mut utxos = append_wallet_utxos(utxos, wallet);
+    let genesis_tx = create_genesis_tx(&mut utxos)?;
     let ledger_config = build_ledger_config(consensus_params)?;
 
     Ok(leader_keys
         .into_iter()
         .enumerate()
         .map(|(i, (pk, sk))| GeneralConsensusConfig {
-            leader_config: LeaderConfig { pk, sk },
+            leader_pk: pk,
+            leader_sk: sk,
             ledger_config: ledger_config.clone(),
             genesis_tx: genesis_tx.clone(),
             utxos: utxos.clone(),
@@ -241,10 +249,8 @@ fn create_utxos_for_leader_and_services(
 ) -> Vec<Utxo> {
     let mut utxos = Vec::new();
 
-    // Assume output index which will be set by the ledger tx.
-    let mut output_index = 0;
-
     // Create notes for leader, Blend and DA declarations.
+    let mut output_index = 0;
     for &id in ids {
         output_index = push_leader_utxo(id, leader_keys, &mut utxos, output_index);
         output_index = push_service_note(b"bn", id, blend_notes, &mut utxos, output_index);
@@ -276,9 +282,9 @@ fn push_leader_utxo(
     let pk = sk.to_public_key();
     leader_keys.push((pk, sk));
     utxos.push(Utxo {
-        note: Note::new(1_000, pk),
+        note: Note::new(100_000, pk),
         tx_hash: BigUint::from(0u8).into(),
-        output_index: 0,
+        output_index,
     });
     output_index + 1
 }
@@ -303,17 +309,18 @@ fn push_service_note(
     utxos.push(Utxo {
         note,
         tx_hash: BigUint::from(0u8).into(),
-        output_index: 0,
+        output_index,
     });
     output_index + 1
 }
 
 fn append_wallet_utxos(mut utxos: Vec<Utxo>, wallet: &WalletConfig) -> Vec<Utxo> {
     for account in &wallet.accounts {
+        let output_index = utxos.len();
         utxos.push(Utxo {
             note: Note::new(account.value, account.public_key()),
             tx_hash: BigUint::from(0u8).into(),
-            output_index: 0,
+            output_index,
         });
     }
 

@@ -32,6 +32,7 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
             "a",
             StartNodeOptions {
                 peers: PeerSelection::None,
+                config_patch: None,
             },
         )
         .await?
@@ -46,6 +47,7 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
             "c",
             StartNodeOptions {
                 peers: PeerSelection::Named(vec!["node-a".to_owned()]),
+                config_patch: None,
             },
         )
         .await?

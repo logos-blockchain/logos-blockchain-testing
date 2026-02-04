@@ -52,7 +52,7 @@ pub fn build_general_config_for_node(
         .next()
         .ok_or(GeneralConfigError::EmptyParticipants)?;
 
-    let kms_config = build_kms_config_for_node(&blend_config, wallet_config);
+    let kms_config = build_kms_config_for_node(&blend_config, wallet_config, &consensus_config);
 
     Ok(GeneralConfig {
         consensus_config,
@@ -105,6 +105,7 @@ pub fn build_initial_peers(network_params: &NetworkParams, peer_ports: &[u16]) -
 fn build_kms_config_for_node(
     blend_config: &blend::GeneralBlendConfig,
     wallet_config: &WalletConfig,
+    consensus_config: &GeneralConsensusConfig,
 ) -> PreloadKMSBackendSettings {
     let mut keys = HashMap::from([
         (
@@ -114,6 +115,14 @@ fn build_kms_config_for_node(
         (
             key_id_for_preload_backend(&Key::Zk(blend_config.secret_zk_key.clone())),
             Key::Zk(blend_config.secret_zk_key.clone()),
+        ),
+        (
+            key_id_for_preload_backend(&Key::Zk(consensus_config.leader_sk.clone().into())),
+            Key::Zk(consensus_config.leader_sk.clone().into()),
+        ),
+        (
+            key_id_for_preload_backend(&Key::Zk(consensus_config.funding_sk.clone())),
+            Key::Zk(consensus_config.funding_sk.clone()),
         ),
     ]);
 

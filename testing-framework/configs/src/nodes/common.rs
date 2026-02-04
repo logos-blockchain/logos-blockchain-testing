@@ -1,8 +1,13 @@
-use std::{collections::HashSet, num::NonZeroUsize, path::PathBuf, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+    path::PathBuf,
+    time::Duration,
+};
 
-use chain_leader::LeaderConfig as ChainLeaderConfig;
 use chain_network::{BootstrapConfig as ChainBootstrapConfig, OrphanConfig, SyncConfig};
 use chain_service::StartingState;
+use key_management_system_service::keys::Key;
 use nomos_api::ApiServiceSettings;
 use nomos_node::{
     api::backend::AxumBackendSettings as NodeAxumBackendSettings,
@@ -22,7 +27,7 @@ use nomos_node::{
 };
 use nomos_wallet::WalletServiceSettings;
 
-use crate::{timeouts, topology::configs::GeneralConfig};
+use crate::{nodes::kms::key_id_for_preload_backend, timeouts, topology::configs::GeneralConfig};
 
 // Configuration constants
 const CRYPTARCHIA_GOSSIPSUB_PROTOCOL: &str = "/cryptarchia/proto";
@@ -37,7 +42,11 @@ const API_MAX_CONCURRENT_REQUESTS: usize = 1000;
 pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeploymentSettings {
     CryptarchiaDeploymentSettings {
         epoch_config: config.consensus_config.ledger_config.epoch_config,
-        consensus_config: config.consensus_config.ledger_config.consensus_config,
+        security_param: config
+            .consensus_config
+            .ledger_config
+            .consensus_config
+            .security_param(),
         sdp_config: DeploymentSdpConfig {
             service_params: config
                 .consensus_config
@@ -69,9 +78,7 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
             starting_state: StartingState::Genesis {
                 genesis_tx: config.consensus_config.genesis_tx.clone(),
             },
-            // Disable on-disk recovery in compose tests to avoid serde errors on
-            // non-string keys and keep services alive.
-            recovery_file: PathBuf::new(),
+            recovery_file: PathBuf::from("recovery/cryptarchia.json"),
             bootstrap: chain_service::BootstrapConfig {
                 prolonged_bootstrap_period: config.bootstrapping_config.prolonged_bootstrap_period,
                 force_bootstrap: false,
@@ -94,10 +101,6 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
                 },
             },
         },
-        leader: ChainLeaderConfig {
-            pk: config.consensus_config.leader_config.pk,
-            sk: config.consensus_config.leader_config.sk.clone(),
-        },
     }
 }
 
@@ -117,8 +120,7 @@ pub(crate) fn time_config(config: &GeneralConfig) -> TimeConfig {
 
 pub(crate) fn mempool_config() -> nomos_node::config::mempool::serde::Config {
     nomos_node::config::mempool::serde::Config {
-        // Disable mempool recovery for hermetic tests.
-        recovery_path: PathBuf::new(),
+        recovery_path: PathBuf::from("recovery/mempool.json"),
     }
 }
 
@@ -160,19 +162,30 @@ fn wallet_settings_with_leader(
     config: &GeneralConfig,
     include_leader: bool,
 ) -> WalletServiceSettings {
-    let mut keys = HashSet::new();
+    let mut keys = HashMap::new();
 
     if include_leader {
-        keys.insert(config.consensus_config.leader_config.pk);
+        let leader_key = Key::Zk(config.consensus_config.leader_sk.clone().into());
+        let leader_key_id = key_id_for_preload_backend(&leader_key);
+        keys.insert(leader_key_id, config.consensus_config.leader_pk);
     }
 
-    keys.extend(
-        config
-            .consensus_config
-            .wallet_accounts
-            .iter()
-            .map(crate::topology::configs::wallet::WalletAccount::public_key),
+    let funding_key = Key::Zk(config.consensus_config.funding_sk.clone());
+    let funding_key_id = key_id_for_preload_backend(&funding_key);
+    keys.insert(
+        funding_key_id,
+        config.consensus_config.funding_sk.to_public_key(),
     );
 
-    WalletServiceSettings { known_keys: keys }
+    // Note: wallet accounts are used by the transaction workload directly and
+    // don't need to be registered for leader eligibility.
+
+    let voucher_master_key_id =
+        key_id_for_preload_backend(&Key::Zk(config.consensus_config.leader_sk.clone().into()));
+
+    WalletServiceSettings {
+        known_keys: keys,
+        voucher_master_key_id,
+        recovery_path: PathBuf::from("recovery/wallet.json"),
+    }
 }

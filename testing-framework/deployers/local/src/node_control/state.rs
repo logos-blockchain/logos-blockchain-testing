@@ -2,15 +2,16 @@ use std::collections::HashMap;
 
 use testing_framework_core::nodes::{ApiClient, node::Node};
 
-pub(crate) struct LocalDynamicState {
+pub(crate) struct LocalNodeManagerState {
     pub(crate) node_count: usize,
     pub(crate) peer_ports: Vec<u16>,
     pub(crate) peer_ports_by_name: HashMap<String, u16>,
     pub(crate) clients_by_name: HashMap<String, ApiClient>,
+    pub(crate) indices_by_name: HashMap<String, usize>,
     pub(crate) nodes: Vec<Node>,
 }
 
-impl LocalDynamicState {
+impl LocalNodeManagerState {
     fn register_common(&mut self, node_name: &str, network_port: u16, client: ApiClient) {
         self.peer_ports.push(network_port);
         self.peer_ports_by_name
@@ -26,6 +27,8 @@ impl LocalDynamicState {
         node: Node,
     ) {
         self.register_common(node_name, network_port, client);
+        let index = self.nodes.len();
+        self.indices_by_name.insert(node_name.to_string(), index);
         self.node_count += 1;
         self.nodes.push(node);
     }

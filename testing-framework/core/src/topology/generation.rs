@@ -3,9 +3,8 @@ use std::{collections::HashSet, time::Duration};
 use reqwest::{Client, Url};
 
 use crate::topology::{
-    config::TopologyConfig,
+    config::{NodeConfigPatch, TopologyConfig},
     configs::{GeneralConfig, wallet::WalletAccount},
-    deployment::{SpawnTopologyError, Topology},
     readiness::{HttpNetworkReadiness, ReadinessCheck, ReadinessError},
 };
 
@@ -16,6 +15,7 @@ pub struct GeneratedNodeConfig {
     pub id: [u8; 32],
     pub general: GeneralConfig,
     pub blend_port: u16,
+    pub config_patch: Option<NodeConfigPatch>,
 }
 
 impl GeneratedNodeConfig {
@@ -79,17 +79,6 @@ impl GeneratedTopology {
     /// Wallet accounts configured for this topology.
     pub fn wallet_accounts(&self) -> &[WalletAccount] {
         &self.config.wallet_config.accounts
-    }
-
-    pub async fn spawn_local(&self) -> Result<Topology, SpawnTopologyError> {
-        let configs = self
-            .iter()
-            .map(|node| node.general.clone())
-            .collect::<Vec<_>>();
-
-        let nodes = Topology::spawn_nodes(configs, self.config.n_nodes).await?;
-
-        Ok(Topology { nodes })
     }
 
     pub async fn wait_remote_readiness(

@@ -11,6 +11,16 @@ pub fn ensure_recovery_paths(base_dir: &Path) -> io::Result<()> {
         fs::write(&mempool_path, "{}")?;
     }
 
+    let cryptarchia_path = recovery_dir.join("cryptarchia.json");
+    if !cryptarchia_path.exists() {
+        fs::write(&cryptarchia_path, "{}")?;
+    }
+
+    let wallet_path = recovery_dir.join("wallet.json");
+    if !wallet_path.exists() {
+        fs::write(&wallet_path, "{}")?;
+    }
+
     let blend_core_path = recovery_dir.join("blend").join("core.json");
     if let Some(parent) = blend_core_path.parent() {
         fs::create_dir_all(parent)?;

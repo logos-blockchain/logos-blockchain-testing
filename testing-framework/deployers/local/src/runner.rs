@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use testing_framework_core::{
+    nodes::common::node::SpawnNodeError,
     scenario::{
         BlockFeed, BlockFeedTask, Deployer, DynError, Metrics, NodeClients, NodeControlCapability,
         RunContext, Runner, Scenario, ScenarioError, spawn_block_feed,
     },
     topology::{
-        config::TopologyConfig,
-        deployment::{SpawnTopologyError, Topology},
+        config::{TopologyBuilder, TopologyConfig},
+        deployment::Topology,
         readiness::ReadinessError,
     },
 };
@@ -17,7 +18,7 @@ use tracing::{debug, info};
 
 use crate::{
     manual::{LocalManualCluster, ManualClusterError},
-    node_control::{LocalDynamicNodes, LocalDynamicSeed},
+    node_control::{LocalNodeManager, LocalNodeManagerSeed},
 };
 /// Spawns nodes as local processes, reusing the existing
 /// integration harness.
@@ -32,7 +33,7 @@ pub enum LocalDeployerError {
     #[error("failed to spawn local topology: {source}")]
     Spawn {
         #[source]
-        source: SpawnTopologyError,
+        source: SpawnNodeError,
     },
     #[error("readiness probe failed: {source}")]
     ReadinessFailed {
@@ -103,19 +104,39 @@ impl Deployer<NodeControlCapability> for LocalDeployer {
             "starting local deployment with node control"
         );
 
-        let topology = Self::prepare_topology(scenario, self.membership_check).await?;
-        let node_clients = NodeClients::from_topology(scenario.topology(), &topology);
-        let node_control = Arc::new(LocalDynamicNodes::new_with_seed(
+        let mut nodes = LocalNodeManager::spawn_initial_nodes(scenario.topology())
+            .await
+            .map_err(|source| LocalDeployerError::Spawn { source })?;
+
+        if self.membership_check {
+            let topology = Topology::from_nodes(nodes);
+
+            wait_for_readiness(&topology).await.map_err(|source| {
+                debug!(error = ?source, "local readiness failed");
+                LocalDeployerError::ReadinessFailed { source }
+            })?;
+
+            nodes = topology.into_nodes();
+
+            info!("local nodes are ready");
+        } else {
+            info!("skipping local membership readiness checks");
+        }
+
+        let node_control = Arc::new(LocalNodeManager::new_with_seed(
             scenario.topology().clone(),
-            node_clients.clone(),
-            LocalDynamicSeed::from_topology(scenario.topology()),
+            NodeClients::default(),
+            LocalNodeManagerSeed::from_topology(scenario.topology()),
         ));
+
+        node_control.initialize_with_nodes(nodes);
+        let node_clients = node_control.node_clients();
 
         let (block_feed, block_feed_guard) = spawn_block_feed_with(&node_clients).await?;
 
         let context = RunContext::new(
             scenario.topology().clone(),
-            Some(topology),
+            None,
             node_clients,
             scenario.duration(),
             Metrics::empty(),
@@ -150,6 +171,14 @@ impl LocalDeployer {
         LocalManualCluster::from_config(config)
     }
 
+    /// Build a manual cluster from a pre-configured topology builder.
+    pub fn manual_cluster_with_builder(
+        &self,
+        builder: TopologyBuilder,
+    ) -> Result<LocalManualCluster, ManualClusterError> {
+        LocalManualCluster::from_builder(builder)
+    }
+
     async fn prepare_topology<Caps>(
         scenario: &Scenario<Caps>,
         membership_check: bool,
@@ -158,9 +187,7 @@ impl LocalDeployer {
 
         info!(nodes = descriptors.nodes().len(), "spawning local nodes");
 
-        let topology = descriptors
-            .clone()
-            .spawn_local()
+        let topology = LocalNodeManager::spawn_initial_topology(descriptors)
             .await
             .map_err(|source| LocalDeployerError::Spawn { source })?;
 

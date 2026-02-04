@@ -1,7 +1,7 @@
 use testing_framework_core::{
     manual::ManualClusterHandle,
     nodes::ApiClient,
-    scenario::{DynError, StartNodeOptions, StartedNode},
+    scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
     topology::{
         config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
         readiness::{ReadinessCheck, ReadinessError},
@@ -9,7 +9,7 @@ use testing_framework_core::{
 };
 use thiserror::Error;
 
-use crate::node_control::{LocalDynamicError, LocalDynamicNodes, ReadinessNode};
+use crate::node_control::{LocalNodeManager, LocalNodeManagerError, ReadinessNode};
 
 mod readiness;
 
@@ -23,30 +23,41 @@ pub enum ManualClusterError {
         source: TopologyBuildError,
     },
     #[error(transparent)]
-    Dynamic(#[from] LocalDynamicError),
+    Dynamic(#[from] LocalNodeManagerError),
 }
 
 /// Imperative, in-process cluster that can start nodes on demand.
 pub struct LocalManualCluster {
-    nodes: LocalDynamicNodes,
+    nodes: LocalNodeManager,
 }
 
 impl LocalManualCluster {
-    pub(crate) fn from_config(config: TopologyConfig) -> Result<Self, ManualClusterError> {
-        let builder = TopologyBuilder::new(config);
+    pub(crate) fn from_builder(builder: TopologyBuilder) -> Result<Self, ManualClusterError> {
         let descriptors = builder
             .build()
             .map_err(|source| ManualClusterError::Build { source })?;
-        let nodes = LocalDynamicNodes::new(
+
+        let nodes = LocalNodeManager::new(
             descriptors,
             testing_framework_core::scenario::NodeClients::default(),
         );
+
         Ok(Self { nodes })
+    }
+
+    pub(crate) fn from_config(config: TopologyConfig) -> Result<Self, ManualClusterError> {
+        let builder = TopologyBuilder::new(config);
+        Self::from_builder(builder)
     }
 
     #[must_use]
     pub fn node_client(&self, name: &str) -> Option<ApiClient> {
         self.nodes.node_client(name)
+    }
+
+    #[must_use]
+    pub fn node_pid(&self, name: &str) -> Option<u32> {
+        self.nodes.node_pid(name)
     }
 
     pub async fn start_node(&self, name: &str) -> Result<StartedNode, ManualClusterError> {
@@ -66,6 +77,14 @@ impl LocalManualCluster {
 
     pub fn stop_all(&self) {
         self.nodes.stop_all();
+    }
+
+    pub async fn restart_node(&self, name: &str) -> Result<(), ManualClusterError> {
+        Ok(self.nodes.restart_node(name).await?)
+    }
+
+    pub async fn stop_node(&self, name: &str) -> Result<(), ManualClusterError> {
+        Ok(self.nodes.stop_node(name).await?)
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
@@ -89,6 +108,44 @@ impl LocalManualCluster {
 impl Drop for LocalManualCluster {
     fn drop(&mut self) {
         self.stop_all();
+    }
+}
+
+#[async_trait::async_trait]
+impl NodeControlHandle for LocalManualCluster {
+    async fn restart_node(&self, name: &str) -> Result<(), DynError> {
+        self.nodes
+            .restart_node(name)
+            .await
+            .map_err(|err| err.into())
+    }
+
+    async fn stop_node(&self, name: &str) -> Result<(), DynError> {
+        self.nodes.stop_node(name).await.map_err(|err| err.into())
+    }
+
+    async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {
+        self.start_node_with(name, StartNodeOptions::default())
+            .await
+            .map_err(|err| err.into())
+    }
+
+    async fn start_node_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions,
+    ) -> Result<StartedNode, DynError> {
+        self.start_node_with(name, options)
+            .await
+            .map_err(|err| err.into())
+    }
+
+    fn node_client(&self, name: &str) -> Option<ApiClient> {
+        self.node_client(name)
+    }
+
+    fn node_pid(&self, name: &str) -> Option<u32> {
+        self.node_pid(name)
     }
 }
 

@@ -23,5 +23,7 @@ tracing-subscriber               = { features = ["env-filter", "fmt"], version =
 [dev-dependencies]
 async-trait = { workspace = true }
 
+[features]
+
 [lints]
 workspace = true

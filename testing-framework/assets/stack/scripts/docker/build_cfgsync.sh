@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RUSTFLAGS='--cfg feature="pol-dev-mode"' \
+RUSTFLAGS='--cfg feature="high-active-slot-coefficient"' \
   cargo build --all-features --manifest-path /workspace/testing-framework/tools/cfgsync_tf/Cargo.toml --bins
 
 cp /workspace/target/debug/cfgsync-server /workspace/artifacts/cfgsync-server

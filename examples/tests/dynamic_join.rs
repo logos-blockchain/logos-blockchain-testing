@@ -85,6 +85,7 @@ impl Workload for JoinNodeWithPeersWorkload {
 
         let options = StartNodeOptions {
             peers: PeerSelection::Named(self.peers.clone()),
+            config_patch: None,
         };
         let node = handle.start_node_with(&self.name, options).await?;
         let client = node.api;

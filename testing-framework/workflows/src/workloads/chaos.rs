@@ -44,7 +44,7 @@ impl RandomRestartWorkload {
         if self.include_nodes {
             if node_count > 1 {
                 for index in 0..node_count {
-                    targets.push(Target::Node(index));
+                    targets.push(Target::Node(format!("node-{index}")));
                 }
             } else if node_count == 1 {
                 info!("chaos restart skipping nodes: only one node configured");
@@ -76,7 +76,7 @@ impl RandomRestartWorkload {
         let ready = now.checked_sub(self.target_cooldown).unwrap_or(now);
         targets
             .iter()
-            .copied()
+            .cloned()
             .map(|target| (target, ready))
             .collect()
     }
@@ -111,16 +111,16 @@ impl RandomRestartWorkload {
 
             let available: Vec<Target> = targets
                 .iter()
-                .copied()
+                .cloned()
                 .filter(|target| cooldowns.get(target).is_none_or(|ready| *ready <= now))
                 .collect();
 
-            if let Some(choice) = available.choose(&mut thread_rng()).copied() {
+            if let Some(choice) = available.choose(&mut thread_rng()).cloned() {
                 tracing::debug!(?choice, "chaos restart picked target");
                 return Ok(choice);
             }
 
-            if let Some(choice) = targets.choose(&mut thread_rng()).copied() {
+            if let Some(choice) = targets.choose(&mut thread_rng()).cloned() {
                 return Ok(choice);
             }
             return Err("chaos restart workload has no eligible targets".into());
@@ -158,10 +158,10 @@ impl Workload for RandomRestartWorkload {
             let target = self.pick_target(&targets, &cooldowns).await?;
 
             match target {
-                Target::Node(index) => {
-                    tracing::info!(index, "chaos restarting node");
+                Target::Node(ref name) => {
+                    tracing::info!(name, "chaos restarting node");
                     handle
-                        .restart_node(index)
+                        .restart_node(name)
                         .await
                         .map_err(|err| format!("node restart failed: {err}"))?
                 }
@@ -172,7 +172,7 @@ impl Workload for RandomRestartWorkload {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum Target {
-    Node(usize),
+    Node(String),
 }

@@ -32,6 +32,7 @@ const EPOCH_TRANSITION_SLOTS: u64 = 2_600;
 const SAFETY_BUFFER_INTERVALS: u64 = 100;
 const MESSAGE_FREQUENCY_PER_ROUND: f64 = 1.0;
 const MAX_RELEASE_DELAY_ROUNDS: u64 = 3;
+const DATA_REPLICATION_FACTOR: u64 = 0;
 
 pub(crate) fn build_blend_service_config(
     config: &TopologyBlendConfig,
@@ -106,6 +107,7 @@ fn build_blend_deployment_settings(
         common: blend_deployment::CommonSettings {
             num_blend_layers: unsafe { NonZeroU64::new_unchecked(BLEND_LAYERS_COUNT) },
             minimum_network_size: unsafe { NonZeroU64::new_unchecked(MINIMUM_NETWORK_SIZE) },
+            data_replication_factor: DATA_REPLICATION_FACTOR,
             timing: TimingSettings {
                 round_duration: Duration::from_secs(ROUND_DURATION_SECS),
                 rounds_per_interval: unsafe { NonZeroU64::new_unchecked(ROUNDS_PER_INTERVAL) },

@@ -50,8 +50,8 @@ git checkout "${LOGOS_BLOCKCHAIN_NODE_REV}"
 git reset --hard
 git clean -fdx
 
-# Enable pol-dev-mode via cfg to let POL_PROOF_DEV_MODE short-circuit proofs in tests.
-RUSTFLAGS='--cfg feature="pol-dev-mode"' \
+# Enable high-active-slot-coefficient via cfg to keep test blocks frequent.
+RUSTFLAGS='--cfg feature="high-active-slot-coefficient"' \
   cargo build --features "testing" -p logos-blockchain-node
 
 cp /tmp/nomos-node/target/debug/logos-blockchain-node /workspace/artifacts/logos-blockchain-node

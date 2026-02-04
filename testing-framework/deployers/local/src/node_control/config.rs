@@ -8,16 +8,16 @@ use testing_framework_config::topology::configs::{
     runtime::{build_general_config_for_node, build_initial_peers},
     time::GeneralTimeConfig,
 };
-use testing_framework_core::{
+pub(crate) use testing_framework_core::{
     scenario::{PeerSelection, StartNodeOptions},
     topology::{
-        config::TopologyConfig,
+        config::{NodeConfigPatch, TopologyConfig},
         configs::GeneralConfig,
         generation::{GeneratedNodeConfig, GeneratedTopology},
     },
 };
 
-use super::LocalDynamicError;
+use super::LocalNodeManagerError;
 
 pub(super) fn build_general_config_for(
     descriptors: &GeneratedTopology,
@@ -27,7 +27,7 @@ pub(super) fn build_general_config_for(
     peer_ports_by_name: &HashMap<String, u16>,
     options: &StartNodeOptions,
     peer_ports: &[u16],
-) -> Result<(GeneralConfig, u16), LocalDynamicError> {
+) -> Result<(GeneralConfig, u16, Option<NodeConfigPatch>), LocalNodeManagerError> {
     if let Some(node) = descriptor_for(descriptors, index) {
         let mut config = node.general.clone();
         let initial_peers = resolve_initial_peers(
@@ -40,7 +40,7 @@ pub(super) fn build_general_config_for(
 
         config.network_config.backend.initial_peers = initial_peers;
 
-        return Ok((config, node.network_port()));
+        return Ok((config, node.network_port(), node.config_patch.clone()));
     }
 
     let id = random_node_id();
@@ -59,9 +59,9 @@ pub(super) fn build_general_config_for(
         base_consensus,
         base_time,
     )
-    .map_err(|source| LocalDynamicError::Config { source })?;
+    .map_err(|source| LocalNodeManagerError::Config { source })?;
 
-    Ok((general_config, network_port))
+    Ok((general_config, network_port, None))
 }
 
 fn descriptor_for(descriptors: &GeneratedTopology, index: usize) -> Option<&GeneratedNodeConfig> {
@@ -71,13 +71,13 @@ fn descriptor_for(descriptors: &GeneratedTopology, index: usize) -> Option<&Gene
 fn resolve_peer_names(
     peer_ports_by_name: &HashMap<String, u16>,
     peer_names: &[String],
-) -> Result<Vec<Multiaddr>, LocalDynamicError> {
+) -> Result<Vec<Multiaddr>, LocalNodeManagerError> {
     let mut peers = Vec::with_capacity(peer_names.len());
     for name in peer_names {
         let port =
             peer_ports_by_name
                 .get(name)
-                .ok_or_else(|| LocalDynamicError::InvalidArgument {
+                .ok_or_else(|| LocalNodeManagerError::InvalidArgument {
                     message: format!("unknown peer name '{name}'"),
                 })?;
         peers.push(testing_framework_config::node_address_from_port(*port));
@@ -91,7 +91,7 @@ fn resolve_initial_peers(
     default_peers: &[Multiaddr],
     descriptors: &GeneratedTopology,
     peer_ports: &[u16],
-) -> Result<Vec<Multiaddr>, LocalDynamicError> {
+) -> Result<Vec<Multiaddr>, LocalNodeManagerError> {
     match &options.peers {
         PeerSelection::Named(names) => resolve_peer_names(peer_ports_by_name, names),
         PeerSelection::DefaultLayout => {
@@ -112,8 +112,8 @@ fn random_node_id() -> [u8; 32] {
     id
 }
 
-fn allocate_udp_port(label: &'static str) -> Result<u16, LocalDynamicError> {
-    get_available_udp_port().ok_or_else(|| LocalDynamicError::PortAllocation {
+fn allocate_udp_port(label: &'static str) -> Result<u16, LocalNodeManagerError> {
+    get_available_udp_port().ok_or_else(|| LocalNodeManagerError::PortAllocation {
         message: format!("failed to allocate free UDP port for {label}"),
     })
 }
