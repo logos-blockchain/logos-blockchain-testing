@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use nomos_core::{
     mantle::GenesisTx as _,
@@ -11,7 +11,7 @@ use testing_framework_config::topology::{
         base::{BaseConfigError, BaseConfigs, build_base_configs},
         consensus::{
             ConsensusConfigError, ConsensusParams, ProviderInfo,
-            create_genesis_tx_with_declarations,
+            create_genesis_tx_with_declarations, sync_utxos_with_genesis,
         },
         network::{Libp2pNetworkLayout, NetworkParams},
         tracing::create_tracing_configs,
@@ -65,6 +65,7 @@ pub struct TopologyConfig {
     pub network_params: NetworkParams,
     pub wallet_config: WalletConfig,
     pub node_config_patches: HashMap<usize, NodeConfigPatch>,
+    pub persist_dirs: HashMap<usize, PathBuf>,
 }
 
 impl TopologyConfig {
@@ -77,6 +78,7 @@ impl TopologyConfig {
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
             node_config_patches: HashMap::new(),
+            persist_dirs: HashMap::new(),
         }
     }
 
@@ -89,6 +91,7 @@ impl TopologyConfig {
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
             node_config_patches: HashMap::new(),
+            persist_dirs: HashMap::new(),
         }
     }
 
@@ -103,6 +106,7 @@ impl TopologyConfig {
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
             node_config_patches: HashMap::new(),
+            persist_dirs: HashMap::new(),
         }
     }
 
@@ -119,6 +123,17 @@ impl TopologyConfig {
     #[must_use]
     pub fn with_node_config_patch(mut self, index: usize, patch: NodeConfigPatch) -> Self {
         self.node_config_patches.insert(index, patch);
+        self
+    }
+
+    #[must_use]
+    pub fn persist_dir(&self, index: usize) -> Option<&PathBuf> {
+        self.persist_dirs.get(&index)
+    }
+
+    #[must_use]
+    pub fn with_persist_dir(mut self, index: usize, dir: PathBuf) -> Self {
+        self.persist_dirs.insert(index, dir);
         self
     }
 }
@@ -160,6 +175,13 @@ impl TopologyBuilder {
     /// Apply a config patch for a specific node index.
     pub fn with_node_config_patch(mut self, index: usize, patch: NodeConfigPatch) -> Self {
         self.config.node_config_patches.insert(index, patch);
+        self
+    }
+
+    #[must_use]
+    /// Apply a persist dir for a specific node index.
+    pub fn with_persist_dir(mut self, index: usize, dir: PathBuf) -> Self {
+        self.config.persist_dirs.insert(index, dir);
         self
     }
 
@@ -240,6 +262,7 @@ impl TopologyBuilder {
             &kms_configs,
             &time_config,
             &config.node_config_patches,
+            &config.persist_dirs,
         )?;
 
         Ok(GeneratedTopology { config, nodes })
@@ -310,10 +333,7 @@ fn apply_consensus_genesis_tx(
 ) -> Result<(), TopologyBuildError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
-        testing_framework_config::topology::configs::consensus::sync_utxos_with_genesis(
-            &mut c.utxos,
-            genesis_tx,
-        )?;
+        sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
     }
     Ok(())
 }
@@ -333,6 +353,7 @@ fn build_node_descriptors(
     kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
     time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
     node_config_patches: &HashMap<usize, NodeConfigPatch>,
+    persist_dirs: &HashMap<usize, PathBuf>,
 ) -> Result<Vec<GeneratedNodeConfig>, TopologyBuildError> {
     let mut nodes = Vec::with_capacity(config.n_nodes);
 
@@ -367,6 +388,7 @@ fn build_node_descriptors(
             general,
             blend_port,
             config_patch: node_config_patches.get(&i).cloned(),
+            persist_dir: persist_dirs.get(&i).cloned(),
         };
 
         nodes.push(descriptor);

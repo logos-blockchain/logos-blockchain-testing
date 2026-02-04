@@ -25,7 +25,7 @@ impl Default for ConsensusLiveness {
 }
 
 const LAG_ALLOWANCE: u64 = 2;
-const MIN_PROGRESS_BLOCKS: u64 = 5;
+const MIN_PROGRESS_BLOCKS: u64 = 3;
 const REQUEST_RETRIES: usize = 15;
 const REQUEST_RETRY_DELAY: Duration = Duration::from_secs(2);
 const MAX_LAG_ALLOWANCE: u64 = 5;
@@ -67,7 +67,7 @@ enum ConsensusLivenessIssue {
 
 #[derive(Debug, Error)]
 enum ConsensusLivenessError {
-    #[error("consensus liveness requires at least one node")]
+    #[error("consensus liveness requires at least one validator")]
     MissingParticipants,
     #[error("consensus liveness violated (target={target}):\n{details}")]
     Violations {

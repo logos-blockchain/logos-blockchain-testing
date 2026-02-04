@@ -153,7 +153,7 @@ async fn hello_consensus_liveness() -> Result<()> {
 
 **Run it:**
 ```bash
-POL_PROOF_DEV_MODE=true cargo test hello_consensus_liveness
+cargo test hello_consensus_liveness
 ```
 
 ---

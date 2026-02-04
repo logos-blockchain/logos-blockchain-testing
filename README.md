@@ -123,7 +123,6 @@ Key environment variables for customization:
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `POL_PROOF_DEV_MODE=true` | **Required** — Disable expensive proof generation (set automatically by `scripts/run/run-examples.sh`) | (none) |
 | `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | Docker image tag for compose/k8s | `logos-blockchain-testing:local` |
 | `LOGOS_BLOCKCHAIN_DEMO_NODES` | Number of nodes | Varies by example |
 | `LOGOS_BLOCKCHAIN_LOG_DIR` | Directory for persistent log files | (temporary) |

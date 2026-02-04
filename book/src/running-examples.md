@@ -99,7 +99,6 @@ scripts/ops/clean.sh --docker
 For manual control, run the `local_runner` binary directly:
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 LOGOS_BLOCKCHAIN_NODE_BIN=/path/to/logos-blockchain-node \
 cargo run -p runner-examples --bin local_runner
 ```
@@ -116,7 +115,6 @@ cargo run -p runner-examples --bin local_runner
 | `LOGOS_BLOCKCHAIN_TESTS_TRACING` | false | Enable debug tracing preset |
 | `LOGOS_BLOCKCHAIN_LOG_LEVEL` | info | Global log level: error, warn, info, debug, trace |
 | `LOGOS_BLOCKCHAIN_LOG_FILTER` | None | Fine-grained module filtering (e.g., `cryptarchia=trace`) |
-| `POL_PROOF_DEV_MODE` | — | **REQUIRED**: Set to `true` for all runners |
 
 **Note:** Requires circuit assets and host binaries. Use `scripts/run/run-examples.sh host` to handle setup automatically.
 
@@ -139,7 +137,6 @@ scripts/build/build_test_image.sh
 
 # 3. Run
 LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 ```
 
@@ -154,7 +151,6 @@ scripts/build/build_test_image.sh
 
 # Run
 LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 ```
 
@@ -169,7 +165,6 @@ cargo run -p runner-examples --bin compose_runner
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | — | Image tag (required, must match built image) |
-| `POL_PROOF_DEV_MODE` | — | **REQUIRED**: Set to `true` for all runners |
 | `LOGOS_BLOCKCHAIN_DEMO_NODES` | 1 | Number of nodes |
 | `LOGOS_BLOCKCHAIN_DEMO_RUN_SECS` | 60 | Run duration in seconds |
 | `COMPOSE_NODE_PAIRS` | — | Alternative topology format: "nodes" (e.g., `3`) |
@@ -232,7 +227,6 @@ export LOGOS_BLOCKCHAIN_TESTNET_IMAGE=your-registry/logos-blockchain-testing:lat
 
 ```bash
 export LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local
-export POL_PROOF_DEV_MODE=true
 cargo run -p runner-examples --bin k8s_runner
 ```
 
@@ -241,7 +235,6 @@ cargo run -p runner-examples --bin k8s_runner
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | — | Image tag (required) |
-| `POL_PROOF_DEV_MODE` | — | **REQUIRED**: Set to `true` for all runners |
 | `LOGOS_BLOCKCHAIN_DEMO_NODES` | 1 | Number of nodes |
 | `LOGOS_BLOCKCHAIN_DEMO_RUN_SECS` | 60 | Run duration in seconds |
 | `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` | None | Prometheus-compatible base URL for runner to query (PromQL) |

@@ -16,7 +16,7 @@ git clone https://github.com/logos-blockchain/logos-blockchain-testing.git
 cd logos-blockchain-testing
 
 # 3. Run your first scenario (downloads dependencies automatically)
-POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -n 1 host
+scripts/run/run-examples.sh -t 60 -n 1 host
 ```
 
 **First run takes 5-10 minutes** (downloads ~120MB circuit assets, builds binaries).
@@ -56,7 +56,7 @@ This handles circuit setup, binary building, and runs a complete scenario: 1 nod
 
 ```bash
 # Requires circuits in place and LOGOS_BLOCKCHAIN_NODE_BIN set
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+cargo run -p runner-examples --bin local_runner
 ```
 
 **Core API Pattern** (simplified example):
@@ -91,8 +91,6 @@ pub async fn run_local_demo() -> Result<()> {
 ```
 
 **Note:** The examples are binaries with `#[tokio::main]`, not test functions. If you want to write integration tests, wrap this pattern in `#[tokio::test]` functions in your own test suite.
-
-**Important:** `POL_PROOF_DEV_MODE=true` disables expensive Groth16 zero-knowledge proof generation for leader election. Without it, proof generation is CPU-intensive and tests will timeout. **This is required for all runners** (local, compose, k8s) for practical testing. Never use in production.
 
 **What you should see:**
 - Nodes spawn as local processes
@@ -213,7 +211,6 @@ scripts/run/run-examples.sh -t 120 -n 3 host
 # Uses LOGOS_BLOCKCHAIN_DEMO_* env vars (or legacy *_DEMO_* vars)
 LOGOS_BLOCKCHAIN_DEMO_NODES=3 \
 LOGOS_BLOCKCHAIN_DEMO_RUN_SECS=120 \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -246,7 +243,6 @@ scripts/build/build_test_image.sh
 
 # Run with Compose
 LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 ```
 

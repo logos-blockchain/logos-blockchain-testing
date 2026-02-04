@@ -65,9 +65,7 @@ Convenience utilities:
 - `compose_runner.rs` — Docker Compose (requires `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` built)
 - `k8s_runner.rs` — Kubernetes (requires cluster + image)
 
-**Run with:** `POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>`
-
-**All runners require `POL_PROOF_DEV_MODE=true`** to avoid expensive proof generation.
+**Run with:** `cargo run -p runner-examples --bin <name>`
 
 ### `scripts/`
 Helper utilities:

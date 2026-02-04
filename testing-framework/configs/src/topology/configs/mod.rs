@@ -13,7 +13,8 @@ use std::cmp;
 
 use blend::GeneralBlendConfig;
 use consensus::{
-    ConsensusConfigError, GeneralConsensusConfig, ProviderInfo, create_genesis_tx_with_declarations,
+    ConsensusConfigError, GeneralConsensusConfig, ProviderInfo,
+    create_genesis_tx_with_declarations, sync_utxos_with_genesis,
 };
 use key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
 use network::GeneralNetworkConfig;
@@ -203,7 +204,7 @@ fn apply_consensus_genesis_tx(
 ) -> Result<(), ConsensusConfigError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
-        consensus::sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
+        sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
     }
 
     Ok(())

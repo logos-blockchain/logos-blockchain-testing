@@ -18,7 +18,6 @@ const CONVERGENCE_POLL: Duration = Duration::from_secs(2);
 async fn manual_cluster_two_clusters_merge() -> Result<()> {
     let _ = try_init();
     // Required env vars (set on the command line when running this test):
-    // - `POL_PROOF_DEV_MODE=true`
     // - `RUST_LOG=info` (optional)
     let config = TopologyConfig::with_node_numbers(2);
     let deployer = LocalDeployer::new();
@@ -33,6 +32,7 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
             StartNodeOptions {
                 peers: PeerSelection::None,
                 config_patch: None,
+                persist_dir: None,
             },
         )
         .await?
@@ -48,6 +48,7 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
             StartNodeOptions {
                 peers: PeerSelection::Named(vec!["node-a".to_owned()]),
                 config_patch: None,
+                persist_dir: None,
             },
         )
         .await?
@@ -81,4 +82,58 @@ async fn manual_cluster_two_clusters_merge() -> Result<()> {
 
         sleep(CONVERGENCE_POLL).await;
     }
+}
+
+#[tokio::test]
+#[ignore = "run manually with `cargo test -p runner-examples -- --ignored manual_cluster_with_persist_dir`"]
+async fn manual_cluster_with_persist_dir() -> Result<()> {
+    use std::path::PathBuf;
+
+    let _ = try_init();
+    // Required env vars (set on the command line when running this test):
+    // - `RUST_LOG=info` (optional)
+    let config = TopologyConfig::with_node_numbers(1);
+    let deployer = LocalDeployer::new();
+    let cluster = deployer.manual_cluster(config)?;
+
+    let persist_dir = PathBuf::from("/tmp/test-node-persist-dir");
+
+    println!("starting validator with persist_dir: {:?}", persist_dir);
+
+    let _node = cluster
+        .start_node_with(
+            "test",
+            StartNodeOptions {
+                peers: PeerSelection::None,
+                config_patch: None,
+                persist_dir: Some(persist_dir.clone()),
+            },
+        )
+        .await?
+        .api;
+
+    println!("validator started, waiting briefly");
+    sleep(Duration::from_secs(5)).await;
+
+    // Drop the cluster to trigger the persist logic
+    drop(cluster);
+
+    println!("cluster dropped, checking if persist_dir exists");
+
+    // Verify the persist_dir was created
+    if !persist_dir.exists() {
+        return Err(anyhow::anyhow!(
+            "persist_dir was not created: {:?}",
+            persist_dir
+        ));
+    }
+
+    println!("persist_dir verified: {:?}", persist_dir);
+
+    // Clean up
+    if persist_dir.exists() {
+        std::fs::remove_dir_all(&persist_dir)?;
+    }
+
+    Ok(())
 }

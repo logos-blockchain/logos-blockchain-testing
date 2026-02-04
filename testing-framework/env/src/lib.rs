@@ -53,11 +53,6 @@ pub fn nomos_testnet_image_pull_policy() -> Option<String> {
 }
 
 #[must_use]
-pub fn pol_proof_dev_mode() -> Option<String> {
-    env::var("POL_PROOF_DEV_MODE").ok()
-}
-
-#[must_use]
 pub fn rust_log() -> Option<String> {
     env::var("RUST_LOG").ok()
 }
