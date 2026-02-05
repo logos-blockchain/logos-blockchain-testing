@@ -71,23 +71,15 @@ pub struct NodeHandle<T> {
     pub(crate) tempdir: TempDir,
     pub(crate) config: T,
     pub(crate) api: ApiClient,
-    pub(crate) persist_dir: Option<PathBuf>,
 }
 
 impl<T> NodeHandle<T> {
-    pub fn new(
-        child: Child,
-        tempdir: TempDir,
-        config: T,
-        api: ApiClient,
-        persist_dir: Option<PathBuf>,
-    ) -> Self {
+    pub fn new(child: Child, tempdir: TempDir, config: T, api: ApiClient) -> Self {
         Self {
             child,
             tempdir,
             config,
             api,
-            persist_dir,
         }
     }
 
@@ -132,8 +124,9 @@ pub fn prepare_node_config<T: NodeConfigCommon>(
     mut config: T,
     log_prefix: &str,
     enable_logging: bool,
+    persist_dir: Option<PathBuf>,
 ) -> Result<PreparedNodeConfig<T>, SpawnNodeError> {
-    let dir = create_tempdir().map_err(|source| SpawnNodeError::TempDir { source })?;
+    let dir = create_tempdir(persist_dir).map_err(|source| SpawnNodeError::TempDir { source })?;
 
     debug!(dir = %dir.path().display(), log_prefix, enable_logging, "preparing node config");
 
@@ -168,7 +161,7 @@ where
     C: NodeConfigCommon + Serialize,
 {
     let (dir, config, addr, testing_addr) =
-        prepare_node_config(config, log_prefix, enable_logging)?;
+        prepare_node_config(config, log_prefix, enable_logging, persist_dir)?;
 
     let config_path = dir.path().join(config_filename);
     write_node_config(&config, &config_path)?;
@@ -177,13 +170,7 @@ where
 
     let child = spawn_node_process(&binary_path, &config_path, dir.path())?;
 
-    let mut handle = NodeHandle::new(
-        child,
-        dir,
-        config,
-        ApiClient::new(addr, testing_addr),
-        persist_dir,
-    );
+    let mut handle = NodeHandle::new(child, dir, config, ApiClient::new(addr, testing_addr));
 
     // Wait for readiness via consensus_info
     let ready = wait_for_consensus_readiness(&handle.api).await;

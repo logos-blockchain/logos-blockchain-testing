@@ -5,7 +5,6 @@ use nomos_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::node::create_node_config;
 use tracing::{debug, info};
 
-use super::{persist_tempdir, persist_tempdir_to, should_persist_tempdir};
 use crate::{
     IS_DEBUG_TRACING,
     nodes::{
@@ -67,22 +66,6 @@ impl Deref for Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        if should_persist_tempdir() {
-            if let Some(ref persist_dir) = self.handle.persist_dir {
-                if let Err(e) = persist_tempdir_to(
-                    &mut self.handle.tempdir,
-                    persist_dir,
-                    "logos-blockchain-node",
-                ) {
-                    debug!(error = ?e, persist_dir = %persist_dir.display(), "failed to persist node tempdir to custom directory");
-                }
-            } else {
-                if let Err(e) = persist_tempdir(&mut self.handle.tempdir, "logos-blockchain-node") {
-                    debug!(error = ?e, "failed to persist node tempdir");
-                }
-            }
-        }
-
         debug!("stopping node process");
         kill_child(&mut self.handle.child);
     }
