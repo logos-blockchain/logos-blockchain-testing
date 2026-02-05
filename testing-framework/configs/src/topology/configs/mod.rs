@@ -116,7 +116,7 @@ pub fn create_general_configs_with_blend_core_subset(
         collect_blend_core_providers(first_consensus, &blend_configs, n_blend_core_nodes)?;
     let ledger_tx = first_consensus.genesis_tx.mantle_tx().ledger_tx.clone();
     let genesis_tx = create_genesis_tx_with_declarations(ledger_tx, providers)?;
-    apply_consensus_genesis_tx(&mut consensus_configs, &genesis_tx);
+    apply_consensus_genesis_tx(&mut consensus_configs, &genesis_tx)?;
 
     // Set Blend and DA keys in KMS of each node config.
     let kms_configs = build_kms_configs(&blend_configs);
@@ -200,10 +200,13 @@ fn collect_blend_core_providers(
 fn apply_consensus_genesis_tx(
     consensus_configs: &mut [GeneralConsensusConfig],
     genesis_tx: &nomos_core::mantle::genesis_tx::GenesisTx,
-) {
+) -> Result<(), ConsensusConfigError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
+        consensus::sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
     }
+
+    Ok(())
 }
 
 fn build_kms_configs(blend_configs: &[GeneralBlendConfig]) -> Vec<PreloadKMSBackendSettings> {

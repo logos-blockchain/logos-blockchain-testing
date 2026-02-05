@@ -8,7 +8,10 @@ use testing_framework_config::topology::configs::{
     GeneralConfig,
     api::GeneralApiConfig,
     base::{BaseConfigError, BaseConfigs, build_base_configs},
-    consensus::{ConsensusConfigError, ConsensusParams, create_genesis_tx_with_declarations},
+    consensus::{
+        ConsensusConfigError, ConsensusParams, create_genesis_tx_with_declarations,
+        sync_utxos_with_genesis,
+    },
     network::NetworkParams,
     time::default_time_config,
     wallet::WalletConfig,
@@ -131,6 +134,7 @@ pub fn try_create_node_configs(
 
     for c in &mut consensus_configs {
         c.genesis_tx = genesis_tx.clone();
+        sync_utxos_with_genesis(&mut c.utxos, &genesis_tx)?;
     }
 
     let kms_configs = create_kms_configs(&blend_configs);

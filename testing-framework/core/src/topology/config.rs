@@ -218,7 +218,7 @@ impl TopologyBuilder {
         let providers = collect_provider_infos(first_consensus, &blend_configs)?;
 
         let genesis_tx = create_consensus_genesis_tx(first_consensus, providers)?;
-        apply_consensus_genesis_tx(&mut consensus_configs, &genesis_tx);
+        apply_consensus_genesis_tx(&mut consensus_configs, &genesis_tx)?;
 
         let kms_configs = create_kms_configs(
             &blend_configs,
@@ -307,10 +307,15 @@ fn create_consensus_genesis_tx(
 fn apply_consensus_genesis_tx(
     consensus_configs: &mut [testing_framework_config::topology::configs::consensus::GeneralConsensusConfig],
     genesis_tx: &nomos_core::mantle::genesis_tx::GenesisTx,
-) {
+) -> Result<(), TopologyBuildError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
+        testing_framework_config::topology::configs::consensus::sync_utxos_with_genesis(
+            &mut c.utxos,
+            genesis_tx,
+        )?;
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
