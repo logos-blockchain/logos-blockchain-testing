@@ -91,14 +91,14 @@ mod tests {
         config::builder::create_node_configs,
         host::{Host, PortOverrides},
     };
-    use groth16::Fr;
-    use key_management_system_service::keys::ZkPublicKey;
-    use nomos_core::{
+    use lb_core::{
         mantle::{GenesisTx as GenesisTxTrait, ledger::NoteId},
         sdp::{ProviderId, ServiceType},
     };
-    use nomos_ledger::LedgerState;
-    use nomos_tracing_service::TracingSettings;
+    use lb_groth16::Fr;
+    use lb_key_management_system_service::keys::ZkPublicKey;
+    use lb_ledger::LedgerState;
+    use lb_tracing_service::TracingSettings;
     use testing_framework_core::{
         scenario::ScenarioBuilder,
         topology::{

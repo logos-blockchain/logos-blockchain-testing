@@ -5,8 +5,8 @@ use std::{
 };
 
 use anyhow::{Context as _, Result as AnyResult};
-use nomos_tracing::metrics::otlp::OtlpMetricsConfig;
-use nomos_tracing_service::MetricsLayer;
+use lb_tracing::metrics::otlp::OtlpMetricsConfig;
+use lb_tracing_service::MetricsLayer;
 use reqwest::Url;
 use serde::Serialize;
 use tempfile::TempDir;

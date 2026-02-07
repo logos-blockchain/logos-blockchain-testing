@@ -1,7 +1,7 @@
 use std::{ops::Deref, path::PathBuf, time::Duration};
 
-use nomos_node::config::RunConfig;
-use nomos_tracing_service::LoggerLayer;
+use lb_node::config::RunConfig;
+use lb_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::node::create_node_config;
 use tracing::{debug, info};
 

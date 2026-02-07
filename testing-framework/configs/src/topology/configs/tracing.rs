@@ -1,9 +1,9 @@
-use nomos_tracing::{
+use lb_tracing::{
     logging::{local::FileConfig, loki::LokiConfig},
     metrics::otlp::OtlpMetricsConfig,
     tracing::otlp::OtlpTracingConfig,
 };
-use nomos_tracing_service::{
+use lb_tracing_service::{
     ConsoleLayer, FilterLayer, LoggerLayer, MetricsLayer, TracingLayer, TracingSettings,
 };
 use testing_framework_env as tf_env;
@@ -40,7 +40,7 @@ impl GeneralTracingConfig {
             .unwrap_or(MetricsLayer::None);
 
         let filter = file_filter_override().unwrap_or_else(|| {
-            nomos_tracing::filter::envfilter::EnvFilterConfig {
+            lb_tracing::filter::envfilter::EnvFilterConfig {
                 filters: std::iter::once(&("nomos", "debug"))
                     .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                     .collect(),
@@ -121,8 +121,8 @@ fn file_log_level() -> Level {
         .unwrap_or(Level::INFO)
 }
 
-fn file_filter_override() -> Option<nomos_tracing::filter::envfilter::EnvFilterConfig> {
-    tf_env::nomos_log_filter().map(|raw| nomos_tracing::filter::envfilter::EnvFilterConfig {
+fn file_filter_override() -> Option<lb_tracing::filter::envfilter::EnvFilterConfig> {
+    tf_env::nomos_log_filter().map(|raw| lb_tracing::filter::envfilter::EnvFilterConfig {
         filters: raw
             .split(',')
             .filter_map(|pair| {

@@ -58,7 +58,7 @@ pub fn rust_log() -> Option<String> {
 }
 
 #[must_use]
-pub fn nomos_time_backend() -> Option<String> {
+pub fn lb_time_service_backend() -> Option<String> {
     env::var("LOGOS_BLOCKCHAIN_TIME_BACKEND").ok()
 }
 

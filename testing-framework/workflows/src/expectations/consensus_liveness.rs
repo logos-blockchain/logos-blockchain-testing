@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use nomos_core::header::HeaderId;
+use lb_core::header::HeaderId;
 use testing_framework_core::{
     nodes::ApiClient,
     scenario::{DynError, Expectation, RunContext},

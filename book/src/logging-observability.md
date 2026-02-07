@@ -45,7 +45,7 @@ See [Environment Variables Reference](environment-variables.md) for complete det
 LOGOS_BLOCKCHAIN_TESTS_TRACING=true \
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
 LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
-LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=info" \
+LOGOS_BLOCKCHAIN_LOG_FILTER="lb_cryptarchia=trace,lb_chain_service=info,lb_chain_network=info" \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -66,18 +66,18 @@ When `LOGOS_BLOCKCHAIN_LOG_DIR` is set, each node writes logs to separate files:
 
 Common target prefixes for `LOGOS_BLOCKCHAIN_LOG_FILTER`:
 
-| Target Prefix | Subsystem |
-|---------------|-----------|
-| `cryptarchia` | Consensus (Cryptarchia) |
-| `nomos_blend` | Mix network/privacy layer |
-| `chain_service` | Chain service (node APIs/state) |
-| `chain_network` | P2P networking |
-| `chain_leader` | Leader election |
+| Target Prefix             | Subsystem |
+|---------------------------|-----------|
+| `lb_cryptarchia`          | Consensus (Cryptarchia) |
+| `lb_blend`                | Mix network/privacy layer |
+| `lb_chain_service`        | Chain service (node APIs/state) |
+| `lb_chain_network`        | P2P networking |
+| `lb_chain_leader_service` | Leader election |
 
 **Example filter:**
 
 ```bash
-LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=info"
+LOGOS_BLOCKCHAIN_LOG_FILTER="lb_cryptarchia=trace,lb_chain_service=info,lb_chain_network=info"
 ```
 
 ---

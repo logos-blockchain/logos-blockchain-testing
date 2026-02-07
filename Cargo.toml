@@ -40,37 +40,37 @@ testing-framework-runner-local   = { default-features = false, path = "testing-f
 testing-framework-workflows      = { default-features = false, path = "testing-framework/workflows" }
 
 # Logos git dependencies (pinned to latest master)
-broadcast-service             = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-broadcast-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-cfgsync_tf                    = { default-features = false, path = "testing-framework/tools/cfgsync_tf" }
-chain-leader                  = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-leader-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-chain-network                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-network-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-chain-service                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-common-http-client            = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-common-http-client", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-cryptarchia-engine            = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-cryptarchia-engine", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-cryptarchia-sync              = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-cryptarchia-sync", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-groth16                       = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-groth16", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-key-management-system-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-key-management-system-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-api                     = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-api-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-blend-message           = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-blend-message", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-blend-service           = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-blend-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-core                    = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-core", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-http-api-common         = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-http-api-common", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-ledger                  = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-ledger", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-libp2p                  = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-libp2p", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-network                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-network-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-node                    = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-node", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-sdp                     = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-sdp-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-time                    = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-time-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-tracing                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tracing", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-tracing-service         = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tracing-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-utils                   = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-utils", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-nomos-wallet                  = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-wallet-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-poc                           = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-poc", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-pol                           = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-pol", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-tests                         = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tests", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-tx-service                    = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tx-service", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-wallet                        = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-wallet", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
-zksign                        = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-zksign", rev = "2392190d88e8ae8271fa9321014ea33324be7c28" }
+cfgsync_tf                       = { default-features = false, path = "testing-framework/tools/cfgsync_tf" }
+lb-api-service                   = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-api-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-blend-message                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-blend-message", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-blend-service                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-blend-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-chain-broadcast-service       = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-broadcast-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-chain-leader-service          = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-leader-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-chain-network                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-network-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-chain-service                 = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-chain-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-common-http-client            = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-common-http-client", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-core                          = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-core", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-cryptarchia-engine            = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-cryptarchia-engine", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-cryptarchia-sync              = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-cryptarchia-sync", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-groth16                       = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-groth16", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-http-api-common               = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-http-api-common", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-key-management-system-service = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-key-management-system-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-ledger                        = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-ledger", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-libp2p                        = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-libp2p", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-network-service               = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-network-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-node                          = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-node", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-poc                           = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-poc", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-pol                           = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-pol", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-sdp-service                   = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-sdp-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-tests                         = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tests", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-time-service                  = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-time-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-tracing                       = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tracing", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-tracing-service               = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tracing-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-tx-service                    = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-tx-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-utils                         = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-utils", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-wallet                        = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-wallet", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-wallet-service                = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-wallet-service", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
+lb-zksign                        = { default-features = false, git = "https://github.com/logos-co/nomos-node.git", package = "logos-blockchain-zksign", rev = "a075fdf3209947572069e7b7b2ff6250576c8831" }
 
 # External crates
 async-trait      = { default-features = false, version = "0.1" }

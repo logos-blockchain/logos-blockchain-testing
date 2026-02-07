@@ -5,19 +5,23 @@ use std::{
     time::Duration,
 };
 
-use chain_network::{BootstrapConfig as ChainBootstrapConfig, OrphanConfig, SyncConfig};
-use chain_service::StartingState;
-use key_management_system_service::keys::Key;
-use nomos_api::ApiServiceSettings;
-use nomos_node::{
+use lb_api_service::ApiServiceSettings;
+use lb_chain_leader_service::LeaderWalletConfig;
+use lb_chain_network::{BootstrapConfig as ChainBootstrapConfig, OrphanConfig, SyncConfig};
+use lb_chain_service::StartingState;
+use lb_core::mantle::Value;
+use lb_key_management_system_service::keys::{Key, secured_key::SecuredKey};
+use lb_node::{
     api::backend::AxumBackendSettings as NodeAxumBackendSettings,
     config::{
         cryptarchia::{
             deployment::{
-                SdpConfig as DeploymentSdpConfig, Settings as CryptarchiaDeploymentSettings,
+                SdpConfig as DeploymentSdpConfig, ServiceParameters,
+                Settings as CryptarchiaDeploymentSettings,
             },
             serde::{
-                Config as CryptarchiaConfig, NetworkConfig as CryptarchiaNetworkConfig,
+                Config as CryptarchiaConfig, LeaderConfig,
+                NetworkConfig as CryptarchiaNetworkConfig,
                 ServiceConfig as CryptarchiaServiceConfig,
             },
         },
@@ -25,7 +29,7 @@ use nomos_node::{
         time::{deployment::Settings as TimeDeploymentSettings, serde::Config as TimeConfig},
     },
 };
-use nomos_wallet::WalletServiceSettings;
+use lb_wallet_service::WalletServiceSettings;
 
 use crate::{nodes::kms::key_id_for_preload_backend, timeouts, topology::configs::GeneralConfig};
 
@@ -35,11 +39,29 @@ const MEMPOOL_PUBSUB_TOPIC: &str = "mantle";
 const STATE_RECORDING_INTERVAL_SECS: u64 = 60;
 const IBD_DOWNLOAD_DELAY_SECS: u64 = 10;
 const MAX_ORPHAN_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
-const API_RATE_LIMIT_PER_SECOND: u64 = 10000;
-const API_RATE_LIMIT_BURST: u32 = 10000;
 const API_MAX_CONCURRENT_REQUESTS: usize = 1000;
 
 pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeploymentSettings {
+    let mantle_service_params = &config
+        .consensus_config
+        .ledger_config
+        .sdp_config
+        .service_params;
+    let node_service_params = mantle_service_params
+        .iter()
+        .map(|(service_type, service_parameters)| {
+            (
+                service_type.clone(),
+                ServiceParameters {
+                    lock_period: service_parameters.lock_period,
+                    inactivity_period: service_parameters.inactivity_period,
+                    retention_period: service_parameters.retention_period,
+                    timestamp: service_parameters.timestamp,
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
     CryptarchiaDeploymentSettings {
         epoch_config: config.consensus_config.ledger_config.epoch_config,
         security_param: config
@@ -48,12 +70,7 @@ pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeplo
             .consensus_config
             .security_param(),
         sdp_config: DeploymentSdpConfig {
-            service_params: config
-                .consensus_config
-                .ledger_config
-                .sdp_config
-                .service_params
-                .clone(),
+            service_params: node_service_params,
             min_stake: config.consensus_config.ledger_config.sdp_config.min_stake,
         },
         gossipsub_protocol: CRYPTARCHIA_GOSSIPSUB_PROTOCOL.to_owned(),
@@ -79,10 +96,10 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
                 genesis_tx: config.consensus_config.genesis_tx.clone(),
             },
             recovery_file: PathBuf::from("recovery/cryptarchia.json"),
-            bootstrap: chain_service::BootstrapConfig {
+            bootstrap: lb_chain_service::BootstrapConfig {
                 prolonged_bootstrap_period: config.bootstrapping_config.prolonged_bootstrap_period,
                 force_bootstrap: false,
-                offline_grace_period: chain_service::OfflineGracePeriodConfig {
+                offline_grace_period: lb_chain_service::OfflineGracePeriodConfig {
                     grace_period: timeouts::grace_period(),
                     state_recording_interval: Duration::from_secs(STATE_RECORDING_INTERVAL_SECS),
                 },
@@ -90,7 +107,7 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
         },
         network: CryptarchiaNetworkConfig {
             bootstrap: ChainBootstrapConfig {
-                ibd: chain_network::IbdConfig {
+                ibd: lb_chain_network::IbdConfig {
                     peers: HashSet::new(),
                     delay_before_new_download: Duration::from_secs(IBD_DOWNLOAD_DELAY_SECS),
                 },
@@ -101,14 +118,20 @@ pub(crate) fn cryptarchia_config(config: &GeneralConfig) -> CryptarchiaConfig {
                 },
             },
         },
+        leader: LeaderConfig {
+            wallet: LeaderWalletConfig {
+                max_tx_fee: Value::MAX,
+                funding_pk: config.consensus_config.funding_sk.as_public_key(),
+            },
+        },
     }
 }
 
 pub(crate) fn time_config(config: &GeneralConfig) -> TimeConfig {
     TimeConfig {
-        backend: nomos_time::backends::NtpTimeBackendSettings {
+        backend: lb_time_service::backends::NtpTimeBackendSettings {
             ntp_server: config.time_config.ntp_server.clone(),
-            ntp_client_settings: nomos_time::backends::ntp::async_client::NTPClientSettings {
+            ntp_client_settings: lb_time_service::backends::ntp::async_client::NTPClientSettings {
                 timeout: config.time_config.timeout,
                 listening_interface: config.time_config.interface.clone(),
             },
@@ -118,13 +141,13 @@ pub(crate) fn time_config(config: &GeneralConfig) -> TimeConfig {
     }
 }
 
-pub(crate) fn mempool_config() -> nomos_node::config::mempool::serde::Config {
-    nomos_node::config::mempool::serde::Config {
+pub(crate) fn mempool_config() -> lb_node::config::mempool::serde::Config {
+    lb_node::config::mempool::serde::Config {
         recovery_path: PathBuf::from("recovery/mempool.json"),
     }
 }
 
-pub(crate) fn tracing_settings(config: &GeneralConfig) -> nomos_tracing_service::TracingSettings {
+pub(crate) fn tracing_settings(config: &GeneralConfig) -> lb_tracing_service::TracingSettings {
     config.tracing_config.tracing_settings.clone()
 }
 
@@ -132,8 +155,6 @@ pub(crate) fn http_config(config: &GeneralConfig) -> ApiServiceSettings<NodeAxum
     ApiServiceSettings {
         backend_settings: NodeAxumBackendSettings {
             address: config.api_config.address,
-            rate_limit_per_second: API_RATE_LIMIT_PER_SECOND,
-            rate_limit_burst: API_RATE_LIMIT_BURST,
             max_concurrent_requests: API_MAX_CONCURRENT_REQUESTS,
             ..Default::default()
         },
@@ -146,8 +167,6 @@ pub(crate) fn testing_http_config(
     ApiServiceSettings {
         backend_settings: NodeAxumBackendSettings {
             address: config.api_config.testing_http_address,
-            rate_limit_per_second: API_RATE_LIMIT_PER_SECOND,
-            rate_limit_burst: API_RATE_LIMIT_BURST,
             max_concurrent_requests: API_MAX_CONCURRENT_REQUESTS,
             ..Default::default()
         },

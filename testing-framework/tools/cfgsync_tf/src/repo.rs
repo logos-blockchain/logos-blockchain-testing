@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use nomos_tracing_service::TracingSettings;
+use lb_tracing_service::TracingSettings;
 use testing_framework_config::topology::configs::{
     GeneralConfig, consensus::ConsensusParams, wallet::WalletConfig,
 };

@@ -1,7 +1,7 @@
 use std::{net::Ipv4Addr, ops::Mul as _, sync::LazyLock, time::Duration};
 
-use nomos_core::sdp::ProviderId;
-use nomos_libp2p::{Multiaddr, PeerId, multiaddr};
+use lb_core::sdp::ProviderId;
+use lb_libp2p::{Multiaddr, PeerId, multiaddr};
 use testing_framework_env as tf_env;
 
 pub mod constants;
@@ -31,17 +31,13 @@ pub fn node_address_from_port(port: u16) -> Multiaddr {
 }
 
 #[must_use]
-pub fn secret_key_to_peer_id(node_key: nomos_libp2p::ed25519::SecretKey) -> PeerId {
-    PeerId::from_public_key(
-        &nomos_libp2p::ed25519::Keypair::from(node_key)
-            .public()
-            .into(),
-    )
+pub fn secret_key_to_peer_id(node_key: lb_libp2p::ed25519::SecretKey) -> PeerId {
+    PeerId::from_public_key(&lb_libp2p::ed25519::Keypair::from(node_key).public().into())
 }
 
 #[must_use]
-pub fn secret_key_to_provider_id(node_key: nomos_libp2p::ed25519::SecretKey) -> ProviderId {
-    let bytes = nomos_libp2p::ed25519::Keypair::from(node_key)
+pub fn secret_key_to_provider_id(node_key: lb_libp2p::ed25519::SecretKey) -> ProviderId {
+    let bytes = lb_libp2p::ed25519::Keypair::from(node_key)
         .public()
         .to_bytes();
     match ProviderId::try_from(bytes) {

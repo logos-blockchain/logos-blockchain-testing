@@ -10,32 +10,33 @@ repository.workspace  = true
 version               = "0.1.0"
 
 [dependencies]
-chain-network                 = { workspace = true }
-chain-service                 = { workspace = true }
-cryptarchia-engine            = { features = ["serde"], workspace = true }
-cryptarchia-sync              = { workspace = true }
-groth16                       = { workspace = true }
-hex                           = { default-features = false, version = "0.4.3" }
-key-management-system-service = { workspace = true }
-nomos-api                     = { workspace = true }
-nomos-blend-service           = { features = ["libp2p"], workspace = true }
-nomos-core                    = { workspace = true }
-nomos-ledger                  = { features = ["serde"], workspace = true }
-nomos-libp2p                  = { workspace = true }
-nomos-node                    = { default-features = false, features = ["testing"], workspace = true }
-nomos-sdp                     = { workspace = true }
-nomos-time                    = { workspace = true }
-nomos-tracing                 = { workspace = true }
-nomos-tracing-service         = { workspace = true }
-nomos-utils                   = { workspace = true }
-nomos-wallet                  = { workspace = true }
-num-bigint                    = { default-features = false, version = "0.4" }
-rand                          = { workspace = true }
-serde                         = { features = ["derive"], workspace = true }
-testing-framework-env         = { workspace = true }
-thiserror                     = { workspace = true }
-time                          = { default-features = true, version = "0.3" }
-tracing                       = { workspace = true }
+hex                              = { default-features = false, version = "0.4.3" }
+lb-api-service                   = { workspace = true }
+lb-blend-service                 = { features = ["libp2p"], workspace = true }
+lb-chain-leader-service          = { workspace = true }
+lb-chain-network                 = { workspace = true }
+lb-chain-service                 = { workspace = true }
+lb-core                          = { workspace = true }
+lb-cryptarchia-engine            = { features = ["serde"], workspace = true }
+lb-cryptarchia-sync              = { workspace = true }
+lb-groth16                       = { workspace = true }
+lb-key-management-system-service = { workspace = true }
+lb-ledger                        = { features = ["serde"], workspace = true }
+lb-libp2p                        = { workspace = true }
+lb-node                          = { default-features = false, features = ["testing"], workspace = true }
+lb-sdp-service                   = { workspace = true }
+lb-time-service                  = { workspace = true }
+lb-tracing                       = { workspace = true }
+lb-tracing-service               = { workspace = true }
+lb-utils                         = { workspace = true }
+lb-wallet-service                = { workspace = true }
+num-bigint                       = { default-features = false, version = "0.4" }
+rand                             = { workspace = true }
+serde                            = { features = ["derive"], workspace = true }
+testing-framework-env            = { workspace = true }
+thiserror                        = { workspace = true }
+time                             = { default-features = true, version = "0.3" }
+tracing                          = { workspace = true }
 
 [lints]
 workspace = true

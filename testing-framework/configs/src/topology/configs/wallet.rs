@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use key_management_system_service::keys::{ZkKey, ZkPublicKey};
+use lb_key_management_system_service::keys::{ZkKey, ZkPublicKey};
 use num_bigint::BigUint;
 
 /// Collection of wallet accounts that should be funded at genesis.

@@ -9,8 +9,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use key_management_system_service::keys::ZkPublicKey;
-use nomos_core::{header::HeaderId, mantle::AuthenticatedMantleTx as _};
+use lb_core::{header::HeaderId, mantle::AuthenticatedMantleTx as _};
+use lb_key_management_system_service::keys::ZkPublicKey;
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
 use thiserror::Error;
 use tokio::{sync::broadcast, time::sleep};

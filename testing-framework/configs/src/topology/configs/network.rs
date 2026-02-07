@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use nomos_libp2p::{
+use lb_libp2p::{
     IdentifySettings, KademliaSettings, Multiaddr, NatSettings, Protocol, ed25519, gossipsub,
 };
-use nomos_node::config::network::serde::{BackendSettings, Config, SwarmConfig};
-use nomos_utils::net::get_available_udp_port;
+use lb_node::config::network::serde::{BackendSettings, Config, SwarmConfig};
+use lb_utils::net::get_available_udp_port;
 use testing_framework_env as tf_env;
 use thiserror::Error;
 
@@ -45,7 +45,7 @@ fn default_swarm_config() -> SwarmConfig {
         gossipsub_config: gossipsub::Config::default(),
         kademlia_config: KademliaSettings::default(),
         identify_config: IdentifySettings::default(),
-        chain_sync_config: cryptarchia_sync::Config::default(),
+        chain_sync_config: lb_cryptarchia_sync::Config::default(),
         nat_config: NatSettings::default(),
     }
 }
@@ -85,7 +85,7 @@ pub fn create_network_configs(
             Ok(SwarmConfig {
                 node_key,
                 port,
-                chain_sync_config: cryptarchia_sync::Config {
+                chain_sync_config: lb_cryptarchia_sync::Config {
                     peer_response_timeout: PEER_RESPONSE_TIMEOUT,
                 },
                 nat_config: nat_settings(port)?,
@@ -123,7 +123,7 @@ pub fn build_network_config_for_node(
     let swarm_config = SwarmConfig {
         node_key,
         port,
-        chain_sync_config: cryptarchia_sync::Config {
+        chain_sync_config: lb_cryptarchia_sync::Config {
             peer_response_timeout: PEER_RESPONSE_TIMEOUT,
         },
         nat_config: nat_settings(port)?,

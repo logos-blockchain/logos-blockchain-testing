@@ -1,5 +1,5 @@
-use groth16::fr_to_bytes;
-use key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
+use lb_groth16::fr_to_bytes;
+use lb_key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
 use testing_framework_config::topology::configs::blend::GeneralBlendConfig;
 
 pub fn create_kms_configs(blend_configs: &[GeneralBlendConfig]) -> Vec<PreloadKMSBackendSettings> {

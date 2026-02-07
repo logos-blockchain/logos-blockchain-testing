@@ -5,8 +5,8 @@ const DEFAULT_DELAY_BEFORE_NEW_DOWNLOAD_SECS: u64 = 10;
 const DEFAULT_MAX_ORPHAN_CACHE_SIZE: usize = 5;
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
-use nomos_tracing_service::TracingSettings;
-use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
+use lb_tracing_service::TracingSettings;
+use lb_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json, to_value};
 use serde_with::serde_as;

@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use nomos_tracing_service::LoggerLayer;
+use lb_tracing_service::LoggerLayer;
 use reqwest::Url;
 use serde::Serialize;
 use tempfile::TempDir;

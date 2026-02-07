@@ -5,12 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use cryptarchia_engine::EpochConfig;
-use groth16::CompressedGroth16Proof;
-use key_management_system_service::keys::{
-    Ed25519Key, UnsecuredZkKey, ZkKey, ZkPublicKey, ZkSignature,
-};
-use nomos_core::{
+use lb_core::{
     mantle::{
         GenesisTx as GenesisTxTrait, MantleTx, Note, OpProof, Utxo,
         genesis_tx::GenesisTx,
@@ -22,11 +17,17 @@ use nomos_core::{
     },
     sdp::{DeclarationMessage, Locator, ProviderId, ServiceParameters, ServiceType},
 };
-use nomos_node::{SignedMantleTx, Transaction as _};
-use nomos_utils::math::NonNegativeF64;
+use lb_cryptarchia_engine::EpochConfig;
+use lb_groth16::CompressedGroth16Proof;
+use lb_key_management_system_service::keys::{
+    Ed25519Key, UnsecuredZkKey, ZkKey, ZkPublicKey, ZkSignature,
+};
+use lb_node::{SignedMantleTx, Transaction as _};
+use lb_utils::math::NonNegativeF64;
 use num_bigint::BigUint;
 
 use super::wallet::{WalletAccount, WalletConfig};
+use crate::nodes::blend::ACTIVITY_THRESHOLD_SENSITIVITY;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusConfigError {
@@ -101,7 +102,7 @@ impl ProviderInfo {
 pub struct GeneralConsensusConfig {
     pub leader_pk: ZkPublicKey,
     pub leader_sk: UnsecuredZkKey,
-    pub ledger_config: nomos_ledger::Config,
+    pub ledger_config: lb_ledger::Config,
     pub genesis_tx: GenesisTx,
     pub utxos: Vec<Utxo>,
     pub blend_notes: Vec<ServiceNote>,
@@ -161,18 +162,18 @@ fn create_genesis_tx(utxos: &mut [Utxo]) -> Result<GenesisTx, ConsensusConfigErr
 
 fn build_ledger_config(
     consensus_params: &ConsensusParams,
-) -> Result<nomos_ledger::Config, ConsensusConfigError> {
-    Ok(nomos_ledger::Config {
+) -> Result<lb_ledger::Config, ConsensusConfigError> {
+    Ok(lb_ledger::Config {
         epoch_config: EpochConfig {
             epoch_stake_distribution_stabilization: unsafe { NonZero::new_unchecked(3) },
             epoch_period_nonce_buffer: unsafe { NonZero::new_unchecked(3) },
             epoch_period_nonce_stabilization: unsafe { NonZero::new_unchecked(4) },
         },
-        consensus_config: cryptarchia_engine::Config::new(
+        consensus_config: lb_cryptarchia_engine::Config::new(
             consensus_params.security_param,
             consensus_params.active_slot_coeff,
         ),
-        sdp_config: nomos_ledger::mantle::sdp::Config {
+        sdp_config: lb_ledger::mantle::sdp::Config {
             service_params: Arc::new(
                 [(
                     ServiceType::BlendNetwork,
@@ -186,12 +187,12 @@ fn build_ledger_config(
                 )]
                 .into(),
             ),
-            min_stake: nomos_core::sdp::MinStake {
+            min_stake: lb_core::sdp::MinStake {
                 threshold: 1,
                 timestamp: 0,
             },
-            service_rewards_params: nomos_ledger::mantle::sdp::ServiceRewardsParameters {
-                blend: nomos_ledger::mantle::sdp::rewards::blend::RewardsParameters {
+            service_rewards_params: lb_ledger::mantle::sdp::ServiceRewardsParameters {
+                blend: lb_ledger::mantle::sdp::rewards::blend::RewardsParameters {
                     rounds_per_session: unsafe { NonZeroU64::new_unchecked(10) },
                     message_frequency_per_round: NonNegativeF64::try_from(1.0).map_err(|_| {
                         ConsensusConfigError::LedgerConfig {
@@ -201,6 +202,7 @@ fn build_ledger_config(
                     num_blend_layers: unsafe { NonZeroU64::new_unchecked(3) },
                     minimum_network_size: unsafe { NonZeroU64::new_unchecked(1) },
                     data_replication_factor: 0,
+                    activity_threshold_sensitivity: ACTIVITY_THRESHOLD_SENSITIVITY,
                 },
             },
         },
@@ -397,7 +399,7 @@ fn build_genesis_inscription() -> Result<InscriptionOp, ConsensusConfigError> {
 
 fn build_genesis_ops(
     inscription: InscriptionOp,
-    ledger_tx_hash: nomos_core::mantle::TxHash,
+    ledger_tx_hash: lb_core::mantle::TxHash,
     providers: &[ProviderInfo],
 ) -> Vec<Op> {
     let mut ops = Vec::with_capacity(1 + providers.len());
@@ -423,7 +425,7 @@ fn build_genesis_ops(
 }
 
 fn build_genesis_ops_proofs(
-    mantle_tx_hash: nomos_core::mantle::TxHash,
+    mantle_tx_hash: lb_core::mantle::TxHash,
     providers: Vec<ProviderInfo>,
 ) -> Result<Vec<OpProof>, ConsensusConfigError> {
     let mut ops_proofs = Vec::with_capacity(1 + providers.len());

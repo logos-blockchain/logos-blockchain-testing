@@ -1,10 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use nomos_core::{
+use lb_core::{
     mantle::GenesisTx as _,
     sdp::{Locator, ServiceType},
 };
-use nomos_node::config::RunConfig;
+use lb_node::config::RunConfig;
 use testing_framework_config::topology::{
     configs::{
         api::{ApiConfigError, create_api_configs},
@@ -127,11 +127,6 @@ impl TopologyConfig {
     }
 
     #[must_use]
-    pub fn persist_dir(&self, index: usize) -> Option<&PathBuf> {
-        self.persist_dirs.get(&index)
-    }
-
-    #[must_use]
     pub fn with_persist_dir(mut self, index: usize, dir: PathBuf) -> Self {
         self.persist_dirs.insert(index, dir);
         self
@@ -144,6 +139,7 @@ pub struct TopologyBuilder {
     config: TopologyConfig,
     ids: Option<Vec<[u8; 32]>>,
     blend_ports: Option<Vec<u16>>,
+    scenario_base_dir: Option<PathBuf>,
 }
 
 impl TopologyBuilder {
@@ -154,6 +150,7 @@ impl TopologyBuilder {
             config,
             ids: None,
             blend_ports: None,
+            scenario_base_dir: None,
         }
     }
 
@@ -192,6 +189,11 @@ impl TopologyBuilder {
         self
     }
 
+    pub fn with_scenario_base_dir(mut self, scenario_base_dir: Option<PathBuf>) -> Self {
+        self.scenario_base_dir = scenario_base_dir;
+        self
+    }
+
     #[must_use]
     /// Configure the libp2p network layout.
     pub const fn with_network_layout(mut self, layout: Libp2pNetworkLayout) -> Self {
@@ -208,12 +210,19 @@ impl TopologyBuilder {
     /// Finalize and generate topology and node descriptors.
     pub fn build(self) -> Result<GeneratedTopology, TopologyBuildError> {
         let Self {
-            config,
+            mut config,
             ids,
             blend_ports,
+            scenario_base_dir,
         } = self;
 
         let n_participants = participant_count(&config)?;
+        if let Some(base_dir) = scenario_base_dir {
+            for i in 0..n_participants {
+                let dir = base_dir.join(format!("node_{i}"));
+                config = config.with_persist_dir(i, dir);
+            }
+        }
 
         let (ids, blend_ports) = resolve_and_validate_vectors(ids, blend_ports, n_participants)?;
 
@@ -262,7 +271,6 @@ impl TopologyBuilder {
             &kms_configs,
             &time_config,
             &config.node_config_patches,
-            &config.persist_dirs,
         )?;
 
         Ok(GeneratedTopology { config, nodes })
@@ -322,14 +330,14 @@ fn collect_provider_infos(
 fn create_consensus_genesis_tx(
     first_consensus: &testing_framework_config::topology::configs::consensus::GeneralConsensusConfig,
     providers: Vec<ProviderInfo>,
-) -> Result<nomos_core::mantle::genesis_tx::GenesisTx, TopologyBuildError> {
+) -> Result<lb_core::mantle::genesis_tx::GenesisTx, TopologyBuildError> {
     let ledger_tx = first_consensus.genesis_tx.mantle_tx().ledger_tx.clone();
     Ok(create_genesis_tx_with_declarations(ledger_tx, providers)?)
 }
 
 fn apply_consensus_genesis_tx(
     consensus_configs: &mut [testing_framework_config::topology::configs::consensus::GeneralConsensusConfig],
-    genesis_tx: &nomos_core::mantle::genesis_tx::GenesisTx,
+    genesis_tx: &lb_core::mantle::genesis_tx::GenesisTx,
 ) -> Result<(), TopologyBuildError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
@@ -350,10 +358,9 @@ fn build_node_descriptors(
     blend_configs: &[testing_framework_config::topology::configs::blend::GeneralBlendConfig],
     api_configs: &[testing_framework_config::topology::configs::api::GeneralApiConfig],
     tracing_configs: &[testing_framework_config::topology::configs::tracing::GeneralTracingConfig],
-    kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
+    kms_configs: &[lb_key_management_system_service::backend::preload::PreloadKMSBackendSettings],
     time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
     node_config_patches: &HashMap<usize, NodeConfigPatch>,
-    persist_dirs: &HashMap<usize, PathBuf>,
 ) -> Result<Vec<GeneratedNodeConfig>, TopologyBuildError> {
     let mut nodes = Vec::with_capacity(config.n_nodes);
 
@@ -388,7 +395,7 @@ fn build_node_descriptors(
             general,
             blend_port,
             config_patch: node_config_patches.get(&i).cloned(),
-            persist_dir: persist_dirs.get(&i).cloned(),
+            persist_dir: config.persist_dirs.get(&i).cloned(),
         };
 
         nodes.push(descriptor);

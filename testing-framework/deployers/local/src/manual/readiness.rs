@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use nomos_network::backends::libp2p::Libp2pInfo;
+use lb_network_service::backends::libp2p::Libp2pInfo;
 use testing_framework_core::topology::readiness::ReadinessCheck;
 use tokio::time::timeout;
 

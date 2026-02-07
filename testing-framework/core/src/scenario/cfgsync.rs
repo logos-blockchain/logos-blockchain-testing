@@ -1,8 +1,8 @@
 use std::{fs::File, num::NonZero, path::Path, time::Duration};
 
 use anyhow::{Context as _, Result};
-use nomos_tracing_service::TracingSettings;
-use nomos_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
+use lb_tracing_service::TracingSettings;
+use lb_utils::bounded_duration::{MinimalBoundedDuration, SECOND};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use tracing::debug;

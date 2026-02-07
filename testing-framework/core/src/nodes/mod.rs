@@ -3,6 +3,7 @@ pub mod common;
 pub mod node;
 
 use std::{
+    fs,
     io::{Error, ErrorKind},
     path::PathBuf,
     sync::LazyLock,
@@ -20,7 +21,7 @@ pub(crate) fn create_tempdir(custom_work_dir: Option<PathBuf>) -> std::io::Resul
         let final_dir_name = dir
             .components()
             .last()
-            .ok_or(Error::new(ErrorKind::Other, "invalid final directory"))?
+            .ok_or(Error::new(ErrorKind::Other, "Invalid final directory"))?
             .as_os_str()
             .display()
             .to_string()
@@ -28,7 +29,13 @@ pub(crate) fn create_tempdir(custom_work_dir: Option<PathBuf>) -> std::io::Resul
             + "_";
         let parent_dir = dir
             .parent()
-            .ok_or(Error::new(ErrorKind::Other, "invalid parent directory"))?;
+            .ok_or(Error::new(ErrorKind::Other, "Invalid parent directory"))?;
+        fs::create_dir_all(parent_dir).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Error creating parent dir: {}", e),
+            )
+        })?;
         let mut temp_dir = TempDir::with_prefix_in(final_dir_name, parent_dir)?;
         if should_persist_tempdir() {
             temp_dir.disable_cleanup(true);

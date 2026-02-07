@@ -17,8 +17,8 @@ anyhow                   = "1"
 async-trait              = { workspace = true }
 k8s-openapi              = { features = ["latest"], version = "0.20" }
 kube                     = { default-features = false, features = ["client", "runtime", "rustls-tls"], version = "0.87" }
-nomos-tracing            = { workspace = true }
-nomos-tracing-service    = { workspace = true }
+lb-tracing               = { workspace = true }
+lb-tracing-service       = { workspace = true }
 reqwest                  = { features = ["json"], workspace = true }
 serde                    = { features = ["derive"], version = "1" }
 serde_yaml               = { workspace = true }

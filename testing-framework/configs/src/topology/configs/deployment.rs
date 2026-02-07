@@ -1,11 +1,11 @@
 use core::{num::NonZeroU64, time::Duration};
 
-use nomos_blend_service::{
+use lb_blend_service::{
     core::settings::{CoverTrafficSettings, MessageDelayerSettings, SchedulerSettings},
     settings::TimingSettings,
 };
-use nomos_libp2p::protocol_name::StreamProtocol;
-use nomos_node::config::{
+use lb_libp2p::protocol_name::StreamProtocol;
+use lb_node::config::{
     blend::deployment::{
         CommonSettings as BlendCommonSettings, CoreSettings as BlendCoreSettings,
         Settings as BlendDeploymentSettings,
@@ -13,7 +13,7 @@ use nomos_node::config::{
     deployment::{CustomDeployment, Settings as DeploymentSettings},
     network::deployment::Settings as NetworkDeploymentSettings,
 };
-use nomos_utils::math::NonNegativeF64;
+use lb_utils::math::NonNegativeF64;
 
 const DEFAULT_ROUND_DURATION: Duration = Duration::from_secs(1);
 

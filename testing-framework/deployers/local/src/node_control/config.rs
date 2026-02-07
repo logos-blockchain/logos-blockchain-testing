@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use nomos_libp2p::Multiaddr;
-use nomos_utils::net::get_available_udp_port;
+use lb_libp2p::Multiaddr;
+use lb_utils::net::get_available_udp_port;
 use rand::Rng as _;
 use testing_framework_config::topology::configs::{
     consensus,

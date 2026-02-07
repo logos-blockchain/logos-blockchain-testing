@@ -8,9 +8,9 @@ use std::{
 };
 
 use anyhow::{Context as _, Result};
-use nomos_core::{block::Block, mantle::SignedMantleTx};
-use nomos_http_api_common::paths::STORAGE_BLOCK;
-use nomos_node::HeaderId;
+use lb_core::{block::Block, mantle::SignedMantleTx};
+use lb_http_api_common::paths::STORAGE_BLOCK;
+use lb_node::HeaderId;
 use tokio::{sync::broadcast, task::JoinHandle, time::sleep};
 use tracing::{debug, error};
 

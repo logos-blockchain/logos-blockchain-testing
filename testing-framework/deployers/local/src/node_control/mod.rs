@@ -3,7 +3,7 @@ use std::{
     sync::Mutex,
 };
 
-use nomos_node::config::RunConfig;
+use lb_node::config::RunConfig;
 use testing_framework_config::topology::configs::{consensus, time};
 use testing_framework_core::{
     nodes::{

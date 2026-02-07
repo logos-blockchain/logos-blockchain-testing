@@ -127,13 +127,13 @@ ls /tmp/test-logs/
 
 **Common filter targets:**
 
-| Target Prefix | Subsystem |
-|---------------|-----------|
-| `cryptarchia` | Consensus (Cryptarchia) |
-| `nomos_blend` | Mix network/privacy layer |
-| `chain_service` | Chain service (node APIs/state) |
-| `chain_network` | P2P networking |
-| `chain_leader` | Leader election |
+| Target Prefix             | Subsystem |
+|---------------------------|-----------|
+| `lb_cryptarchia`          | Consensus (Cryptarchia) |
+| `lb_blend`                | Mix network/privacy layer |
+| `lb_chain_service`        | Chain service (node APIs/state) |
+| `lb_chain_network`        | P2P networking |
+| `lb_chain_leader_service` | Leader election |
 
 ---
 

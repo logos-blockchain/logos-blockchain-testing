@@ -13,26 +13,26 @@ version     = { workspace = true }
 workspace = true
 
 [dependencies]
-anyhow                        = "1"
-axum                          = { default-features = false, features = ["http1", "http2", "json", "tokio"], version = "0.7.5" }
-clap                          = { default-features = false, version = "4" }
-groth16                       = { workspace = true }
-hex                           = { workspace = true }
-key-management-system-service = { workspace = true }
-nomos-core                    = { workspace = true }
-nomos-libp2p                  = { workspace = true }
-nomos-node                    = { workspace = true }
-nomos-tracing-service         = { workspace = true }
-nomos-utils                   = { workspace = true }
-rand                          = { workspace = true }
-reqwest                       = { workspace = true }
-serde                         = { default-features = false, version = "1" }
-serde_json                    = { default-features = false, version = "1.0" }
-serde_path_to_error           = "0.1"
-serde_with                    = { workspace = true }
-serde_yaml                    = "0.9"
-testing-framework-config      = { workspace = true }
-testing-framework-core        = { path = "../../core" }
-thiserror                     = { workspace = true }
-tokio                         = { default-features = false, features = ["macros", "net", "rt-multi-thread"], version = "1" }
-tracing                       = { workspace = true }
+anyhow                           = "1"
+axum                             = { default-features = false, features = ["http1", "http2", "json", "tokio"], version = "0.7.5" }
+clap                             = { default-features = false, version = "4" }
+hex                              = { workspace = true }
+lb-core                          = { workspace = true }
+lb-groth16                       = { workspace = true }
+lb-key-management-system-service = { workspace = true }
+lb-libp2p                        = { workspace = true }
+lb-node                          = { workspace = true }
+lb-tracing-service               = { workspace = true }
+lb-utils                         = { workspace = true }
+rand                             = { workspace = true }
+reqwest                          = { workspace = true }
+serde                            = { default-features = false, version = "1" }
+serde_json                       = { default-features = false, version = "1.0" }
+serde_path_to_error              = "0.1"
+serde_with                       = { workspace = true }
+serde_yaml                       = "0.9"
+testing-framework-config         = { workspace = true }
+testing-framework-core           = { path = "../../core" }
+thiserror                        = { workspace = true }
+tokio                            = { default-features = false, features = ["macros", "net", "rt-multi-thread"], version = "1" }
+tracing                          = { workspace = true }

@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use nomos_core::{
+use lb_core::{
     block::Block,
     mantle::{
         AuthenticatedMantleTx as _, SignedMantleTx, Transaction as MantleTx,
