@@ -8,7 +8,7 @@ use time::OffsetDateTime;
 
 const DEFAULT_SLOT_TIME: u64 = 1;
 const CONSENSUS_SLOT_TIME_VAR: &str = "CONSENSUS_SLOT_TIME";
-const DEFAULT_NTP_SERVER: &str = "pool.ntp.org";
+const DEFAULT_NTP_SERVER: &str = "pool.ntp.org:123";
 const DEFAULT_NTP_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_NTP_UPDATE_INTERVAL: Duration = Duration::from_secs(16);
 
