@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use nomos_tracing::logging::local::FileConfig;
+use lb_tracing::logging::local::FileConfig;
 use serde::Serialize;
 use serde_yaml::Value;
 use testing_framework_env as tf_env;

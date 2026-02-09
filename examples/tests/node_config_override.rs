@@ -17,7 +17,6 @@ use tracing_subscriber::fmt::try_init;
 async fn manual_cluster_api_port_override() -> Result<()> {
     let _ = try_init();
     // Required env vars (set on the command line when running this test):
-    // - `POL_PROOF_DEV_MODE=true`
     // - `LOGOS_BLOCKCHAIN_NODE_BIN=...`
     // - `LOGOS_BLOCKCHAIN_CIRCUITS=...`
     // - `RUST_LOG=info` (optional)
@@ -33,6 +32,7 @@ async fn manual_cluster_api_port_override() -> Result<()> {
             StartNodeOptions {
                 peers: PeerSelection::None,
                 config_patch: None,
+                persist_dir: None,
             }
             .create_patch(move |mut config| {
                 println!("overriding API port to {api_port}");
@@ -62,7 +62,6 @@ async fn manual_cluster_api_port_override() -> Result<()> {
 async fn scenario_builder_api_port_override() -> Result<()> {
     let _ = try_init();
     // Required env vars (set on the command line when running this test):
-    // - `POL_PROOF_DEV_MODE=true`
     // - `LOGOS_BLOCKCHAIN_NODE_BIN=...`
     // - `LOGOS_BLOCKCHAIN_CIRCUITS=...`
     // - `RUST_LOG=info` (optional)

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use futures::future::try_join_all;
-use nomos_http_api_common::paths;
+use lb_http_api_common::paths;
 use reqwest::Client as ReqwestClient;
 use thiserror::Error;
 use tokio::time::{Instant, sleep};

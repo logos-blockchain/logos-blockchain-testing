@@ -13,17 +13,16 @@ version               = "0.1.0"
 workspace = true
 
 [dependencies]
-async-trait                   = "0.1"
-chain-service                 = { workspace = true }
-key-management-system-service = { workspace = true }
-nomos-core                    = { workspace = true }
-rand                          = { workspace = true }
-reqwest                       = { workspace = true }
-testing-framework-config      = { workspace = true }
-testing-framework-core        = { workspace = true }
-thiserror                     = { workspace = true }
-tokio                         = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
-tracing                       = { workspace = true }
+async-trait                      = "0.1"
+lb-core                          = { workspace = true }
+lb-key-management-system-service = { workspace = true }
+rand                             = { workspace = true }
+reqwest                          = { workspace = true }
+testing-framework-config         = { workspace = true }
+testing-framework-core           = { workspace = true }
+thiserror                        = { workspace = true }
+tokio                            = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
+tracing                          = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["chain-service"]

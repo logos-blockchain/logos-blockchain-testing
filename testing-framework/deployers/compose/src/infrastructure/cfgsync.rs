@@ -1,7 +1,7 @@
 use std::{path::Path, process::Command as StdCommand};
 
-use nomos_tracing::metrics::otlp::OtlpMetricsConfig;
-use nomos_tracing_service::MetricsLayer;
+use lb_tracing::metrics::otlp::OtlpMetricsConfig;
+use lb_tracing_service::MetricsLayer;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::cfgsync::{apply_topology_overrides, load_cfgsync_template, write_cfgsync_template},

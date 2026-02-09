@@ -53,17 +53,12 @@ pub fn nomos_testnet_image_pull_policy() -> Option<String> {
 }
 
 #[must_use]
-pub fn pol_proof_dev_mode() -> Option<String> {
-    env::var("POL_PROOF_DEV_MODE").ok()
-}
-
-#[must_use]
 pub fn rust_log() -> Option<String> {
     env::var("RUST_LOG").ok()
 }
 
 #[must_use]
-pub fn nomos_time_backend() -> Option<String> {
+pub fn lb_time_service_backend() -> Option<String> {
     env::var("LOGOS_BLOCKCHAIN_TIME_BACKEND").ok()
 }
 

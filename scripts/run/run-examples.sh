@@ -515,7 +515,6 @@ run_examples::run() {
   echo "==> Running ${BIN} for ${RUN_SECS}s (mode=${MODE}, image=${IMAGE})"
   cd "${ROOT_DIR}"
 
-  POL_PROOF_DEV_MODE=true \
   TESTNET_PRINT_ENDPOINTS=1 \
   LOGOS_BLOCKCHAIN_TESTNET_IMAGE="${IMAGE}" \
   LOGOS_BLOCKCHAIN_NODE_BIN="${LOGOS_BLOCKCHAIN_NODE_BIN:-}" \

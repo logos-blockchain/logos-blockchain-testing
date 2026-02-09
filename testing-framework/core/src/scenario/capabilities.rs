@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use reqwest::Url;
 
@@ -41,6 +41,8 @@ pub struct StartNodeOptions {
     pub peers: PeerSelection,
     /// Optional node config patch applied before spawn.
     pub config_patch: Option<NodeConfigPatch>,
+    /// Optional directory to persist node's tempdir to on stop.
+    pub persist_dir: Option<PathBuf>,
 }
 
 impl Default for StartNodeOptions {
@@ -48,6 +50,7 @@ impl Default for StartNodeOptions {
         Self {
             peers: PeerSelection::DefaultLayout,
             config_patch: None,
+            persist_dir: None,
         }
     }
 }
@@ -55,7 +58,7 @@ impl Default for StartNodeOptions {
 impl StartNodeOptions {
     pub fn create_patch<F>(mut self, f: F) -> Self
     where
-        F: Fn(nomos_node::config::RunConfig) -> Result<nomos_node::config::RunConfig, DynError>
+        F: Fn(lb_node::config::RunConfig) -> Result<lb_node::config::RunConfig, DynError>
             + Send
             + Sync
             + 'static,

@@ -1,9 +1,9 @@
-use key_management_system_service::keys::{Ed25519Key, ZkKey};
-use nomos_core::mantle::{
+use lb_core::mantle::{
     MantleTx, Op, OpProof, SignedMantleTx, Transaction as _,
     ledger::Tx as LedgerTx,
     ops::channel::{ChannelId, MsgId, inscribe::InscriptionOp},
 };
+use lb_key_management_system_service::keys::{Ed25519Key, ZkKey};
 use testing_framework_core::scenario::DynError;
 
 /// Builds a signed inscription transaction with deterministic payload for

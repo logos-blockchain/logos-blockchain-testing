@@ -1,19 +1,19 @@
 use std::{num::NonZeroU64, path::PathBuf, time::Duration};
 
 use blend_serde::Config as BlendUserConfig;
-use key_management_system_service::keys::Key;
-use nomos_blend_service::{
+use lb_blend_service::{
     core::settings::{CoverTrafficSettings, MessageDelayerSettings, SchedulerSettings, ZkSettings},
     settings::TimingSettings,
 };
-use nomos_node::config::{
+use lb_key_management_system_service::keys::Key;
+use lb_node::config::{
     blend::{
         deployment::{self as blend_deployment, Settings as BlendDeploymentSettings},
         serde as blend_serde,
     },
     network::deployment::Settings as NetworkDeploymentSettings,
 };
-use nomos_utils::math::NonNegativeF64;
+use lb_utils::math::NonNegativeF64;
 
 use crate::{
     nodes::kms::key_id_for_preload_backend,
@@ -33,6 +33,7 @@ const SAFETY_BUFFER_INTERVALS: u64 = 100;
 const MESSAGE_FREQUENCY_PER_ROUND: f64 = 1.0;
 const MAX_RELEASE_DELAY_ROUNDS: u64 = 3;
 const DATA_REPLICATION_FACTOR: u64 = 0;
+pub const ACTIVITY_THRESHOLD_SENSITIVITY: u64 = 1;
 
 pub(crate) fn build_blend_service_config(
     config: &TopologyBlendConfig,
@@ -138,19 +139,20 @@ fn build_blend_deployment_settings(
             },
             minimum_messages_coefficient: backend_core.minimum_messages_coefficient,
             normalization_constant: backend_core.normalization_constant,
+            activity_threshold_sensitivity: ACTIVITY_THRESHOLD_SENSITIVITY,
         },
     }
 }
 
 fn build_network_deployment_settings() -> NetworkDeploymentSettings {
     NetworkDeploymentSettings {
-        identify_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
+        identify_protocol_name: lb_libp2p::protocol_name::StreamProtocol::new(
             "/integration/nomos/identify/1.0.0",
         ),
-        kademlia_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
+        kademlia_protocol_name: lb_libp2p::protocol_name::StreamProtocol::new(
             "/integration/nomos/kad/1.0.0",
         ),
-        chain_sync_protocol_name: nomos_libp2p::protocol_name::StreamProtocol::new(
+        chain_sync_protocol_name: lb_libp2p::protocol_name::StreamProtocol::new(
             "/integration/nomos/cryptarchia/sync/1.0.0",
         ),
     }

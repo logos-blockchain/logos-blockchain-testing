@@ -16,8 +16,8 @@ workspace = true
 anyhow                   = "1"
 async-trait              = { workspace = true }
 cfgsync_tf               = { workspace = true }
-nomos-tracing            = { workspace = true }
-nomos-tracing-service    = { workspace = true }
+lb-tracing               = { workspace = true }
+lb-tracing-service       = { workspace = true }
 reqwest                  = { features = ["json"], workspace = true }
 serde                    = { features = ["derive"], workspace = true }
 tempfile                 = { workspace = true }
@@ -32,8 +32,8 @@ url                      = { version = "2" }
 uuid                     = { features = ["v4"], version = "1" }
 
 [dev-dependencies]
-groth16                       = { workspace = true }
-key-management-system-service = { workspace = true }
-nomos-core                    = { workspace = true }
-nomos-ledger                  = { workspace = true }
-zksign                        = { workspace = true }
+lb-core                          = { workspace = true }
+lb-groth16                       = { workspace = true }
+lb-key-management-system-service = { workspace = true }
+lb-ledger                        = { workspace = true }
+lb-zksign                        = { workspace = true }

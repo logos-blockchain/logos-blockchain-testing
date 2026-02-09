@@ -23,7 +23,6 @@ Operational readiness focuses on prerequisites, environment fit, and clear signa
 - Binary bundles for reproducible builds
 
 **Environment Configuration:**
-- `POL_PROOF_DEV_MODE=true` is **REQUIRED for all runners** to avoid expensive proof generation
 - Logging configured via `LOGOS_BLOCKCHAIN_LOG_*` variables
 - Observability endpoints (Prometheus, Grafana) optional but useful
 

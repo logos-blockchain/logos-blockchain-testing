@@ -1,4 +1,4 @@
-use nomos_libp2p::{Multiaddr, PeerId, Protocol};
+use lb_libp2p::{Multiaddr, PeerId, Protocol};
 use thiserror::Error;
 
 use super::address::find_matching_host;

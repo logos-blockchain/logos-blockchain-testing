@@ -78,13 +78,7 @@ ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
    ```
    The workload will fail during `init()` if no wallets are configured.
 
-2. **Proof generation must be fast:**
-   ```bash
-   export POL_PROOF_DEV_MODE=true
-   ```
-   Without this, proof generation takes ~30-60 seconds per transaction, causing timeouts.
-
-3. **Circuit artifacts must be available:**
+2. **Circuit artifacts must be available:**
    - Automatically staged by `scripts/run/run-examples.sh`
    - Or manually via `scripts/setup/setup-logos-blockchain-circuits.sh` (recommended) / `scripts/setup/setup-logos-blockchain-circuits.sh`
 
@@ -108,7 +102,6 @@ Error: Expectation failed: TxInclusionExpectation
   Observed: 127 transactions
   
   Possible causes:
-  - POL_PROOF_DEV_MODE not set (proof generation too slow)
   - Duration too short (nodes still syncing)
   - Node crashes (check logs for panics/OOM)
   - Wallet accounts not seeded (check topology config)
@@ -119,9 +112,8 @@ Error: Expectation failed: TxInclusionExpectation
    ```bash
    grep "proof generation" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
    ```
-2. Verify `POL_PROOF_DEV_MODE=true` was set
-3. Increase duration: `.with_run_duration(Duration::from_secs(120))`
-4. Reduce rate: `.rate(5)` instead of `.rate(10)`
+2. Increase duration: `.with_run_duration(Duration::from_secs(120))`
+3. Reduce rate: `.rate(5)` instead of `.rate(10)`
 
 ---
 
@@ -382,12 +374,11 @@ ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
 When a workload or expectation fails:
 
 1. Check logs: `$LOGOS_BLOCKCHAIN_LOG_DIR/*/` or `docker compose logs` or `kubectl logs`
-2. Verify environment variables: `POL_PROOF_DEV_MODE`, `LOGOS_BLOCKCHAIN_NODE_BIN`, etc.
-3. Check prerequisites: wallets, node control, circuits
-4. Increase duration: Double the run duration and retry
-5. Reduce rates: Half the traffic rates and retry
-6. Check metrics: Prometheus queries for block height and tx count
-7. Reproduce locally: Use local runner for faster iteration
+2. Check prerequisites: wallets, node control, circuits
+3. Increase duration: Double the run duration and retry
+4. Reduce rates: Half the traffic rates and retry
+5. Check metrics: Prometheus queries for block height and tx count
+6. Reproduce locally: Use local runner for faster iteration
 
 ---
 

@@ -1,13 +1,13 @@
 use core::time::Duration;
 use std::{net::Ipv4Addr, num::NonZeroU64};
 
-use key_management_system_service::keys::{Ed25519Key, UnsecuredEd25519Key, ZkKey};
-use nomos_blend_service::{
+use lb_blend_service::{
     core::backends::libp2p::Libp2pBlendBackendSettings as Libp2pCoreBlendBackendSettings,
     edge::backends::libp2p::Libp2pBlendBackendSettings as Libp2pEdgeBlendBackendSettings,
 };
-use nomos_libp2p::{Multiaddr, Protocol, protocol_name::StreamProtocol};
-use nomos_utils::math::NonNegativeF64;
+use lb_key_management_system_service::keys::{Ed25519Key, UnsecuredEd25519Key, ZkKey};
+use lb_libp2p::{Multiaddr, Protocol, protocol_name::StreamProtocol};
+use lb_utils::math::NonNegativeF64;
 use num_bigint::BigUint;
 
 const EDGE_NODE_CONNECTION_TIMEOUT: Duration = Duration::from_secs(1);

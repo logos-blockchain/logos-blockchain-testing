@@ -2,27 +2,6 @@
 
 Complete reference of environment variables used by the testing framework, organized by category.
 
-## Critical Variables
-
-These MUST be set for successful test runs:
-
-| Variable | Required | Default | Effect |
-|----------|----------|---------|--------|
-| `POL_PROOF_DEV_MODE` | **YES** | — | **REQUIRED for all runners**. Set to `true` to use fast dev-mode proving instead of expensive Groth16. Without this, tests will hang/timeout. |
-
-**Example:**
-
-```bash
-export POL_PROOF_DEV_MODE=true
-```
-
-Or add to your shell profile (`~/.bashrc`, `~/.zshrc`):
-
-```bash
-# Required for nomos-testing framework
-export POL_PROOF_DEV_MODE=true
-```
-
 ---
 
 ## Runner Selection & Topology
@@ -138,7 +117,6 @@ Control node log output (not framework runner logs):
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
 LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
 LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # Inspect logs
@@ -149,13 +127,13 @@ ls /tmp/test-logs/
 
 **Common filter targets:**
 
-| Target Prefix | Subsystem |
-|---------------|-----------|
-| `cryptarchia` | Consensus (Cryptarchia) |
-| `nomos_blend` | Mix network/privacy layer |
-| `chain_service` | Chain service (node APIs/state) |
-| `chain_network` | P2P networking |
-| `chain_leader` | Leader election |
+| Target Prefix             | Subsystem |
+|---------------------------|-----------|
+| `lb_cryptarchia`          | Consensus (Cryptarchia) |
+| `lb_blend`                | Mix network/privacy layer |
+| `lb_chain_service`        | Chain service (node APIs/state) |
+| `lb_chain_network`        | P2P networking |
+| `lb_chain_leader_service` | Leader election |
 
 ---
 
@@ -303,7 +281,6 @@ Node-level configuration passed through to logos-blockchain-node:
 # Faster block production
 CONSENSUS_SLOT_TIME=5 \
 CONSENSUS_ACTIVE_SLOT_COEFF=0.9 \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -350,14 +327,12 @@ Variables used by helper scripts (`scripts/run/run-examples.sh`, etc.):
 ### Minimal Host Run
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
 ### Debug Logging (Host)
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/logs \
 LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
 LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
@@ -367,7 +342,6 @@ scripts/run/run-examples.sh -t 60 -n 3 host
 ### Compose with Observability
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://localhost:9090 \
 LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000 \
 scripts/run/run-examples.sh -t 60 -n 3 compose
@@ -376,7 +350,6 @@ scripts/run/run-examples.sh -t 60 -n 3 compose
 ### K8s with Debug
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 K8S_RUNNER_NAMESPACE=nomos-debug \
 K8S_RUNNER_DEBUG=1 \
 K8S_RUNNER_PRESERVE=1 \
@@ -387,7 +360,6 @@ scripts/run/run-examples.sh -t 60 -n 3 k8s
 
 ```yaml
 env:
-  POL_PROOF_DEV_MODE: true
   RUST_BACKTRACE: 1
   LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS: 1
 ```

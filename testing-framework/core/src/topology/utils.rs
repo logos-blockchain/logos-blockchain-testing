@@ -1,8 +1,8 @@
 use std::{collections::HashMap, iter};
 
-use groth16::fr_to_bytes;
-use key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
-use nomos_utils::net::get_available_udp_port;
+use lb_groth16::fr_to_bytes;
+use lb_key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
+use lb_utils::net::get_available_udp_port;
 use rand::{Rng, thread_rng};
 use thiserror::Error;
 
@@ -120,10 +120,10 @@ pub fn resolve_ports(
     Ok(resolved)
 }
 
-pub fn multiaddr_port(addr: &nomos_libp2p::Multiaddr) -> Option<u16> {
+pub fn multiaddr_port(addr: &lb_libp2p::Multiaddr) -> Option<u16> {
     for protocol in addr {
         match protocol {
-            nomos_libp2p::Protocol::Udp(port) | nomos_libp2p::Protocol::Tcp(port) => {
+            lb_libp2p::Protocol::Udp(port) | lb_libp2p::Protocol::Tcp(port) => {
                 return Some(port);
             }
             _ => {}

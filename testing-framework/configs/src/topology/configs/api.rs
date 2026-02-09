@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use nomos_utils::net::get_available_tcp_port;
+use lb_utils::net::get_available_tcp_port;
 use thiserror::Error;
 
 const LOCALHOST: [u8; 4] = [127, 0, 0, 1];

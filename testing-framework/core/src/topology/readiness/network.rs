@@ -1,5 +1,5 @@
-use nomos_libp2p::PeerId;
-use nomos_network::backends::libp2p::Libp2pInfo;
+use lb_libp2p::PeerId;
+use lb_network_service::backends::libp2p::Libp2pInfo;
 use reqwest::{Client, Url};
 use thiserror::Error;
 use tracing::warn;
@@ -135,12 +135,12 @@ pub async fn try_fetch_network_info(
     client: &Client,
     base: &Url,
 ) -> Result<Libp2pInfo, NetworkInfoError> {
-    let path = nomos_http_api_common::paths::NETWORK_INFO.trim_start_matches('/');
+    let path = lb_http_api_common::paths::NETWORK_INFO.trim_start_matches('/');
     let url = base
         .join(path)
         .map_err(|source| NetworkInfoError::JoinUrl {
             base: base.clone(),
-            path: nomos_http_api_common::paths::NETWORK_INFO,
+            path: lb_http_api_common::paths::NETWORK_INFO,
             message: source.to_string(),
         })?;
 

@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use nomos_tracing_service::LoggerLayer;
+use lb_tracing_service::LoggerLayer;
 use reqwest::Url;
 use serde::Serialize;
 use tempfile::TempDir;
@@ -124,8 +124,9 @@ pub fn prepare_node_config<T: NodeConfigCommon>(
     mut config: T,
     log_prefix: &str,
     enable_logging: bool,
+    persist_dir: Option<PathBuf>,
 ) -> Result<PreparedNodeConfig<T>, SpawnNodeError> {
-    let dir = create_tempdir().map_err(|source| SpawnNodeError::TempDir { source })?;
+    let dir = create_tempdir(persist_dir).map_err(|source| SpawnNodeError::TempDir { source })?;
 
     debug!(dir = %dir.path().display(), log_prefix, enable_logging, "preparing node config");
 
@@ -154,12 +155,13 @@ pub async fn spawn_node<C>(
     config_filename: &str,
     binary_path: PathBuf,
     enable_logging: bool,
+    persist_dir: Option<PathBuf>,
 ) -> Result<NodeHandle<C>, SpawnNodeError>
 where
     C: NodeConfigCommon + Serialize,
 {
     let (dir, config, addr, testing_addr) =
-        prepare_node_config(config, log_prefix, enable_logging)?;
+        prepare_node_config(config, log_prefix, enable_logging, persist_dir)?;
 
     let config_path = dir.path().join(config_filename);
     write_node_config(&config, &config_path)?;

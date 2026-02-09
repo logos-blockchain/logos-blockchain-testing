@@ -38,10 +38,6 @@
   Also called "correctness expectations."
 - **Mantle transaction**: transaction type in Logos that can contain UTXO transfers
   (LedgerTx) and operations (Op).
-- **POL_PROOF_DEV_MODE**: environment variable that disables expensive Groth16 zero-knowledge
-  proof generation for leader election. **Required for all runners** (local, compose, k8s)
-  for practical testing—without it, proof generation causes timeouts. Should never be
-  used in production environments.
 
 ---
 

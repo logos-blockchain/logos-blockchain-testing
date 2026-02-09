@@ -13,15 +13,16 @@ use std::cmp;
 
 use blend::GeneralBlendConfig;
 use consensus::{
-    ConsensusConfigError, GeneralConsensusConfig, ProviderInfo, create_genesis_tx_with_declarations,
+    ConsensusConfigError, GeneralConsensusConfig, ProviderInfo,
+    create_genesis_tx_with_declarations, sync_utxos_with_genesis,
 };
-use key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
-use network::GeneralNetworkConfig;
-use nomos_core::{
+use lb_core::{
     mantle::GenesisTx as _,
     sdp::{Locator, ServiceType},
 };
-use nomos_utils::net::get_available_udp_port;
+use lb_key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
+use lb_utils::net::get_available_udp_port;
+use network::GeneralNetworkConfig;
 use rand::{Rng as _, thread_rng};
 use tracing::GeneralTracingConfig;
 use wallet::WalletConfig;
@@ -199,11 +200,11 @@ fn collect_blend_core_providers(
 
 fn apply_consensus_genesis_tx(
     consensus_configs: &mut [GeneralConsensusConfig],
-    genesis_tx: &nomos_core::mantle::genesis_tx::GenesisTx,
+    genesis_tx: &lb_core::mantle::genesis_tx::GenesisTx,
 ) -> Result<(), ConsensusConfigError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
-        consensus::sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
+        sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
     }
 
     Ok(())

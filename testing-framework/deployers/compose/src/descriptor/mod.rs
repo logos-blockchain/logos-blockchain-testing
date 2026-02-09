@@ -119,12 +119,10 @@ fn default_extra_hosts() -> Vec<String> {
 }
 
 fn base_environment(cfgsync_port: u16) -> Vec<EnvEntry> {
-    let pol_mode = tf_env::pol_proof_dev_mode().unwrap_or_else(|| "true".to_string());
     let rust_log = tf_env::rust_log().unwrap_or_else(|| "info".to_string());
     let nomos_log_level = tf_env::nomos_log_level().unwrap_or_else(|| "info".to_string());
-    let time_backend = tf_env::nomos_time_backend().unwrap_or_else(|| "monotonic".into());
+    let time_backend = tf_env::lb_time_service_backend().unwrap_or_else(|| "monotonic".into());
     vec![
-        EnvEntry::new("POL_PROOF_DEV_MODE", pol_mode),
         EnvEntry::new("RUST_LOG", rust_log),
         EnvEntry::new("LOGOS_BLOCKCHAIN_LOG_LEVEL", nomos_log_level),
         EnvEntry::new("LOGOS_BLOCKCHAIN_TIME_BACKEND", time_backend),

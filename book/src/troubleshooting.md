@@ -2,7 +2,6 @@
 
 **Prerequisites for All Runners:**
 - **`versions.env` file** at repository root (required by helper scripts)
-- **`POL_PROOF_DEV_MODE=true`** MUST be set for all runners (host, compose, k8s) to avoid expensive Groth16 proof generation that causes timeouts
 - **Circuit assets** must be present and `LOGOS_BLOCKCHAIN_CIRCUITS` must point to a directory that contains them
 
 **Platform/Environment Notes:**
@@ -18,7 +17,6 @@
 
 Common symptoms and likely causes:
 
-- **No or slow block progression**: missing `POL_PROOF_DEV_MODE=true`, missing circuit assets, too-short run window, port conflicts, or resource exhaustion—set required env vars, verify assets exist, extend duration, check node logs for startup errors.
 - **Transactions not included**: unfunded or misconfigured wallets (check `.wallets(N)` vs `.users(M)`), transaction rate exceeding block capacity, or rates exceeding block production speed—reduce rate, increase wallet count, verify wallet setup in logs.
 - **Chaos stalls the run**: chaos (node control) only works with ComposeDeployer; host runner (LocalDeployer) and K8sDeployer don't support it (won't "stall", just can't execute chaos workloads). With compose, aggressive restart cadence can prevent consensus recovery—widen restart intervals.
 - **Observability gaps**: metrics or logs unreachable because ports clash or services are not exposed—adjust observability ports and confirm runner wiring.
@@ -28,40 +26,7 @@ Common symptoms and likely causes:
 
 This section shows what you'll actually see when common issues occur. Each example includes realistic console output and the fix.
 
-### 1. Missing `POL_PROOF_DEV_MODE=true` (Most Common!)
-
-**Symptoms:**
-- Test "hangs" with no visible progress
-- CPU usage spikes to 100%
-- Eventually hits timeout after several minutes
-- Nodes appear to start but blocks aren't produced
-
-**What you'll see:**
-
-```text
-$ cargo run -p runner-examples --bin local_runner
-    Finished dev [unoptimized + debuginfo] target(s) in 0.48s
-     Running `target/debug/local_runner`
-[INFO  runner_examples::local_runner] Starting local runner scenario
-[INFO  testing_framework_runner_local] Launching 3 nodes
-[INFO  testing_framework_runner_local] Waiting for node readiness...
-(hangs here for 5+ minutes, CPU at 100%)
-thread 'main' panicked at 'readiness timeout expired'
-```
-
-**Root Cause:** Groth16 proof generation is extremely slow without dev mode. The system tries to compute real cryptographic proofs, which can take minutes per block.
-
-**Fix:**
-
-```bash
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
-```
-
-**Prevention:** Set this in your shell profile or `.env` file so you never forget it.
-
----
-
-### 2. Missing `versions.env` File
+### 1. Missing `versions.env` File
 
 **Symptoms:**
 - Helper scripts fail immediately
@@ -93,7 +58,7 @@ cat versions.env
 
 ---
 
-### 3. Missing Circuit Assets
+### 2. Missing Circuit Assets
 
 **Symptoms:**
 - Node startup fails early
@@ -102,7 +67,7 @@ cat versions.env
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+$ cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_runner_local] Starting local runner scenario
 Error: circuit assets directory missing or invalid
 thread 'main' panicked at 'workload init failed'
@@ -129,7 +94,7 @@ export LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits
 
 ---
 
-### 4. Node Binaries Not Found
+### 3. Node Binaries Not Found
 
 **Symptoms:**
 - Error about missing `logos-blockchain-node` binary
@@ -139,7 +104,7 @@ export LOGOS_BLOCKCHAIN_CIRCUITS=$HOME/.logos-blockchain-circuits
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+$ cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_runner_local] Spawning node 0
 Error: Os { code: 2, kind: NotFound, message: "No such file or directory" }
 thread 'main' panicked at 'failed to spawn logos-blockchain-node process'
@@ -166,12 +131,12 @@ export LOGOS_BLOCKCHAIN_NODE_BIN=$PWD/target/release/logos-blockchain-node
 
 # Return to testing framework
 cd ../nomos-testing
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+cargo run -p runner-examples --bin local_runner
 ```
 
 ---
 
-### 5. Docker Daemon Not Running (Compose)
+### 4. Docker Daemon Not Running (Compose)
 
 **Symptoms:**
 - Compose tests fail immediately
@@ -208,7 +173,7 @@ sudo usermod -aG docker $USER
 
 ---
 
-### 6. Image Not Found (Compose/K8s)
+### 5. Image Not Found (Compose/K8s)
 
 **Symptoms:**
 - Compose/K8s tests fail during deployment
@@ -218,7 +183,7 @@ sudo usermod -aG docker $USER
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin compose_runner
+$ cargo run -p runner-examples --bin compose_runner
 [INFO  testing_framework_runner_compose] Starting compose deployment
 Error: Failed to pull image 'logos-blockchain-testing:local': No such image
 thread 'main' panicked at 'compose deployment failed'
@@ -255,7 +220,7 @@ kind load docker-image logos-blockchain-testing:local
 
 ---
 
-### 7. Port Conflicts
+### 6. Port Conflicts
 
 **Symptoms:**
 - "Address already in use" errors
@@ -265,7 +230,7 @@ kind load docker-image logos-blockchain-testing:local
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+$ cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_runner_local] Launching node 0 on port 18080
 Error: Os { code: 48, kind: AddrInUse, message: "Address already in use" }
 thread 'main' panicked at 'failed to bind port 18080'
@@ -305,7 +270,7 @@ vim scripts/observability/compose/docker-compose.yml
 
 ---
 
-### 8. Wallet Seeding Failed (Insufficient Funds)
+### 7. Wallet Seeding Failed (Insufficient Funds)
 
 **Symptoms:**
 - Transaction workload reports wallet issues
@@ -315,7 +280,7 @@ vim scripts/observability/compose/docker-compose.yml
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+$ cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_workflows] Starting transaction workload with 10 users
 [ERROR testing_framework_workflows] Wallet seeding failed: requested 10 users but only 3 wallets available
 thread 'main' panicked at 'workload init failed: insufficient wallets'
@@ -340,7 +305,7 @@ let scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
 
 ---
 
-### 9. Resource Exhaustion (OOM / CPU)
+### 8. Resource Exhaustion (OOM / CPU)
 
 **Symptoms:**
 - Nodes crash randomly
@@ -385,7 +350,7 @@ ulimit -n 4096
 
 ---
 
-### 10. Logs Disappear After Run
+### 9. Logs Disappear After Run
 
 **Symptoms:**
 - Test completes but no logs on disk
@@ -395,7 +360,7 @@ ulimit -n 4096
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+$ cargo run -p runner-examples --bin local_runner
 [INFO  runner_examples] Test complete, cleaning up
 [INFO  testing_framework_runner_local] Removing temporary directories
 $ ls .tmp/
@@ -410,7 +375,6 @@ $ ls .tmp/
 # Persist logs to a specific directory
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
 LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1 \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # Logs persist after run
@@ -422,7 +386,7 @@ ls /tmp/test-logs/
 
 ---
 
-### 11. Consensus Timing Too Tight / Run Duration Too Short
+### 10. Consensus Timing Too Tight / Run Duration Too Short
 
 **Symptoms:**
 - "Consensus liveness expectation failed"
@@ -432,7 +396,7 @@ ls /tmp/test-logs/
 **What you'll see:**
 
 ```text
-$ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+$ cargo run -p runner-examples --bin local_runner
 [INFO  testing_framework_core] Starting workloads
 [INFO  testing_framework_core] Run window: 10 seconds
 [INFO  testing_framework_core] Evaluating expectations
@@ -463,7 +427,6 @@ let scenario = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
 # Faster block production (shorter slot time)
 CONSENSUS_SLOT_TIME=5 \
 CONSENSUS_ACTIVE_SLOT_COEFF=0.9 \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -473,17 +436,16 @@ cargo run -p runner-examples --bin local_runner
 
 When a test fails, check these in order:
 
-1. **`POL_PROOF_DEV_MODE=true` is set** (REQUIRED for all runners)
-2. **`versions.env` exists at repo root**
-3. **Circuit assets present** (`LOGOS_BLOCKCHAIN_CIRCUITS` points to a valid directory)
-4. **Node binaries available** (`LOGOS_BLOCKCHAIN_NODE_BIN` set, or using `run-examples.sh`)
-5. **Docker daemon running** (for compose/k8s)
-6. **Docker image built** (`logos-blockchain-testing:local` exists for compose/k8s)
-7. **No port conflicts** (`lsof -i :18080`, kill orphaned processes)
-8. **Sufficient wallets** (`.wallets(N)` ≥ `.users(M)`)
-9. **Enough resources** (Docker memory 8GB+, ulimit -n 4096)
-10. **Run duration appropriate** (long enough for consensus timing)
-11. **Logs persisted** (`LOGOS_BLOCKCHAIN_LOG_DIR` + `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1` if needed)
+1. **`versions.env` exists at repo root**
+2. **Circuit assets present** (`LOGOS_BLOCKCHAIN_CIRCUITS` points to a valid directory)
+3. **Node binaries available** (`LOGOS_BLOCKCHAIN_NODE_BIN` set, or using `run-examples.sh`)
+4. **Docker daemon running** (for compose/k8s)
+5. **Docker image built** (`logos-blockchain-testing:local` exists for compose/k8s)
+6. **No port conflicts** (`lsof -i :18080`, kill orphaned processes)
+7. **Sufficient wallets** (`.wallets(N)` ≥ `.users(M)`)
+8. **Enough resources** (Docker memory 8GB+, ulimit -n 4096)
+9. **Run duration appropriate** (long enough for consensus timing)
+10. **Logs persisted** (`LOGOS_BLOCKCHAIN_LOG_DIR` + `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1` if needed)
 
 **Still stuck?** Check node logs (see [Where to Find Logs](#where-to-find-logs)) for the actual error.
 
@@ -509,14 +471,13 @@ When a test fails, check these in order:
 
 **Console output (default):**
 ```bash
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner 2>&1 | tee test.log
+cargo run -p runner-examples --bin local_runner 2>&1 | tee test.log
 ```
 
 **Persistent file output:**
 ```bash
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/debug-logs \
 LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # Inspect logs (note: filenames include timestamps):
@@ -546,7 +507,6 @@ docker logs --tail 100 <container-id>
 ```bash
 COMPOSE_RUNNER_PRESERVE=1 \
 LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 
 # OR: Use run-examples.sh (handles setup automatically)
@@ -651,7 +611,6 @@ Focus on the first node that exhibited problems or the node with the highest ind
 - "ERROR: versions.env missing" → missing required `versions.env` file at repository root
 - "Failed to bind address" → port conflict
 - "Connection refused" → peer not ready or network issue
-- "Proof verification failed" or "Proof generation timeout" → missing `POL_PROOF_DEV_MODE=true` (REQUIRED for all runners)
 - "Circuit file not found" → missing circuit assets at the path in `LOGOS_BLOCKCHAIN_CIRCUITS`
 - "Insufficient funds" → wallet seeding issue (increase `.wallets(N)` or reduce `.users(M)`)
 
@@ -689,16 +648,14 @@ Run a minimal baseline test (e.g., 2 nodes, consensus liveness only). If it pass
 
 ### "Consensus liveness expectation failed"
 
-- **Cause**: Not enough blocks produced during the run window, missing
-  `POL_PROOF_DEV_MODE=true` (causes slow proof generation), or missing circuit
+- **Cause**: Not enough blocks produced during the run window, missing circuit
   assets.
 - **Fix**:
-  1. Verify `POL_PROOF_DEV_MODE=true` is set (REQUIRED for all runners).
-  2. Verify circuit assets exist at the path referenced by
+  1. Verify circuit assets exist at the path referenced by
      `LOGOS_BLOCKCHAIN_CIRCUITS`.
-  3. Extend `with_run_duration()` to allow more blocks.
-  4. Check node logs for proof generation or circuit asset errors.
-  5. Reduce transaction rate if nodes are overwhelmed.
+  2. Extend `with_run_duration()` to allow more blocks.
+  3. Check node logs for proof generation or circuit asset errors.
+  4. Reduce transaction rate if nodes are overwhelmed.
 
 ### "Wallet seeding failed"
 
@@ -720,11 +677,10 @@ Run a minimal baseline test (e.g., 2 nodes, consensus liveness only). If it pass
 - **Cause**: Nodes didn't become responsive within expected time (often due to
   missing prerequisites).
 - **Fix**:
-  1. **Verify `POL_PROOF_DEV_MODE=true` is set** (REQUIRED for all runners—without
      it, proof generation is too slow).
-  2. Check node logs for startup errors (port conflicts, missing assets).
-  3. Verify network connectivity between nodes.
-  4. Ensure circuit assets are present and `LOGOS_BLOCKCHAIN_CIRCUITS` points to them.
+  1. Check node logs for startup errors (port conflicts, missing assets).
+  2. Verify network connectivity between nodes.
+  3. Ensure circuit assets are present and `LOGOS_BLOCKCHAIN_CIRCUITS` points to them.
 
 ### "ERROR: versions.env missing"
 

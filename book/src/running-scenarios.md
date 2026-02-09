@@ -69,7 +69,6 @@ Notes:
 Run the built-in local examples:
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
@@ -82,7 +81,6 @@ scripts/run/run-examples.sh -t 60 -n 3 host
 Run the built-in compose examples:
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
@@ -95,7 +93,6 @@ scripts/run/run-examples.sh -t 60 -n 3 compose
 Run the built-in k8s examples:
 
 ```bash
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 k8s
 ```
 

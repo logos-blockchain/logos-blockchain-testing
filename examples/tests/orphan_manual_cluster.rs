@@ -25,7 +25,6 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 async fn orphan_manual_cluster() -> Result<()> {
     let _ = try_init();
     // Required env vars (set on the command line when running this test):
-    // - `POL_PROOF_DEV_MODE=true`
     // - `LOGOS_BLOCKCHAIN_NODE_BIN=...`
     // - `NOMOS_KZGRS_PARAMS_PATH=...` (path to KZG params directory/file)
     // - `RUST_LOG=info` (optional; better visibility)

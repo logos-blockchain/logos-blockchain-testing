@@ -128,13 +128,9 @@ strategy:
 
 ## Anti-Patterns to Avoid
 
-**DON'T: Run without POL_PROOF_DEV_MODE**
 ```bash
 # BAD: Will hang/timeout on proof generation
 cargo run -p runner-examples --bin local_runner
-
-# GOOD: Fast mode for testing
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 ```
 
 **DON'T: Use tiny durations**

@@ -1,4 +1,4 @@
-use nomos_libp2p::{Multiaddr, Protocol};
+use lb_libp2p::{Multiaddr, Protocol};
 
 pub fn extract_udp_port(addr: &Multiaddr) -> Option<u16> {
     addr.iter().find_map(|protocol| {

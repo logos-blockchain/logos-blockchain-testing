@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, path::PathBuf, time::Duration};
 
 use reqwest::{Client, Url};
 
@@ -16,6 +16,7 @@ pub struct GeneratedNodeConfig {
     pub general: GeneralConfig,
     pub blend_port: u16,
     pub config_patch: Option<NodeConfigPatch>,
+    pub persist_dir: Option<PathBuf>,
 }
 
 impl GeneratedNodeConfig {

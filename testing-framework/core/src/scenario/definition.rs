@@ -1,6 +1,6 @@
-use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{num::NonZeroUsize, path::PathBuf, sync::Arc, time::Duration};
 
-use nomos_node::config::RunConfig;
+use lb_node::config::RunConfig;
 use thiserror::Error;
 use tracing::{debug, info};
 
@@ -107,6 +107,7 @@ pub struct TopologyConfigurator<Caps> {
     builder: Builder<Caps>,
     nodes: usize,
     network_star: bool,
+    scenario_base_dir: Option<PathBuf>,
 }
 
 impl<Caps: Default> Builder<Caps> {
@@ -286,6 +287,7 @@ impl<Caps> TopologyConfigurator<Caps> {
             builder,
             nodes: 0,
             network_star: false,
+            scenario_base_dir: None,
         }
     }
 
@@ -293,6 +295,13 @@ impl<Caps> TopologyConfigurator<Caps> {
     #[must_use]
     pub fn nodes(mut self, count: usize) -> Self {
         self.nodes = count;
+        self
+    }
+
+    /// Set a base scenario directory for nodes to persist data. If not set,
+    /// nodes will use
+    pub fn scenario_base_dir(mut self, path: PathBuf) -> Self {
+        self.scenario_base_dir = Some(path);
         self
     }
 
@@ -327,7 +336,10 @@ impl<Caps> TopologyConfigurator<Caps> {
     #[must_use]
     pub fn apply(self) -> Builder<Caps> {
         let mut builder = self.builder;
-        builder.topology = builder.topology.with_node_count(self.nodes);
+        builder.topology = builder
+            .topology
+            .with_node_count(self.nodes)
+            .with_scenario_base_dir(self.scenario_base_dir);
 
         if self.network_star {
             builder.topology = builder

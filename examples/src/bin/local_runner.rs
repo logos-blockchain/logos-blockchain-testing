@@ -1,4 +1,4 @@
-use std::{env, process, time::Duration};
+use std::{process, time::Duration};
 
 use anyhow::{Context as _, Result};
 use runner_examples::{DeployerKind, ScenarioBuilderExt as _, demo, read_env_any};
@@ -16,11 +16,6 @@ async fn main() {
     runner_examples::defaults::init_node_log_dir_defaults(DeployerKind::Local);
 
     tracing_subscriber::fmt::init();
-
-    if env::var("POL_PROOF_DEV_MODE").is_err() {
-        warn!("POL_PROOF_DEV_MODE=true is required for the local runner demo");
-        process::exit(1);
-    }
 
     let nodes = read_env_any(&["LOGOS_BLOCKCHAIN_DEMO_NODES"], demo::DEFAULT_NODES);
     let run_secs = read_env_any(&["LOGOS_BLOCKCHAIN_DEMO_RUN_SECS"], demo::DEFAULT_RUN_SECS);

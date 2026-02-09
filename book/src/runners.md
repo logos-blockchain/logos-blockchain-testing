@@ -4,8 +4,6 @@ Runners turn a scenario plan into a live environment while keeping the plan
 unchanged. Choose based on feedback speed, reproducibility, and fidelity. For
 environment and operational considerations, see [Operations Overview](operations-overview.md).
 
-**Important:** All runners require `POL_PROOF_DEV_MODE=true` to avoid expensive Groth16 proof generation that causes timeouts.
-
 ## Host runner (local processes)
 - Launches node processes directly on the host (via `LocalDeployer`).
 - Binary: `local_runner.rs`, script mode: `host`

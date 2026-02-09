@@ -45,8 +45,7 @@ See [Environment Variables Reference](environment-variables.md) for complete det
 LOGOS_BLOCKCHAIN_TESTS_TRACING=true \
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/test-logs \
 LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
-LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=info" \
-POL_PROOF_DEV_MODE=true \
+LOGOS_BLOCKCHAIN_LOG_FILTER="lb_cryptarchia=trace,lb_chain_service=info,lb_chain_network=info" \
 cargo run -p runner-examples --bin local_runner
 ```
 
@@ -67,18 +66,18 @@ When `LOGOS_BLOCKCHAIN_LOG_DIR` is set, each node writes logs to separate files:
 
 Common target prefixes for `LOGOS_BLOCKCHAIN_LOG_FILTER`:
 
-| Target Prefix | Subsystem |
-|---------------|-----------|
-| `cryptarchia` | Consensus (Cryptarchia) |
-| `nomos_blend` | Mix network/privacy layer |
-| `chain_service` | Chain service (node APIs/state) |
-| `chain_network` | P2P networking |
-| `chain_leader` | Leader election |
+| Target Prefix             | Subsystem |
+|---------------------------|-----------|
+| `lb_cryptarchia`          | Consensus (Cryptarchia) |
+| `lb_blend`                | Mix network/privacy layer |
+| `lb_chain_service`        | Chain service (node APIs/state) |
+| `lb_chain_network`        | P2P networking |
+| `lb_chain_leader_service` | Leader election |
 
 **Example filter:**
 
 ```bash
-LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=info"
+LOGOS_BLOCKCHAIN_LOG_FILTER="lb_cryptarchia=trace,lb_chain_service=info,lb_chain_network=info"
 ```
 
 ---
@@ -90,7 +89,7 @@ LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace,chain_service=info,chain_network=
 **Default (temporary directories, auto-cleanup):**
 
 ```bash
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
+cargo run -p runner-examples --bin local_runner
 # Logs written to temporary directories in working directory
 # Automatically cleaned up after test completes
 ```
@@ -99,7 +98,6 @@ POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
 
 ```bash
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/local-logs \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin local_runner
 
 # After test completes:
@@ -137,7 +135,6 @@ To write per-node log files inside containers, set `tracing_settings.logger: !Fi
 ```bash
 # Ensure cfgsync.yaml is configured to log to /logs
 LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-POL_PROOF_DEV_MODE=true \
 cargo run -p runner-examples --bin compose_runner
 
 # After test, copy files from containers:
@@ -257,7 +254,6 @@ scripts/setup/setup-observability.sh compose up
 eval $(scripts/setup/setup-observability.sh compose env)
 
 # Run scenario with metrics
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
@@ -275,7 +271,7 @@ scripts/setup/setup-observability.sh compose up
 eval $(scripts/setup/setup-observability.sh compose env)
 
 export LOGOS_BLOCKCHAIN_GRAFANA_URL=http://localhost:3000
-POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -n 3 compose
+scripts/run/run-examples.sh -t 60 -n 3 compose
 ```
 
 **Default bundled Grafana login:** `admin` / `admin` (see `scripts/observability/compose/docker-compose.yml`).
@@ -322,7 +318,6 @@ flowchart TD
 LOGOS_BLOCKCHAIN_LOG_DIR=/tmp/logs \
 LOGOS_BLOCKCHAIN_LOG_LEVEL=debug \
 LOGOS_BLOCKCHAIN_LOG_FILTER="cryptarchia=trace" \
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 host
 ```
 
@@ -334,7 +329,6 @@ scripts/setup/setup-observability.sh compose up
 eval $(scripts/setup/setup-observability.sh compose env)
 
 # Run with metrics
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 compose
 
 # Access Grafana at http://localhost:3000
@@ -346,7 +340,6 @@ scripts/run/run-examples.sh -t 60 -n 3 compose
 K8S_RUNNER_NAMESPACE=nomos-debug \
 K8S_RUNNER_DEBUG=1 \
 K8S_RUNNER_PRESERVE=1 \
-POL_PROOF_DEV_MODE=true \
 scripts/run/run-examples.sh -t 60 -n 3 k8s
 
 # Inspect logs

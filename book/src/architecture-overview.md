@@ -150,10 +150,8 @@ This handles circuit setup, binary building/bundling, image building, and execut
 **Alternative:** Direct cargo run (requires manual setup):
 
 ```bash
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>
+cargo run -p runner-examples --bin <name>
 ```
-
-**Important:** All runners require `POL_PROOF_DEV_MODE=true` to avoid expensive Groth16 proof generation that causes timeouts.
 
 These binaries use the framework API (`ScenarioBuilder`) to construct and execute scenarios.
 

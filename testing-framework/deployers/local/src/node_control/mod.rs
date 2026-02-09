@@ -3,7 +3,7 @@ use std::{
     sync::Mutex,
 };
 
-use nomos_node::config::RunConfig;
+use lb_node::config::RunConfig;
 use testing_framework_config::topology::configs::{consensus, time};
 use testing_framework_core::{
     nodes::{
@@ -110,7 +110,7 @@ impl LocalNodeManager {
         for node in descriptors.nodes() {
             let label = Self::default_label(node.index());
             let config = create_node_config(node.general.clone());
-            let spawned = Node::spawn(config, &label).await?;
+            let spawned = Node::spawn(config, &label, node.persist_dir.clone()).await?;
             nodes.push(spawned);
         }
 
@@ -335,7 +335,7 @@ impl LocalNodeManager {
         )?;
 
         let api_client = self
-            .spawn_and_register_node(&node_name, network_port, config)
+            .spawn_and_register_node(&node_name, network_port, config, options.persist_dir)
             .await?;
 
         Ok(StartedNode {
@@ -428,8 +428,9 @@ impl LocalNodeManager {
         node_name: &str,
         network_port: u16,
         config: RunConfig,
+        persist_dir: Option<std::path::PathBuf>,
     ) -> Result<ApiClient, LocalNodeManagerError> {
-        let node = Node::spawn(config, node_name)
+        let node = Node::spawn(config, node_name, persist_dir)
             .await
             .map_err(|source| LocalNodeManagerError::Spawn { source })?;
         let client = node.api().clone();

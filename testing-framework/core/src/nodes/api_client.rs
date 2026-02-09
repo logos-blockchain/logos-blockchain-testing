@@ -1,14 +1,14 @@
 use std::net::SocketAddr;
 
-use chain_service::CryptarchiaInfo;
-use common_http_client::CommonHttpClient;
 use hex;
-use nomos_core::{block::Block, mantle::SignedMantleTx};
-use nomos_http_api_common::paths::{
+use lb_chain_service::CryptarchiaInfo;
+use lb_common_http_client::CommonHttpClient;
+use lb_core::{block::Block, mantle::SignedMantleTx};
+use lb_http_api_common::paths::{
     CRYPTARCHIA_HEADERS, CRYPTARCHIA_INFO, MEMPOOL_ADD_TX, NETWORK_INFO, STORAGE_BLOCK,
 };
-use nomos_network::backends::libp2p::Libp2pInfo;
-use nomos_node::HeaderId;
+use lb_network_service::backends::libp2p::Libp2pInfo;
+use lb_node::HeaderId;
 use reqwest::{Client, RequestBuilder, Response, Url};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;

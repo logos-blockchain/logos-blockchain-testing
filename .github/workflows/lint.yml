@@ -239,7 +239,6 @@ jobs:
   host_smoke:
     runs-on: ubuntu-latest
     env:
-      POL_PROOF_DEV_MODE: true
       LOCAL_DEMO_RUN_SECS: 120
       LOCAL_DEMO_VALIDATORS: 1
       LOGOS_BLOCKCHAIN_CIRCUITS: ${{ github.workspace }}/.tmp/logos-blockchain-circuits
@@ -500,7 +499,6 @@ jobs:
 
       - name: Run compose mixed workload binary
         env:
-          POL_PROOF_DEV_MODE: "true"
           COMPOSE_NODE_PAIRS: "1x1"
           LOGOS_BLOCKCHAIN_TESTNET_IMAGE: ${{ env.LOGOS_BLOCKCHAIN_TESTNET_IMAGE }}
           COMPOSE_RUNNER_HOST: "127.0.0.1"

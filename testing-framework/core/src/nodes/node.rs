@@ -1,11 +1,10 @@
 use std::{ops::Deref, path::PathBuf, time::Duration};
 
-use nomos_node::config::RunConfig;
-use nomos_tracing_service::LoggerLayer;
+use lb_node::config::RunConfig;
+use lb_tracing_service::LoggerLayer;
 pub use testing_framework_config::nodes::node::create_node_config;
 use tracing::{debug, info};
 
-use super::{persist_tempdir, should_persist_tempdir};
 use crate::{
     IS_DEBUG_TRACING,
     nodes::{
@@ -67,12 +66,6 @@ impl Deref for Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        if should_persist_tempdir()
-            && let Err(e) = persist_tempdir(&mut self.handle.tempdir, "logos-blockchain-node")
-        {
-            debug!(error = ?e, "failed to persist node tempdir");
-        }
-
         debug!("stopping node process");
         kill_child(&mut self.handle.child);
     }
@@ -96,7 +89,11 @@ impl Node {
         self.handle.wait_for_exit(timeout).await
     }
 
-    pub async fn spawn(config: RunConfig, label: &str) -> Result<Self, SpawnNodeError> {
+    pub async fn spawn(
+        config: RunConfig,
+        label: &str,
+        persist_dir: Option<PathBuf>,
+    ) -> Result<Self, SpawnNodeError> {
         let log_prefix = format!("{LOGS_PREFIX}-{label}");
         let handle = spawn_node(
             config,
@@ -104,6 +101,7 @@ impl Node {
             "node.yaml",
             binary_path(),
             !*IS_DEBUG_TRACING,
+            persist_dir,
         )
         .await?;
 

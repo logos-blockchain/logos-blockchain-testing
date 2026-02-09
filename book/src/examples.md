@@ -15,9 +15,7 @@ and expectations.
 
 **Recommended:** Use `scripts/run/run-examples.sh -t <duration> -n <nodes> <mode>` where mode is `host`, `compose`, or `k8s`.
 
-**Alternative:** Direct cargo run: `POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin <name>`
-
-**All runners require `POL_PROOF_DEV_MODE=true`** to avoid expensive proof generation.
+**Alternative:** Direct cargo run: `cargo run -p runner-examples --bin <name>`
 
 **Code patterns** below show how to build scenarios. Wrap these in `#[tokio::test]` functions for integration tests, or `#[tokio::main]` for binaries.
 

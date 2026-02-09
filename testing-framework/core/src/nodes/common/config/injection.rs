@@ -1,5 +1,5 @@
 use hex;
-use key_management_system_service::keys::{Ed25519Key, Key};
+use lb_key_management_system_service::keys::{Ed25519Key, Key};
 use serde_yaml::{Mapping, Number as YamlNumber, Value};
 use testing_framework_config::nodes::kms::key_id_for_preload_backend;
 

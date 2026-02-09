@@ -1,17 +1,17 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use nomos_core::{
+use lb_core::{
     mantle::GenesisTx as _,
     sdp::{Locator, ServiceType},
 };
-use nomos_node::config::RunConfig;
+use lb_node::config::RunConfig;
 use testing_framework_config::topology::{
     configs::{
         api::{ApiConfigError, create_api_configs},
         base::{BaseConfigError, BaseConfigs, build_base_configs},
         consensus::{
             ConsensusConfigError, ConsensusParams, ProviderInfo,
-            create_genesis_tx_with_declarations,
+            create_genesis_tx_with_declarations, sync_utxos_with_genesis,
         },
         network::{Libp2pNetworkLayout, NetworkParams},
         tracing::create_tracing_configs,
@@ -65,6 +65,7 @@ pub struct TopologyConfig {
     pub network_params: NetworkParams,
     pub wallet_config: WalletConfig,
     pub node_config_patches: HashMap<usize, NodeConfigPatch>,
+    pub persist_dirs: HashMap<usize, PathBuf>,
 }
 
 impl TopologyConfig {
@@ -77,6 +78,7 @@ impl TopologyConfig {
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
             node_config_patches: HashMap::new(),
+            persist_dirs: HashMap::new(),
         }
     }
 
@@ -89,6 +91,7 @@ impl TopologyConfig {
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
             node_config_patches: HashMap::new(),
+            persist_dirs: HashMap::new(),
         }
     }
 
@@ -103,6 +106,7 @@ impl TopologyConfig {
             network_params: NetworkParams::default(),
             wallet_config: WalletConfig::default(),
             node_config_patches: HashMap::new(),
+            persist_dirs: HashMap::new(),
         }
     }
 
@@ -121,6 +125,12 @@ impl TopologyConfig {
         self.node_config_patches.insert(index, patch);
         self
     }
+
+    #[must_use]
+    pub fn with_persist_dir(mut self, index: usize, dir: PathBuf) -> Self {
+        self.persist_dirs.insert(index, dir);
+        self
+    }
 }
 
 /// Builder that produces `GeneratedTopology` instances from a `TopologyConfig`.
@@ -129,6 +139,7 @@ pub struct TopologyBuilder {
     config: TopologyConfig,
     ids: Option<Vec<[u8; 32]>>,
     blend_ports: Option<Vec<u16>>,
+    scenario_base_dir: Option<PathBuf>,
 }
 
 impl TopologyBuilder {
@@ -139,6 +150,7 @@ impl TopologyBuilder {
             config,
             ids: None,
             blend_ports: None,
+            scenario_base_dir: None,
         }
     }
 
@@ -164,9 +176,21 @@ impl TopologyBuilder {
     }
 
     #[must_use]
+    /// Apply a persist dir for a specific node index.
+    pub fn with_persist_dir(mut self, index: usize, dir: PathBuf) -> Self {
+        self.config.persist_dirs.insert(index, dir);
+        self
+    }
+
+    #[must_use]
     /// Set node counts.
     pub const fn with_node_count(mut self, nodes: usize) -> Self {
         self.config.n_nodes = nodes;
+        self
+    }
+
+    pub fn with_scenario_base_dir(mut self, scenario_base_dir: Option<PathBuf>) -> Self {
+        self.scenario_base_dir = scenario_base_dir;
         self
     }
 
@@ -186,12 +210,19 @@ impl TopologyBuilder {
     /// Finalize and generate topology and node descriptors.
     pub fn build(self) -> Result<GeneratedTopology, TopologyBuildError> {
         let Self {
-            config,
+            mut config,
             ids,
             blend_ports,
+            scenario_base_dir,
         } = self;
 
         let n_participants = participant_count(&config)?;
+        if let Some(base_dir) = scenario_base_dir {
+            for i in 0..n_participants {
+                let dir = base_dir.join(format!("node_{i}"));
+                config = config.with_persist_dir(i, dir);
+            }
+        }
 
         let (ids, blend_ports) = resolve_and_validate_vectors(ids, blend_ports, n_participants)?;
 
@@ -299,21 +330,18 @@ fn collect_provider_infos(
 fn create_consensus_genesis_tx(
     first_consensus: &testing_framework_config::topology::configs::consensus::GeneralConsensusConfig,
     providers: Vec<ProviderInfo>,
-) -> Result<nomos_core::mantle::genesis_tx::GenesisTx, TopologyBuildError> {
+) -> Result<lb_core::mantle::genesis_tx::GenesisTx, TopologyBuildError> {
     let ledger_tx = first_consensus.genesis_tx.mantle_tx().ledger_tx.clone();
     Ok(create_genesis_tx_with_declarations(ledger_tx, providers)?)
 }
 
 fn apply_consensus_genesis_tx(
     consensus_configs: &mut [testing_framework_config::topology::configs::consensus::GeneralConsensusConfig],
-    genesis_tx: &nomos_core::mantle::genesis_tx::GenesisTx,
+    genesis_tx: &lb_core::mantle::genesis_tx::GenesisTx,
 ) -> Result<(), TopologyBuildError> {
     for c in consensus_configs {
         c.genesis_tx = genesis_tx.clone();
-        testing_framework_config::topology::configs::consensus::sync_utxos_with_genesis(
-            &mut c.utxos,
-            genesis_tx,
-        )?;
+        sync_utxos_with_genesis(&mut c.utxos, genesis_tx)?;
     }
     Ok(())
 }
@@ -330,7 +358,7 @@ fn build_node_descriptors(
     blend_configs: &[testing_framework_config::topology::configs::blend::GeneralBlendConfig],
     api_configs: &[testing_framework_config::topology::configs::api::GeneralApiConfig],
     tracing_configs: &[testing_framework_config::topology::configs::tracing::GeneralTracingConfig],
-    kms_configs: &[key_management_system_service::backend::preload::PreloadKMSBackendSettings],
+    kms_configs: &[lb_key_management_system_service::backend::preload::PreloadKMSBackendSettings],
     time_config: &testing_framework_config::topology::configs::time::GeneralTimeConfig,
     node_config_patches: &HashMap<usize, NodeConfigPatch>,
 ) -> Result<Vec<GeneratedNodeConfig>, TopologyBuildError> {
@@ -367,6 +395,7 @@ fn build_node_descriptors(
             general,
             blend_port,
             config_patch: node_config_patches.get(&i).cloned(),
+            persist_dir: config.persist_dirs.get(&i).cloned(),
         };
 
         nodes.push(descriptor);

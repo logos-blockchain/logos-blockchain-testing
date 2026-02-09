@@ -39,7 +39,6 @@ on:
     branches: [main]
 
 env:
-  POL_PROOF_DEV_MODE: true
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
@@ -242,17 +241,6 @@ if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 ```
 
 ## Best Practices
-
-### Required: Set POL_PROOF_DEV_MODE
-
-**Always set `POL_PROOF_DEV_MODE=true` globally** in your workflow env:
-
-```yaml
-env:
-  POL_PROOF_DEV_MODE: true  # REQUIRED!
-```
-
-Without this, tests will hang due to expensive proof generation.
 
 ### Use Helper Scripts
 

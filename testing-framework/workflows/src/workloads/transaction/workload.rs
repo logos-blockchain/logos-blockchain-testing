@@ -6,10 +6,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use key_management_system_service::keys::{ZkKey, ZkPublicKey};
-use nomos_core::mantle::{
+use lb_core::mantle::{
     GenesisTx as _, Note, SignedMantleTx, Transaction as _, Utxo, tx_builder::MantleTxBuilder,
 };
+use lb_key_management_system_service::keys::{ZkKey, ZkPublicKey};
 use testing_framework_config::topology::configs::wallet::WalletAccount;
 use testing_framework_core::{
     scenario::{DynError, Expectation, RunContext, RunMetrics, Workload as ScenarioWorkload},

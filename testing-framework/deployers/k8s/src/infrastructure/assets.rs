@@ -5,8 +5,8 @@ use std::{
 };
 
 use anyhow::{Context as _, Result as AnyResult};
-use nomos_tracing::metrics::otlp::OtlpMetricsConfig;
-use nomos_tracing_service::MetricsLayer;
+use lb_tracing::metrics::otlp::OtlpMetricsConfig;
+use lb_tracing_service::MetricsLayer;
 use reqwest::Url;
 use serde::Serialize;
 use tempfile::TempDir;
@@ -291,11 +291,9 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
     let cfgsync = CfgsyncValues {
         port: cfgsync_port(),
     };
-    let pol_mode = pol_proof_mode();
     let image_pull_policy =
         tf_env::nomos_testnet_image_pull_policy().unwrap_or_else(|| "IfNotPresent".into());
-    debug!(pol_mode, "rendering Helm values for k8s stack");
-    let nodes = build_node_group("node", topology.nodes(), &pol_mode);
+    let nodes = build_node_group("node", topology.nodes());
 
     HelmValues {
         image_pull_policy,
@@ -307,12 +305,11 @@ fn build_values(topology: &GeneratedTopology) -> HelmValues {
 fn build_node_group(
     kind: &'static str,
     nodes: &[testing_framework_core::topology::generation::GeneratedNodeConfig],
-    pol_mode: &str,
 ) -> NodeGroup {
     let node_values = nodes
         .iter()
         .enumerate()
-        .map(|(index, node)| build_node_values(kind, index, node, pol_mode))
+        .map(|(index, node)| build_node_values(kind, index, node))
         .collect();
 
     NodeGroup {
@@ -325,10 +322,8 @@ fn build_node_values(
     kind: &'static str,
     index: usize,
     node: &testing_framework_core::topology::generation::GeneratedNodeConfig,
-    pol_mode: &str,
 ) -> NodeValues {
     let mut env = BTreeMap::new();
-    env.insert("POL_PROOF_DEV_MODE".into(), pol_mode.to_string());
     env.insert("CFG_NETWORK_PORT".into(), node.network_port().to_string());
     env.insert("CFG_BLEND_PORT".into(), node.blend_port.to_string());
     env.insert(
@@ -351,8 +346,4 @@ fn build_node_values(
         testing_http_port: node.general.api_config.testing_http_address.port(),
         env,
     }
-}
-
-fn pol_proof_mode() -> String {
-    tf_env::pol_proof_dev_mode().unwrap_or_else(|| "true".to_string())
 }

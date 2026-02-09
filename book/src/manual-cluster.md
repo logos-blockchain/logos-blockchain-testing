@@ -375,7 +375,6 @@ async fn external_driver_example() -> Result<()> {
 
 ```bash
 # Required: dev mode for fast proofs
-POL_PROOF_DEV_MODE=true \
 cargo test -p runner-examples -- --ignored external_driver_example
 ```
 
@@ -385,7 +384,6 @@ cargo test -p runner-examples -- --ignored external_driver_example
 # Preserve logs after test
 LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1 \
 RUST_LOG=info \
-POL_PROOF_DEV_MODE=true \
 cargo test -p runner-examples -- --ignored external_driver_example
 ```
 

@@ -1,8 +1,8 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr as _};
 
-use nomos_core::mantle::GenesisTx as _;
-use nomos_libp2p::{Multiaddr, PeerId, ed25519};
-use nomos_tracing_service::TracingSettings;
+use lb_core::mantle::GenesisTx as _;
+use lb_libp2p::{Multiaddr, PeerId, ed25519};
+use lb_tracing_service::TracingSettings;
 use rand::{Rng as _, thread_rng};
 use testing_framework_config::topology::configs::{
     GeneralConfig,
@@ -165,7 +165,7 @@ pub fn try_create_node_configs(
                 message: source.to_string(),
             }
         })?;
-        network_config.backend.swarm.nat_config = nomos_libp2p::NatSettings::Static {
+        network_config.backend.swarm.nat_config = lb_libp2p::NatSettings::Static {
             external_address: nat_addr,
         };
 

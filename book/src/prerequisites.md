@@ -194,30 +194,6 @@ minikube image load logos-blockchain-testing:local
 - Resource isolation
 - Large topologies
 
-## Critical Environment Variable
-
-**`POL_PROOF_DEV_MODE=true` is REQUIRED for ALL runners!**
-
-Without this, proof generation uses expensive Groth16 proving, causing:
-- Tests "hang" for minutes
-- CPU spikes to 100%
-- Timeouts and failures
-
-**Always set:**
-
-```bash
-POL_PROOF_DEV_MODE=true cargo run -p runner-examples --bin local_runner
-POL_PROOF_DEV_MODE=true scripts/run/run-examples.sh -t 60 -n 3 compose
-# etc.
-```
-
-**Or add to your shell profile:**
-
-```bash
-# ~/.bashrc or ~/.zshrc
-export POL_PROOF_DEV_MODE=true
-```
-
 ## Quick Setup Check
 
 Run this checklist before your first scenario:
@@ -229,16 +205,13 @@ cat versions.env
 # 2. Check circuit assets
 ls -lh "${HOME}/.logos-blockchain-circuits"
 
-# 3. Verify POL_PROOF_DEV_MODE is set
-echo $POL_PROOF_DEV_MODE  # Should print: true
-
-# 4. For compose/k8s: verify Docker is running
+# 3. For compose/k8s: verify Docker is running
 docker ps
 
-# 5. For compose/k8s: verify image exists
+# 4. For compose/k8s: verify image exists
 docker images | grep logos-blockchain-testing
 
-# 6. For host runner: verify node binaries (if not using scripts)
+# 5. For host runner: verify node binaries (if not using scripts)
 $LOGOS_BLOCKCHAIN_NODE_BIN --version
 ```
 

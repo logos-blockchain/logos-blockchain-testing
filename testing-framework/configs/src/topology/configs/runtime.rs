@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
-use nomos_libp2p::Multiaddr;
+use lb_key_management_system_service::{backend::preload::PreloadKMSBackendSettings, keys::Key};
+use lb_libp2p::Multiaddr;
 
 use crate::{
     node_address_from_port,

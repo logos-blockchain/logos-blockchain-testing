@@ -1,4 +1,4 @@
-use nomos_tracing_service::{LoggerLayer, MetricsLayer, TracingLayer, TracingSettings};
+use lb_tracing_service::{LoggerLayer, MetricsLayer, TracingLayer, TracingSettings};
 use testing_framework_config::topology::configs::tracing::GeneralTracingConfig;
 
 pub fn update_tracing_identifier(

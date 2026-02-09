@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use nomos_core::sdp::{Locator, ServiceType};
-use nomos_libp2p::Multiaddr;
+use lb_core::sdp::{Locator, ServiceType};
+use lb_libp2p::Multiaddr;
 use testing_framework_config::topology::configs::{
     blend::GeneralBlendConfig,
     consensus::{GeneralConsensusConfig, ProviderInfo},

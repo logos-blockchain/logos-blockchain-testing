@@ -1,10 +1,10 @@
-use key_management_system_service::keys::secured_key::SecuredKey as _;
-use nomos_core::mantle::Value;
-use nomos_node::{
+use lb_core::mantle::Value;
+use lb_key_management_system_service::keys::secured_key::SecuredKey as _;
+use lb_node::{
     RocksBackendSettings, UserConfig,
     config::{RunConfig, deployment::DeploymentSettings},
 };
-use nomos_sdp::{SdpSettings, wallet::SdpWalletConfig};
+use lb_sdp_service::{SdpSettings, wallet::SdpWalletConfig};
 
 use crate::{
     nodes::{
@@ -56,8 +56,8 @@ pub fn create_node_config(config: GeneralConfig) -> RunConfig {
 
 fn build_node_deployment_settings(
     config: &GeneralConfig,
-    blend_deployment: nomos_node::config::blend::deployment::Settings,
-    network_deployment: nomos_node::config::network::deployment::Settings,
+    blend_deployment: lb_node::config::blend::deployment::Settings,
+    network_deployment: lb_node::config::network::deployment::Settings,
 ) -> DeploymentSettings {
     DeploymentSettings {
         blend: blend_deployment,
