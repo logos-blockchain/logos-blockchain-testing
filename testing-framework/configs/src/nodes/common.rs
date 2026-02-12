@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
     path::PathBuf,
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -29,6 +30,7 @@ use lb_node::{
     },
 };
 use lb_wallet_service::WalletServiceSettings;
+use time::OffsetDateTime;
 
 use crate::{nodes::kms::key_id_for_preload_backend, timeouts, topology::configs::GeneralConfig};
 
@@ -39,6 +41,12 @@ const STATE_RECORDING_INTERVAL_SECS: u64 = 60;
 const IBD_DOWNLOAD_DELAY_SECS: u64 = 10;
 const MAX_ORPHAN_CACHE_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(5) };
 const API_MAX_CONCURRENT_REQUESTS: usize = 1000;
+
+static CHAIN_START_TIME: OnceLock<OffsetDateTime> = OnceLock::new();
+
+fn get_or_init_chain_start_time() -> OffsetDateTime {
+    *CHAIN_START_TIME.get_or_init(OffsetDateTime::now_utc)
+}
 
 pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeploymentSettings {
     let mantle_service_params = &config
@@ -80,6 +88,7 @@ pub(crate) fn cryptarchia_deployment(config: &GeneralConfig) -> CryptarchiaDeplo
 pub(crate) fn time_deployment(config: &GeneralConfig) -> TimeDeploymentSettings {
     TimeDeploymentSettings {
         slot_duration: config.time_config.slot_duration,
+        chain_start_time: get_or_init_chain_start_time(),
     }
 }
 
@@ -134,7 +143,6 @@ pub(crate) fn time_config(config: &GeneralConfig) -> TimeConfig {
             },
             update_interval: config.time_config.update_interval,
         },
-        chain_start_time: config.time_config.chain_start_time,
     }
 }
 

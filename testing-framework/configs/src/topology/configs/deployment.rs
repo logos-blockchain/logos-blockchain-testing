@@ -36,7 +36,7 @@ pub fn default_e2e_deployment_settings() -> DeploymentSettings {
     DeploymentSettings::Custom(CustomDeployment {
         blend: BlendDeploymentSettings {
             common: BlendCommonSettings {
-                minimum_network_size: unsafe { NonZeroU64::new_unchecked(30) },
+                minimum_network_size: unsafe { NonZeroU64::new_unchecked(1) },
                 num_blend_layers: unsafe { NonZeroU64::new_unchecked(3) },
                 timing: TimingSettings {
                     round_duration: DEFAULT_ROUND_DURATION,
@@ -58,7 +58,7 @@ pub fn default_e2e_deployment_settings() -> DeploymentSettings {
                         message_frequency_per_round,
                     },
                     delayer: MessageDelayerSettings {
-                        maximum_release_delay_in_rounds: unsafe { NonZeroU64::new_unchecked(3) },
+                        maximum_release_delay_in_rounds: unsafe { NonZeroU64::new_unchecked(1) },
                     },
                 },
             },
