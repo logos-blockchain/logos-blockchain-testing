@@ -67,6 +67,7 @@ async fn scenario_builder_api_port_override() -> Result<()> {
     let base_descriptors = base_builder.clone().build()?;
     let base_node = base_descriptors.nodes().first().expect("node 0 descriptor");
     let mut run_config = build_node_run_config(
+        &base_descriptors,
         base_node,
         base_descriptors
             .config()

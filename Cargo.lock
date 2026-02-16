@@ -925,7 +925,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_yaml",
- "testing-framework-core 0.1.0",
+ "testing-framework-core",
  "tokio",
 ]
 
@@ -2904,8 +2904,8 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tempfile",
- "testing-framework-core 0.1.0",
- "testing-framework-env 0.1.0",
+ "testing-framework-core",
+ "testing-framework-env",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
  "testing_framework",
@@ -2920,7 +2920,7 @@ name = "lb-workloads"
 version = "0.1.0"
 dependencies = [
  "lb-ext",
- "testing-framework-core 0.1.0",
+ "testing-framework-core",
  "testing_framework",
  "thiserror 2.0.18",
  "tokio",
@@ -5782,7 +5782,7 @@ dependencies = [
  "async-trait",
  "lb-ext",
  "lb-workloads",
- "testing-framework-core 0.1.0",
+ "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
  "testing_framework",
@@ -6503,29 +6503,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "testing-framework-core"
-version = "0.1.0"
-source = "git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641#e9b41263041897b4983b7ee8b4ea495d18a64641"
-dependencies = [
- "async-trait",
- "futures",
- "parking_lot",
- "prometheus-http-query",
- "rand 0.8.5",
- "reqwest",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "testing-framework-env"
 version = "0.1.0"
-
-[[package]]
-name = "testing-framework-env"
-version = "0.1.0"
-source = "git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641#e9b41263041897b4983b7ee8b4ea495d18a64641"
 
 [[package]]
 name = "testing-framework-runner-compose"
@@ -6541,7 +6520,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tera",
- "testing-framework-core 0.1.0",
+ "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -6559,7 +6538,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "reqwest",
- "testing-framework-core 0.1.0",
+ "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -6573,21 +6552,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "tempfile",
- "testing-framework-core 0.1.0",
- "thiserror 2.0.18",
- "tokio",
- "tokio-retry",
- "tracing",
-]
-
-[[package]]
-name = "testing-framework-runner-local"
-version = "0.1.0"
-source = "git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641#e9b41263041897b4983b7ee8b4ea495d18a64641"
-dependencies = [
- "async-trait",
- "tempfile",
- "testing-framework-core 0.1.0 (git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641)",
+ "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -6626,9 +6591,9 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "testing-framework-core 0.1.0 (git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641)",
- "testing-framework-env 0.1.0 (git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641)",
- "testing-framework-runner-local 0.1.0 (git+https://github.com/logos-blockchain/logos-blockchain-testing.git?rev=e9b41263041897b4983b7ee8b4ea495d18a64641)",
+ "testing-framework-core",
+ "testing-framework-env",
+ "testing-framework-runner-local",
  "thiserror 2.0.18",
  "time",
  "tokio",

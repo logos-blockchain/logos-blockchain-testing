@@ -102,3 +102,8 @@ time                = { default-features = false, version = "0.3" }
 tokio               = { default-features = false, version = "1" }
 tracing             = { default-features = false, version = "0.1" }
 uuid                = { default-features = false, version = "1", features = ["v4"] }
+
+[patch."https://github.com/logos-blockchain/logos-blockchain-testing.git"]
+testing-framework-core         = { path = "testing-framework/core" }
+testing-framework-env          = { path = "logos/runtime/env" }
+testing-framework-runner-local = { path = "testing-framework/deployers/local" }
