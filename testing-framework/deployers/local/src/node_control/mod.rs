@@ -182,7 +182,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 .collect()
         };
 
-        if ports.len() <= 1 {
+        if ports.is_empty() {
             return Ok(());
         }
 
