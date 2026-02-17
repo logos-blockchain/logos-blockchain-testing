@@ -73,6 +73,11 @@ impl<E: LocalDeployerEnv> ManualCluster<E> {
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
         self.nodes.wait_network_ready().await
     }
+
+    pub async fn wait_node_ready(&self, name: &str) -> Result<(), ManualClusterError> {
+        self.nodes.wait_node_ready(name).await?;
+        Ok(())
+    }
 }
 
 impl<E: LocalDeployerEnv> Drop for ManualCluster<E> {

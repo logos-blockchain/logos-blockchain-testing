@@ -51,6 +51,11 @@ pub enum NodeManagerError {
         #[source]
         source: DynError,
     },
+    #[error("failed readiness check: {source}")]
+    Readiness {
+        #[source]
+        source: ReadinessError,
+    },
 }
 
 pub struct NodeManager<E: LocalDeployerEnv> {
@@ -189,6 +194,31 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         }
 
         wait_for_http_ports(&ports, E::readiness_endpoint_path()).await
+    }
+
+    pub async fn wait_node_ready(&self, name: &str) -> Result<(), NodeManagerError> {
+        let port = {
+            let state = self.lock_state();
+            let index =
+                *state
+                    .indices_by_name
+                    .get(name)
+                    .ok_or_else(|| NodeManagerError::NodeName {
+                        name: name.to_string(),
+                    })?;
+
+            state
+                .nodes
+                .get(index)
+                .map(|node| node.endpoints().api.port())
+                .ok_or_else(|| NodeManagerError::NodeName {
+                    name: name.to_string(),
+                })?
+        };
+
+        wait_for_http_ports(&[port], E::readiness_endpoint_path())
+            .await
+            .map_err(|source| NodeManagerError::Readiness { source })
     }
 
     pub async fn start_node_with(
