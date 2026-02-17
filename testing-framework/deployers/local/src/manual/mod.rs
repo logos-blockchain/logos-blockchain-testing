@@ -1,57 +1,40 @@
 use testing_framework_core::{
     manual::ManualClusterHandle,
-    nodes::ApiClient,
-    scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
-    topology::{
-        config::{TopologyBuildError, TopologyBuilder, TopologyConfig},
-        readiness::{ReadinessCheck, ReadinessError},
-    },
+    scenario::{DynError, NodeControlHandle, ReadinessError, StartNodeOptions, StartedNode},
 };
 use thiserror::Error;
 
-use crate::node_control::{LocalNodeManager, LocalNodeManagerError, ReadinessNode};
-
-mod readiness;
-
-use readiness::ManualNetworkReadiness;
+use crate::{
+    env::LocalDeployerEnv,
+    keep_tempdir_from_env,
+    node_control::{NodeManager, NodeManagerError, NodeManagerSeed},
+};
 
 #[derive(Debug, Error)]
 pub enum ManualClusterError {
-    #[error("failed to build topology: {source}")]
-    Build {
-        #[source]
-        source: TopologyBuildError,
-    },
     #[error(transparent)]
-    Dynamic(#[from] LocalNodeManagerError),
+    Dynamic(#[from] NodeManagerError),
 }
 
 /// Imperative, in-process cluster that can start nodes on demand.
-pub struct LocalManualCluster {
-    nodes: LocalNodeManager,
+pub struct ManualCluster<E: LocalDeployerEnv> {
+    nodes: NodeManager<E>,
 }
 
-impl LocalManualCluster {
-    pub(crate) fn from_builder(builder: TopologyBuilder) -> Result<Self, ManualClusterError> {
-        let descriptors = builder
-            .build()
-            .map_err(|source| ManualClusterError::Build { source })?;
-
-        let nodes = LocalNodeManager::new(
+impl<E: LocalDeployerEnv> ManualCluster<E> {
+    pub fn from_topology(descriptors: E::Deployment) -> Self {
+        let nodes = NodeManager::new_with_seed(
             descriptors,
             testing_framework_core::scenario::NodeClients::default(),
+            keep_tempdir_from_env(),
+            NodeManagerSeed::default(),
         );
 
-        Ok(Self { nodes })
-    }
-
-    pub(crate) fn from_config(config: TopologyConfig) -> Result<Self, ManualClusterError> {
-        let builder = TopologyBuilder::new(config);
-        Self::from_builder(builder)
+        Self { nodes }
     }
 
     #[must_use]
-    pub fn node_client(&self, name: &str) -> Option<ApiClient> {
+    pub fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.nodes.node_client(name)
     }
 
@@ -60,18 +43,18 @@ impl LocalManualCluster {
         self.nodes.node_pid(name)
     }
 
-    pub async fn start_node(&self, name: &str) -> Result<StartedNode, ManualClusterError> {
+    pub async fn start_node(&self, name: &str) -> Result<StartedNode<E>, ManualClusterError> {
         Ok(self
             .nodes
-            .start_node_with(name, StartNodeOptions::default())
+            .start_node_with(name, StartNodeOptions::<E>::default())
             .await?)
     }
 
     pub async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, ManualClusterError> {
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, ManualClusterError> {
         Ok(self.nodes.start_node_with(name, options).await?)
     }
 
@@ -88,31 +71,23 @@ impl LocalManualCluster {
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
-        let nodes = self.nodes.readiness_nodes();
-        if self.is_singleton(&nodes) {
-            return Ok(());
-        }
-
-        self.wait_nodes_ready(nodes).await
+        self.nodes.wait_network_ready().await
     }
 
-    fn is_singleton(&self, nodes: &[ReadinessNode]) -> bool {
-        nodes.len() <= 1
-    }
-
-    async fn wait_nodes_ready(&self, nodes: Vec<ReadinessNode>) -> Result<(), ReadinessError> {
-        ManualNetworkReadiness::new(nodes).wait().await
+    pub async fn wait_node_ready(&self, name: &str) -> Result<(), ManualClusterError> {
+        self.nodes.wait_node_ready(name).await?;
+        Ok(())
     }
 }
 
-impl Drop for LocalManualCluster {
+impl<E: LocalDeployerEnv> Drop for ManualCluster<E> {
     fn drop(&mut self) {
         self.stop_all();
     }
 }
 
 #[async_trait::async_trait]
-impl NodeControlHandle for LocalManualCluster {
+impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.nodes
             .restart_node(name)
@@ -124,8 +99,9 @@ impl NodeControlHandle for LocalManualCluster {
         self.nodes.stop_node(name).await.map_err(|err| err.into())
     }
 
-    async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {
-        self.start_node_with(name, StartNodeOptions::default())
+    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
+        self.nodes
+            .start_node_with(name, StartNodeOptions::<E>::default())
             .await
             .map_err(|err| err.into())
     }
@@ -133,14 +109,15 @@ impl NodeControlHandle for LocalManualCluster {
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError> {
-        self.start_node_with(name, options)
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        self.nodes
+            .start_node_with(name, options)
             .await
             .map_err(|err| err.into())
     }
 
-    fn node_client(&self, name: &str) -> Option<ApiClient> {
+    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.node_client(name)
     }
 
@@ -150,13 +127,14 @@ impl NodeControlHandle for LocalManualCluster {
 }
 
 #[async_trait::async_trait]
-impl ManualClusterHandle for LocalManualCluster {
+impl<E: LocalDeployerEnv> ManualClusterHandle<E> for ManualCluster<E> {
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError> {
-        self.start_node_with(name, options)
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        self.nodes
+            .start_node_with(name, options)
             .await
             .map_err(|err| err.into())
     }

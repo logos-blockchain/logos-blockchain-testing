@@ -1,13 +1,14 @@
 use std::{
+    fmt, io,
     net::{Ipv4Addr, TcpListener, TcpStream},
-    process::{Child, Command as StdCommand, Stdio},
+    process::{Child, Command as StdCommand, ExitStatus, Stdio},
     thread,
     time::Duration,
 };
 
-use anyhow::{Result as AnyhowResult, anyhow};
+use anyhow::anyhow;
 
-use super::{ClusterWaitError, NodeConfigPorts, NodePortAllocation};
+use super::ClusterWaitError;
 
 const PORT_FORWARD_READY_ATTEMPTS: u32 = 240;
 const PORT_FORWARD_READY_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -16,8 +17,8 @@ pub struct PortForwardHandle {
     child: Child,
 }
 
-impl std::fmt::Debug for PortForwardHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for PortForwardHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PortForwardHandle").finish_non_exhaustive()
     }
 }
@@ -40,94 +41,21 @@ pub struct PortForwardSpawn {
     pub handle: PortForwardHandle,
 }
 
-pub fn port_forward_group(
-    namespace: &str,
-    release: &str,
-    kind: &str,
-    ports: &[NodeConfigPorts],
-    allocations: &mut Vec<NodePortAllocation>,
-) -> Result<Vec<PortForwardHandle>, ClusterWaitError> {
-    let mut forwards = Vec::new();
-    for (index, ports) in ports.iter().enumerate() {
-        let service = format!("{release}-{kind}-{index}");
-        let PortForwardSpawn {
-            local_port: api_port,
-            handle: api_forward,
-        } = match port_forward_service(namespace, &service, ports.api) {
-            Ok(forward) => forward,
-            Err(err) => {
-                kill_port_forwards(&mut forwards);
-                return Err(err);
-            }
-        };
-        let PortForwardSpawn {
-            local_port: testing_port,
-            handle: testing_forward,
-        } = match port_forward_service(namespace, &service, ports.testing) {
-            Ok(forward) => forward,
-            Err(err) => {
-                kill_port_forwards(&mut forwards);
-                return Err(err);
-            }
-        };
-        allocations.push(NodePortAllocation {
-            api: api_port,
-            testing: testing_port,
-        });
-        forwards.push(api_forward);
-        forwards.push(testing_forward);
-    }
-    Ok(forwards)
-}
-
 pub fn port_forward_service(
     namespace: &str,
     service: &str,
     remote_port: u16,
 ) -> Result<PortForwardSpawn, ClusterWaitError> {
-    let local_port = allocate_local_port().map_err(|source| ClusterWaitError::PortForward {
-        service: service.to_owned(),
-        port: remote_port,
-        source,
-    })?;
+    let local_port =
+        allocate_local_port().map_err(|source| port_forward_error(service, remote_port, source))?;
+    let mut child = spawn_kubectl_port_forward(namespace, service, local_port, remote_port)
+        .map_err(|source| port_forward_error(service, remote_port, source.into()))?;
 
-    let mut child = StdCommand::new("kubectl")
-        .arg("port-forward")
-        .arg("-n")
-        .arg(namespace)
-        .arg(format!("svc/{service}"))
-        .arg(format!("{local_port}:{remote_port}"))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|source| ClusterWaitError::PortForward {
-            service: service.to_owned(),
-            port: remote_port,
-            source: source.into(),
-        })?;
+    wait_until_port_forward_ready(&mut child, local_port, service, remote_port)?;
 
-    for _ in 0..PORT_FORWARD_READY_ATTEMPTS {
-        if let Ok(Some(status)) = child.try_wait() {
-            return Err(ClusterWaitError::PortForward {
-                service: service.to_owned(),
-                port: remote_port,
-                source: anyhow!("kubectl exited with {status}"),
-            });
-        }
-        if TcpStream::connect((Ipv4Addr::LOCALHOST, local_port)).is_ok() {
-            return Ok(PortForwardSpawn {
-                local_port,
-                handle: PortForwardHandle { child },
-            });
-        }
-        thread::sleep(PORT_FORWARD_READY_POLL_INTERVAL);
-    }
-
-    let _ = child.kill();
-    Err(ClusterWaitError::PortForward {
-        service: service.to_owned(),
-        port: remote_port,
-        source: anyhow!("port-forward did not become ready"),
+    Ok(PortForwardSpawn {
+        local_port,
+        handle: PortForwardHandle { child },
     })
 }
 
@@ -138,9 +66,90 @@ pub fn kill_port_forwards(handles: &mut Vec<PortForwardHandle>) {
     handles.clear();
 }
 
-fn allocate_local_port() -> AnyhowResult<u16> {
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+fn allocate_local_port() -> anyhow::Result<u16> {
+    let listener = TcpListener::bind(localhost_addr(0))?;
     let port = listener.local_addr()?.port();
     drop(listener);
     Ok(port)
+}
+
+fn spawn_kubectl_port_forward(
+    namespace: &str,
+    service: &str,
+    local_port: u16,
+    remote_port: u16,
+) -> io::Result<Child> {
+    StdCommand::new("kubectl")
+        .arg("port-forward")
+        .arg("-n")
+        .arg(namespace)
+        .arg(format!("svc/{service}"))
+        .arg(format!("{local_port}:{remote_port}"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+}
+
+fn wait_until_port_forward_ready(
+    child: &mut Child,
+    local_port: u16,
+    service: &str,
+    remote_port: u16,
+) -> Result<(), ClusterWaitError> {
+    for _ in 0..PORT_FORWARD_READY_ATTEMPTS {
+        ensure_port_forward_running(child, service, remote_port)?;
+
+        if local_port_reachable(local_port) {
+            return Ok(());
+        }
+
+        thread::sleep(PORT_FORWARD_READY_POLL_INTERVAL);
+    }
+
+    let _ = child.kill();
+    Err(port_forward_ready_timeout_error(service, remote_port))
+}
+
+fn ensure_port_forward_running(
+    child: &mut Child,
+    service: &str,
+    remote_port: u16,
+) -> Result<(), ClusterWaitError> {
+    let Some(status) = exited_status(child) else {
+        return Ok(());
+    };
+
+    Err(port_forward_error(
+        service,
+        remote_port,
+        anyhow!("kubectl exited with {status}"),
+    ))
+}
+
+fn port_forward_error(service: &str, remote_port: u16, source: anyhow::Error) -> ClusterWaitError {
+    ClusterWaitError::PortForward {
+        service: service.to_owned(),
+        port: remote_port,
+        source,
+    }
+}
+
+fn port_forward_ready_timeout_error(service: &str, remote_port: u16) -> ClusterWaitError {
+    port_forward_error(
+        service,
+        remote_port,
+        anyhow!("port-forward did not become ready"),
+    )
+}
+
+fn exited_status(child: &mut Child) -> Option<ExitStatus> {
+    child.try_wait().ok().flatten()
+}
+
+fn local_port_reachable(local_port: u16) -> bool {
+    TcpStream::connect(localhost_addr(local_port)).is_ok()
+}
+
+const fn localhost_addr(port: u16) -> (Ipv4Addr, u16) {
+    (Ipv4Addr::LOCALHOST, port)
 }

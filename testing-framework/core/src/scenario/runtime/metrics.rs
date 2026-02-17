@@ -1,13 +1,18 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, thread};
 
-use prometheus_http_query::{Client as PrometheusClient, response::Data as PrometheusData};
+use prometheus_http_query::{
+    Client as PrometheusClient,
+    response::{Data as PrometheusData, PromqlResult, Sample},
+};
 use reqwest::Url;
+use tokio::runtime::Runtime;
 use tracing::warn;
 
 pub const CONSENSUS_PROCESSED_BLOCKS: &str = "consensus_processed_blocks";
 pub const CONSENSUS_TRANSACTIONS_TOTAL: &str = "consensus_transactions_total";
 const CONSENSUS_TRANSACTIONS_NODE_QUERY: &str =
     r#"sum(consensus_transactions_total{job=~"node-.*"})"#;
+const NODE_QUERY_FALLBACK_MESSAGE: &str = "falling back to aggregate consensus transaction counter";
 
 /// Telemetry handles available during a run.
 #[derive(Clone, Default)]
@@ -49,17 +54,11 @@ impl Metrics {
     }
 
     pub fn instant_values(&self, query: &str) -> Result<Vec<f64>, MetricsError> {
-        let handle = self
-            .prometheus()
-            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))?;
-        handle.instant_values(query)
+        self.require_prometheus()?.instant_values(query)
     }
 
     pub fn counter_value(&self, query: &str) -> Result<f64, MetricsError> {
-        let handle = self
-            .prometheus()
-            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))?;
-        handle.counter_value(query)
+        self.require_prometheus()?.counter_value(query)
     }
 
     pub fn consensus_processed_blocks(&self) -> Result<f64, MetricsError> {
@@ -67,30 +66,51 @@ impl Metrics {
     }
 
     pub fn consensus_transactions_total(&self) -> Result<f64, MetricsError> {
-        let handle = self
-            .prometheus()
-            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))?;
+        let handle = self.require_prometheus()?;
 
-        match handle.instant_samples(CONSENSUS_TRANSACTIONS_NODE_QUERY) {
-            Ok(samples) if !samples.is_empty() => {
-                return Ok(samples.into_iter().map(|sample| sample.value).sum());
-            }
-            Ok(_) => {
-                warn!(
-                    query = CONSENSUS_TRANSACTIONS_NODE_QUERY,
-                    "node-specific consensus transaction metric returned no samples; falling back to aggregate counter"
-                );
-            }
-            Err(err) => {
-                warn!(
-                    query = CONSENSUS_TRANSACTIONS_NODE_QUERY,
-                    error = %err,
-                    "failed to query node-specific consensus transaction metric; falling back to aggregate counter"
-                );
-            }
+        if let Some(total) = query_node_transactions_total(&handle) {
+            return Ok(total);
         }
 
         handle.counter_value(CONSENSUS_TRANSACTIONS_TOTAL)
+    }
+
+    fn require_prometheus(&self) -> Result<Arc<PrometheusEndpoint>, MetricsError> {
+        self.prometheus()
+            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))
+    }
+}
+
+fn query_node_transactions_total(handle: &PrometheusEndpoint) -> Option<f64> {
+    match handle.instant_samples(CONSENSUS_TRANSACTIONS_NODE_QUERY) {
+        Ok(samples) => samples_total_or_warn(samples),
+        Err(error) => {
+            warn_node_query_fallback(Some(&error));
+            None
+        }
+    }
+}
+
+fn samples_total_or_warn(samples: Vec<PrometheusInstantSample>) -> Option<f64> {
+    if samples.is_empty() {
+        warn_node_query_fallback(None);
+        return None;
+    }
+
+    Some(samples.into_iter().map(|sample| sample.value).sum())
+}
+
+fn warn_node_query_fallback(error: Option<&MetricsError>) {
+    match error {
+        Some(error) => warn!(
+            query = CONSENSUS_TRANSACTIONS_NODE_QUERY,
+            error = %error,
+            "{NODE_QUERY_FALLBACK_MESSAGE}"
+        ),
+        None => warn!(
+            query = CONSENSUS_TRANSACTIONS_NODE_QUERY,
+            "{NODE_QUERY_FALLBACK_MESSAGE}"
+        ),
     }
 }
 
@@ -144,52 +164,8 @@ impl PrometheusEndpoint {
         &self,
         query: &str,
     ) -> Result<Vec<PrometheusInstantSample>, MetricsError> {
-        let query = query.to_owned();
-        let client = self.client.clone();
-
-        let response = std::thread::spawn(move || -> Result<_, MetricsError> {
-            let runtime = tokio::runtime::Runtime::new()
-                .map_err(|err| MetricsError::new(format!("failed to create runtime: {err}")))?;
-            runtime
-                .block_on(async { client.query(&query).get().await })
-                .map_err(|err| MetricsError::new(format!("prometheus query failed: {err}")))
-        })
-        .join()
-        .map_err(|_| MetricsError::new("prometheus query thread panicked"))??;
-
-        let mut samples = Vec::new();
-        match response.data() {
-            PrometheusData::Vector(vectors) => {
-                for vector in vectors {
-                    samples.push(PrometheusInstantSample {
-                        labels: vector.metric().clone(),
-                        timestamp: vector.sample().timestamp(),
-                        value: vector.sample().value(),
-                    });
-                }
-            }
-            PrometheusData::Matrix(ranges) => {
-                for range in ranges {
-                    let labels = range.metric().clone();
-                    for sample in range.samples() {
-                        samples.push(PrometheusInstantSample {
-                            labels: labels.clone(),
-                            timestamp: sample.timestamp(),
-                            value: sample.value(),
-                        });
-                    }
-                }
-            }
-            PrometheusData::Scalar(sample) => {
-                samples.push(PrometheusInstantSample {
-                    labels: HashMap::new(),
-                    timestamp: sample.timestamp(),
-                    value: sample.value(),
-                });
-            }
-        }
-
-        Ok(samples)
+        query_prometheus(self.client.clone(), query.to_owned())
+            .map(|response| samples_from_prometheus_data(response.data()))
     }
 
     pub fn instant_values(&self, query: &str) -> Result<Vec<f64>, MetricsError> {
@@ -200,5 +176,57 @@ impl PrometheusEndpoint {
     pub fn counter_value(&self, query: &str) -> Result<f64, MetricsError> {
         self.instant_values(query)
             .map(|values| values.into_iter().sum())
+    }
+}
+
+fn query_prometheus(client: PrometheusClient, query: String) -> Result<PromqlResult, MetricsError> {
+    thread::spawn(move || -> Result<_, MetricsError> {
+        let runtime = Runtime::new()
+            .map_err(|error| MetricsError::new(format!("failed to create runtime: {error}")))?;
+        runtime
+            .block_on(async { client.query(&query).get().await })
+            .map_err(|error| MetricsError::new(format!("prometheus query failed: {error}")))
+    })
+    .join()
+    .map_err(|_| MetricsError::new("prometheus query thread panicked"))?
+}
+
+fn samples_from_prometheus_data(data: &PrometheusData) -> Vec<PrometheusInstantSample> {
+    let mut samples = Vec::new();
+
+    match data {
+        PrometheusData::Vector(vectors) => {
+            samples.extend(vectors.iter().map(|vector| PrometheusInstantSample {
+                labels: vector.metric().clone(),
+                timestamp: vector.sample().timestamp(),
+                value: vector.sample().value(),
+            }));
+        }
+        PrometheusData::Matrix(ranges) => {
+            for range in ranges {
+                let labels = range.metric().clone();
+                samples.extend(
+                    range
+                        .samples()
+                        .iter()
+                        .map(|sample| PrometheusInstantSample {
+                            labels: labels.clone(),
+                            timestamp: sample.timestamp(),
+                            value: sample.value(),
+                        }),
+                );
+            }
+        }
+        PrometheusData::Scalar(sample) => samples.push(scalar_sample(sample)),
+    }
+
+    samples
+}
+
+fn scalar_sample(sample: &Sample) -> PrometheusInstantSample {
+    PrometheusInstantSample {
+        labels: HashMap::new(),
+        timestamp: sample.timestamp(),
+        value: sample.value(),
     }
 }

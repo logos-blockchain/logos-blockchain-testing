@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use testing_framework_core::{
-    scenario::{MetricsError, http_probe::HttpReadinessError},
-    topology::readiness::ReadinessError,
-};
+use testing_framework_core::scenario::{DynError, MetricsError};
 use url::ParseError;
 
 use crate::{docker::commands::ComposeCommandError, infrastructure::template::TemplateError};
@@ -34,16 +31,14 @@ pub enum ComposeRunnerError {
     NodeClients(#[from] NodeClientError),
     #[error(transparent)]
     Telemetry(#[from] MetricsError),
-    #[error("block feed requires at least one node client")]
+    #[error("feed requires at least one node client")]
     BlockFeedMissing,
-    #[error("failed to start block feed: {source}")]
+    #[error("failed to start feed: {source}")]
     BlockFeed {
         #[source]
-        source: anyhow::Error,
+        source: DynError,
     },
-    #[error(
-        "docker image '{image}' is not available; set LOGOS_BLOCKCHAIN_TESTNET_IMAGE or build the image manually"
-    )]
+    #[error("docker image '{image}' is not available; build or load it locally")]
     MissingImage { image: String },
     #[error("failed to prepare docker image: {source}")]
     ImageBuild {
@@ -71,11 +66,11 @@ impl WorkspaceError {
 #[derive(Debug, thiserror::Error)]
 /// Configuration-related failures while preparing compose runs.
 pub enum ConfigError {
-    #[error("failed to update cfgsync configuration at {path}: {source}")]
+    #[error("failed to update cfgsync configuration at {path:?}: {source}")]
     Cfgsync {
         path: PathBuf,
         #[source]
-        source: anyhow::Error,
+        source: DynError,
     },
     #[error("failed to allocate cfgsync port: {source}")]
     Port {
@@ -86,7 +81,7 @@ pub enum ConfigError {
     CfgsyncStart {
         port: u16,
         #[source]
-        source: anyhow::Error,
+        source: DynError,
     },
     #[error("failed to render compose template: {source}")]
     Template {
@@ -98,8 +93,6 @@ pub enum ConfigError {
 #[derive(Debug, thiserror::Error)]
 /// Readiness probe failures surfaced to callers.
 pub enum StackReadinessError {
-    #[error(transparent)]
-    Http(#[from] HttpReadinessError),
     #[error("failed to build readiness URL for {role} port {port}: {source}")]
     Endpoint {
         role: &'static str,
@@ -110,8 +103,10 @@ pub enum StackReadinessError {
     #[error("remote readiness probe failed: {source}")]
     Remote {
         #[source]
-        source: ReadinessError,
+        source: DynError,
     },
+    #[error("expected readiness URLs for {nodes} nodes but none were provided")]
+    MissingUrls { nodes: usize },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -124,5 +119,10 @@ pub enum NodeClientError {
         port: u16,
         #[source]
         source: ParseError,
+    },
+    #[error("failed to build node clients: {source}")]
+    Build {
+        #[source]
+        source: DynError,
     },
 }

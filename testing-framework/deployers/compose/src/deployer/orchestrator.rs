@@ -1,8 +1,13 @@
-use std::sync::Arc;
+use std::{env, sync::Arc, time::Duration};
 
-use testing_framework_core::scenario::{
-    NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl,
-    RunContext, Runner, Scenario,
+use reqwest::Url;
+use testing_framework_core::{
+    scenario::{
+        DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
+        RequiresNodeControl, RunContext, Runner, Scenario,
+    },
+    topology::DeploymentDescriptor,
 };
 use tracing::info;
 
@@ -16,6 +21,7 @@ use super::{
 };
 use crate::{
     docker::control::ComposeNodeControl,
+    env::ComposeDeployEnv,
     errors::ComposeRunnerError,
     infrastructure::{
         environment::StackEnvironment,
@@ -23,36 +29,142 @@ use crate::{
     },
 };
 
-pub struct DeploymentOrchestrator {
-    deployer: ComposeDeployer,
+const PRINT_ENDPOINTS_ENV: &str = "TESTNET_PRINT_ENDPOINTS";
+
+pub struct DeploymentOrchestrator<E: ComposeDeployEnv> {
+    deployer: ComposeDeployer<E>,
 }
 
-impl DeploymentOrchestrator {
-    pub const fn new(deployer: ComposeDeployer) -> Self {
+impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
+    pub const fn new(deployer: ComposeDeployer<E>) -> Self {
         Self { deployer }
     }
 
     pub async fn deploy<Caps>(
         &self,
-        scenario: &Scenario<Caps>,
-    ) -> Result<Runner, ComposeRunnerError>
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<Runner<E>, ComposeRunnerError>
     where
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
-        let setup = DeploymentSetup::new(scenario.topology());
+        let deployment = scenario.deployment();
+        let setup = DeploymentSetup::<E>::new(deployment);
         setup.validate_environment().await?;
 
         let observability = resolve_observability_inputs(scenario)?;
+        let mut prepared = prepare_deployment::<E>(setup, &observability).await?;
+        let deployment_policy = scenario.deployment_policy();
+        let readiness_enabled =
+            self.deployer.readiness_checks && deployment_policy.readiness_enabled;
 
-        let DeploymentContext {
-            mut environment,
-            descriptors,
-        } = setup.prepare_workspace(&observability).await?;
+        self.log_deploy_start(
+            scenario,
+            &prepared.descriptors,
+            deployment_policy,
+            &observability,
+        );
 
-        tracing::info!(
-            nodes = descriptors.nodes().len(),
+        let deployed = deploy_nodes::<E>(
+            &mut prepared.environment,
+            &prepared.descriptors,
+            readiness_enabled,
+            deployment_policy.readiness_requirement,
+        )
+        .await?;
+
+        let runner = self
+            .build_runner::<Caps>(
+                scenario,
+                prepared,
+                deployed,
+                observability,
+                readiness_enabled,
+            )
+            .await?;
+
+        self.log_deploy_ready(
+            scenario,
+            deployment_policy,
+            deployment.node_count(),
+            &compose_runner_host(),
+            readiness_enabled,
+        );
+
+        Ok(runner)
+    }
+
+    async fn build_runner<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+        mut prepared: PreparedDeployment<E>,
+        deployed: DeployedNodes<E>,
+        observability: ObservabilityInputs,
+        readiness_enabled: bool,
+    ) -> Result<Runner<E>, ComposeRunnerError>
+    where
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
+    {
+        let telemetry = observability.telemetry_handle()?;
+        let node_control = self.maybe_node_control::<Caps>(&prepared.environment);
+
+        log_observability_endpoints(&observability);
+        log_profiling_urls(&deployed.host, &deployed.host_ports);
+        maybe_print_endpoints(&observability, &deployed.host, &deployed.host_ports);
+
+        let input = RuntimeBuildInput {
+            deployed: &deployed,
+            descriptors: prepared.descriptors.clone(),
+            duration: scenario.duration(),
+            expectation_cooldown: scenario.expectation_cooldown(),
+            telemetry,
+            environment: &mut prepared.environment,
+            node_control,
+        };
+        let runtime = build_compose_runtime::<E>(input).await?;
+        let cleanup_guard =
+            make_cleanup_guard(prepared.environment.into_cleanup()?, runtime.feed_task);
+
+        info!(
+            effective_readiness = readiness_enabled,
+            host = deployed.host,
+            "compose runtime prepared"
+        );
+
+        Ok(Runner::new(runtime.context, Some(cleanup_guard)))
+    }
+
+    fn maybe_node_control<Caps>(
+        &self,
+        environment: &StackEnvironment,
+    ) -> Option<Arc<dyn NodeControlHandle<E>>>
+    where
+        Caps: RequiresNodeControl + Send + Sync,
+    {
+        Caps::REQUIRED.then(|| {
+            Arc::new(ComposeNodeControl {
+                compose_file: environment.compose_path().to_path_buf(),
+                project_name: environment.project_name().to_owned(),
+            }) as Arc<dyn NodeControlHandle<E>>
+        })
+    }
+
+    fn log_deploy_start<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+        descriptors: &E::Deployment,
+        deployment_policy: DeploymentPolicy,
+        observability: &ObservabilityInputs,
+    ) {
+        let effective_readiness =
+            self.deployer.readiness_checks && deployment_policy.readiness_enabled;
+
+        info!(
+            nodes = descriptors.node_count(),
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
+            readiness_enabled = deployment_policy.readiness_enabled,
+            readiness_requirement = ?deployment_policy.readiness_requirement,
+            effective_readiness,
             metrics_query_url = observability.metrics_query_url.as_ref().map(|u| u.as_str()),
             metrics_otlp_ingest_url = observability
                 .metrics_otlp_ingest_url
@@ -61,78 +173,130 @@ impl DeploymentOrchestrator {
             grafana_url = observability.grafana_url.as_ref().map(|u| u.as_str()),
             "compose deployment starting"
         );
+    }
 
-        let node_count = descriptors.nodes().len();
-        let host_ports = PortManager::prepare(&mut environment, &descriptors).await?;
-
-        wait_for_readiness_or_grace_period(
-            self.deployer.readiness_checks,
-            &descriptors,
-            &host_ports,
-            &mut environment,
-        )
-        .await?;
-
-        let host = compose_runner_host();
-        let client_builder = ClientBuilder::new();
-        let node_clients = client_builder
-            .build_node_clients(&descriptors, &host_ports, &host, &mut environment)
-            .await?;
-        let telemetry = observability.telemetry_handle()?;
-        let node_control = self.maybe_node_control::<Caps>(&environment);
-
-        log_observability_endpoints(&observability);
-        log_profiling_urls(&host, &host_ports);
-
-        maybe_print_endpoints(&observability, &host, &host_ports);
-
-        let (block_feed, block_feed_guard) = client_builder
-            .start_block_feed(&node_clients, &mut environment)
-            .await?;
-        let cleanup_guard = make_cleanup_guard(environment.into_cleanup()?, block_feed_guard);
-
-        let context = RunContext::new(
-            descriptors,
-            None,
-            node_clients,
-            scenario.duration(),
-            telemetry,
-            block_feed,
-            node_control,
-        );
-
+    fn log_deploy_ready<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+        deployment_policy: DeploymentPolicy,
+        node_count: usize,
+        host: &str,
+        readiness_enabled: bool,
+    ) {
         info!(
             nodes = node_count,
             duration_secs = scenario.duration().as_secs(),
             readiness_checks = self.deployer.readiness_checks,
+            readiness_enabled = deployment_policy.readiness_enabled,
+            readiness_requirement = ?deployment_policy.readiness_requirement,
+            effective_readiness = readiness_enabled,
             host,
             "compose deployment ready; handing control to scenario runner"
         );
-
-        Ok(Runner::new(context, Some(cleanup_guard)))
-    }
-
-    fn maybe_node_control<Caps>(
-        &self,
-        environment: &StackEnvironment,
-    ) -> Option<Arc<dyn NodeControlHandle>>
-    where
-        Caps: RequiresNodeControl + Send + Sync,
-    {
-        Caps::REQUIRED.then(|| {
-            Arc::new(ComposeNodeControl {
-                compose_file: environment.compose_path().to_path_buf(),
-                project_name: environment.project_name().to_owned(),
-            }) as Arc<dyn NodeControlHandle>
-        })
     }
 }
 
-fn resolve_observability_inputs<Caps>(
-    scenario: &Scenario<Caps>,
+struct DeployedNodes<E: ComposeDeployEnv> {
+    host_ports: HostPortMapping,
+    host: String,
+    node_clients: NodeClients<E>,
+    client_builder: ClientBuilder<E>,
+}
+
+struct ComposeRuntime<E: ComposeDeployEnv> {
+    context: RunContext<E>,
+    feed_task: FeedHandle,
+}
+
+struct RuntimeBuildInput<'a, E: ComposeDeployEnv> {
+    deployed: &'a DeployedNodes<E>,
+    descriptors: E::Deployment,
+    duration: Duration,
+    expectation_cooldown: Duration,
+    telemetry: Metrics,
+    environment: &'a mut StackEnvironment,
+    node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+}
+
+async fn build_compose_runtime<E: ComposeDeployEnv>(
+    input: RuntimeBuildInput<'_, E>,
+) -> Result<ComposeRuntime<E>, ComposeRunnerError> {
+    let node_clients = input.deployed.node_clients.clone();
+    let (feed, feed_task) = input
+        .deployed
+        .client_builder
+        .start_block_feed(&node_clients, input.environment)
+        .await?;
+
+    let context = build_run_context(
+        input.descriptors,
+        node_clients,
+        input.duration,
+        input.expectation_cooldown,
+        input.telemetry,
+        feed,
+        input.node_control,
+    );
+
+    Ok(ComposeRuntime { context, feed_task })
+}
+
+async fn deploy_nodes<E: ComposeDeployEnv>(
+    environment: &mut StackEnvironment,
+    descriptors: &E::Deployment,
+    readiness_enabled: bool,
+    readiness_requirement: HttpReadinessRequirement,
+) -> Result<DeployedNodes<E>, ComposeRunnerError> {
+    let host_ports = PortManager::<E>::prepare(environment, descriptors).await?;
+    wait_for_readiness_or_grace_period::<E>(
+        readiness_enabled,
+        descriptors,
+        readiness_requirement,
+        &host_ports,
+        environment,
+    )
+    .await?;
+
+    let host = compose_runner_host();
+    let client_builder = ClientBuilder::<E>::new();
+    let node_clients = client_builder
+        .build_node_clients(descriptors, &host_ports, &host, environment)
+        .await?;
+
+    Ok(DeployedNodes {
+        host_ports,
+        host,
+        node_clients,
+        client_builder,
+    })
+}
+
+fn build_run_context<E: ComposeDeployEnv>(
+    descriptors: E::Deployment,
+    node_clients: NodeClients<E>,
+    run_duration: Duration,
+    expectation_cooldown: Duration,
+    telemetry: Metrics,
+    feed: <E::FeedRuntime as FeedRuntime>::Feed,
+    node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+) -> RunContext<E> {
+    RunContext::new(
+        descriptors,
+        node_clients,
+        run_duration,
+        expectation_cooldown,
+        telemetry,
+        feed,
+        node_control,
+    )
+}
+
+fn resolve_observability_inputs<E, Caps>(
+    scenario: &Scenario<E, Caps>,
 ) -> Result<ObservabilityInputs, ComposeRunnerError>
 where
     Caps: ObservabilityCapabilityProvider,
+    E: ComposeDeployEnv,
 {
     let env_inputs = ObservabilityInputs::from_env()?;
     let cap_inputs = scenario
@@ -140,17 +304,25 @@ where
         .observability_capability()
         .map(ObservabilityInputs::from_capability)
         .unwrap_or_default();
+
     Ok(env_inputs.with_overrides(cap_inputs))
 }
 
-async fn wait_for_readiness_or_grace_period(
+async fn wait_for_readiness_or_grace_period<E: ComposeDeployEnv>(
     readiness_checks: bool,
-    descriptors: &testing_framework_core::topology::generation::GeneratedTopology,
+    descriptors: &E::Deployment,
+    readiness_requirement: HttpReadinessRequirement,
     host_ports: &HostPortMapping,
     environment: &mut StackEnvironment,
 ) -> Result<(), ComposeRunnerError> {
     if readiness_checks {
-        ReadinessChecker::wait_all(descriptors, host_ports, environment).await?;
+        ReadinessChecker::<E>::wait_all(
+            descriptors,
+            host_ports,
+            readiness_requirement,
+            environment,
+        )
+        .await?;
         return Ok(());
     }
 
@@ -166,42 +338,41 @@ fn log_observability_endpoints(observability: &ObservabilityInputs) {
             "metrics query endpoint configured"
         );
     }
+
     if let Some(url) = observability.grafana_url.as_ref() {
         info!(grafana_url = %url.as_str(), "grafana url configured");
     }
 }
 
 fn maybe_print_endpoints(observability: &ObservabilityInputs, host: &str, ports: &HostPortMapping) {
-    if std::env::var("TESTNET_PRINT_ENDPOINTS").is_err() {
+    if !should_print_endpoints() {
         return;
     }
 
-    let prometheus = observability
-        .metrics_query_url
-        .as_ref()
-        .map(|u| u.as_str().to_string())
-        .unwrap_or_else(|| "<disabled>".to_string());
-    let grafana = observability
-        .grafana_url
-        .as_ref()
-        .map(|u| u.as_str().to_string())
-        .unwrap_or_else(|| "<disabled>".to_string());
+    let prometheus = endpoint_or_disabled(observability.metrics_query_url.as_ref());
+    let grafana = endpoint_or_disabled(observability.grafana_url.as_ref());
 
     println!(
         "TESTNET_ENDPOINTS prometheus={} grafana={}",
         prometheus, grafana
     );
+
     print_profiling_urls(host, ports);
+}
+
+fn should_print_endpoints() -> bool {
+    env::var(PRINT_ENDPOINTS_ENV).is_ok()
+}
+
+fn endpoint_or_disabled(endpoint: Option<&Url>) -> String {
+    endpoint.map_or_else(|| "<disabled>".to_string(), |url| url.as_str().to_string())
 }
 
 fn log_profiling_urls(host: &str, ports: &HostPortMapping) {
     for (idx, node) in ports.nodes.iter().enumerate() {
-        tracing::info!(
+        info!(
             node = idx,
-            profiling_url = %format!(
-                "http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
-                host, node.api
-            ),
+            profiling_url = %profiling_url(host, node.api),
             "node profiling endpoint (profiling feature required)"
         );
     }
@@ -210,8 +381,33 @@ fn log_profiling_urls(host: &str, ports: &HostPortMapping) {
 fn print_profiling_urls(host: &str, ports: &HostPortMapping) {
     for (idx, node) in ports.nodes.iter().enumerate() {
         println!(
-            "TESTNET_PPROF node_{}=http://{}:{}/debug/pprof/profile?seconds=15&format=proto",
-            idx, host, node.api
+            "TESTNET_PPROF node_{}={}",
+            idx,
+            profiling_url(host, node.api)
         );
     }
+}
+
+fn profiling_url(host: &str, api_port: u16) -> String {
+    format!("http://{host}:{api_port}/debug/pprof/profile?seconds=15&format=proto")
+}
+
+struct PreparedDeployment<E: ComposeDeployEnv> {
+    environment: StackEnvironment,
+    descriptors: E::Deployment,
+}
+
+async fn prepare_deployment<E: ComposeDeployEnv>(
+    setup: DeploymentSetup<'_, E>,
+    observability: &ObservabilityInputs,
+) -> Result<PreparedDeployment<E>, ComposeRunnerError> {
+    let DeploymentContext {
+        environment,
+        descriptors,
+    } = setup.prepare_workspace(observability).await?;
+
+    Ok(PreparedDeployment {
+        environment,
+        descriptors: descriptors.clone(),
+    })
 }

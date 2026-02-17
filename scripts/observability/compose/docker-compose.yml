@@ -19,17 +19,17 @@ services:
     depends_on:
       - prometheus
     env_file:
-      - ../../../testing-framework/assets/stack/monitoring/grafana/plugins.env
+      - ../../../logos/infra/assets/stack/monitoring/grafana/plugins.env
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ../../../testing-framework/assets/stack/monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
-      - ../../../testing-framework/assets/stack/monitoring/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
-      - ../../../testing-framework/assets/stack/monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
-      - ../../../testing-framework/assets/stack/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../../../logos/infra/assets/stack/monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ../../../logos/infra/assets/stack/monitoring/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ../../../logos/infra/assets/stack/monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ../../../logos/infra/assets/stack/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
 

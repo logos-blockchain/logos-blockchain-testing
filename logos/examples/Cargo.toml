@@ -1,0 +1,30 @@
+[package]
+categories.workspace  = true
+description.workspace = true
+edition.workspace     = true
+keywords.workspace    = true
+license.workspace     = true
+name                  = "runner-examples"
+readme.workspace      = true
+repository.workspace  = true
+version               = "0.1.0"
+
+[dependencies]
+anyhow                           = "1"
+lb-ext                           = { workspace = true }
+lb-framework                     = { workspace = true }
+lb-workloads                     = { workspace = true }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+tokio                            = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
+tracing                          = { workspace = true }
+tracing-subscriber               = { features = ["env-filter", "fmt"], version = "0.3" }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+
+[features]
+
+[lints]
+workspace = true

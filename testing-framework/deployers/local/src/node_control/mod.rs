@@ -1,42 +1,42 @@
 use std::{
-    collections::{HashMap, HashSet},
-    sync::Mutex,
+    collections::HashMap,
+    sync::{Mutex, MutexGuard},
 };
 
-use lb_node::config::RunConfig;
-use testing_framework_config::topology::configs::{consensus, time};
-use testing_framework_core::{
-    nodes::{
-        ApiClient,
-        node::{Node, apply_node_config_patch, create_node_config},
-    },
-    scenario::{DynError, NodeControlHandle, StartNodeOptions, StartedNode},
-    topology::{
-        deployment::Topology,
-        generation::{GeneratedTopology, find_expected_peer_counts},
-        utils::multiaddr_port,
-    },
+use testing_framework_core::scenario::{
+    Application, DynError, NodeClients, NodeControlHandle, ReadinessError, StartNodeOptions,
+    StartedNode, wait_for_http_ports,
 };
 use thiserror::Error;
 
-mod config;
+use crate::{
+    env::{LocalDeployerEnv, Node, spawn_node_from_config},
+    process::ProcessSpawnError,
+};
+
 mod state;
 
-use config::build_general_config_for;
 use state::LocalNodeManagerState;
-use testing_framework_core::scenario::NodeClients;
+
+#[derive(Clone)]
+struct NodeStartSnapshot {
+    peer_ports: Vec<u16>,
+    peer_ports_by_name: HashMap<String, u16>,
+    node_name: String,
+    index: usize,
+}
 
 #[derive(Debug, Error)]
-pub enum LocalNodeManagerError {
+pub enum NodeManagerError {
     #[error("failed to generate node config: {source}")]
     Config {
         #[source]
-        source: testing_framework_config::topology::configs::GeneralConfigError,
+        source: DynError,
     },
     #[error("failed to spawn node: {source}")]
     Spawn {
         #[source]
-        source: testing_framework_core::nodes::common::node::SpawnNodeError,
+        source: DynError,
     },
     #[error("{message}")]
     InvalidArgument { message: String },
@@ -49,97 +49,63 @@ pub enum LocalNodeManagerError {
     #[error("failed to restart node: {source}")]
     Restart {
         #[source]
-        source: testing_framework_core::nodes::common::node::SpawnNodeError,
+        source: DynError,
+    },
+    #[error("failed readiness check: {source}")]
+    Readiness {
+        #[source]
+        source: ReadinessError,
     },
 }
 
-pub struct LocalNodeManager {
-    descriptors: GeneratedTopology,
-    base_consensus: consensus::GeneralConsensusConfig,
-    base_time: time::GeneralTimeConfig,
-    node_clients: NodeClients,
-    seed: LocalNodeManagerSeed,
-    state: Mutex<LocalNodeManagerState>,
+pub struct NodeManager<E: LocalDeployerEnv> {
+    descriptors: E::Deployment,
+    node_clients: NodeClients<E>,
+    keep_tempdir: bool,
+    seed: NodeManagerSeed,
+    state: Mutex<LocalNodeManagerState<E>>,
 }
 
 #[derive(Clone, Default)]
-pub struct LocalNodeManagerSeed {
+pub struct NodeManagerSeed {
     pub node_count: usize,
     pub peer_ports: Vec<u16>,
     pub peer_ports_by_name: HashMap<String, u16>,
 }
 
-impl LocalNodeManagerSeed {
-    #[must_use]
-    pub fn from_topology(descriptors: &GeneratedTopology) -> Self {
-        let peer_ports = descriptors
-            .nodes()
-            .iter()
-            .map(|node| node.network_port())
-            .collect::<Vec<_>>();
-
-        let peer_ports_by_name = descriptors
-            .nodes()
-            .iter()
-            .map(|node| (format!("node-{}", node.index()), node.network_port()))
-            .collect();
-
-        Self {
-            node_count: descriptors.nodes().len(),
-            peer_ports,
-            peer_ports_by_name,
-        }
-    }
-}
-
-pub(crate) struct ReadinessNode {
-    pub(crate) label: String,
-    pub(crate) expected_peers: Option<usize>,
-    pub(crate) api: ApiClient,
-}
-
-impl LocalNodeManager {
-    fn default_label(index: usize) -> String {
-        format!("node-{index}")
-    }
-
+impl<E: LocalDeployerEnv> NodeManager<E> {
     pub async fn spawn_initial_nodes(
-        descriptors: &GeneratedTopology,
-    ) -> Result<Vec<Node>, testing_framework_core::nodes::common::node::SpawnNodeError> {
-        let mut nodes = Vec::with_capacity(descriptors.nodes().len());
-        for node in descriptors.nodes() {
-            let label = Self::default_label(node.index());
-            let config = create_node_config(node.general.clone());
-            let spawned = Node::spawn(config, &label, node.persist_dir.clone()).await?;
-            nodes.push(spawned);
+        descriptors: &E::Deployment,
+        keep_tempdir: bool,
+    ) -> Result<Vec<Node<E>>, ProcessSpawnError> {
+        let configs = E::build_initial_node_configs(descriptors)?;
+        let mut spawned = Vec::with_capacity(configs.len());
+
+        for (index, config_entry) in configs.into_iter().enumerate() {
+            let persist_dir = E::initial_persist_dir(descriptors, &config_entry.name, index);
+            spawned.push(
+                spawn_node_from_config::<E>(
+                    config_entry.name,
+                    config_entry.config,
+                    keep_tempdir,
+                    persist_dir.as_deref(),
+                )
+                .await?,
+            );
         }
 
-        Ok(nodes)
+        Ok(spawned)
     }
-
-    pub async fn spawn_initial_topology(
-        descriptors: &GeneratedTopology,
-    ) -> Result<Topology, testing_framework_core::nodes::common::node::SpawnNodeError> {
-        let nodes = Self::spawn_initial_nodes(descriptors).await?;
-        Ok(Topology::from_nodes(nodes))
-    }
-    pub fn new(descriptors: GeneratedTopology, node_clients: NodeClients) -> Self {
-        Self::new_with_seed(descriptors, node_clients, LocalNodeManagerSeed::default())
+    pub fn new(descriptors: E::Deployment, node_clients: NodeClients<E>) -> Self {
+        Self::new_with_seed(descriptors, node_clients, false, NodeManagerSeed::default())
     }
 
     pub fn new_with_seed(
-        descriptors: GeneratedTopology,
-        node_clients: NodeClients,
-        seed: LocalNodeManagerSeed,
+        descriptors: E::Deployment,
+        node_clients: NodeClients<E>,
+        keep_tempdir: bool,
+        seed: NodeManagerSeed,
     ) -> Self {
-        let base_node = descriptors
-            .nodes()
-            .first()
-            .expect("generated topology must include at least one node");
-
-        let base_consensus = base_node.general.consensus_config.clone();
-        let base_time = base_node.general.time_config.clone();
-
         let state = LocalNodeManagerState {
             node_count: seed.node_count,
             peer_ports: seed.peer_ports.clone(),
@@ -151,30 +117,23 @@ impl LocalNodeManager {
 
         Self {
             descriptors,
-            base_consensus,
-            base_time,
             node_clients,
+            keep_tempdir,
             seed,
             state: Mutex::new(state),
         }
     }
 
     #[must_use]
-    pub fn node_client(&self, name: &str) -> Option<ApiClient> {
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+    pub fn node_client(&self, name: &str) -> Option<E::NodeClient> {
+        let state = self.lock_state();
 
         state.clients_by_name.get(name).cloned()
     }
 
     #[must_use]
     pub fn node_pid(&self, name: &str) -> Option<u32> {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
 
         let index = *state.indices_by_name.get(name)?;
         let node = state.nodes.get_mut(index)?;
@@ -186,10 +145,7 @@ impl LocalNodeManager {
     }
 
     pub fn stop_all(&self) {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
 
         state.nodes.clear();
         state.peer_ports.clone_from(&self.seed.peer_ports);
@@ -202,25 +158,16 @@ impl LocalNodeManager {
         self.node_clients.clear();
     }
 
-    pub fn initialize_with_nodes(&self, nodes: Vec<Node>) {
+    pub fn initialize_with_nodes(&self, nodes: Vec<Node<E>>) {
         self.node_clients.clear();
 
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        state.nodes.clear();
-        state.peer_ports.clear();
-        state.peer_ports_by_name.clear();
-        state.clients_by_name.clear();
-        state.indices_by_name.clear();
-        state.node_count = 0;
+        let mut state = self.lock_state();
+        clear_registered_nodes(&mut state);
 
         for (idx, node) in nodes.into_iter().enumerate() {
-            let name = Self::default_label(idx);
-            let port = node.config().user.network.backend.swarm.port;
-            let client = node.api().clone();
+            let name = default_node_label(idx);
+            let port = E::node_peer_port(&node);
+            let client = node.client();
 
             self.node_clients.add_node(client.clone());
             state.register_node(&name, port, client, node);
@@ -228,253 +175,247 @@ impl LocalNodeManager {
     }
 
     #[must_use]
-    pub fn node_clients(&self) -> NodeClients {
+    pub fn node_clients(&self) -> NodeClients<E> {
         self.node_clients.clone()
+    }
+
+    pub async fn wait_network_ready(&self) -> Result<(), ReadinessError> {
+        let ports: Vec<_> = {
+            let state = self.lock_state();
+            state
+                .nodes
+                .iter()
+                .map(|node| node.endpoints().api.port())
+                .collect()
+        };
+
+        if ports.is_empty() {
+            return Ok(());
+        }
+
+        wait_for_http_ports(&ports, E::readiness_endpoint_path()).await
+    }
+
+    pub async fn wait_node_ready(&self, name: &str) -> Result<(), NodeManagerError> {
+        let port = {
+            let state = self.lock_state();
+            let index =
+                *state
+                    .indices_by_name
+                    .get(name)
+                    .ok_or_else(|| NodeManagerError::NodeName {
+                        name: name.to_string(),
+                    })?;
+
+            state
+                .nodes
+                .get(index)
+                .map(|node| node.endpoints().api.port())
+                .ok_or_else(|| NodeManagerError::NodeName {
+                    name: name.to_string(),
+                })?
+        };
+
+        wait_for_http_ports(&[port], E::readiness_endpoint_path())
+            .await
+            .map_err(|source| NodeManagerError::Readiness { source })
     }
 
     pub async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, LocalNodeManagerError> {
-        self.start_node(name, options).await
-    }
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, NodeManagerError> {
+        let snapshot = self.start_snapshot(name)?;
 
-    pub(crate) fn readiness_nodes(&self) -> Vec<ReadinessNode> {
-        let state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        let listen_ports = state
-            .nodes
-            .iter()
-            .map(|node| node.config().user.network.backend.swarm.port)
-            .collect::<Vec<_>>();
-
-        let initial_peer_ports = state
-            .nodes
-            .iter()
-            .map(|node| {
-                node.config()
-                    .user
-                    .network
-                    .backend
-                    .initial_peers
-                    .iter()
-                    .filter_map(multiaddr_port)
-                    .collect::<HashSet<u16>>()
-            })
-            .collect::<Vec<_>>();
-
-        let expected_peer_counts = find_expected_peer_counts(&listen_ports, &initial_peer_ports);
-
-        state
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| ReadinessNode {
-                label: format!(
-                    "node#{idx}@{}",
-                    node.config().user.network.backend.swarm.port
-                ),
-                expected_peers: expected_peer_counts.get(idx).copied(),
-                api: node.api().clone(),
-            })
-            .collect::<Vec<_>>()
-    }
-
-    async fn start_node(
-        &self,
-        name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, LocalNodeManagerError> {
-        let (peer_ports, peer_ports_by_name, node_name, index) = {
-            let state = self
-                .state
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-            let index = state.node_count;
-            let label = if name.trim().is_empty() {
-                Self::default_label(index)
-            } else if name.starts_with("node-") {
-                name.to_string()
-            } else {
-                format!("node-{name}")
-            };
-
-            if state.peer_ports_by_name.contains_key(&label) {
-                return Err(LocalNodeManagerError::InvalidArgument {
-                    message: format!("node name '{label}' already exists"),
-                });
-            }
-
-            (
-                state.peer_ports.clone(),
-                state.peer_ports_by_name.clone(),
-                label,
-                index,
-            )
-        };
-
-        let (general_config, network_port, descriptor_patch) = build_general_config_for(
+        let mut built = E::build_node_config(
             &self.descriptors,
-            &self.base_consensus,
-            &self.base_time,
-            index,
-            &peer_ports_by_name,
+            snapshot.index,
+            &snapshot.peer_ports_by_name,
             &options,
-            &peer_ports,
-        )?;
+            &snapshot.peer_ports,
+        )
+        .map_err(|source| NodeManagerError::Config { source })?;
 
-        let config = build_node_config(
-            general_config,
-            descriptor_patch.as_ref(),
-            options.config_patch.as_ref(),
-        )?;
+        if let Some(config_patch) = &options.config_patch {
+            built.config =
+                config_patch(built.config).map_err(|source| NodeManagerError::ConfigPatch {
+                    message: source.to_string(),
+                })?;
+        }
 
-        let api_client = self
-            .spawn_and_register_node(&node_name, network_port, config, options.persist_dir)
+        let client = self
+            .spawn_and_register_node(
+                &snapshot.node_name,
+                built.network_port,
+                built.config,
+                options.persist_dir.as_deref(),
+            )
             .await?;
 
         Ok(StartedNode {
-            name: node_name,
-            api: api_client,
+            name: snapshot.node_name,
+            client,
         })
     }
 
-    pub async fn restart_node(&self, name: &str) -> Result<(), LocalNodeManagerError> {
-        let (index, mut node) = {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+    pub async fn restart_node(&self, name: &str) -> Result<(), NodeManagerError> {
+        let (index, mut node) = self.take_node(name)?;
 
-            let Some(index) = state.indices_by_name.get(name).copied() else {
-                return Err(LocalNodeManagerError::NodeName {
-                    name: name.to_string(),
-                });
-            };
+        if let Err(source) = node.restart().await {
+            self.put_node_back(index, node);
 
-            if index >= state.nodes.len() {
-                return Err(LocalNodeManagerError::NodeName {
-                    name: name.to_string(),
-                });
-            }
-
-            let node = state.nodes.remove(index);
-            (index, node)
-        };
-
-        node.restart()
-            .await
-            .map_err(|source| LocalNodeManagerError::Restart { source })?;
-
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-        if index <= state.nodes.len() {
-            state.nodes.insert(index, node);
-        } else {
-            state.nodes.push(node);
+            return Err(NodeManagerError::Restart {
+                source: source.into(),
+            });
         }
+
+        self.put_node_back(index, node);
 
         Ok(())
     }
 
-    pub async fn stop_node(&self, name: &str) -> Result<(), LocalNodeManagerError> {
-        let (index, mut node) = {
-            let mut state = self
-                .state
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-            let Some(index) = state.indices_by_name.get(name).copied() else {
-                return Err(LocalNodeManagerError::NodeName {
-                    name: name.to_string(),
-                });
-            };
-
-            if index >= state.nodes.len() {
-                return Err(LocalNodeManagerError::NodeName {
-                    name: name.to_string(),
-                });
-            }
-
-            let node = state.nodes.remove(index);
-            (index, node)
-        };
+    pub async fn stop_node(&self, name: &str) -> Result<(), NodeManagerError> {
+        let (index, mut node) = self.take_node(name)?;
 
         node.stop().await;
 
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.put_node_back(index, node);
 
-        if index <= state.nodes.len() {
-            state.nodes.insert(index, node);
-        } else {
-            state.nodes.push(node);
-        }
         Ok(())
     }
-
     async fn spawn_and_register_node(
         &self,
         node_name: &str,
         network_port: u16,
-        config: RunConfig,
-        persist_dir: Option<std::path::PathBuf>,
-    ) -> Result<ApiClient, LocalNodeManagerError> {
-        let node = Node::spawn(config, node_name, persist_dir)
-            .await
-            .map_err(|source| LocalNodeManagerError::Spawn { source })?;
-        let client = node.api().clone();
+        config: <E as Application>::NodeConfig,
+        persist_dir: Option<&std::path::Path>,
+    ) -> Result<E::NodeClient, NodeManagerError> {
+        let node = spawn_node_from_config::<E>(
+            node_name.to_string(),
+            config,
+            self.keep_tempdir,
+            persist_dir,
+        )
+        .await
+        .map_err(|source| NodeManagerError::Spawn {
+            source: source.into(),
+        })?;
+        let client = node.client();
 
         self.node_clients.add_node(client.clone());
 
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self.lock_state();
 
         state.register_node(node_name, network_port, client.clone(), node);
 
         Ok(client)
     }
+
+    fn take_node(&self, name: &str) -> Result<(usize, Node<E>), NodeManagerError> {
+        let mut state = self.lock_state();
+        remove_node_from_state(&mut state, name)
+    }
+
+    fn put_node_back(&self, index: usize, node: Node<E>) {
+        let mut state = self.lock_state();
+        reinsert_node_at(&mut state, index, node);
+    }
+
+    fn start_snapshot(&self, requested_name: &str) -> Result<NodeStartSnapshot, NodeManagerError> {
+        let state = self.lock_state();
+        let index = state.node_count;
+        let node_name = validate_new_node_name::<E>(state.node_count, &state, requested_name)?;
+
+        Ok(NodeStartSnapshot {
+            peer_ports: state.peer_ports.clone(),
+            peer_ports_by_name: state.peer_ports_by_name.clone(),
+            node_name,
+            index,
+        })
+    }
+
+    fn lock_state(&self) -> MutexGuard<'_, LocalNodeManagerState<E>> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 }
 
-fn build_node_config(
-    general_config: testing_framework_config::topology::configs::GeneralConfig,
-    descriptor_patch: Option<&config::NodeConfigPatch>,
-    options_patch: Option<&config::NodeConfigPatch>,
-) -> Result<RunConfig, LocalNodeManagerError> {
-    let mut config = create_node_config(general_config);
-    config = apply_patch_if_needed(config, descriptor_patch)?;
-    config = apply_patch_if_needed(config, options_patch)?;
-
-    Ok(config)
+fn clear_registered_nodes<E: LocalDeployerEnv>(state: &mut LocalNodeManagerState<E>) {
+    state.nodes.clear();
+    state.peer_ports.clear();
+    state.peer_ports_by_name.clear();
+    state.clients_by_name.clear();
+    state.indices_by_name.clear();
+    state.node_count = 0;
 }
 
-fn apply_patch_if_needed(
-    config: RunConfig,
-    patch: Option<&config::NodeConfigPatch>,
-) -> Result<RunConfig, LocalNodeManagerError> {
-    let Some(patch) = patch else {
-        return Ok(config);
+fn validate_new_node_name<E: LocalDeployerEnv>(
+    node_count: usize,
+    state: &LocalNodeManagerState<E>,
+    requested_name: &str,
+) -> Result<String, NodeManagerError> {
+    let label = normalize_node_name(node_count, requested_name);
+
+    if state.peer_ports_by_name.contains_key(&label) {
+        return Err(NodeManagerError::InvalidArgument {
+            message: format!("node name '{label}' already exists"),
+        });
+    }
+
+    Ok(label)
+}
+
+fn normalize_node_name(index: usize, requested_name: &str) -> String {
+    if requested_name.trim().is_empty() {
+        return default_node_label(index);
+    }
+
+    if requested_name.starts_with("node-") {
+        return requested_name.to_string();
+    }
+
+    format!("node-{requested_name}")
+}
+
+fn default_node_label(index: usize) -> String {
+    format!("node-{index}")
+}
+
+fn remove_node_from_state<E: LocalDeployerEnv>(
+    state: &mut LocalNodeManagerState<E>,
+    name: &str,
+) -> Result<(usize, Node<E>), NodeManagerError> {
+    let Some(index) = state.indices_by_name.get(name).copied() else {
+        return Err(NodeManagerError::NodeName {
+            name: name.to_string(),
+        });
     };
 
-    apply_node_config_patch(config, patch).map_err(|err| LocalNodeManagerError::ConfigPatch {
-        message: err.to_string(),
-    })
+    if index >= state.nodes.len() {
+        return Err(NodeManagerError::NodeName {
+            name: name.to_string(),
+        });
+    }
+
+    Ok((index, state.nodes.remove(index)))
+}
+
+fn reinsert_node_at<E: LocalDeployerEnv>(
+    state: &mut LocalNodeManagerState<E>,
+    index: usize,
+    node: Node<E>,
+) {
+    if index <= state.nodes.len() {
+        state.nodes.insert(index, node);
+    } else {
+        state.nodes.push(node);
+    }
 }
 
 #[async_trait::async_trait]
-impl NodeControlHandle for LocalNodeManager {
+impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.restart_node(name).await.map_err(|err| err.into())
     }
@@ -483,8 +424,8 @@ impl NodeControlHandle for LocalNodeManager {
         self.stop_node(name).await.map_err(|err| err.into())
     }
 
-    async fn start_node(&self, name: &str) -> Result<StartedNode, DynError> {
-        self.start_node_with(name, StartNodeOptions::default())
+    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
+        self.start_node_with(name, StartNodeOptions::<E>::default())
             .await
             .map_err(|err| err.into())
     }
@@ -492,14 +433,14 @@ impl NodeControlHandle for LocalNodeManager {
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError> {
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
         self.start_node_with(name, options)
             .await
             .map_err(|err| err.into())
     }
 
-    fn node_client(&self, name: &str) -> Option<ApiClient> {
+    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.node_client(name)
     }
 

@@ -1,26 +1,23 @@
 use async_trait::async_trait;
 
-use crate::{
-    nodes::ApiClient,
-    scenario::{DynError, StartNodeOptions, StartedNode},
-};
+use crate::scenario::{Application, DynError, StartNodeOptions, StartedNode};
 
 /// Deployer-agnostic control surface for runtime node operations.
 #[async_trait]
-pub trait NodeControlHandle: Send + Sync {
+pub trait NodeControlHandle<E: Application>: Send + Sync {
     async fn restart_node(&self, _name: &str) -> Result<(), DynError> {
         Err("restart_node not supported by this deployer".into())
     }
 
-    async fn start_node(&self, _name: &str) -> Result<StartedNode, DynError> {
+    async fn start_node(&self, _name: &str) -> Result<StartedNode<E>, DynError> {
         Err("start_node not supported by this deployer".into())
     }
 
     async fn start_node_with(
         &self,
         _name: &str,
-        _options: StartNodeOptions,
-    ) -> Result<StartedNode, DynError> {
+        _options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
         Err("start_node_with not supported by this deployer".into())
     }
 
@@ -28,7 +25,7 @@ pub trait NodeControlHandle: Send + Sync {
         Err("stop_node not supported by this deployer".into())
     }
 
-    fn node_client(&self, _name: &str) -> Option<ApiClient> {
+    fn node_client(&self, _name: &str) -> Option<E::NodeClient> {
         None
     }
 

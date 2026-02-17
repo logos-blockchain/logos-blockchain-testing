@@ -99,9 +99,23 @@ build_bundle::load_env() {
   ROOT_DIR="$(common::repo_root)"
   export ROOT_DIR
 
+  local env_version="${VERSION:-}"
+  local env_node_rev="${LOGOS_BLOCKCHAIN_NODE_REV:-}"
+  local env_node_path="${LOGOS_BLOCKCHAIN_NODE_PATH:-}"
+
   common::require_file "${ROOT_DIR}/versions.env"
   # shellcheck disable=SC1091
   . "${ROOT_DIR}/versions.env"
+
+  if [ -n "${env_version}" ]; then
+    VERSION="${env_version}"
+  fi
+  if [ -n "${env_node_rev}" ]; then
+    LOGOS_BLOCKCHAIN_NODE_REV="${env_node_rev}"
+  fi
+  if [ -n "${env_node_path}" ]; then
+    LOGOS_BLOCKCHAIN_NODE_PATH="${env_node_path}"
+  fi
 
   DEFAULT_VERSION="${VERSION:?Missing VERSION in versions.env}"
   DEFAULT_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV:-}"
@@ -130,6 +144,23 @@ build_bundle::default_docker_platform() {
     amd64|x86_64) DOCKER_PLATFORM="linux/amd64" ;;
     *) DOCKER_PLATFORM="linux/amd64" ;;
   esac
+}
+
+build_bundle::ensure_circuits() {
+  if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS:-}" ]; then
+    [ -d "${LOGOS_BLOCKCHAIN_CIRCUITS}" ] || build_bundle::fail \
+      "LOGOS_BLOCKCHAIN_CIRCUITS is set but missing: ${LOGOS_BLOCKCHAIN_CIRCUITS}"
+    return 0
+  fi
+
+  local default_dir="${HOME}/.logos-blockchain-circuits"
+  if [ ! -d "${default_dir}" ]; then
+    echo "==> Circuits not found; installing to ${default_dir}"
+    bash "${ROOT_DIR}/scripts/setup/setup-logos-blockchain-circuits.sh" "${VERSION}" "${default_dir}"
+  fi
+
+  LOGOS_BLOCKCHAIN_CIRCUITS="${default_dir}"
+  export LOGOS_BLOCKCHAIN_CIRCUITS
 }
 
 build_bundle::parse_args() {
@@ -231,20 +262,27 @@ build_bundle::maybe_run_linux_build_in_docker() {
         node_path_env="/workspace${LOGOS_BLOCKCHAIN_NODE_PATH#"${ROOT_DIR}"}"
         ;;
       /*)
-        node_path_env="/external/logos-blockchain-node"
+        node_path_env="/external/nomos-node"
         extra_mounts+=("-v" "${LOGOS_BLOCKCHAIN_NODE_PATH}:${node_path_env}")
+        # Local node checkouts may reference this workspace via absolute
+        # /external/nomos-testing path dependencies.
+        extra_mounts+=("-v" "${ROOT_DIR}:/external/nomos-testing")
         ;;
       *)
         build_bundle::fail "--path must be absolute when cross-building in Docker"
         ;;
     esac
   fi
+  if [ -n "${LOGOS_BLOCKCHAIN_CIRCUITS:-}" ] && [ -d "${LOGOS_BLOCKCHAIN_CIRCUITS}" ]; then
+    extra_mounts+=("-v" "${LOGOS_BLOCKCHAIN_CIRCUITS}:/root/.logos-blockchain-circuits:ro")
+  fi
 
   echo "==> Building Linux bundle inside Docker"
   local container_output="/workspace${OUTPUT#"${ROOT_DIR}"}"
   local target_suffix
   target_suffix="$(build_bundle::docker_platform_suffix "${DOCKER_PLATFORM}")"
-  local host_target_dir="${ROOT_DIR}/.tmp/logos-blockchain-node-linux-target${target_suffix}"
+  local run_suffix="-$(date +%s)"
+  local host_target_dir="${ROOT_DIR}/.tmp/logos-blockchain-node-linux-target${target_suffix}${run_suffix}"
   mkdir -p "${ROOT_DIR}/.tmp/cargo-linux" "${host_target_dir}"
 
   local -a features_args=()
@@ -263,13 +301,15 @@ build_bundle::maybe_run_linux_build_in_docker() {
     -e VERSION="${VERSION}" \
     -e LOGOS_BLOCKCHAIN_NODE_REV="${LOGOS_BLOCKCHAIN_NODE_REV}" \
     -e LOGOS_BLOCKCHAIN_NODE_PATH="${node_path_env}" \
+    -e LOGOS_BLOCKCHAIN_CIRCUITS="/root/.logos-blockchain-circuits" \
     -e LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM="${DOCKER_PLATFORM}" \
+    -e LOGOS_BLOCKCHAIN_NODE_TARGET_SUFFIX="${run_suffix}" \
     -e LOGOS_BLOCKCHAIN_EXTRA_FEATURES="${LOGOS_BLOCKCHAIN_EXTRA_FEATURES:-}" \
     -e BUNDLE_IN_CONTAINER=1 \
     -e CARGO_HOME=/workspace/.tmp/cargo-linux \
-    -e CARGO_TARGET_DIR="/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}" \
+    -e CARGO_TARGET_DIR="/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}${run_suffix}" \
     -v "${ROOT_DIR}/.tmp/cargo-linux":/workspace/.tmp/cargo-linux \
-    -v "${host_target_dir}:/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}" \
+    -v "${host_target_dir}:/workspace/.tmp/logos-blockchain-node-linux-target${target_suffix}${run_suffix}" \
     -v "${ROOT_DIR}:/workspace" \
     "${extra_mounts[@]}" \
     -w /workspace \
@@ -291,6 +331,7 @@ build_bundle::prepare_circuits() {
     if [ -n "${BUNDLE_IN_CONTAINER:-}" ]; then
       target_suffix="$(build_bundle::docker_platform_suffix "${LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM:-}")"
     fi
+    target_suffix="${target_suffix}${LOGOS_BLOCKCHAIN_NODE_TARGET_SUFFIX:-}"
     NODE_TARGET="${ROOT_DIR}/.tmp/logos-blockchain-node-linux-target${target_suffix}"
   fi
 
@@ -315,7 +356,11 @@ build_bundle::build_binaries() {
   (
     cd "${NODE_SRC}"
     if [ -d "${NODE_TARGET}" ]; then
-      rm -rf "${NODE_TARGET}"
+      if [ -n "${BUNDLE_IN_CONTAINER:-}" ]; then
+        find "${NODE_TARGET}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+      else
+        rm -rf "${NODE_TARGET}"
+      fi
     fi
     if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
       echo "Using local logos-blockchain-node checkout at ${NODE_SRC} (no fetch/checkout)"
@@ -329,6 +374,9 @@ build_bundle::build_binaries() {
       git clean -fdx
     fi
 
+    if [ -z "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
+      build_bundle::apply_nomos_node_patches "${NODE_SRC}"
+    fi
     if [ -n "${BUNDLE_RUSTUP_TOOLCHAIN}" ]; then
       RUSTFLAGS='--cfg feature="high-active-slot-coefficient" --cfg feature="build-verification-key"' \
         CARGO_FEATURE_BUILD_VERIFICATION_KEY=1 \
@@ -386,6 +434,7 @@ build_bundle::main() {
   build_bundle::clean_cargo_linux_cache
   build_bundle::parse_args "$@"
   build_bundle::validate_and_finalize
+  build_bundle::ensure_circuits
   build_bundle::maybe_run_linux_build_in_docker
   build_bundle::prepare_circuits
   build_bundle::build_binaries

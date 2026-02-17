@@ -13,6 +13,7 @@ pub fn node_host() -> String {
         debug!(host, env = NODE_HOST_ENV, "using node host override");
         return host;
     }
+
     if let Ok(host) = env::var(KUBE_SERVICE_HOST_ENV)
         && !host.is_empty()
     {

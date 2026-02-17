@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "logos-runner.fullname" . }}-assets
+  labels:
+    {{- include "logos-runner.labels" . | nindent 4 }}
+data:
+  cfgsync.yaml: |
+{{- if .Values.cfgsync.config }}
+{{ .Values.cfgsync.config | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  cfgsync.bundle.yaml: |
+{{- if .Values.cfgsync.bundle }}
+{{ .Values.cfgsync.bundle | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  run_cfgsync.sh: |
+{{- if .Values.scripts.runCfgsyncSh }}
+{{ .Values.scripts.runCfgsyncSh | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  run_logos.sh: |
+{{- if .Values.scripts.runLogosSh }}
+{{ .Values.scripts.runLogosSh | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  run_logos_node.sh: |
+{{- if .Values.scripts.runLogosNodeSh }}
+{{ .Values.scripts.runLogosNodeSh | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}

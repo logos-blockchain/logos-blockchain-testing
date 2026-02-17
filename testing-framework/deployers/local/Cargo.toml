@@ -13,17 +13,10 @@ version               = "0.1.0"
 workspace = true
 
 [dependencies]
-async-trait              = "0.1"
-lb-libp2p                = { workspace = true }
-lb-network-service       = { workspace = true }
-lb-node                  = { workspace = true }
-lb-utils                 = { workspace = true }
-rand                     = { workspace = true }
-testing-framework-config = { workspace = true }
-testing-framework-core   = { path = "../../core" }
-thiserror                = { workspace = true }
-tokio                    = { workspace = true }
-tracing                  = { workspace = true }
-
-[dev-dependencies]
-tracing-subscriber = "0.3"
+async-trait            = "0.1"
+tempfile               = { workspace = true }
+testing-framework-core = { path = "../../core" }
+thiserror              = { workspace = true }
+tokio                  = { workspace = true }
+tokio-retry            = "0.3"
+tracing                = { workspace = true }

@@ -1,0 +1,20 @@
+image: "public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test"
+imagePullPolicy: IfNotPresent
+
+# Keep node time in-process by default; NTP backends are flaky in short-lived
+# test clusters and can stall consensus if they fail to sync.
+timeBackend: "monotonic"
+
+cfgsync:
+  port: 4400
+  config: ""
+  bundle: ""
+
+scripts:
+  runCfgsyncSh: ""
+  runLogosSh: ""
+  runLogosNodeSh: ""
+
+nodes:
+  count: 1
+  nodes: []

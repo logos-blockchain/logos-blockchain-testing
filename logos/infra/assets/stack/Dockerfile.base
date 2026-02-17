@@ -1,0 +1,106 @@
+# syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
+# Ignore warnings about sensitive information as this is test data.
+
+ARG VERSION
+ARG LOGOS_BLOCKCHAIN_NODE_REV
+ARG LOGOS_BLOCKCHAIN_NODE_USE_LOCAL_CONTEXT
+
+# ===========================
+# BUILD IMAGE
+# ===========================
+
+FROM rust:1.91.0-slim-bookworm AS builder
+
+ARG VERSION
+ARG LOGOS_BLOCKCHAIN_NODE_REV
+ARG LOGOS_BLOCKCHAIN_FORCE_BUILD
+ARG LOGOS_BLOCKCHAIN_NODE_USE_LOCAL_CONTEXT
+
+LABEL maintainer="augustinas@status.im" \
+    source="https://github.com/logos-co/nomos-node" \
+    description="Logos testnet build image"
+
+WORKDIR /workspace
+COPY . .
+
+# Reduce debug artifact size.
+ENV CARGO_PROFILE_DEV_DEBUG=0
+ENV LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV}
+ENV LOGOS_BLOCKCHAIN_FORCE_BUILD=${LOGOS_BLOCKCHAIN_FORCE_BUILD}
+ENV LOGOS_BLOCKCHAIN_NODE_USE_LOCAL_CONTEXT=${LOGOS_BLOCKCHAIN_NODE_USE_LOCAL_CONTEXT}
+
+# Install dependencies needed for building RocksDB and for circuit tooling.
+RUN apt-get update && apt-get install -yq \
+    git gcc g++ clang make cmake m4 xz-utils libgmp-dev libssl-dev pkg-config ca-certificates curl wget file \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN chmod +x \
+      /workspace/logos/infra/assets/stack/scripts/docker/prepare_binaries.sh \
+      /workspace/logos/infra/assets/stack/scripts/docker/build_cfgsync.sh \
+      /workspace/logos/infra/assets/stack/scripts/setup-logos-blockchain-circuits.sh \
+    || true
+
+RUN /workspace/logos/infra/assets/stack/scripts/setup-logos-blockchain-circuits.sh "${VERSION}" /opt/circuits
+
+ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
+
+RUN /workspace/scripts/build/build-rapidsnark.sh /opt/circuits
+
+RUN --mount=type=bind,from=nomos_node,source=.,target=/nomos-node-local,ro \
+    if [ "${LOGOS_BLOCKCHAIN_NODE_USE_LOCAL_CONTEXT}" = "1" ]; then \
+      rm -rf /nomos-node && mkdir -p /nomos-node && cp -a /nomos-node-local/. /nomos-node/ ; \
+      if grep -q 'file:///Users/.*nomos-node' /workspace/Cargo.toml; then \
+        sed -i "s#git = \\\"file:///Users/[^\\\"]*nomos-node\\\"#path = \\\"/nomos-node\\\"#g" /workspace/Cargo.toml; \
+      fi; \
+      # Local checkout may reference ../nomos-testing paths; remap them to /workspace in container.
+      if [ -f /nomos-node/Cargo.toml ]; then \
+        sed -i 's#\.\./nomos-testing/#../workspace/#g' /nomos-node/Cargo.toml; \
+      fi; \
+      if [ -f /nomos-node/tests/Cargo.toml ]; then \
+        sed -i 's#\.\./\.\./nomos-testing/#../../workspace/#g' /nomos-node/tests/Cargo.toml; \
+      fi; \
+    else \
+      if grep -q 'file:///Users/.*nomos-node' /workspace/Cargo.toml; then \
+        sed -i "s#git = \\\"file:///Users/[^\\\"]*nomos-node\\\"#git = \\\"https://github.com/logos-co/nomos-node.git\\\", rev = \\\"${LOGOS_BLOCKCHAIN_NODE_REV}\\\"#g" /workspace/Cargo.toml; \
+      fi; \
+      rm -rf /nomos-node; \
+      git clone https://github.com/logos-co/nomos-node.git /nomos-node; \
+      cd /nomos-node; \
+      git fetch origin "${LOGOS_BLOCKCHAIN_NODE_REV}"; \
+      git checkout "${LOGOS_BLOCKCHAIN_NODE_REV}"; \
+    fi
+
+RUN /workspace/logos/infra/assets/stack/scripts/docker/prepare_binaries.sh
+
+# Strip host-local patches to avoid unresolved absolute paths inside containers.
+RUN sed -i '/^\[patch\."https:\/\/github.com\/logos-co\/nomos-node"\]/,/^$/d' /workspace/Cargo.toml
+
+RUN /workspace/logos/infra/assets/stack/scripts/docker/build_cfgsync.sh
+
+# ===========================
+# BASE RUNTIME IMAGE
+# ===========================
+
+FROM ubuntu:24.04 AS base
+
+LABEL maintainer="augustinas@status.im" \
+    source="https://github.com/logos-co/nomos-node" \
+    description="Logos base runtime image (testing)"
+
+RUN apt-get update && apt-get install -yq \
+    libstdc++6 \
+    libgmp10 \
+    libgomp1 \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /workspace/artifacts/logos-blockchain-node /usr/bin/logos-blockchain-node
+COPY --from=builder /workspace/artifacts/cfgsync-server /usr/bin/cfgsync-server
+COPY --from=builder /workspace/artifacts/cfgsync-client /usr/bin/cfgsync-client
+COPY --from=builder /opt/circuits /opt/circuits
+
+ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/circuits
+
+EXPOSE 3000 8080 9000 60000

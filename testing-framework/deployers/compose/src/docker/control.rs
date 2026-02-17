@@ -3,19 +3,42 @@ use std::{
     time::Duration,
 };
 
-use testing_framework_core::scenario::{DynError, NodeControlHandle};
+use testing_framework_core::{
+    adjust_timeout,
+    scenario::{Application, DynError, NodeControlHandle},
+};
 use tokio::process::Command;
 use tracing::info;
 
 use crate::{docker::commands::run_docker_command, errors::ComposeRunnerError};
 
 const COMPOSE_RESTART_TIMEOUT: Duration = Duration::from_secs(120);
+const COMPOSE_RESTART_DESCRIPTION: &str = "docker compose restart";
 
 pub async fn restart_compose_service(
     compose_file: &Path,
     project_name: &str,
     service: &str,
 ) -> Result<(), ComposeRunnerError> {
+    let command = compose_restart_command(compose_file, project_name, service);
+
+    info!(
+        service,
+        project = project_name,
+        compose_file = %compose_file.display(),
+        "restarting compose service"
+    );
+
+    run_docker_command(
+        command,
+        adjust_timeout(COMPOSE_RESTART_TIMEOUT),
+        COMPOSE_RESTART_DESCRIPTION,
+    )
+    .await
+    .map_err(ComposeRunnerError::Compose)
+}
+
+fn compose_restart_command(compose_file: &Path, project_name: &str, service: &str) -> Command {
     let mut command = Command::new("docker");
     command
         .arg("compose")
@@ -25,16 +48,7 @@ pub async fn restart_compose_service(
         .arg(project_name)
         .arg("restart")
         .arg(service);
-
-    let description = "docker compose restart";
-    info!(service, project = project_name, compose_file = %compose_file.display(), "restarting compose service");
-    run_docker_command(
-        command,
-        testing_framework_core::adjust_timeout(COMPOSE_RESTART_TIMEOUT),
-        description,
-    )
-    .await
-    .map_err(ComposeRunnerError::Compose)
+    command
 }
 
 /// Compose-specific node control handle for restarting nodes.
@@ -44,7 +58,7 @@ pub struct ComposeNodeControl {
 }
 
 #[async_trait::async_trait]
-impl NodeControlHandle for ComposeNodeControl {
+impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         restart_compose_service(&self.compose_file, &self.project_name, name)
             .await

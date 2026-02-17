@@ -10,11 +10,11 @@ mod orchestrator;
 mod ports;
 
 pub use forwarding::PortForwardHandle;
+const DEFAULT_HTTP_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_NODE_HTTP_TIMEOUT: Duration = Duration::from_secs(240);
+const DEFAULT_NODE_HTTP_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_K8S_DEPLOYMENT_TIMEOUT: Duration = Duration::from_secs(180);
 pub use orchestrator::wait_for_cluster_ready;
-use testing_framework_config::constants::{
-    DEFAULT_HTTP_POLL_INTERVAL, DEFAULT_K8S_DEPLOYMENT_TIMEOUT, DEFAULT_NODE_HTTP_PROBE_TIMEOUT,
-    DEFAULT_NODE_HTTP_TIMEOUT,
-};
 
 /// Container and host-side HTTP ports for a node in the Helm chart values.
 #[derive(Clone, Copy, Debug)]
@@ -81,6 +81,12 @@ pub enum ClusterWaitError {
         role: &'static str,
         port: u16,
         timeout: Duration,
+    },
+    #[error("failed to reach {role} HTTP endpoints: {source}")]
+    NodeHttp {
+        role: &'static str,
+        #[source]
+        source: testing_framework_core::scenario::DynError,
     },
     #[error("failed to start port-forward for service {service} port {port}: {source}")]
     PortForward {

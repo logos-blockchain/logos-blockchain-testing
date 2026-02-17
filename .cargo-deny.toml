@@ -53,9 +53,10 @@ license-files = [{ hash = 0xcb90f5db, path = "LICENSE" }]
 name          = "jsonpath-rust"
 
 [sources]
-allow-git        = ["https://github.com/EspressoSystems/jellyfish.git"]
-unknown-git      = "deny"
+allow-git = [
+  "https://github.com/EspressoSystems/jellyfish.git",
+  "https://github.com/logos-blockchain/logos-blockchain.git",
+  "https://github.com/logos-co/Overwatch",
+]
+unknown-git = "deny"
 unknown-registry = "deny"
-
-[sources.allow-org]
-github = ["logos-co"]

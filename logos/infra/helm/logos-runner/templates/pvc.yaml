@@ -1,0 +1,16 @@
+{{- if eq .Values.kzg.mode "hostPath" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "logos-runner.fullname" . }}-kzg
+  labels:
+    {{- include "logos-runner.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: manual
+  volumeName: {{ include "logos-runner.fullname" . }}-kzg
+  resources:
+    requests:
+      storage: {{ .Values.kzg.storageSize }}
+{{- end }}

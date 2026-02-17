@@ -1,0 +1,61 @@
+{{- $root := . -}}
+{{- $nodes := default (list) .Values.nodes.nodes }}
+{{- range $i, $node := $nodes }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "logos-runner.fullname" $root }}-node-{{ $i }}
+  labels:
+    {{- include "logos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "logos-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 8 }}
+    spec:
+      containers:
+        - name: node
+          image: {{ $root.Values.image }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          command: ["/bin/sh", "/etc/logos/scripts/run_logos_node.sh"]
+          ports:
+            - name: http
+              containerPort: {{ default 18080 $node.apiPort }}
+            - name: testing-http
+              containerPort: {{ default 18081 $node.testingHttpPort }}
+            - name: swarm-udp
+              containerPort: {{ default 60000 $node.networkPort }}
+              protocol: UDP
+          env:
+            - name: CFG_SERVER_ADDR
+              value: http://{{ include "logos-runner.fullname" $root }}-cfgsync:{{ $root.Values.cfgsync.port }}
+            - name: LOGOS_BLOCKCHAIN_TIME_BACKEND
+              value: {{ $root.Values.timeBackend | default "monotonic" | quote }}
+            {{- range $key, $value := $node.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          volumeMounts:
+            - name: assets
+              mountPath: /etc/logos
+              readOnly: true
+      volumes:
+        - name: assets
+          configMap:
+            name: {{ include "logos-runner.fullname" $root }}-assets
+            defaultMode: 0755
+            items:
+              - key: cfgsync.yaml
+                path: cfgsync.yaml
+              - key: run_cfgsync.sh
+                path: scripts/run_cfgsync.sh
+              - key: run_logos.sh
+                path: scripts/run_logos.sh
+              - key: run_logos_node.sh
+                path: scripts/run_logos_node.sh
+{{- end }}
