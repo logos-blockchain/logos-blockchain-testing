@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
-    fs, io, mem,
+    env, fs,
+    io::{self, Error, ErrorKind},
+    mem,
     net::{Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     process::Stdio,
@@ -192,18 +194,8 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         persist_dir: Option<&Path>,
         client_from_endpoints: impl FnOnce(&NodeEndpoints) -> Client,
     ) -> Result<Self, ProcessSpawnError> {
-        let tempdir = match persist_dir {
-            Some(path) => {
-                std::fs::create_dir_all(path).map_err(|source| ProcessSpawnError::TempDir {
-                    source: io::Error::new(
-                        source.kind(),
-                        format!("failed to create persist dir {}: {source}", path.display()),
-                    ),
-                })?;
-                TempDir::new_in(path).map_err(|source| ProcessSpawnError::TempDir { source })?
-            }
-            None => TempDir::new().map_err(|source| ProcessSpawnError::TempDir { source })?,
-        };
+        let tempdir = create_tempdir(persist_dir)?;
+
         let launch = build_launch_spec(&config, tempdir.path(), label)
             .map_err(|source| ProcessSpawnError::Config { source })?;
         let endpoints = endpoints_from_config(&config);
@@ -338,6 +330,43 @@ fn write_launch_file(base: &Path, file: &LaunchFile) -> io::Result<()> {
 
 fn default_api_socket() -> SocketAddr {
     SocketAddr::from((Ipv4Addr::LOCALHOST, 0))
+}
+
+fn create_tempdir(persist_dir: Option<&Path>) -> Result<TempDir, ProcessSpawnError> {
+    match persist_dir {
+        Some(dir) => {
+            let final_dir_name = dir
+                .components()
+                .last()
+                .ok_or_else(|| ProcessSpawnError::TempDir {
+                    source: Error::new(ErrorKind::Other, "invalid final directory"),
+                })?
+                .as_os_str()
+                .display()
+                .to_string()
+                + "_";
+            let parent_dir = dir.parent().ok_or_else(|| ProcessSpawnError::TempDir {
+                source: Error::new(ErrorKind::Other, "invalid parent directory"),
+            })?;
+
+            fs::create_dir_all(parent_dir).map_err(|source| ProcessSpawnError::TempDir {
+                source: Error::new(
+                    source.kind(),
+                    format!(
+                        "failed to create parent dir for persist path {}: {source}",
+                        dir.display()
+                    ),
+                ),
+            })?;
+
+            TempDir::with_prefix_in(final_dir_name, parent_dir)
+                .map_err(|source| ProcessSpawnError::TempDir { source })
+        }
+        None => {
+            let cwd = env::current_dir().map_err(|source| ProcessSpawnError::TempDir { source })?;
+            TempDir::new_in(cwd).map_err(|source| ProcessSpawnError::TempDir { source })
+        }
+    }
 }
 
 #[cfg(test)]

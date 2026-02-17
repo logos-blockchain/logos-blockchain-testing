@@ -14,3 +14,15 @@ pub use process::{
     LaunchEnvVar, LaunchFile, LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessNode,
     ProcessSpawnError,
 };
+
+const KEEP_LOGS_ENV: &str = "TF_KEEP_LOGS";
+
+pub(crate) fn keep_tempdir_from_env() -> bool {
+    env_enabled(KEEP_LOGS_ENV)
+}
+
+fn env_enabled(key: &str) -> bool {
+    std::env::var(key).ok().is_some_and(|value| {
+        value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes")
+    })
+}

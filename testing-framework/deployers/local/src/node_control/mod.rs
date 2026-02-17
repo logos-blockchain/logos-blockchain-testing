@@ -75,13 +75,15 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     ) -> Result<Vec<Node<E>>, ProcessSpawnError> {
         let configs = E::build_initial_node_configs(descriptors)?;
         let mut spawned = Vec::with_capacity(configs.len());
-        for config_entry in configs {
+
+        for (index, config_entry) in configs.into_iter().enumerate() {
+            let persist_dir = E::initial_persist_dir(descriptors, &config_entry.name, index);
             spawned.push(
                 spawn_node_from_config::<E>(
                     config_entry.name,
                     config_entry.config,
                     keep_tempdir,
-                    None,
+                    persist_dir.as_deref(),
                 )
                 .await?,
             );

@@ -6,7 +6,8 @@ use thiserror::Error;
 
 use crate::{
     env::LocalDeployerEnv,
-    node_control::{NodeManager, NodeManagerError},
+    keep_tempdir_from_env,
+    node_control::{NodeManager, NodeManagerError, NodeManagerSeed},
 };
 
 #[derive(Debug, Error)]
@@ -22,9 +23,11 @@ pub struct ManualCluster<E: LocalDeployerEnv> {
 
 impl<E: LocalDeployerEnv> ManualCluster<E> {
     pub fn from_topology(descriptors: E::Deployment) -> Self {
-        let nodes = NodeManager::new(
+        let nodes = NodeManager::new_with_seed(
             descriptors,
             testing_framework_core::scenario::NodeClients::default(),
+            keep_tempdir_from_env(),
+            NodeManagerSeed::default(),
         );
 
         Self { nodes }

@@ -25,6 +25,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     env::{LocalDeployerEnv, Node, wait_local_http_readiness},
+    keep_tempdir_from_env,
     manual::ManualCluster,
     node_control::{NodeManager, NodeManagerSeed},
 };
@@ -395,8 +396,8 @@ const fn default_local_retry_policy() -> RetryPolicy {
     )
 }
 
-const fn keep_tempdir(policy: DeploymentPolicy) -> bool {
-    policy.cleanup_policy.preserve_artifacts
+fn keep_tempdir(policy: DeploymentPolicy) -> bool {
+    policy.cleanup_policy.preserve_artifacts || keep_tempdir_from_env()
 }
 
 async fn spawn_feed_with<E: Application>(

@@ -21,7 +21,7 @@ fn set_default_env(key: &str, value: &str) {
 }
 
 pub fn init_logging_defaults() {
-    set_default_env("LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS", "1");
+    set_default_env("TF_KEEP_LOGS", "1");
     set_default_env("LOGOS_BLOCKCHAIN_LOG_LEVEL", "info");
     set_default_env("RUST_LOG", "info");
 }

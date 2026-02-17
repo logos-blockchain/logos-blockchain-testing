@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use testing_framework_core::scenario::{
     Application, DynError, HttpReadinessRequirement, ReadinessError, StartNodeOptions,
@@ -35,6 +38,14 @@ where
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError>;
+
+    fn initial_persist_dir(
+        _topology: &Self::Deployment,
+        _node_name: &str,
+        _index: usize,
+    ) -> Option<PathBuf> {
+        None
+    }
 
     fn build_launch_spec(
         config: &<Self as Application>::NodeConfig,
