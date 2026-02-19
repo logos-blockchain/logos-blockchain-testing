@@ -41,14 +41,12 @@ pub struct SourceOrchestrationPlan {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SourceModeName {
     Attached,
-    ExternalOnly,
 }
 
 impl fmt::Display for SourceModeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Attached => f.write_str("Attached"),
-            Self::ExternalOnly => f.write_str("ExternalOnly"),
         }
     }
 }
@@ -87,9 +85,9 @@ impl SourceOrchestrationPlan {
 
     fn ensure_currently_wired(&self) -> Result<(), SourceOrchestrationPlanError> {
         match self.mode {
-            SourceOrchestrationMode::Managed { .. } => Ok(()),
+            SourceOrchestrationMode::Managed { .. }
+            | SourceOrchestrationMode::ExternalOnly { .. } => Ok(()),
             SourceOrchestrationMode::Attached { .. } => not_wired(SourceModeName::Attached),
-            SourceOrchestrationMode::ExternalOnly { .. } => not_wired(SourceModeName::ExternalOnly),
         }
     }
 }

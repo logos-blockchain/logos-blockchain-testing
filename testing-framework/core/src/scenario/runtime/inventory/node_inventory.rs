@@ -304,25 +304,18 @@ fn upsert_node<E: Application>(
 }
 
 fn canonical_identity<E: Application>(
-    client: &E::NodeClient,
+    _client: &E::NodeClient,
     identity_hint: Option<String>,
     inner: &mut NodeInventoryInner<E>,
 ) -> String {
-    // Priority: explicit hint -> app-provided peer id -> endpoint -> synthetic.
+    // Priority: explicit hint -> synthetic.
     if let Some(identity) = identity_hint.filter(|value| !value.trim().is_empty()) {
         return identity;
     }
 
-    if let Some(identity) = E::node_peer_identity(client) {
-        return format!("peer:{identity}");
-    }
-
-    if let Some(identity) = E::node_endpoint_identity(client) {
-        return format!("endpoint:{identity}");
-    }
-
     let synthetic = format!("node:{}", inner.next_synthetic_id);
     inner.next_synthetic_id += 1;
+
     synthetic
 }
 
