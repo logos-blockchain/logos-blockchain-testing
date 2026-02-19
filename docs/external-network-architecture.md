@@ -17,11 +17,11 @@ flowchart TD
     BO[Bootstrap Orchestrator]
 
     A --> B[Managed Nodes Spec\ncount/config/patches]
-    A --> C[Attach Spec\nprovider + selector]
+    A --> C[Attach Spec\ntyped k8s/compose source]
     A --> D[External Nodes Spec\nstatic endpoints]
 
     B --> E[Deployer\nlocal/docker/k8s]
-    C --> F[AttachProvider\nstatic/k8s/compose/...]
+    C --> F[AttachProvider\nk8s/compose/...]
     D --> BO
 
     E --> G[Managed Node Handles\norigin=Managed, ownership=Owned]
@@ -147,7 +147,7 @@ This keeps scenario logic reusable while preserving explicit safety boundaries.
 - **Node identity**: use `peer_id` as canonical key; fallback to `(host, port)` only when peer id is unavailable.
 - **Dedup merge**: if same canonical identity appears from multiple sources, keep one handle and record all origins for diagnostics.
 - **Bootstrap peers**: every managed node gets at least 2 seed peers from distinct origins when possible.
-- **Readiness gate**: default to quorum (`>= 2` or `>= 50%`, whichever is greater); allow strict-all via scenario override.
+- **Readiness gate**: phase 1 default is `AllReady` (all known nodes must pass readiness). Keep policy extensible for `Quorum` and future `SourceAware` readiness.
 - **Borrowed node safety**: lifecycle and config patch disabled by default for borrowed nodes; explicit opt-in required.
 - **Compatibility preflight**: enforce matching chain/network id + protocol version before scenario start.
 - **Failure handling**:
@@ -155,6 +155,20 @@ This keeps scenario logic reusable while preserving explicit safety boundaries.
   - attach discovery empty result: fatal if attach requested
   - partial attach discovery: warn + continue only if readiness quorum still satisfiable
 - **Cleanup**: delete owned artifacts only; never mutate or delete borrowed node resources.
+
+## Source Combination Modes
+
+Use a typed source enum so invalid combinations are unrepresentable:
+
+- `Managed { external }`: deployer-managed nodes with optional external overlays.
+- `Attached { attach, external }`: attached cluster with optional external overlays.
+- `ExternalOnly { external }`: explicit external-only mode.
+
+Validation rules:
+
+- `Managed` requires managed deployment to produce nodes (`managed_count > 0`).
+- `Attached` requires managed deployment to produce zero nodes (`managed + attached` is disallowed).
+- `ExternalOnly` requires non-empty `external` and zero managed nodes.
 
 ## Clean Codebase Layout (Recommended)
 
@@ -220,3 +234,17 @@ These changes help future external-network support while preserving current publ
 - Add internal node metadata (`origin`, `ownership`, `capabilities`) defaulted to managed semantics.
 - Standardize node identity and dedup helpers (`peer_id` preferred, endpoint fallback).
 - Keep current env vars/flags intact, but parse via a single typed config layer.
+- Add a single source-orchestration match path (`ScenarioSources`) inside deployers; unsupported source modes fail fast with typed errors until attach/external registration lands.
+
+## Open Risks and Required Clarifications
+
+Before full rollout, lock these semantics explicitly:
+
+- **Source enum precedence**: typed `ScenarioSources` variants are the primary control plane. Runtime counts validate, but never redefine, source intent.
+- **Ownership conflict resolution**: define behavior when a deduped node appears from multiple sources with different ownership (for example, fail-fast by default; optional override if needed).
+- **Source-aware readiness**: avoid quorum rules that can hide managed deployment failures. Require per-source readiness constraints (for example, minimum managed-ready + global quorum).
+- **Readiness rollout**: phase 1 uses `AllReady`; later rollout can add `SourceAware` constraints once mixed-source behavior is validated.
+- **Bootstrap mutation boundary**: peer/bootstrap policy mutates managed nodes only unless an attach provider explicitly supports controlled mutation.
+- **Compatibility contract expansion**: preflight checks should include API/auth/genesis compatibility class, not only network/protocol identifiers.
+- **Deterministic membership policy**: define strict vs degradable attach behavior so partial discovery does not silently change scenario semantics.
+- **Step migration boundary**: after `NodeInventory` handoff, scenario steps must not read deployer-specific state directly.

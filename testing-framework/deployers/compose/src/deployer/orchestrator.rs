@@ -222,6 +222,10 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
     input: RuntimeBuildInput<'_, E>,
 ) -> Result<ComposeRuntime<E>, ComposeRunnerError> {
     let node_clients = input.deployed.node_clients.clone();
+    if node_clients.is_empty() {
+        return Err(ComposeRunnerError::RuntimePreflight);
+    }
+
     let (feed, feed_task) = input
         .deployed
         .client_builder

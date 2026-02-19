@@ -92,6 +92,8 @@ pub enum K8sRunnerError {
     InternalInvariant { message: String },
     #[error("k8s runner requires at least one node client for feed data")]
     BlockFeedMissing,
+    #[error("runtime preflight failed: no node clients available")]
+    RuntimePreflight,
     #[error("failed to initialize feed: {source}")]
     BlockFeed {
         #[source]
@@ -344,6 +346,15 @@ async fn build_runtime_artifacts<E: K8sDeployEnv>(
 ) -> Result<RuntimeArtifacts<E>, K8sRunnerError> {
     info!("building node clients");
     let node_clients = build_node_clients_or_fail::<E>(cluster).await?;
+    if node_clients.is_empty() {
+        fail_cluster(
+            cluster,
+            "runtime preflight failed: no node clients available",
+        )
+        .await;
+        return Err(K8sRunnerError::RuntimePreflight);
+    }
+
     let telemetry = build_telemetry_or_fail(cluster, observability).await?;
     let (feed, feed_task) = spawn_block_feed_or_fail::<E>(cluster, &node_clients).await?;
 

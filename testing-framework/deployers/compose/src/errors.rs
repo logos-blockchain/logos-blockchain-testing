@@ -33,6 +33,8 @@ pub enum ComposeRunnerError {
     Telemetry(#[from] MetricsError),
     #[error("feed requires at least one node client")]
     BlockFeedMissing,
+    #[error("runtime preflight failed: no node clients available")]
+    RuntimePreflight,
     #[error("failed to start feed: {source}")]
     BlockFeed {
         #[source]

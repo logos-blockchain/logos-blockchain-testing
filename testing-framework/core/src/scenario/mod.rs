@@ -12,6 +12,7 @@ mod deployment_policy;
 mod expectation;
 mod observability;
 mod runtime;
+mod sources;
 mod workload;
 
 pub type DynError = Box<dyn Error + Send + Sync + 'static>;
@@ -36,8 +37,9 @@ pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
-    CleanupGuard, Deployer, Feed, FeedHandle, FeedRuntime, HttpReadinessRequirement, NodeClients,
-    ReadinessError, RunContext, RunHandle, RunMetrics, Runner, ScenarioError, StabilizationConfig,
+    BorrowedNode, BorrowedOrigin, CleanupGuard, Deployer, Feed, FeedHandle, FeedRuntime,
+    HttpReadinessRequirement, ManagedNode, NodeClients, NodeHandle, NodeInventory, ReadinessError,
+    RunContext, RunHandle, RunMetrics, Runner, ScenarioError, StabilizationConfig,
     metrics::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
         PrometheusEndpoint, PrometheusInstantSample,
@@ -46,6 +48,7 @@ pub use runtime::{
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
     wait_http_readiness, wait_until_stable,
 };
+pub use sources::{AttachSource, ExternalNodeSource, ScenarioSources, SourceReadinessPolicy};
 pub use workload::Workload;
 
 pub use crate::env::Application;

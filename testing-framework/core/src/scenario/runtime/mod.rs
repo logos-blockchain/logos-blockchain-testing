@@ -1,13 +1,17 @@
 pub mod context;
 mod deployer;
+pub mod inventory;
 pub mod metrics;
 mod node_clients;
+pub(crate) mod orchestration;
+pub(crate) mod providers;
 pub mod readiness;
 mod runner;
 
 use async_trait::async_trait;
 pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics};
 pub use deployer::{Deployer, ScenarioError};
+pub use inventory::{BorrowedNode, BorrowedOrigin, ManagedNode, NodeHandle, NodeInventory};
 pub use node_clients::NodeClients;
 pub use readiness::{
     HttpReadinessRequirement, ReadinessError, StabilizationConfig, wait_for_http_ports,

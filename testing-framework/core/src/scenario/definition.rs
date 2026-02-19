@@ -4,9 +4,16 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, DeploymentPolicy, DynError, HttpReadinessRequirement, NodeControlCapability,
-    ObservabilityCapability, builder_ops::CoreBuilderAccess, expectation::Expectation,
-    runtime::context::RunMetrics, workload::Workload,
+    Application, AttachSource, DeploymentPolicy, DynError, ExternalNodeSource,
+    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability, ScenarioSources,
+    SourceReadinessPolicy,
+    builder_ops::CoreBuilderAccess,
+    expectation::Expectation,
+    runtime::{
+        context::RunMetrics,
+        orchestration::{SourceModeName, SourceOrchestrationPlan, SourceOrchestrationPlanError},
+    },
+    workload::Workload,
 };
 use crate::topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, DynTopologyError};
 
@@ -21,6 +28,10 @@ pub enum ScenarioBuildError {
     WorkloadInit { name: String, source: DynError },
     #[error("expectation '{name}' failed to initialize")]
     ExpectationInit { name: String, source: DynError },
+    #[error("invalid scenario source configuration: {message}")]
+    SourceConfiguration { message: String },
+    #[error("scenario source mode '{mode}' is not wired into deployers yet")]
+    SourceModeNotWiredYet { mode: &'static str },
 }
 
 /// Immutable scenario definition used by the runner, workloads, and
@@ -32,6 +43,8 @@ pub struct Scenario<E: Application, Caps = ()> {
     duration: Duration,
     expectation_cooldown: Duration,
     deployment_policy: DeploymentPolicy,
+    sources: ScenarioSources,
+    source_readiness_policy: SourceReadinessPolicy,
     capabilities: Caps,
 }
 
@@ -43,6 +56,8 @@ impl<E: Application, Caps> Scenario<E, Caps> {
         duration: Duration,
         expectation_cooldown: Duration,
         deployment_policy: DeploymentPolicy,
+        sources: ScenarioSources,
+        source_readiness_policy: SourceReadinessPolicy,
         capabilities: Caps,
     ) -> Self {
         Self {
@@ -52,6 +67,8 @@ impl<E: Application, Caps> Scenario<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
+            sources,
+            source_readiness_policy,
             capabilities,
         }
     }
@@ -97,6 +114,20 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
+    /// Selected source readiness policy.
+    ///
+    /// This is currently reserved for future mixed-source orchestration and
+    /// does not change runtime behavior yet.
+    pub const fn source_readiness_policy(&self) -> SourceReadinessPolicy {
+        self.source_readiness_policy
+    }
+
+    #[must_use]
+    pub fn sources(&self) -> &ScenarioSources {
+        &self.sources
+    }
+
+    #[must_use]
     pub const fn capabilities(&self) -> &Caps {
         &self.capabilities
     }
@@ -111,6 +142,8 @@ pub struct Builder<E: Application, Caps = ()> {
     duration: Duration,
     expectation_cooldown: Option<Duration>,
     deployment_policy: DeploymentPolicy,
+    sources: ScenarioSources,
+    source_readiness_policy: SourceReadinessPolicy,
     capabilities: Caps,
 }
 
@@ -206,6 +239,26 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
+            pub fn with_attach_source(self, attach: AttachSource) -> Self {
+                self.map_core_builder(|builder| builder.with_attach_source(attach))
+            }
+
+            #[must_use]
+            pub fn with_external_node(self, node: ExternalNodeSource) -> Self {
+                self.map_core_builder(|builder| builder.with_external_node(node))
+            }
+
+            #[must_use]
+            pub fn with_source_readiness_policy(self, policy: SourceReadinessPolicy) -> Self {
+                self.map_core_builder(|builder| builder.with_source_readiness_policy(policy))
+            }
+
+            #[must_use]
+            pub fn with_external_only_sources(self) -> Self {
+                self.map_core_builder(|builder| builder.with_external_only_sources())
+            }
+
+            #[must_use]
             pub fn run_duration(&self) -> Duration {
                 self.core_builder_ref().run_duration()
             }
@@ -288,6 +341,8 @@ impl<E: Application, Caps: Default> Builder<E, Caps> {
             duration: Duration::ZERO,
             expectation_cooldown: None,
             deployment_policy: DeploymentPolicy::default(),
+            sources: ScenarioSources::default(),
+            source_readiness_policy: SourceReadinessPolicy::default(),
             capabilities: Caps::default(),
         }
     }
@@ -389,6 +444,8 @@ impl<E: Application, Caps> Builder<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
+            sources,
+            source_readiness_policy,
             ..
         } = self;
 
@@ -400,6 +457,8 @@ impl<E: Application, Caps> Builder<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
+            sources,
+            source_readiness_policy,
             capabilities,
         }
     }
@@ -500,6 +559,34 @@ impl<E: Application, Caps> Builder<E, Caps> {
         self
     }
 
+    #[must_use]
+    pub fn with_attach_source(mut self, attach: AttachSource) -> Self {
+        self.sources.set_attach(attach);
+        self
+    }
+
+    #[must_use]
+    pub fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
+        self.sources.add_external_node(node);
+        self
+    }
+
+    #[must_use]
+    /// Configure source readiness policy metadata.
+    ///
+    /// This is currently reserved for future mixed-source orchestration and
+    /// does not change runtime behavior yet.
+    pub fn with_source_readiness_policy(mut self, policy: SourceReadinessPolicy) -> Self {
+        self.source_readiness_policy = policy;
+        self
+    }
+
+    #[must_use]
+    pub fn with_external_only_sources(mut self) -> Self {
+        self.sources.set_external_only();
+        self
+    }
+
     fn add_workload(&mut self, workload: Box<dyn Workload<E>>) {
         self.expectations.extend(workload.expectations());
         self.workloads.push(workload);
@@ -517,6 +604,11 @@ impl<E: Application, Caps> Builder<E, Caps> {
         let descriptors = parts.resolve_deployment()?;
         let run_plan = parts.run_plan();
         let run_metrics = RunMetrics::new(run_plan.duration);
+        let _source_plan = build_source_orchestration_plan(
+            parts.sources(),
+            descriptors.node_count(),
+            parts.source_readiness_policy,
+        )?;
 
         initialize_components(
             &descriptors,
@@ -542,6 +634,8 @@ impl<E: Application, Caps> Builder<E, Caps> {
             run_plan.duration,
             run_plan.expectation_cooldown,
             parts.deployment_policy,
+            parts.sources,
+            parts.source_readiness_policy,
             parts.capabilities,
         ))
     }
@@ -560,6 +654,8 @@ struct BuilderParts<E: Application, Caps> {
     duration: Duration,
     expectation_cooldown: Option<Duration>,
     deployment_policy: DeploymentPolicy,
+    sources: ScenarioSources,
+    source_readiness_policy: SourceReadinessPolicy,
     capabilities: Caps,
 }
 
@@ -573,6 +669,8 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
+            sources,
+            source_readiness_policy,
             capabilities,
             ..
         } = builder;
@@ -585,6 +683,8 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
+            sources,
+            source_readiness_policy,
             capabilities,
         }
     }
@@ -600,6 +700,40 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             duration: enforce_min_duration(self.duration),
             expectation_cooldown: expectation_cooldown_for(self.expectation_cooldown),
         }
+    }
+
+    fn sources(&self) -> &ScenarioSources {
+        &self.sources
+    }
+}
+
+fn build_source_orchestration_plan(
+    sources: &ScenarioSources,
+    managed_node_count: usize,
+    readiness_policy: SourceReadinessPolicy,
+) -> Result<SourceOrchestrationPlan, ScenarioBuildError> {
+    SourceOrchestrationPlan::try_from_sources(sources, managed_node_count, readiness_policy)
+        .map_err(source_plan_error_to_build_error)
+}
+
+fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> ScenarioBuildError {
+    match error {
+        SourceOrchestrationPlanError::ManagedNodesMissing => ScenarioBuildError::SourceConfiguration {
+            message:
+                "managed source selected but deployment produced 0 managed nodes; choose a deployment provider/configuration that yields managed nodes".to_string(),
+        },
+        SourceOrchestrationPlanError::SourceModeNotWiredYet { mode } => {
+            ScenarioBuildError::SourceModeNotWiredYet {
+                mode: source_mode_name(mode),
+            }
+        }
+    }
+}
+
+const fn source_mode_name(mode: SourceModeName) -> &'static str {
+    match mode {
+        SourceModeName::Attached => "Attached",
+        SourceModeName::ExternalOnly => "ExternalOnly",
     }
 }
 

@@ -77,7 +77,7 @@ impl Metrics {
 
     fn require_prometheus(&self) -> Result<Arc<PrometheusEndpoint>, MetricsError> {
         self.prometheus()
-            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable"))
+            .ok_or_else(|| MetricsError::new("prometheus endpoint unavailable".to_string()))
     }
 }
 
@@ -122,8 +122,8 @@ pub enum MetricsError {
 
 impl MetricsError {
     #[must_use]
-    pub fn new(message: impl Into<String>) -> Self {
-        Self::Store(message.into())
+    pub fn new(message: String) -> Self {
+        Self::Store(message)
     }
 }
 
@@ -188,7 +188,7 @@ fn query_prometheus(client: PrometheusClient, query: String) -> Result<PromqlRes
             .map_err(|error| MetricsError::new(format!("prometheus query failed: {error}")))
     })
     .join()
-    .map_err(|_| MetricsError::new("prometheus query thread panicked"))?
+    .map_err(|_| MetricsError::new("prometheus query thread panicked".to_string()))?
 }
 
 fn samples_from_prometheus_data(data: &PrometheusData) -> Vec<PrometheusInstantSample> {

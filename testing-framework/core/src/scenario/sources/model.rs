@@ -1,0 +1,168 @@
+/// Typed attach source for existing clusters.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AttachSource {
+    K8s {
+        namespace: Option<String>,
+        label_selector: String,
+    },
+    Compose {
+        project: Option<String>,
+        services: Vec<String>,
+    },
+}
+
+impl AttachSource {
+    #[must_use]
+    pub fn k8s(label_selector: String) -> Self {
+        Self::K8s {
+            namespace: None,
+            label_selector,
+        }
+    }
+
+    #[must_use]
+    pub fn with_namespace(self, namespace: String) -> Self {
+        match self {
+            Self::K8s { label_selector, .. } => Self::K8s {
+                namespace: Some(namespace),
+                label_selector,
+            },
+            other => other,
+        }
+    }
+
+    #[must_use]
+    pub fn compose(services: Vec<String>) -> Self {
+        Self::Compose {
+            project: None,
+            services,
+        }
+    }
+
+    #[must_use]
+    pub fn with_project(self, project: String) -> Self {
+        match self {
+            Self::Compose { services, .. } => Self::Compose {
+                project: Some(project),
+                services,
+            },
+            other => other,
+        }
+    }
+}
+
+/// Static external node endpoint that should be included in the runtime
+/// inventory.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExternalNodeSource {
+    pub label: String,
+    pub endpoint: String,
+}
+
+impl ExternalNodeSource {
+    #[must_use]
+    pub fn new(label: String, endpoint: String) -> Self {
+        Self { label, endpoint }
+    }
+}
+
+/// Planned readiness strategy for mixed managed/attached/external sources.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+pub enum SourceReadinessPolicy {
+    /// Phase 1 default: require every known node to pass readiness checks.
+    #[default]
+    AllReady,
+    /// Optional relaxed policy for large/partial environments.
+    Quorum,
+    /// Future policy for per-source constraints (for example managed minimum
+    /// plus overall quorum).
+    SourceAware,
+}
+
+/// Source model that makes invalid managed+attached combinations
+/// unrepresentable by type.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScenarioSources {
+    Managed {
+        external: Vec<ExternalNodeSource>,
+    },
+    Attached {
+        attach: AttachSource,
+        external: Vec<ExternalNodeSource>,
+    },
+    ExternalOnly {
+        external: Vec<ExternalNodeSource>,
+    },
+}
+
+impl Default for ScenarioSources {
+    fn default() -> Self {
+        Self::Managed {
+            external: Vec::new(),
+        }
+    }
+}
+
+impl ScenarioSources {
+    #[must_use]
+    pub const fn managed() -> Self {
+        Self::Managed {
+            external: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn attached(attach: AttachSource) -> Self {
+        Self::Attached {
+            attach,
+            external: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn external_only(external: Vec<ExternalNodeSource>) -> Self {
+        Self::ExternalOnly { external }
+    }
+
+    pub fn add_external_node(&mut self, node: ExternalNodeSource) {
+        match self {
+            Self::Managed { external }
+            | Self::Attached { external, .. }
+            | Self::ExternalOnly { external } => external.push(node),
+        }
+    }
+
+    pub fn set_attach(&mut self, attach: AttachSource) {
+        let external = self.external_nodes().to_vec();
+        *self = Self::Attached { attach, external };
+    }
+
+    pub fn set_external_only(&mut self) {
+        let external = self.external_nodes().to_vec();
+        *self = Self::ExternalOnly { external };
+    }
+
+    #[must_use]
+    pub fn external_nodes(&self) -> &[ExternalNodeSource] {
+        match self {
+            Self::Managed { external }
+            | Self::Attached { external, .. }
+            | Self::ExternalOnly { external } => external,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_managed(&self) -> bool {
+        matches!(self, Self::Managed { .. })
+    }
+
+    #[must_use]
+    pub const fn is_attached(&self) -> bool {
+        matches!(self, Self::Attached { .. })
+    }
+
+    #[must_use]
+    pub const fn is_external_only(&self) -> bool {
+        matches!(self, Self::ExternalOnly { .. })
+    }
+}

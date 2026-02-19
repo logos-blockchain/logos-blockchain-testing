@@ -84,6 +84,8 @@ pub enum ProcessDeployerError {
         #[source]
         source: DynError,
     },
+    #[error("runtime preflight failed: no node clients available")]
+    RuntimePreflight,
     #[error("expectations failed: {source}")]
     ExpectationsFailed {
         #[source]
@@ -421,10 +423,8 @@ async fn spawn_feed_with<E: Application>(
         .map_err(workload_error)
 }
 
-fn workload_error(source: impl Into<DynError>) -> ProcessDeployerError {
-    ProcessDeployerError::WorkloadFailed {
-        source: source.into(),
-    }
+fn workload_error(source: DynError) -> ProcessDeployerError {
+    ProcessDeployerError::WorkloadFailed { source }
 }
 
 fn log_local_deploy_start(node_count: usize, policy: DeploymentPolicy, has_node_control: bool) {
@@ -449,6 +449,10 @@ async fn run_context_for<E: Application>(
     expectation_cooldown: Duration,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<RuntimeContext<E>, ProcessDeployerError> {
+    if node_clients.is_empty() {
+        return Err(ProcessDeployerError::RuntimePreflight);
+    }
+
     let (feed, feed_task) = spawn_feed_with::<E>(&node_clients).await?;
     let context = RunContext::new(
         descriptors,
