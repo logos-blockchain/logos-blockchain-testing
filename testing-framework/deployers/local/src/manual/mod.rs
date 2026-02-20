@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::{
     env::LocalDeployerEnv,
+    external::build_external_client,
     keep_tempdir_from_env,
     node_control::{NodeManager, NodeManagerError, NodeManagerSeed},
 };
@@ -93,7 +94,8 @@ impl<E: LocalDeployerEnv> ManualCluster<E> {
     ) -> Result<(), DynError> {
         let node_clients = self.nodes.node_clients();
         for source in external_sources {
-            let client = E::external_node_client(&source)?;
+            let client = E::external_node_client(&source)
+                .or_else(|_| build_external_client::<E>(&source))?;
             node_clients.add_node(client);
         }
 
