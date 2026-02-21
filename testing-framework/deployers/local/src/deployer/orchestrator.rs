@@ -135,9 +135,9 @@ impl From<ScenarioError> for ProcessDeployerError {
     fn from(value: ScenarioError) -> Self {
         match value {
             ScenarioError::Workload(source) => Self::WorkloadFailed { source },
-            ScenarioError::ExpectationCapture(source) | ScenarioError::Expectations(source) => {
-                Self::ExpectationsFailed { source }
-            }
+            ScenarioError::ExpectationCapture(source)
+            | ScenarioError::ExpectationFailedDuringCapture(source)
+            | ScenarioError::Expectations(source) => Self::ExpectationsFailed { source },
         }
     }
 }

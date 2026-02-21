@@ -19,5 +19,12 @@ pub trait Expectation<E: Application>: Send + Sync {
         Ok(())
     }
 
+    /// Optional periodic check used by fail-fast expectation mode.
+    ///
+    /// Default is a no-op so existing expectations stay end-of-run only.
+    async fn check_during_capture(&mut self, _ctx: &RunContext<E>) -> Result<(), DynError> {
+        Ok(())
+    }
+
     async fn evaluate(&mut self, ctx: &RunContext<E>) -> Result<(), DynError>;
 }

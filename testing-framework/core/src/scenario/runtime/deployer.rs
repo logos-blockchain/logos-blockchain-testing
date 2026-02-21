@@ -10,6 +10,8 @@ pub enum ScenarioError {
     Workload(#[source] DynError),
     #[error("expectation capture failed: {0}")]
     ExpectationCapture(#[source] DynError),
+    #[error("expectation failed during capture: {0}")]
+    ExpectationFailedDuringCapture(#[source] DynError),
     #[error("expectations failed:\n{0}")]
     Expectations(#[source] DynError),
 }
