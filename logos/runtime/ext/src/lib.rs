@@ -12,7 +12,8 @@ pub use scenario::{
     ScenarioBuilderWith,
 };
 use testing_framework_core::scenario::{
-    Application, DynError, ExternalNodeSource, FeedRuntime, RunContext, StartNodeOptions,
+    Application, DynError, ExternalNodeSource, FeedRuntime, NodeClients, RunContext,
+    StartNodeOptions,
 };
 use testing_framework_runner_local::{
     BuiltNodeConfig, LocalDeployerEnv, NodeConfigEntry,
@@ -48,9 +49,12 @@ impl Application for LbcExtEnv {
     }
 
     async fn prepare_feed(
-        client: Self::NodeClient,
+        node_clients: NodeClients<Self>,
     ) -> Result<(<Self::FeedRuntime as FeedRuntime>::Feed, Self::FeedRuntime), DynError> {
-        <LbcEnv as Application>::prepare_feed(client).await
+        let clients = node_clients.snapshot();
+        let upstream_clients = NodeClients::<lb_framework::LbcEnv>::new(clients);
+
+        <LbcEnv as Application>::prepare_feed(upstream_clients).await
     }
 }
 
@@ -59,6 +63,10 @@ impl LbcScenarioEnv for LbcExtEnv {}
 impl LbcBlockFeedEnv for LbcExtEnv {
     fn block_feed_subscription(ctx: &RunContext<Self>) -> broadcast::Receiver<Arc<BlockRecord>> {
         ctx.feed().subscribe()
+    }
+
+    fn block_feed(ctx: &RunContext<Self>) -> BlockFeed {
+        ctx.feed()
     }
 }
 

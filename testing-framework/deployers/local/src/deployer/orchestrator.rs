@@ -444,20 +444,18 @@ fn keep_tempdir(policy: DeploymentPolicy) -> bool {
 async fn spawn_feed_with<E: Application>(
     node_clients: &NodeClients<E>,
 ) -> Result<(<E::FeedRuntime as FeedRuntime>::Feed, FeedHandle), ProcessDeployerError> {
-    debug!(
-        nodes = node_clients.len(),
-        "selecting node client for local feed"
-    );
+    let node_count = node_clients.len();
+    debug!(nodes = node_count, "starting local feed");
 
-    let Some(block_source_client) = node_clients.random_client() else {
+    if node_count == 0 {
         return Err(ProcessDeployerError::WorkloadFailed {
             source: "feed requires at least one node".into(),
         });
-    };
+    }
 
     info!("starting feed");
 
-    spawn_feed::<E>(block_source_client)
+    spawn_feed::<E>(node_clients.clone())
         .await
         .map_err(workload_error)
 }

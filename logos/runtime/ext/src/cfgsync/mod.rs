@@ -9,7 +9,7 @@ use cfgsync_runtime::{
     render::{RenderedCfgsync, apply_timeout_floor, ensure_bundle_path, write_rendered_cfgsync},
 };
 use lb_tracing::metrics::otlp::OtlpMetricsConfig;
-use lb_tracing_service::MetricsLayer;
+use lb_tracing_service::MetricsLayerSettings;
 use reqwest::Url;
 use testing_framework_core::cfgsync::CfgsyncEnv;
 
@@ -77,7 +77,7 @@ fn apply_render_options<E: CfgsyncEnv>(
 
 fn apply_metrics_endpoint(cfg: &mut template::CfgSyncConfig, endpoint: Option<Url>) {
     if let Some(endpoint) = endpoint {
-        cfg.tracing_settings.metrics = MetricsLayer::Otlp(OtlpMetricsConfig {
+        cfg.tracing_settings.metrics = MetricsLayerSettings::Otlp(OtlpMetricsConfig {
             endpoint,
             host_identifier: "node".into(),
         });

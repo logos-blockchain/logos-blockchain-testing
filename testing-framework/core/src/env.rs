@@ -3,7 +3,7 @@ use std::io;
 use async_trait::async_trait;
 
 use crate::{
-    scenario::{DynError, ExternalNodeSource, FeedRuntime},
+    scenario::{DynError, ExternalNodeSource, FeedRuntime, NodeClients},
     topology::DeploymentDescriptor,
 };
 
@@ -26,6 +26,8 @@ pub trait Application: Send + Sync + 'static {
     }
 
     async fn prepare_feed(
-        client: Self::NodeClient,
-    ) -> Result<(<Self::FeedRuntime as FeedRuntime>::Feed, Self::FeedRuntime), DynError>;
+        node_clients: NodeClients<Self>,
+    ) -> Result<(<Self::FeedRuntime as FeedRuntime>::Feed, Self::FeedRuntime), DynError>
+    where
+        Self: Sized;
 }
