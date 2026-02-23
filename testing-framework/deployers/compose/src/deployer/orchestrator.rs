@@ -5,7 +5,8 @@ use testing_framework_core::{
     scenario::{
         DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
         NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, RunContext, Runner, Scenario,
+        RequiresNodeControl, RunContext, Runner, Scenario, build_source_orchestration_plan,
+        orchestrate_sources,
     },
     topology::DeploymentDescriptor,
 };
@@ -47,6 +48,13 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     where
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
+        // Source planning is currently resolved here before deployer-specific setup.
+        let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
+            ComposeRunnerError::SourceOrchestration {
+                source: source.into(),
+            }
+        })?;
+
         let deployment = scenario.deployment();
         let setup = DeploymentSetup::<E>::new(deployment);
         setup.validate_environment().await?;
@@ -64,13 +72,18 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             &observability,
         );
 
-        let deployed = deploy_nodes::<E>(
+        let mut deployed = deploy_nodes::<E>(
             &mut prepared.environment,
             &prepared.descriptors,
             readiness_enabled,
             deployment_policy.readiness_requirement,
         )
         .await?;
+
+        // Source orchestration currently runs here after managed clients are prepared.
+        deployed.node_clients = orchestrate_sources(&source_plan, deployed.node_clients)
+            .await
+            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
 
         let runner = self
             .build_runner::<Caps>(

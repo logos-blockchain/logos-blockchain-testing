@@ -45,6 +45,7 @@ pub struct Scenario<E: Application, Caps = ()> {
     deployment_policy: DeploymentPolicy,
     sources: ScenarioSources,
     source_readiness_policy: SourceReadinessPolicy,
+    source_orchestration_plan: SourceOrchestrationPlan,
     capabilities: Caps,
 }
 
@@ -58,6 +59,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
         deployment_policy: DeploymentPolicy,
         sources: ScenarioSources,
         source_readiness_policy: SourceReadinessPolicy,
+        source_orchestration_plan: SourceOrchestrationPlan,
         capabilities: Caps,
     ) -> Self {
         Self {
@@ -69,6 +71,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
             deployment_policy,
             sources,
             source_readiness_policy,
+            source_orchestration_plan,
             capabilities,
         }
     }
@@ -125,6 +128,11 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     #[must_use]
     pub fn sources(&self) -> &ScenarioSources {
         &self.sources
+    }
+
+    #[must_use]
+    pub const fn source_orchestration_plan(&self) -> &SourceOrchestrationPlan {
+        &self.source_orchestration_plan
     }
 
     #[must_use]
@@ -604,11 +612,8 @@ impl<E: Application, Caps> Builder<E, Caps> {
         let descriptors = parts.resolve_deployment()?;
         let run_plan = parts.run_plan();
         let run_metrics = RunMetrics::new(run_plan.duration);
-        let _source_plan = build_source_orchestration_plan(
-            parts.sources(),
-            descriptors.node_count(),
-            parts.source_readiness_policy,
-        )?;
+        let source_orchestration_plan =
+            build_source_orchestration_plan(parts.sources(), parts.source_readiness_policy)?;
 
         initialize_components(
             &descriptors,
@@ -636,6 +641,7 @@ impl<E: Application, Caps> Builder<E, Caps> {
             parts.deployment_policy,
             parts.sources,
             parts.source_readiness_policy,
+            source_orchestration_plan,
             parts.capabilities,
         ))
     }
@@ -709,19 +715,14 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
 
 fn build_source_orchestration_plan(
     sources: &ScenarioSources,
-    managed_node_count: usize,
     readiness_policy: SourceReadinessPolicy,
 ) -> Result<SourceOrchestrationPlan, ScenarioBuildError> {
-    SourceOrchestrationPlan::try_from_sources(sources, managed_node_count, readiness_policy)
+    SourceOrchestrationPlan::try_from_sources(sources, readiness_policy)
         .map_err(source_plan_error_to_build_error)
 }
 
 fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> ScenarioBuildError {
     match error {
-        SourceOrchestrationPlanError::ManagedNodesMissing => ScenarioBuildError::SourceConfiguration {
-            message:
-                "managed source selected but deployment produced 0 managed nodes; choose a deployment provider/configuration that yields managed nodes".to_string(),
-        },
         SourceOrchestrationPlanError::SourceModeNotWiredYet { mode } => {
             ScenarioBuildError::SourceModeNotWiredYet {
                 mode: source_mode_name(mode),

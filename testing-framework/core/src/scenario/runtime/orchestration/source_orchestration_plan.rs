@@ -56,8 +56,6 @@ impl fmt::Display for SourceModeName {
 /// Validation failure while building orchestration plan from sources.
 #[derive(Debug, thiserror::Error)]
 pub enum SourceOrchestrationPlanError {
-    #[error("managed source selected but deployment produced 0 managed nodes")]
-    ManagedNodesMissing,
     #[error("source mode '{mode}' is not wired into deployers yet")]
     SourceModeNotWiredYet { mode: SourceModeName },
 }
@@ -65,10 +63,8 @@ pub enum SourceOrchestrationPlanError {
 impl SourceOrchestrationPlan {
     pub fn try_from_sources(
         sources: &ScenarioSources,
-        managed_node_count: usize,
         readiness_policy: SourceReadinessPolicy,
     ) -> Result<Self, SourceOrchestrationPlanError> {
-        ensure_managed_sources_have_nodes(sources, managed_node_count)?;
         let mode = mode_from_sources(sources);
 
         let plan = Self {
@@ -96,17 +92,6 @@ impl SourceOrchestrationPlan {
             SourceOrchestrationMode::ExternalOnly { .. } => not_wired(SourceModeName::ExternalOnly),
         }
     }
-}
-
-fn ensure_managed_sources_have_nodes(
-    sources: &ScenarioSources,
-    managed_node_count: usize,
-) -> Result<(), SourceOrchestrationPlanError> {
-    if matches!(sources, ScenarioSources::Managed { .. }) && managed_node_count == 0 {
-        return Err(SourceOrchestrationPlanError::ManagedNodesMissing);
-    }
-
-    Ok(())
 }
 
 fn mode_from_sources(sources: &ScenarioSources) -> SourceOrchestrationMode {

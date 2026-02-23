@@ -1,0 +1,115 @@
+use std::sync::Arc;
+
+use crate::scenario::{
+    Application, DynError, NodeClients, Scenario,
+    runtime::{
+        orchestration::{
+            SourceOrchestrationMode, SourceOrchestrationPlan, SourceOrchestrationPlanError,
+        },
+        providers::{
+            AttachProviderError, AttachedNode, ExternalNode, ExternalProviderError,
+            ManagedProviderError, ManagedProvisionedNode, SourceProviders, StaticManagedProvider,
+        },
+    },
+};
+
+/// Resolved source nodes grouped by source class.
+#[derive(Clone, Default)]
+pub struct ResolvedSources<E: Application> {
+    pub managed: Vec<ManagedProvisionedNode<E>>,
+    pub attached: Vec<AttachedNode<E>>,
+    pub external: Vec<ExternalNode<E>>,
+}
+
+/// Errors while resolving sources through unified providers.
+#[derive(Debug, thiserror::Error)]
+pub enum SourceResolveError {
+    #[error(transparent)]
+    Plan(#[from] SourceOrchestrationPlanError),
+    #[error("managed source selected but deployer produced 0 managed nodes")]
+    ManagedNodesMissing,
+    #[error(transparent)]
+    Managed(#[from] ManagedProviderError),
+    #[error(transparent)]
+    Attach(#[from] AttachProviderError),
+    #[error(transparent)]
+    External(#[from] ExternalProviderError),
+}
+
+/// Builds a source orchestration plan from scenario source configuration.
+pub fn build_source_orchestration_plan<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+) -> Result<SourceOrchestrationPlan, SourceOrchestrationPlanError> {
+    SourceOrchestrationPlan::try_from_sources(
+        scenario.sources(),
+        scenario.source_readiness_policy(),
+    )
+}
+
+/// Resolves runtime source nodes via unified providers from orchestration plan.
+///
+/// This currently returns managed nodes for managed mode and keeps external
+/// overlays for managed mode reserved until external wiring is enabled.
+pub async fn resolve_sources<E: Application>(
+    plan: &SourceOrchestrationPlan,
+    providers: &SourceProviders<E>,
+) -> Result<ResolvedSources<E>, SourceResolveError> {
+    match &plan.mode {
+        SourceOrchestrationMode::Managed { managed, .. } => {
+            let managed_nodes = providers.managed.provide(managed).await?;
+            Ok(ResolvedSources {
+                managed: managed_nodes,
+                attached: Vec::new(),
+                external: Vec::new(),
+            })
+        }
+        SourceOrchestrationMode::Attached { attach, external } => {
+            let attached_nodes = providers.attach.discover(attach).await?;
+            let external_nodes = providers.external.provide(external).await?;
+            Ok(ResolvedSources {
+                managed: Vec::new(),
+                attached: attached_nodes,
+                external: external_nodes,
+            })
+        }
+        SourceOrchestrationMode::ExternalOnly { external } => {
+            let external_nodes = providers.external.provide(external).await?;
+            Ok(ResolvedSources {
+                managed: Vec::new(),
+                attached: Vec::new(),
+                external: external_nodes,
+            })
+        }
+    }
+}
+
+/// Orchestrates scenario sources through the unified source orchestration path.
+///
+/// Current wiring is transitional:
+/// - Managed mode is backed by prebuilt deployer-managed clients via
+///   `StaticManagedProvider`.
+/// - Attached and external modes are represented in the orchestration plan and
+///   resolver, but provider wiring is still scaffolding-only until full runtime
+///   integration lands.
+pub async fn orchestrate_sources<E: Application>(
+    plan: &SourceOrchestrationPlan,
+    node_clients: NodeClients<E>,
+) -> Result<NodeClients<E>, DynError> {
+    let providers: SourceProviders<E> = SourceProviders::default().with_managed(Arc::new(
+        StaticManagedProvider::new(node_clients.snapshot()),
+    ));
+
+    let resolved = resolve_sources(plan, &providers).await?;
+
+    if matches!(plan.mode, SourceOrchestrationMode::Managed { .. }) && resolved.managed.is_empty() {
+        return Err(SourceResolveError::ManagedNodesMissing.into());
+    }
+
+    Ok(NodeClients::new(
+        resolved
+            .managed
+            .into_iter()
+            .map(|node| node.client)
+            .collect(),
+    ))
+}

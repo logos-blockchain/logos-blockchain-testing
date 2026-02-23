@@ -12,7 +12,8 @@ use testing_framework_core::{
     scenario::{
         Application, CleanupGuard, Deployer, DeploymentPolicy, DynError, FeedHandle, FeedRuntime,
         HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, RunContext, Runner, Scenario, ScenarioError, spawn_feed,
+        RetryPolicy, RunContext, Runner, Scenario, ScenarioError, build_source_orchestration_plan,
+        orchestrate_sources, spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -86,6 +87,11 @@ pub enum ProcessDeployerError {
     },
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
+    #[error("source orchestration failed: {source}")]
+    SourceOrchestration {
+        #[source]
+        source: DynError,
+    },
     #[error("expectations failed: {source}")]
     ExpectationsFailed {
         #[source]
@@ -180,6 +186,13 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         &self,
         scenario: &Scenario<E, ()>,
     ) -> Result<Runner<E>, ProcessDeployerError> {
+        // Source planning is currently resolved here before node spawn/runtime setup.
+        let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
+            ProcessDeployerError::SourceOrchestration {
+                source: source.into(),
+            }
+        })?;
+
         log_local_deploy_start(
             scenario.deployment().node_count(),
             scenario.deployment_policy(),
@@ -188,6 +201,12 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
 
         let nodes = Self::spawn_nodes_for_scenario(scenario, self.membership_check).await?;
         let node_clients = NodeClients::<E>::new(nodes.iter().map(|node| node.client()).collect());
+
+        // Source orchestration currently runs here after managed clients are prepared.
+        let node_clients = orchestrate_sources(&source_plan, node_clients)
+            .await
+            .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
+
         let runtime = run_context_for(
             scenario.deployment().clone(),
             node_clients,
@@ -207,6 +226,13 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         &self,
         scenario: &Scenario<E, NodeControlCapability>,
     ) -> Result<Runner<E>, ProcessDeployerError> {
+        // Source planning is currently resolved here before node spawn/runtime setup.
+        let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
+            ProcessDeployerError::SourceOrchestration {
+                source: source.into(),
+            }
+        })?;
+
         log_local_deploy_start(
             scenario.deployment().node_count(),
             scenario.deployment_policy(),
@@ -215,7 +241,10 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
 
         let nodes = Self::spawn_nodes_for_scenario(scenario, self.membership_check).await?;
         let node_control = self.node_control_from(scenario, nodes);
-        let node_clients = node_control.node_clients();
+        // Source orchestration currently runs here after managed clients are prepared.
+        let node_clients = orchestrate_sources(&source_plan, node_control.node_clients())
+            .await
+            .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
         let runtime = run_context_for(
             scenario.deployment().clone(),
             node_clients,
