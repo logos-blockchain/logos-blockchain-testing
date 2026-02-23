@@ -12,8 +12,8 @@ use testing_framework_core::{
     scenario::{
         Application, CleanupGuard, Deployer, DeploymentPolicy, DynError, FeedHandle, FeedRuntime,
         HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, RunContext, Runner, Scenario, ScenarioError, build_source_orchestration_plan,
-        orchestrate_sources, spawn_feed,
+        RetryPolicy, RunContext, Runner, Scenario, ScenarioError, SourceOrchestrationPlan,
+        build_source_orchestration_plan, spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -26,6 +26,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     env::{LocalDeployerEnv, Node, wait_local_http_readiness},
+    external::build_external_client,
     keep_tempdir_from_env,
     manual::ManualCluster,
     node_control::{NodeManager, NodeManagerSeed},
@@ -202,9 +203,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let nodes = Self::spawn_nodes_for_scenario(scenario, self.membership_check).await?;
         let node_clients = NodeClients::<E>::new(nodes.iter().map(|node| node.client()).collect());
 
-        // Source orchestration currently runs here after managed clients are prepared.
-        let node_clients = orchestrate_sources(&source_plan, node_clients)
-            .await
+        let node_clients = merge_source_clients_for_local::<E>(&source_plan, node_clients)
             .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
 
         let runtime = run_context_for(
@@ -241,10 +240,9 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
 
         let nodes = Self::spawn_nodes_for_scenario(scenario, self.membership_check).await?;
         let node_control = self.node_control_from(scenario, nodes);
-        // Source orchestration currently runs here after managed clients are prepared.
-        let node_clients = orchestrate_sources(&source_plan, node_control.node_clients())
-            .await
-            .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
+        let node_clients =
+            merge_source_clients_for_local::<E>(&source_plan, node_control.node_clients())
+                .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
         let runtime = run_context_for(
             scenario.deployment().clone(),
             node_clients,
@@ -312,6 +310,18 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let nodes = RetryIf::spawn(strategy, operation, should_retry).await?;
         Ok(nodes)
     }
+}
+
+fn merge_source_clients_for_local<E: LocalDeployerEnv>(
+    source_plan: &SourceOrchestrationPlan,
+    node_clients: NodeClients<E>,
+) -> Result<NodeClients<E>, DynError> {
+    for source in source_plan.external_sources() {
+        let client =
+            E::external_node_client(source).or_else(|_| build_external_client::<E>(source))?;
+        node_clients.add_node(client);
+    }
+    Ok(node_clients)
 }
 
 fn build_retry_execution_config(

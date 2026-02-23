@@ -7,8 +7,9 @@ use crate::scenario::{
             SourceOrchestrationMode, SourceOrchestrationPlan, SourceOrchestrationPlanError,
         },
         providers::{
-            AttachProviderError, AttachedNode, ExternalNode, ExternalProviderError,
-            ManagedProviderError, ManagedProvisionedNode, SourceProviders, StaticManagedProvider,
+            ApplicationExternalProvider, AttachProviderError, AttachedNode, ExternalNode,
+            ExternalProviderError, ManagedProviderError, ManagedProvisionedNode, SourceProviders,
+            StaticManagedProvider,
         },
     },
 };
@@ -47,9 +48,6 @@ pub fn build_source_orchestration_plan<E: Application, Caps>(
 }
 
 /// Resolves runtime source nodes via unified providers from orchestration plan.
-///
-/// This currently returns managed nodes for managed mode and keeps external
-/// overlays for managed mode reserved until external wiring is enabled.
 pub async fn resolve_sources<E: Application>(
     plan: &SourceOrchestrationPlan,
     providers: &SourceProviders<E>,
@@ -57,15 +55,18 @@ pub async fn resolve_sources<E: Application>(
     match &plan.mode {
         SourceOrchestrationMode::Managed { managed, .. } => {
             let managed_nodes = providers.managed.provide(managed).await?;
+            let external_nodes = providers.external.provide(plan.external_sources()).await?;
+
             Ok(ResolvedSources {
                 managed: managed_nodes,
                 attached: Vec::new(),
-                external: Vec::new(),
+                external: external_nodes,
             })
         }
         SourceOrchestrationMode::Attached { attach, external } => {
             let attached_nodes = providers.attach.discover(attach).await?;
             let external_nodes = providers.external.provide(external).await?;
+
             Ok(ResolvedSources {
                 managed: Vec::new(),
                 attached: attached_nodes,
@@ -74,6 +75,7 @@ pub async fn resolve_sources<E: Application>(
         }
         SourceOrchestrationMode::ExternalOnly { external } => {
             let external_nodes = providers.external.provide(external).await?;
+
             Ok(ResolvedSources {
                 managed: Vec::new(),
                 attached: Vec::new(),
@@ -88,16 +90,18 @@ pub async fn resolve_sources<E: Application>(
 /// Current wiring is transitional:
 /// - Managed mode is backed by prebuilt deployer-managed clients via
 ///   `StaticManagedProvider`.
-/// - Attached and external modes are represented in the orchestration plan and
-///   resolver, but provider wiring is still scaffolding-only until full runtime
-///   integration lands.
+/// - External nodes are resolved via `Application::external_node_client`.
+/// - Attached mode remains blocked at plan validation until attach providers
+///   are fully wired.
 pub async fn orchestrate_sources<E: Application>(
     plan: &SourceOrchestrationPlan,
     node_clients: NodeClients<E>,
 ) -> Result<NodeClients<E>, DynError> {
-    let providers: SourceProviders<E> = SourceProviders::default().with_managed(Arc::new(
-        StaticManagedProvider::new(node_clients.snapshot()),
-    ));
+    let providers: SourceProviders<E> = SourceProviders::default()
+        .with_managed(Arc::new(StaticManagedProvider::new(
+            node_clients.snapshot(),
+        )))
+        .with_external(Arc::new(ApplicationExternalProvider));
 
     let resolved = resolve_sources(plan, &providers).await?;
 
@@ -110,6 +114,8 @@ pub async fn orchestrate_sources<E: Application>(
             .managed
             .into_iter()
             .map(|node| node.client)
+            .chain(resolved.attached.into_iter().map(|node| node.client))
+            .chain(resolved.external.into_iter().map(|node| node.client))
             .collect(),
     ))
 }

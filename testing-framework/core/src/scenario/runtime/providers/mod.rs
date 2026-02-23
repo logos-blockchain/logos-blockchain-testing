@@ -8,6 +8,6 @@ mod managed_provider;
 mod source_providers;
 
 pub use attach_provider::{AttachProviderError, AttachedNode};
-pub use external_provider::{ExternalNode, ExternalProviderError};
+pub use external_provider::{ApplicationExternalProvider, ExternalNode, ExternalProviderError};
 pub use managed_provider::{ManagedProviderError, ManagedProvisionedNode, StaticManagedProvider};
 pub use source_providers::SourceProviders;

@@ -1,11 +1,15 @@
 use testing_framework_core::{
     manual::ManualClusterHandle,
-    scenario::{DynError, NodeControlHandle, ReadinessError, StartNodeOptions, StartedNode},
+    scenario::{
+        DynError, ExternalNodeSource, NodeClients, NodeControlHandle, ReadinessError,
+        StartNodeOptions, StartedNode,
+    },
 };
 use thiserror::Error;
 
 use crate::{
     env::LocalDeployerEnv,
+    external::build_external_client,
     keep_tempdir_from_env,
     node_control::{NodeManager, NodeManagerError, NodeManagerSeed},
 };
@@ -77,6 +81,32 @@ impl<E: LocalDeployerEnv> ManualCluster<E> {
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), ManualClusterError> {
         self.nodes.wait_node_ready(name).await?;
         Ok(())
+    }
+
+    #[must_use]
+    pub fn node_clients(&self) -> NodeClients<E> {
+        self.nodes.node_clients()
+    }
+
+    pub fn add_external_sources(
+        &self,
+        external_sources: impl IntoIterator<Item = ExternalNodeSource>,
+    ) -> Result<(), DynError> {
+        let node_clients = self.nodes.node_clients();
+        for source in external_sources {
+            let client = E::external_node_client(&source)
+                .or_else(|_| build_external_client::<E>(&source))?;
+            node_clients.add_node(client);
+        }
+
+        Ok(())
+    }
+
+    pub fn add_external_clients(&self, clients: impl IntoIterator<Item = E::NodeClient>) {
+        let node_clients = self.nodes.node_clients();
+        for client in clients {
+            node_clients.add_node(client);
+        }
     }
 }
 

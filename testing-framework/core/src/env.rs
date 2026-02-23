@@ -1,7 +1,9 @@
+use std::io;
+
 use async_trait::async_trait;
 
 use crate::{
-    scenario::{DynError, FeedRuntime},
+    scenario::{DynError, ExternalNodeSource, FeedRuntime},
     topology::DeploymentDescriptor,
 };
 
@@ -16,16 +18,11 @@ pub trait Application: Send + Sync + 'static {
 
     type FeedRuntime: FeedRuntime;
 
-    /// Optional stable node identity (for example a peer id) used for
-    /// deduplication when nodes are discovered from multiple sources.
-    fn node_peer_identity(_client: &Self::NodeClient) -> Option<String> {
-        None
-    }
-
-    /// Optional endpoint identity used as a dedup fallback when no peer id is
-    /// available.
-    fn node_endpoint_identity(_client: &Self::NodeClient) -> Option<String> {
-        None
+    /// Build an application node client from a static external source.
+    ///
+    /// Environments that support external nodes should override this.
+    fn external_node_client(_source: &ExternalNodeSource) -> Result<Self::NodeClient, DynError> {
+        Err(io::Error::other("external node sources are not supported").into())
     }
 
     async fn prepare_feed(
