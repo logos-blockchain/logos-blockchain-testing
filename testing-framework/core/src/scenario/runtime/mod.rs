@@ -3,8 +3,8 @@ mod deployer;
 pub mod inventory;
 pub mod metrics;
 mod node_clients;
-pub(crate) mod orchestration;
-pub(crate) mod providers;
+pub mod orchestration;
+pub mod providers;
 pub mod readiness;
 mod runner;
 
@@ -13,6 +13,13 @@ pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics};
 pub use deployer::{Deployer, ScenarioError};
 pub use inventory::{BorrowedNode, BorrowedOrigin, ManagedNode, NodeHandle, NodeInventory};
 pub use node_clients::NodeClients;
+#[doc(hidden)]
+pub use orchestration::{
+    ManagedSource, SourceOrchestrationPlan, build_source_orchestration_plan, orchestrate_sources,
+    resolve_sources,
+};
+#[doc(hidden)]
+pub use providers::{SourceProviders, StaticManagedProvider};
 pub use readiness::{
     HttpReadinessRequirement, ReadinessError, StabilizationConfig, wait_for_http_ports,
     wait_for_http_ports_with_host, wait_for_http_ports_with_host_and_requirement,

@@ -8,7 +8,7 @@ use testing_framework_core::{
         Application, CleanupGuard, Deployer, DynError, FeedHandle, FeedRuntime,
         HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
         ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
-        Runner, Scenario,
+        Runner, Scenario, build_source_orchestration_plan, orchestrate_sources,
     },
     topology::DeploymentDescriptor,
 };
@@ -94,6 +94,11 @@ pub enum K8sRunnerError {
     BlockFeedMissing,
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
+    #[error("source orchestration failed: {source}")]
+    SourceOrchestration {
+        #[source]
+        source: DynError,
+    },
     #[error("failed to initialize feed: {source}")]
     BlockFeed {
         #[source]
@@ -147,10 +152,24 @@ where
     E: K8sDeployEnv,
     Caps: ObservabilityCapabilityProvider,
 {
+    // Source planning is currently resolved here before deployer-specific setup.
+    let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
+        K8sRunnerError::SourceOrchestration {
+            source: source.into(),
+        }
+    })?;
+
     let observability = resolve_observability_inputs(scenario.capabilities())?;
     let deployment = build_k8s_deployment::<E, Caps>(deployer, scenario, &observability).await?;
     let mut cluster = Some(deployment.cluster);
-    let runtime = build_runtime_artifacts::<E>(&mut cluster, &observability).await?;
+
+    let mut runtime = build_runtime_artifacts::<E>(&mut cluster, &observability).await?;
+
+    // Source orchestration currently runs here after managed clients are prepared.
+    runtime.node_clients = orchestrate_sources(&source_plan, runtime.node_clients)
+        .await
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+
     let parts = build_runner_parts(scenario, deployment.node_count, runtime);
 
     log_configured_observability(&observability);

@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::scenario::{Application, DynError, ExternalNodeSource};
 
 /// External node client prepared from a static external source endpoint.
@@ -27,12 +29,13 @@ pub enum ExternalProviderError {
 ///
 /// This is scaffolding-only in phase 1 and is intentionally not wired into
 /// deployer runtime orchestration yet.
+#[async_trait]
 pub trait ExternalProvider<E: Application>: Send + Sync {
-    /// Builds one external node handle from one external source descriptor.
-    fn build_node(
+    /// Builds external node handles from external source descriptors.
+    async fn provide(
         &self,
-        source: &ExternalNodeSource,
-    ) -> Result<ExternalNode<E>, ExternalProviderError>;
+        sources: &[ExternalNodeSource],
+    ) -> Result<Vec<ExternalNode<E>>, ExternalProviderError>;
 }
 
 /// Default external provider stub used while external wiring is not
@@ -40,13 +43,18 @@ pub trait ExternalProvider<E: Application>: Send + Sync {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoopExternalProvider;
 
+#[async_trait]
 impl<E: Application> ExternalProvider<E> for NoopExternalProvider {
-    fn build_node(
+    async fn provide(
         &self,
-        source: &ExternalNodeSource,
-    ) -> Result<ExternalNode<E>, ExternalProviderError> {
+        sources: &[ExternalNodeSource],
+    ) -> Result<Vec<ExternalNode<E>>, ExternalProviderError> {
+        let Some(first) = sources.first() else {
+            return Ok(Vec::new());
+        };
+
         Err(ExternalProviderError::UnsupportedSource {
-            external_source: source.clone(),
+            external_source: first.clone(),
         })
     }
 }

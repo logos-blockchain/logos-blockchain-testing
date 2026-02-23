@@ -35,6 +35,11 @@ pub enum ComposeRunnerError {
     BlockFeedMissing,
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
+    #[error("source orchestration failed: {source}")]
+    SourceOrchestration {
+        #[source]
+        source: DynError,
+    },
     #[error("failed to start feed: {source}")]
     BlockFeed {
         #[source]
