@@ -734,7 +734,6 @@ fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> Scen
 const fn source_mode_name(mode: SourceModeName) -> &'static str {
     match mode {
         SourceModeName::Attached => "Attached",
-        SourceModeName::ExternalOnly => "ExternalOnly",
     }
 }
 

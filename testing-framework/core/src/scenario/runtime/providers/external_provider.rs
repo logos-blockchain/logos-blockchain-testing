@@ -26,9 +26,6 @@ pub enum ExternalProviderError {
 
 /// Internal adapter interface for constructing node clients from static
 /// external endpoint sources.
-///
-/// This is scaffolding-only in phase 1 and is intentionally not wired into
-/// deployer runtime orchestration yet.
 #[async_trait]
 pub trait ExternalProvider<E: Application>: Send + Sync {
     /// Builds external node handles from external source descriptors.
@@ -38,8 +35,8 @@ pub trait ExternalProvider<E: Application>: Send + Sync {
     ) -> Result<Vec<ExternalNode<E>>, ExternalProviderError>;
 }
 
-/// Default external provider stub used while external wiring is not
-/// implemented.
+/// Default external provider stub used when external wiring is intentionally
+/// disabled.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoopExternalProvider;
 
@@ -56,5 +53,32 @@ impl<E: Application> ExternalProvider<E> for NoopExternalProvider {
         Err(ExternalProviderError::UnsupportedSource {
             external_source: first.clone(),
         })
+    }
+}
+
+/// External provider backed by [`Application::external_node_client`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ApplicationExternalProvider;
+
+#[async_trait]
+impl<E: Application> ExternalProvider<E> for ApplicationExternalProvider {
+    async fn provide(
+        &self,
+        sources: &[ExternalNodeSource],
+    ) -> Result<Vec<ExternalNode<E>>, ExternalProviderError> {
+        sources
+            .iter()
+            .map(|source| {
+                E::external_node_client(source)
+                    .map(|client| ExternalNode {
+                        identity_hint: Some(source.label.clone()),
+                        client,
+                    })
+                    .map_err(|build_error| ExternalProviderError::Build {
+                        source_label: source.label.clone(),
+                        source: build_error,
+                    })
+            })
+            .collect()
     }
 }

@@ -1,6 +1,7 @@
 pub mod binary;
 mod deployer;
 pub mod env;
+mod external;
 mod manual;
 mod node_control;
 pub mod process;

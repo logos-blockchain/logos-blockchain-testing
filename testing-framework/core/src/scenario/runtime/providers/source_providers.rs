@@ -9,8 +9,8 @@ use crate::scenario::Application;
 
 /// Unified provider set used by source orchestration.
 ///
-/// This is scaffolding-only and is intentionally not wired into runtime
-/// deployer orchestration yet.
+/// This is wired through source orchestration, but defaults to no-op providers
+/// until deployers override specific source classes.
 pub struct SourceProviders<E: Application> {
     pub managed: Arc<dyn ManagedProvider<E>>,
     pub attach: Arc<dyn AttachProvider<E>>,
