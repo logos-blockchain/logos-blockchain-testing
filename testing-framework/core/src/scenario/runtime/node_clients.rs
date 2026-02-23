@@ -1,23 +1,17 @@
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use rand::{seq::SliceRandom as _, thread_rng};
 
+use super::inventory::{BorrowedNode, ManagedNode, NodeInventory};
 use crate::scenario::{Application, DynError};
 
 /// Collection of API clients for the node set.
 pub struct NodeClients<E: Application> {
-    inner: Arc<RwLock<NodeClientsInner<E>>>,
-}
-
-struct NodeClientsInner<E: Application> {
-    nodes: Vec<E::NodeClient>,
+    inventory: NodeInventory<E>,
 }
 
 impl<E: Application> Default for NodeClients<E> {
     fn default() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(NodeClientsInner { nodes: Vec::new() })),
+            inventory: NodeInventory::default(),
         }
     }
 }
@@ -25,7 +19,7 @@ impl<E: Application> Default for NodeClients<E> {
 impl<E: Application> Clone for NodeClients<E> {
     fn clone(&self) -> Self {
         Self {
-            inner: Arc::clone(&self.inner),
+            inventory: self.inventory.clone(),
         }
     }
 }
@@ -35,7 +29,7 @@ impl<E: Application> NodeClients<E> {
     /// Build clients from preconstructed vectors.
     pub fn new(nodes: Vec<E::NodeClient>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(NodeClientsInner { nodes })),
+            inventory: NodeInventory::from_managed_clients(nodes),
         }
     }
 
@@ -45,15 +39,14 @@ impl<E: Application> NodeClients<E> {
     /// This clones the current vector so callers can iterate across `.await`
     /// boundaries without holding the internal lock.
     pub fn snapshot(&self) -> Vec<E::NodeClient> {
-        self.inner.read().nodes.clone()
+        self.inventory.snapshot_clients()
     }
 
     /// Execute a synchronous read against the current client slice.
     ///
     /// Prefer this over `snapshot()` when no async boundary is involved.
     pub fn with_clients<R>(&self, f: impl FnOnce(&[E::NodeClient]) -> R) -> R {
-        let guard = self.inner.read();
-        f(&guard.nodes)
+        self.inventory.with_clients(f)
     }
 
     #[must_use]
@@ -64,12 +57,12 @@ impl<E: Application> NodeClients<E> {
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner.read().nodes.len()
+        self.inventory.len()
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.inventory.is_empty()
     }
 
     #[must_use]
@@ -79,13 +72,35 @@ impl<E: Application> NodeClients<E> {
     }
 
     pub fn add_node(&self, client: E::NodeClient) {
-        let mut guard = self.inner.write();
-        guard.nodes.push(client);
+        self.inventory.add_managed_node(client, None);
     }
 
     pub fn clear(&self) {
-        let mut guard = self.inner.write();
-        guard.nodes.clear();
+        self.inventory.clear();
+    }
+
+    #[must_use]
+    /// Returns a cloned snapshot of managed node handles.
+    pub fn managed_nodes(&self) -> Vec<ManagedNode<E>> {
+        self.inventory.managed_nodes()
+    }
+
+    #[must_use]
+    /// Returns a cloned snapshot of borrowed node handles.
+    pub fn borrowed_nodes(&self) -> Vec<BorrowedNode<E>> {
+        self.inventory.borrowed_nodes()
+    }
+
+    #[must_use]
+    /// Finds a managed node by canonical identity.
+    pub fn find_managed(&self, identity: &str) -> Option<ManagedNode<E>> {
+        self.inventory.find_managed(identity)
+    }
+
+    #[must_use]
+    /// Finds a borrowed node by canonical identity.
+    pub fn find_borrowed(&self, identity: &str) -> Option<BorrowedNode<E>> {
+        self.inventory.find_borrowed(identity)
     }
 
     fn shuffled_snapshot(&self) -> Vec<E::NodeClient> {
