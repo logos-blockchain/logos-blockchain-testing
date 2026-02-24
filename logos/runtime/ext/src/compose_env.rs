@@ -120,8 +120,8 @@ impl ComposeDeployEnv for LbcExtEnv {
         let bundle_path = cfgsync_bundle_path(path);
         let hostnames = topology_hostnames(topology);
         let options = cfgsync_render_options(port, metrics_otlp_ingest_url);
+
         render_and_write_cfgsync_from_template::<lb_framework::LbcEnv>(
-            path,
             topology,
             &hostnames,
             options,

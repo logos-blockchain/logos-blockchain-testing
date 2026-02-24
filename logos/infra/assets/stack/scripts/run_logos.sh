@@ -64,7 +64,7 @@ export CFG_FILE_PATH="/config.yaml" \
        CFG_HOST_KIND="${CFG_HOST_KIND:-$role}" \
        CFG_HOST_IDENTIFIER="${CFG_HOST_IDENTIFIER:-$host_identifier_default}" \
        LOGOS_BLOCKCHAIN_TIME_BACKEND="${LOGOS_BLOCKCHAIN_TIME_BACKEND:-monotonic}" \
-       LOG_LEVEL="${LOG_LEVEL:-INFO}"``"
+       LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
 # Ensure recovery directory exists to avoid early crashes in services that
 # persist state.

@@ -2894,8 +2894,6 @@ dependencies = [
  "cfgsync-runtime",
  "kube",
  "logos-blockchain-http-api-common",
- "logos-blockchain-tracing",
- "logos-blockchain-tracing-service",
  "reqwest",
  "serde",
  "serde_yaml",
