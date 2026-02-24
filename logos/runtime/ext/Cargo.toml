@@ -17,8 +17,6 @@ testing-framework-runner-local   = { workspace = true }
 
 # Logos / Nomos deps
 lb_http_api_common = { workspace = true }
-lb_tracing         = { workspace = true }
-lb_tracing_service = { workspace = true }
 
 # External
 anyhow      = "1"

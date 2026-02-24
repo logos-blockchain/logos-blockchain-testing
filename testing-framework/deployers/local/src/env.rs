@@ -112,7 +112,7 @@ mod tests {
 
     use async_trait::async_trait;
     use testing_framework_core::{
-        scenario::{Application, DynError, Feed, FeedRuntime},
+        scenario::{Application, DynError, Feed, FeedRuntime, NodeClients},
         topology::DeploymentDescriptor,
     };
 
@@ -160,7 +160,7 @@ mod tests {
         type FeedRuntime = DummyFeedRuntime;
 
         async fn prepare_feed(
-            _client: Self::NodeClient,
+            _node_clients: NodeClients<Self>,
         ) -> Result<(<Self::FeedRuntime as FeedRuntime>::Feed, Self::FeedRuntime), DynError>
         {
             Ok((DummyFeed, DummyFeedRuntime))

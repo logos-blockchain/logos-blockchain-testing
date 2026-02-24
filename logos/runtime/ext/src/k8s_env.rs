@@ -183,7 +183,7 @@ pub fn prepare_assets(
     let tempdir = create_assets_tempdir()?;
 
     let (cfgsync_file, cfgsync_yaml, bundle_yaml) =
-        render_and_write_cfgsync(&root, topology, metrics_otlp_ingest_url, &tempdir)?;
+        render_and_write_cfgsync(topology, metrics_otlp_ingest_url, &tempdir)?;
     let scripts = validate_scripts(&root)?;
     let chart_path = helm_chart_path()?;
     let values_file = render_and_write_values(topology, &tempdir, &cfgsync_yaml, &bundle_yaml)?;
@@ -346,7 +346,6 @@ fn create_assets_tempdir() -> Result<TempDir, AssetsError> {
 }
 
 fn render_and_write_cfgsync(
-    root: &Path,
     topology: &DeploymentPlan,
     metrics_otlp_ingest_url: Option<&Url>,
     tempdir: &TempDir,
@@ -354,12 +353,12 @@ fn render_and_write_cfgsync(
     let cfgsync_file = tempdir.path().join("cfgsync.yaml");
     let bundle_file = tempdir.path().join("cfgsync.bundle.yaml");
     let (cfgsync_yaml, bundle_yaml) = render_cfgsync_config(
-        root,
         topology,
         metrics_otlp_ingest_url,
         &cfgsync_file,
         &bundle_file,
     )?;
+
     Ok((cfgsync_file, cfgsync_yaml, bundle_yaml))
 }
 
@@ -378,17 +377,13 @@ fn testnet_image() -> String {
 }
 
 fn render_cfgsync_config(
-    root: &Path,
     topology: &DeploymentPlan,
     metrics_otlp_ingest_url: Option<&Url>,
     cfgsync_file: &Path,
     bundle_file: &Path,
 ) -> Result<(String, String), AssetsError> {
-    let cfgsync_template_path = cfgsync_template_path(root);
-    debug!(path = %cfgsync_template_path.display(), "loading cfgsync template");
     let hostnames = k8s_node_hostnames(topology);
     let rendered = render_and_write_cfgsync_from_template::<lb_framework::LbcEnv>(
-        &cfgsync_template_path,
         topology,
         &hostnames,
         CfgsyncRenderOptions {
@@ -405,10 +400,6 @@ fn render_cfgsync_config(
     .map_err(|source| AssetsError::Cfgsync { source })?;
 
     Ok((rendered.config_yaml, rendered.bundle_yaml))
-}
-
-fn cfgsync_template_path(root: &Path) -> PathBuf {
-    stack_assets_root(root).join("cfgsync.yaml")
 }
 
 fn k8s_node_hostnames(topology: &DeploymentPlan) -> Vec<String> {
@@ -515,15 +506,6 @@ pub fn workspace_root() -> AnyhowResult<PathBuf> {
     Err(anyhow!(
         "resolving workspace root from manifest dir: {manifest_dir:?}"
     ))
-}
-
-fn stack_assets_root(root: &Path) -> PathBuf {
-    if let Some(override_dir) = assets_override_dir(root)
-        && override_dir.exists()
-    {
-        return override_dir;
-    }
-    root.join(DEFAULT_ASSETS_STACK_DIR)
 }
 
 fn stack_scripts_root(root: &Path) -> PathBuf {

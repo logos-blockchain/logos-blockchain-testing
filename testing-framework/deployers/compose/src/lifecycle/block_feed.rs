@@ -20,16 +20,14 @@ async fn spawn_block_feed_with<E: Application>(
     ),
     ComposeRunnerError,
 > {
-    debug!(
-        nodes = node_clients.len(),
-        "selecting node client for block feed"
-    );
+    let node_count = node_clients.len();
+    debug!(nodes = node_count, "starting compose block feed");
 
-    let block_source_client = node_clients
-        .random_client()
-        .ok_or(ComposeRunnerError::BlockFeedMissing)?;
+    if node_count == 0 {
+        return Err(ComposeRunnerError::BlockFeedMissing);
+    }
 
-    spawn_feed::<E>(block_source_client)
+    spawn_feed::<E>(node_clients.clone())
         .await
         .map_err(|source| ComposeRunnerError::BlockFeed { source })
 }

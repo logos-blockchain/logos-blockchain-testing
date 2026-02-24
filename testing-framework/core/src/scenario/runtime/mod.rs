@@ -64,9 +64,9 @@ impl CleanupGuard for FeedHandle {
 
 /// Spawn a background task that drives the environment-provided feed.
 pub async fn spawn_feed<E: Application>(
-    client: E::NodeClient,
+    node_clients: NodeClients<E>,
 ) -> Result<(<E::FeedRuntime as FeedRuntime>::Feed, FeedHandle), DynError> {
-    let (feed, worker) = E::prepare_feed(client).await?;
+    let (feed, worker) = E::prepare_feed(node_clients).await?;
 
     let handle = tokio::spawn(async move {
         Box::new(worker).run().await;

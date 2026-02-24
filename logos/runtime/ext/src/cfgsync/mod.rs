@@ -1,16 +1,14 @@
-mod template;
-
-use std::path::Path;
-
 use anyhow::Result;
 pub(crate) use cfgsync_runtime::render::CfgsyncOutputPaths;
 use cfgsync_runtime::{
     bundle::build_cfgsync_bundle_with_hostnames,
-    render::{RenderedCfgsync, apply_timeout_floor, ensure_bundle_path, write_rendered_cfgsync},
+    render::{
+        CfgsyncConfigOverrides, RenderedCfgsync, ensure_bundle_path,
+        render_cfgsync_yaml_from_template, write_rendered_cfgsync,
+    },
 };
-use lb_tracing::metrics::otlp::OtlpMetricsConfig;
-use lb_tracing_service::MetricsLayer;
 use reqwest::Url;
+use serde_yaml::{Mapping, Value};
 use testing_framework_core::cfgsync::CfgsyncEnv;
 
 pub(crate) struct CfgsyncRenderOptions {
@@ -21,16 +19,14 @@ pub(crate) struct CfgsyncRenderOptions {
 }
 
 pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
-    template_path: &Path,
     topology: &E::Deployment,
     hostnames: &[String],
     options: CfgsyncRenderOptions,
 ) -> Result<RenderedCfgsync> {
-    let mut cfg = template::load_cfgsync_template(template_path)?;
-    apply_render_options::<E>(&mut cfg, topology, options);
-
+    let cfg = build_cfgsync_server_config();
+    let overrides = build_overrides::<E>(topology, options);
+    let config_yaml = render_cfgsync_yaml_from_template(cfg, &overrides)?;
     let bundle = build_cfgsync_bundle_with_hostnames::<E>(topology, hostnames)?;
-    let config_yaml = serde_yaml::to_string(&cfg)?;
     let bundle_yaml = serde_yaml::to_string(&bundle)?;
 
     Ok(RenderedCfgsync {
@@ -39,8 +35,22 @@ pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
     })
 }
 
+fn build_cfgsync_server_config() -> Value {
+    let mut root = Mapping::new();
+    root.insert(
+        Value::String("port".to_string()),
+        Value::Number(4400_u64.into()),
+    );
+
+    root.insert(
+        Value::String("bundle_path".to_string()),
+        Value::String("cfgsync.bundle.yaml".to_string()),
+    );
+
+    Value::Mapping(root)
+}
+
 pub(crate) fn render_and_write_cfgsync_from_template<E: CfgsyncEnv>(
-    template_path: &Path,
     topology: &E::Deployment,
     hostnames: &[String],
     mut options: CfgsyncRenderOptions,
@@ -48,16 +58,16 @@ pub(crate) fn render_and_write_cfgsync_from_template<E: CfgsyncEnv>(
 ) -> Result<RenderedCfgsync> {
     ensure_bundle_path(&mut options.bundle_path, output.bundle_path);
 
-    let rendered = render_cfgsync_from_template::<E>(template_path, topology, hostnames, options)?;
+    let rendered = render_cfgsync_from_template::<E>(topology, hostnames, options)?;
     write_rendered_cfgsync(&rendered, output)?;
+
     Ok(rendered)
 }
 
-fn apply_render_options<E: CfgsyncEnv>(
-    cfg: &mut template::CfgSyncConfig,
+fn build_overrides<E: CfgsyncEnv>(
     topology: &E::Deployment,
     options: CfgsyncRenderOptions,
-) {
+) -> CfgsyncConfigOverrides {
     let CfgsyncRenderOptions {
         port,
         bundle_path,
@@ -65,21 +75,11 @@ fn apply_render_options<E: CfgsyncEnv>(
         metrics_otlp_ingest_url,
     } = options;
 
-    if let Some(port) = port {
-        cfg.port = port;
-    }
-
-    cfg.n_hosts = E::nodes(topology).len();
-    cfg.bundle_path = bundle_path;
-    apply_metrics_endpoint(cfg, metrics_otlp_ingest_url);
-    apply_timeout_floor(&mut cfg.timeout, min_timeout_secs);
-}
-
-fn apply_metrics_endpoint(cfg: &mut template::CfgSyncConfig, endpoint: Option<Url>) {
-    if let Some(endpoint) = endpoint {
-        cfg.tracing_settings.metrics = MetricsLayer::Otlp(OtlpMetricsConfig {
-            endpoint,
-            host_identifier: "node".into(),
-        });
+    CfgsyncConfigOverrides {
+        port,
+        n_hosts: Some(E::nodes(topology).len()),
+        timeout_floor_secs: min_timeout_secs,
+        bundle_path,
+        metrics_otlp_ingest_url: metrics_otlp_ingest_url.map(|url| url.to_string()),
     }
 }
