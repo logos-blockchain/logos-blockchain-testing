@@ -103,6 +103,110 @@ async fn scenario_builder_api_port_override() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[ignore = "run manually with `cargo test -p runner-examples -- --ignored scenario_builder_identify_hide_listen_addrs_override`"]
+async fn scenario_builder_identify_hide_listen_addrs_override() -> Result<()> {
+    let _ = try_init();
+    // Required env vars (set on the command line when running this test):
+    // - `POL_PROOF_DEV_MODE=true`
+    // - `LOGOS_BLOCKCHAIN_NODE_BIN=...`
+    // - `LOGOS_BLOCKCHAIN_CIRCUITS=...`
+    // - `RUST_LOG=info` (optional)
+    let base_builder = DeploymentBuilder::new(TopologyConfig::with_node_numbers(1));
+    let base_descriptors = base_builder.clone().build()?;
+    let base_node = base_descriptors.nodes().first().expect("node 0 descriptor");
+    let mut run_config = build_node_run_config(
+        &base_descriptors,
+        base_node,
+        base_descriptors
+            .config()
+            .node_config_override(base_node.index()),
+    )
+    .expect("build run config");
+
+    run_config
+        .user
+        .network
+        .backend
+        .swarm
+        .identify
+        .hide_listen_addrs = Some(true);
+
+    let mut scenario = ScenarioBuilder::new(Box::new(
+        base_builder.with_node_config_override(0, run_config),
+    ))
+    .with_run_duration(Duration::from_secs(1))
+    .build()?;
+
+    let deployer = LbcLocalDeployer::default();
+    let runner = deployer.deploy(&scenario).await?;
+    let handle = runner.run(&mut scenario).await?;
+
+    let client = handle
+        .context()
+        .random_node_client()
+        .ok_or_else(|| anyhow::anyhow!("scenario did not expose any node clients"))?;
+
+    client
+        .consensus_info()
+        .await
+        .expect("consensus_info should succeed");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "run manually with `cargo test -p runner-examples -- --ignored scenario_builder_identify_hide_listen_addrs_two_nodes`"]
+async fn scenario_builder_identify_hide_listen_addrs_two_nodes() -> Result<()> {
+    let _ = try_init();
+    // Required env vars (set on the command line when running this test):
+    // - `POL_PROOF_DEV_MODE=true`
+    // - `LOGOS_BLOCKCHAIN_NODE_BIN=...`
+    // - `LOGOS_BLOCKCHAIN_CIRCUITS=...`
+    // - `RUST_LOG=info` (optional)
+    let base_builder = DeploymentBuilder::new(TopologyConfig::with_node_numbers(2));
+    let base_descriptors = base_builder.clone().build()?;
+
+    let mut deployment_builder = base_builder;
+    for idx in 0..2 {
+        let node = &base_descriptors.nodes()[idx];
+        let mut run_config = build_node_run_config(
+            &base_descriptors,
+            node,
+            base_descriptors.config().node_config_override(node.index()),
+        )
+        .expect("build run config");
+        run_config
+            .user
+            .network
+            .backend
+            .swarm
+            .identify
+            .hide_listen_addrs = Some(true);
+        deployment_builder = deployment_builder.with_node_config_override(idx, run_config);
+    }
+
+    let mut scenario = ScenarioBuilder::new(Box::new(deployment_builder))
+        .with_run_duration(Duration::from_secs(3))
+        .build()?;
+
+    let deployer = LbcLocalDeployer::default();
+    let runner = deployer.deploy(&scenario).await?;
+    let handle = runner.run(&mut scenario).await?;
+
+    let client = handle
+        .context()
+        .random_node_client()
+        .ok_or_else(|| anyhow::anyhow!("scenario did not expose any node clients"))?;
+
+    client
+        .consensus_info()
+        .await
+        .expect("consensus_info should succeed");
+
+    Ok(())
+}
+
 fn random_api_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind random API port");
     listener.local_addr().expect("read API port").port()

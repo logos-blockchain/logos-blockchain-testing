@@ -3,10 +3,11 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
-        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, RunContext, Runner, Scenario, build_source_orchestration_plan,
-        orchestrate_sources,
+        ApplicationExternalProvider, AttachSource, CleanupGuard, DeploymentPolicy, FeedHandle,
+        FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
+        Runner, Scenario, ScenarioSources, SourceProviders, StaticManagedProvider,
+        build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -14,6 +15,7 @@ use tracing::info;
 
 use super::{
     ComposeDeployer,
+    attach_provider::ComposeAttachProvider,
     clients::ClientBuilder,
     make_cleanup_guard,
     ports::PortManager,
@@ -21,13 +23,14 @@ use super::{
     setup::{DeploymentContext, DeploymentSetup},
 };
 use crate::{
-    docker::control::ComposeNodeControl,
+    docker::control::{ComposeAttachedNodeControl, ComposeNodeControl},
     env::ComposeDeployEnv,
     errors::ComposeRunnerError,
     infrastructure::{
         environment::StackEnvironment,
         ports::{HostPortMapping, compose_runner_host},
     },
+    lifecycle::block_feed::spawn_block_feed_with_retry,
 };
 
 const PRINT_ENDPOINTS_ENV: &str = "TESTNET_PRINT_ENDPOINTS";
@@ -55,6 +58,12 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             }
         })?;
 
+        if scenario.sources().is_attached() {
+            return self
+                .deploy_attached_only::<Caps>(scenario, source_plan)
+                .await;
+        }
+
         let deployment = scenario.deployment();
         let setup = DeploymentSetup::<E>::new(deployment);
         setup.validate_environment().await?;
@@ -81,7 +90,16 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         .await?;
 
         // Source orchestration currently runs here after managed clients are prepared.
-        deployed.node_clients = orchestrate_sources(&source_plan, deployed.node_clients)
+        let source_providers = SourceProviders::default()
+            .with_managed(Arc::new(StaticManagedProvider::new(
+                deployed.node_clients.snapshot(),
+            )))
+            .with_attach(Arc::new(ComposeAttachProvider::<E>::new(
+                compose_runner_host(),
+            )))
+            .with_external(Arc::new(ApplicationExternalProvider));
+
+        deployed.node_clients = orchestrate_sources_with_providers(&source_plan, source_providers)
             .await
             .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
 
@@ -104,6 +122,83 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         );
 
         Ok(runner)
+    }
+
+    async fn deploy_attached_only<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+        source_plan: testing_framework_core::scenario::SourceOrchestrationPlan,
+    ) -> Result<Runner<E>, ComposeRunnerError>
+    where
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
+    {
+        let observability = resolve_observability_inputs(scenario)?;
+        let source_providers = SourceProviders::default()
+            .with_managed(Arc::new(StaticManagedProvider::new(Vec::new())))
+            .with_attach(Arc::new(ComposeAttachProvider::<E>::new(
+                compose_runner_host(),
+            )))
+            .with_external(Arc::new(ApplicationExternalProvider));
+        let node_clients = orchestrate_sources_with_providers(&source_plan, source_providers)
+            .await
+            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
+
+        if node_clients.is_empty() {
+            return Err(ComposeRunnerError::RuntimePreflight);
+        }
+
+        let node_control = self.attached_node_control::<Caps>(scenario)?;
+        let (feed, feed_task) = spawn_block_feed_with_retry::<E>(&node_clients).await?;
+        let context = RunContext::new(
+            scenario.deployment().clone(),
+            node_clients,
+            scenario.duration(),
+            scenario.expectation_cooldown(),
+            observability.telemetry_handle()?,
+            feed,
+            node_control,
+        );
+
+        let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
+        Ok(Runner::new(context, Some(cleanup_guard)))
+    }
+
+    fn attached_node_control<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<Option<Arc<dyn NodeControlHandle<E>>>, ComposeRunnerError>
+    where
+        Caps: RequiresNodeControl + Send + Sync,
+    {
+        if !Caps::REQUIRED {
+            return Ok(None);
+        }
+
+        let ScenarioSources::Attached { attach, .. } = scenario.sources() else {
+            return Err(ComposeRunnerError::InternalInvariant {
+                message: "attached node control requested outside attached source mode",
+            });
+        };
+
+        let AttachSource::Compose { project, .. } = attach else {
+            return Err(ComposeRunnerError::InternalInvariant {
+                message: "compose deployer requires compose attach source for node control",
+            });
+        };
+
+        let Some(project_name) = project
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+        else {
+            return Err(ComposeRunnerError::InternalInvariant {
+                message: "attached compose mode requires explicit project name for node control",
+            });
+        };
+
+        Ok(Some(Arc::new(ComposeAttachedNodeControl {
+            project_name: project_name.to_owned(),
+        }) as Arc<dyn NodeControlHandle<E>>))
     }
 
     async fn build_runner<Caps>(

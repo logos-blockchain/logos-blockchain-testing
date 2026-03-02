@@ -91,8 +91,7 @@ pub async fn resolve_sources<E: Application>(
 /// - Managed mode is backed by prebuilt deployer-managed clients via
 ///   `StaticManagedProvider`.
 /// - External nodes are resolved via `Application::external_node_client`.
-/// - Attached mode remains blocked at plan validation until attach providers
-///   are fully wired.
+/// - Attached nodes are discovered through the selected attach provider.
 pub async fn orchestrate_sources<E: Application>(
     plan: &SourceOrchestrationPlan,
     node_clients: NodeClients<E>,
@@ -103,6 +102,17 @@ pub async fn orchestrate_sources<E: Application>(
         )))
         .with_external(Arc::new(ApplicationExternalProvider));
 
+    orchestrate_sources_with_providers(plan, providers).await
+}
+
+/// Orchestrates scenario sources with caller-supplied provider set.
+///
+/// Deployer runtimes can use this to inject attach/external providers with
+/// backend-specific discovery and control semantics.
+pub async fn orchestrate_sources_with_providers<E: Application>(
+    plan: &SourceOrchestrationPlan,
+    providers: SourceProviders<E>,
+) -> Result<NodeClients<E>, DynError> {
     let resolved = resolve_sources(plan, &providers).await?;
 
     if matches!(plan.mode, SourceOrchestrationMode::Managed { .. }) && resolved.managed.is_empty() {

@@ -1,3 +1,4 @@
+mod attach_provider;
 pub mod clients;
 pub mod orchestrator;
 pub mod ports;

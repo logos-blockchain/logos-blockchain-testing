@@ -16,10 +16,13 @@ pub use node_clients::NodeClients;
 #[doc(hidden)]
 pub use orchestration::{
     ManagedSource, SourceOrchestrationPlan, build_source_orchestration_plan, orchestrate_sources,
-    resolve_sources,
+    orchestrate_sources_with_providers, resolve_sources,
 };
 #[doc(hidden)]
-pub use providers::{SourceProviders, StaticManagedProvider};
+pub use providers::{
+    ApplicationExternalProvider, AttachProvider, AttachProviderError, AttachedNode,
+    SourceProviders, StaticManagedProvider,
+};
 pub use readiness::{
     HttpReadinessRequirement, ReadinessError, StabilizationConfig, wait_for_http_ports,
     wait_for_http_ports_with_host, wait_for_http_ports_with_host_and_requirement,

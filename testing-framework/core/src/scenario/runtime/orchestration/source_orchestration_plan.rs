@@ -65,13 +65,10 @@ impl SourceOrchestrationPlan {
     ) -> Result<Self, SourceOrchestrationPlanError> {
         let mode = mode_from_sources(sources);
 
-        let plan = Self {
+        Ok(Self {
             mode,
             readiness_policy,
-        };
-
-        plan.ensure_currently_wired()?;
-        Ok(plan)
+        })
     }
 
     #[must_use]
@@ -82,13 +79,24 @@ impl SourceOrchestrationPlan {
             | SourceOrchestrationMode::ExternalOnly { external } => external,
         }
     }
+}
 
-    fn ensure_currently_wired(&self) -> Result<(), SourceOrchestrationPlanError> {
-        match self.mode {
-            SourceOrchestrationMode::Managed { .. }
-            | SourceOrchestrationMode::ExternalOnly { .. } => Ok(()),
-            SourceOrchestrationMode::Attached { .. } => not_wired(SourceModeName::Attached),
-        }
+#[cfg(test)]
+mod tests {
+    use super::{SourceOrchestrationMode, SourceOrchestrationPlan};
+    use crate::scenario::{AttachSource, ScenarioSources, SourceReadinessPolicy};
+
+    #[test]
+    fn attached_sources_are_planned() {
+        let sources = ScenarioSources::attached(AttachSource::compose(vec!["node-0".to_string()]));
+        let plan =
+            SourceOrchestrationPlan::try_from_sources(&sources, SourceReadinessPolicy::AllReady)
+                .expect("attached sources should build a source orchestration plan");
+
+        assert!(matches!(
+            plan.mode,
+            SourceOrchestrationMode::Attached { .. }
+        ));
     }
 }
 
@@ -106,8 +114,4 @@ fn mode_from_sources(sources: &ScenarioSources) -> SourceOrchestrationMode {
             external: external.clone(),
         },
     }
-}
-
-fn not_wired(mode: SourceModeName) -> Result<(), SourceOrchestrationPlanError> {
-    Err(SourceOrchestrationPlanError::SourceModeNotWiredYet { mode })
 }
