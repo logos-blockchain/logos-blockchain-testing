@@ -1,4 +1,5 @@
 use anyhow::Result;
+use cfgsync_core::CfgSyncFile;
 use serde::{Deserialize, Serialize};
 use testing_framework_core::cfgsync::{CfgsyncEnv, build_cfgsync_node_configs};
 
@@ -10,7 +11,10 @@ pub struct CfgSyncBundle {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CfgSyncBundleNode {
     pub identifier: String,
-    pub config_yaml: String,
+    #[serde(default)]
+    pub files: Vec<CfgSyncFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_yaml: Option<String>,
 }
 
 pub fn build_cfgsync_bundle_with_hostnames<E: CfgsyncEnv>(
@@ -24,7 +28,11 @@ pub fn build_cfgsync_bundle_with_hostnames<E: CfgsyncEnv>(
             .into_iter()
             .map(|node| CfgSyncBundleNode {
                 identifier: node.identifier,
-                config_yaml: node.config_yaml,
+                files: vec![CfgSyncFile {
+                    path: "/config.yaml".to_owned(),
+                    content: node.config_yaml,
+                }],
+                config_yaml: None,
             })
             .collect(),
     })

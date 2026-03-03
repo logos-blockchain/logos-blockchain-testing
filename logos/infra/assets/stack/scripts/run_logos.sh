@@ -86,4 +86,4 @@ until "${cfgsync_bin}"; do
   sleep "$sleep_seconds"
 done
 
-exec "${bin_path}" /config.yaml
+exec "${bin_path}" /config.yaml --deployment /deployment.yaml

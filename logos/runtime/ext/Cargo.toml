@@ -7,6 +7,7 @@ version     = { workspace = true }
 
 [dependencies]
 # Workspace crates
+cfgsync-core                     = { workspace = true }
 cfgsync_runtime                  = { workspace = true }
 lb-framework                     = { workspace = true }
 testing-framework-core           = { workspace = true }

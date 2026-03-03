@@ -1,7 +1,7 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 pub(crate) use cfgsync_runtime::render::CfgsyncOutputPaths;
 use cfgsync_runtime::{
-    bundle::build_cfgsync_bundle_with_hostnames,
+    bundle::{CfgSyncBundle, CfgSyncBundleNode, build_cfgsync_bundle_with_hostnames},
     render::{
         CfgsyncConfigOverrides, RenderedCfgsync, ensure_bundle_path,
         render_cfgsync_yaml_from_template, write_rendered_cfgsync,
@@ -26,13 +26,58 @@ pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
     let cfg = build_cfgsync_server_config();
     let overrides = build_overrides::<E>(topology, options);
     let config_yaml = render_cfgsync_yaml_from_template(cfg, &overrides)?;
-    let bundle = build_cfgsync_bundle_with_hostnames::<E>(topology, hostnames)?;
+    let mut bundle = build_cfgsync_bundle_with_hostnames::<E>(topology, hostnames)?;
+    append_deployment_files(&mut bundle)?;
     let bundle_yaml = serde_yaml::to_string(&bundle)?;
 
     Ok(RenderedCfgsync {
         config_yaml,
         bundle_yaml,
     })
+}
+
+fn append_deployment_files(bundle: &mut CfgSyncBundle) -> Result<()> {
+    for node in &mut bundle.nodes {
+        if has_file_path(node, "/deployment.yaml") {
+            continue;
+        }
+
+        let config_content = config_file_content(node)
+            .ok_or_else(|| anyhow!("cfgsync bundle node missing /config.yaml"))?;
+        let deployment_yaml = extract_yaml_key(&config_content, "deployment")?;
+
+        node.files
+            .push(build_bundle_file("/deployment.yaml", deployment_yaml));
+    }
+
+    Ok(())
+}
+
+fn has_file_path(node: &CfgSyncBundleNode, path: &str) -> bool {
+    node.files.iter().any(|file| file.path == path)
+}
+
+fn config_file_content(node: &CfgSyncBundleNode) -> Option<String> {
+    node.files
+        .iter()
+        .find_map(|file| (file.path == "/config.yaml").then_some(file.content.clone()))
+}
+
+fn build_bundle_file(path: &str, content: String) -> cfgsync_core::CfgSyncFile {
+    cfgsync_core::CfgSyncFile {
+        path: path.to_owned(),
+        content,
+    }
+}
+
+fn extract_yaml_key(content: &str, key: &str) -> Result<String> {
+    let document: Value = serde_yaml::from_str(content)?;
+    let value = document
+        .get(key)
+        .cloned()
+        .ok_or_else(|| anyhow!("config yaml missing `{key}`"))?;
+
+    Ok(serde_yaml::to_string(&value)?)
 }
 
 fn build_cfgsync_server_config() -> Value {
