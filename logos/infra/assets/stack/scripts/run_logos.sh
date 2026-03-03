@@ -59,6 +59,7 @@ check_binary_arch "$bin_path" "logos-blockchain-${role}"
 host_identifier_default="${role}-$(hostname -i)"
 
 export CFG_FILE_PATH="/config.yaml" \
+      CFG_DEPLOYMENT_FILE_PATH="/deployment.yaml" \
       CFG_SERVER_ADDR="${CFG_SERVER_ADDR:-http://cfgsync:${LOGOS_BLOCKCHAIN_CFGSYNC_PORT:-4400}}" \
        CFG_HOST_IP=$(hostname -i) \
        CFG_HOST_KIND="${CFG_HOST_KIND:-$role}" \
@@ -86,4 +87,4 @@ until "${cfgsync_bin}"; do
   sleep "$sleep_seconds"
 done
 
-exec "${bin_path}" /config.yaml
+exec "${bin_path}" /config.yaml --deployment /deployment.yaml

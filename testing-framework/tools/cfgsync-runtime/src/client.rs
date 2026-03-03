@@ -55,7 +55,28 @@ async fn pull_to_file(payload: ClientIp, server_addr: &str, config_file: &str) -
     fs::write(config_file, &config.config_yaml)
         .with_context(|| format!("writing config to {}", config_file))?;
 
+    if let Ok(deployment_file_path) = env::var("CFG_DEPLOYMENT_FILE_PATH") {
+        write_deployment_config(&config.config_yaml, &deployment_file_path)?;
+    }
+
     println!("Config saved to {config_file}");
+    Ok(())
+}
+
+fn write_deployment_config(config_yaml: &str, deployment_file_path: &str) -> Result<()> {
+    let document: serde_yaml::Value =
+        serde_yaml::from_str(config_yaml).context("parsing fetched config yaml")?;
+    let deployment = document
+        .get("deployment")
+        .cloned()
+        .context("fetched config yaml does not contain `deployment` key")?;
+    let deployment_yaml =
+        serde_yaml::to_string(&deployment).context("serializing deployment yaml")?;
+
+    fs::write(deployment_file_path, deployment_yaml)
+        .with_context(|| format!("writing deployment config to {deployment_file_path}"))?;
+
+    println!("Deployment config saved to {deployment_file_path}");
     Ok(())
 }
 
