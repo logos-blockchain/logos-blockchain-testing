@@ -22,6 +22,13 @@ pub struct ComposeDeployer<E: ComposeDeployEnv> {
     _env: PhantomData<E>,
 }
 
+/// Compose deployment metadata returned by compose-specific deployment APIs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComposeDeploymentMetadata {
+    /// Docker Compose project name used for this deployment when available.
+    pub project_name: Option<String>,
+}
+
 impl<E: ComposeDeployEnv> Default for ComposeDeployer<E> {
     fn default() -> Self {
         Self::new()
@@ -41,6 +48,25 @@ impl<E: ComposeDeployEnv> ComposeDeployer<E> {
     pub const fn with_readiness(mut self, enabled: bool) -> Self {
         self.readiness_checks = enabled;
         self
+    }
+
+    /// Deploy and return compose-specific metadata alongside the generic
+    /// runner.
+    pub async fn deploy_with_metadata<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<(Runner<E>, ComposeDeploymentMetadata), ComposeRunnerError>
+    where
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
+    {
+        let deployer = Self {
+            readiness_checks: self.readiness_checks,
+            _env: PhantomData,
+        };
+
+        orchestrator::DeploymentOrchestrator::new(deployer)
+            .deploy_with_metadata(scenario)
+            .await
     }
 }
 

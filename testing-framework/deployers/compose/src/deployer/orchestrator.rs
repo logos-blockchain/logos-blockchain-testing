@@ -14,7 +14,7 @@ use testing_framework_core::{
 use tracing::info;
 
 use super::{
-    ComposeDeployer,
+    ComposeDeployer, ComposeDeploymentMetadata,
     attach_provider::ComposeAttachProvider,
     clients::ClientBuilder,
     make_cleanup_guard,
@@ -51,6 +51,18 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     where
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
+        self.deploy_with_metadata(scenario)
+            .await
+            .map(|(runner, _)| runner)
+    }
+
+    pub async fn deploy_with_metadata<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<(Runner<E>, ComposeDeploymentMetadata), ComposeRunnerError>
+    where
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
+    {
         // Source planning is currently resolved here before deployer-specific setup.
         let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
             ComposeRunnerError::SourceOrchestration {
@@ -61,7 +73,8 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         if scenario.sources().is_attached() {
             return self
                 .deploy_attached_only::<Caps>(scenario, source_plan)
-                .await;
+                .await
+                .map(|runner| (runner, attached_metadata(scenario)));
         }
 
         let deployment = scenario.deployment();
@@ -103,6 +116,8 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             .await
             .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
 
+        let project_name = prepared.environment.project_name().to_owned();
+
         let runner = self
             .build_runner::<Caps>(
                 scenario,
@@ -121,7 +136,12 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             readiness_enabled,
         );
 
-        Ok(runner)
+        Ok((
+            runner,
+            ComposeDeploymentMetadata {
+                project_name: Some(project_name),
+            },
+        ))
     }
 
     async fn deploy_attached_only<Caps>(
@@ -302,6 +322,22 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             "compose deployment ready; handing control to scenario runner"
         );
     }
+}
+
+fn attached_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> ComposeDeploymentMetadata
+where
+    E: ComposeDeployEnv,
+    Caps: Send + Sync,
+{
+    let project_name = match scenario.sources() {
+        ScenarioSources::Attached {
+            attach: AttachSource::Compose { project, .. },
+            ..
+        } => project.clone(),
+        _ => None,
+    };
+
+    ComposeDeploymentMetadata { project_name }
 }
 
 struct DeployedNodes<E: ComposeDeployEnv> {
