@@ -7,18 +7,45 @@ use tokio::sync::oneshot::Sender;
 pub const CFGSYNC_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CfgSyncFile {
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CfgSyncPayload {
     pub schema_version: u16,
-    pub config_yaml: String,
+    #[serde(default)]
+    pub files: Vec<CfgSyncFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_yaml: Option<String>,
 }
 
 impl CfgSyncPayload {
     #[must_use]
-    pub fn new(config_yaml: String) -> Self {
+    pub fn from_files(files: Vec<CfgSyncFile>) -> Self {
         Self {
             schema_version: CFGSYNC_SCHEMA_VERSION,
-            config_yaml,
+            files,
+            config_yaml: None,
         }
+    }
+
+    #[must_use]
+    pub fn normalized_files(&self, default_config_path: &str) -> Vec<CfgSyncFile> {
+        if !self.files.is_empty() {
+            return self.files.clone();
+        }
+
+        self.config_yaml
+            .as_ref()
+            .map(|content| {
+                vec![CfgSyncFile {
+                    path: default_config_path.to_owned(),
+                    content: content.clone(),
+                }]
+            })
+            .unwrap_or_default()
     }
 }
 

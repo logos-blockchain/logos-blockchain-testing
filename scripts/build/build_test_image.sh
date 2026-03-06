@@ -96,14 +96,6 @@ build_test_image::parse_args() {
   TAR_PATH="${BUNDLE_TAR_PATH:-${DEFAULT_LINUX_TAR}}"
 
   LOGOS_BLOCKCHAIN_NODE_PATH="${LOGOS_BLOCKCHAIN_NODE_PATH:-}"
-  if [ -z "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
-    # Prefer local checkout when available: this repo currently depends on
-    # lb-framework from nomos-node/tests/testing_framework.
-    local sibling_node_path="${ROOT_DIR}/../nomos-node"
-    if [ -d "${sibling_node_path}/tests/testing_framework" ]; then
-      LOGOS_BLOCKCHAIN_NODE_PATH="${sibling_node_path}"
-    fi
-  fi
   if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH}" ] && [ ! -d "${LOGOS_BLOCKCHAIN_NODE_PATH}" ]; then
     build_test_image::fail "LOGOS_BLOCKCHAIN_NODE_PATH does not exist: ${LOGOS_BLOCKCHAIN_NODE_PATH}"
   fi

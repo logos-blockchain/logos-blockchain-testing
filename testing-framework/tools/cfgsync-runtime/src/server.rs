@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 use anyhow::Context as _;
-use cfgsync_core::{CfgSyncPayload, CfgSyncState, ConfigRepo, run_cfgsync};
+use cfgsync_core::{CfgSyncFile, CfgSyncPayload, CfgSyncState, ConfigRepo, run_cfgsync};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -27,26 +27,55 @@ struct CfgSyncBundle {
 #[derive(Debug, Deserialize)]
 struct CfgSyncBundleNode {
     identifier: String,
-    config_yaml: String,
+    #[serde(default)]
+    files: Vec<CfgSyncFile>,
+    #[serde(default)]
+    config_yaml: Option<String>,
 }
 
 fn load_bundle(bundle_path: &Path) -> anyhow::Result<Arc<ConfigRepo>> {
+    let bundle = read_cfgsync_bundle(bundle_path)?;
+
+    let configs = bundle
+        .nodes
+        .into_iter()
+        .map(build_repo_entry)
+        .collect::<HashMap<_, _>>();
+
+    Ok(ConfigRepo::from_bundle(configs))
+}
+
+fn read_cfgsync_bundle(bundle_path: &Path) -> anyhow::Result<CfgSyncBundle> {
     let bundle_content = fs::read_to_string(bundle_path).with_context(|| {
         format!(
             "failed to read cfgsync bundle file {}",
             bundle_path.display()
         )
     })?;
-    let bundle: CfgSyncBundle = serde_yaml::from_str(&bundle_content)
-        .with_context(|| format!("failed to parse cfgsync bundle {}", bundle_path.display()))?;
 
-    let configs = bundle
-        .nodes
-        .into_iter()
-        .map(|node| (node.identifier, CfgSyncPayload::new(node.config_yaml)))
-        .collect::<HashMap<_, _>>();
+    serde_yaml::from_str(&bundle_content)
+        .with_context(|| format!("failed to parse cfgsync bundle {}", bundle_path.display()))
+}
 
-    Ok(ConfigRepo::from_bundle(configs))
+fn build_repo_entry(node: CfgSyncBundleNode) -> (String, CfgSyncPayload) {
+    let files = if node.files.is_empty() {
+        build_legacy_files(node.config_yaml)
+    } else {
+        node.files
+    };
+
+    (node.identifier, CfgSyncPayload::from_files(files))
+}
+
+fn build_legacy_files(config_yaml: Option<String>) -> Vec<CfgSyncFile> {
+    config_yaml
+        .map(|content| {
+            vec![CfgSyncFile {
+                path: "/config.yaml".to_owned(),
+                content,
+            }]
+        })
+        .unwrap_or_default()
 }
 
 fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::PathBuf {
