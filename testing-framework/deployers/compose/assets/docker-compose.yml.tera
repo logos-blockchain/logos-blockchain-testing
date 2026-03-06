@@ -18,6 +18,8 @@ services:
 {% for port in node.ports %}
       - {{ port }}
 {% endfor %}
+    labels:
+      testing-framework.node: "true"
     environment:
 {% for env in node.environment %}
       {{ env.key }}: "{{ env.value }}"

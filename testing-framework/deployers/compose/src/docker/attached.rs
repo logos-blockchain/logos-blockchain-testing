@@ -4,6 +4,9 @@ use serde_json::Value;
 use testing_framework_core::scenario::DynError;
 use tokio::process::Command;
 
+pub const ATTACHABLE_NODE_LABEL_KEY: &str = "testing-framework.node";
+pub const ATTACHABLE_NODE_LABEL_VALUE: &str = "true";
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MappedTcpPort {
     pub container_port: u16,
@@ -43,6 +46,21 @@ pub async fn discover_service_container_id(
         )
         .into()),
     }
+}
+
+pub async fn discover_attachable_services(project: &str) -> Result<Vec<String>, DynError> {
+    let attachable_filter =
+        format!("label={ATTACHABLE_NODE_LABEL_KEY}={ATTACHABLE_NODE_LABEL_VALUE}");
+    let attachable = discover_services_with_filters(project, Some(&attachable_filter)).await?;
+
+    if attachable.is_empty() {
+        return Err(format!(
+            "no running compose services with label '{ATTACHABLE_NODE_LABEL_KEY}={ATTACHABLE_NODE_LABEL_VALUE}' found for project '{project}'"
+        )
+        .into());
+    }
+
+    Ok(attachable)
 }
 
 pub async fn inspect_mapped_tcp_ports(container_id: &str) -> Result<Vec<MappedTcpPort>, DynError> {
@@ -109,6 +127,55 @@ pub async fn run_docker_capture<const N: usize>(args: [&str; N]) -> Result<Strin
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+async fn discover_services_with_filters(
+    project: &str,
+    extra_filter: Option<&str>,
+) -> Result<Vec<String>, DynError> {
+    let mut args = vec![
+        "ps".to_owned(),
+        "--filter".to_owned(),
+        format!("label=com.docker.compose.project={project}"),
+    ];
+
+    if let Some(filter) = extra_filter {
+        args.push("--filter".to_owned());
+        args.push(filter.to_owned());
+    }
+
+    args.push("--format".to_owned());
+    args.push("{{.Label \"com.docker.compose.service\"}}".to_owned());
+
+    let output = Command::new("docker")
+        .args(&args)
+        .stdin(Stdio::null())
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "docker {} failed with status {}: {}",
+            args.join(" "),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+
+    let mut services: Vec<String> = output
+        .stdout
+        .split(|byte| *byte == b'\n')
+        .filter_map(|line| {
+            let parsed = String::from_utf8_lossy(line).trim().to_owned();
+            (!parsed.is_empty()).then_some(parsed)
+        })
+        .collect();
+    services.sort();
+    services.dedup();
+    Ok(services)
 }
 
 fn parse_container_port(port_key: &str) -> Option<u16> {

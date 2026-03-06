@@ -7,7 +7,9 @@ use testing_framework_core::scenario::{
 use url::Url;
 
 use crate::{
-    docker::attached::{discover_service_container_id, inspect_mapped_tcp_ports},
+    docker::attached::{
+        discover_attachable_services, discover_service_container_id, inspect_mapped_tcp_ports,
+    },
     env::ComposeDeployEnv,
 };
 
@@ -46,14 +48,12 @@ impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
                 source: "compose attach source requires an explicit project name".into(),
             })?;
 
-        if services.is_empty() {
-            return Err(AttachProviderError::Discovery {
-                source: "compose attach source requires at least one service name".into(),
-            });
-        }
+        let services = resolve_services(project, services)
+            .await
+            .map_err(to_discovery_error)?;
 
         let mut attached = Vec::with_capacity(services.len());
-        for service in services {
+        for service in &services {
             let container_id = discover_service_container_id(project, service)
                 .await
                 .map_err(to_discovery_error)?;
@@ -77,6 +77,22 @@ impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
 
 fn to_discovery_error(source: DynError) -> AttachProviderError {
     AttachProviderError::Discovery { source }
+}
+
+async fn resolve_services(project: &str, requested: &[String]) -> Result<Vec<String>, DynError> {
+    if !requested.is_empty() {
+        return Ok(requested.to_owned());
+    }
+
+    let discovered = discover_attachable_services(project).await?;
+
+    if discovered.is_empty() {
+        return Err(
+            format!("no running compose services discovered for project '{project}'").into(),
+        );
+    }
+
+    Ok(discovered)
 }
 
 async fn discover_api_port(container_id: &str) -> Result<u16, DynError> {

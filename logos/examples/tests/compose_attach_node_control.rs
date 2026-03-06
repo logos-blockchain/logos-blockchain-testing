@@ -21,14 +21,22 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
             Err(error) => return Err(anyhow::Error::new(error)),
         };
 
+    let services = metadata
+        .discover_services()
+        .await
+        .map_err(|err| anyhow!("{err}"))?;
+    let service = services
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow!("compose deployment metadata discovered no services"))?;
+    let attach_source = metadata
+        .attach_source_for_services(services)
+        .map_err(|err| anyhow!("{err}"))?;
+
     let attached = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
         .enable_node_control()
         .with_run_duration(Duration::from_secs(5))
-        .with_attach_source(
-            metadata
-                .attach_source_for_services(vec!["node-0".to_owned()])
-                .map_err(|err| anyhow!("{err}"))?,
-        )
+        .with_attach_source(attach_source)
         .build()?;
 
     let attached_runner: Runner<LbcExtEnv> = match deployer.deploy(&attached).await {
@@ -38,7 +46,7 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
     };
 
     let pre_restart_started_at = metadata
-        .service_started_at("node-0")
+        .service_started_at(&service)
         .await
         .map_err(|err| anyhow!("{err}"))?;
 
@@ -48,12 +56,12 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         .ok_or_else(|| anyhow!("attached compose node control is unavailable"))?;
 
     control
-        .restart_node("node-0")
+        .restart_node(&service)
         .await
         .map_err(|err| anyhow!("attached restart failed: {err}"))?;
 
     metadata
-        .wait_until_service_restarted("node-0", &pre_restart_started_at, Duration::from_secs(30))
+        .wait_until_service_restarted(&service, &pre_restart_started_at, Duration::from_secs(30))
         .await
         .map_err(|err| anyhow!("{err}"))?;
 
