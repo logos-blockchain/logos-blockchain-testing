@@ -1,10 +1,10 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Error, Result, anyhow};
 use lb_ext::{CoreBuilderExt as _, LbcComposeDeployer, LbcExtEnv, ScenarioBuilder};
 use testing_framework_core::scenario::{AttachSource, Deployer as _, Runner};
 use testing_framework_runner_compose::{ComposeDeploymentMetadata, ComposeRunnerError};
-use tokio::process::Command;
+use tokio::{process::Command, time::sleep};
 
 #[tokio::test]
 #[ignore = "requires Docker and mutates compose runtime state"]
@@ -19,7 +19,7 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         match deployer.deploy_with_metadata(&managed).await {
             Ok(result) => result,
             Err(ComposeRunnerError::DockerUnavailable) => return Ok(()),
-            Err(error) => return Err(anyhow::Error::new(error)),
+            Err(error) => return Err(Error::new(error)),
         };
 
     let project_name = metadata
@@ -37,7 +37,7 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
     let attached_runner: Runner<LbcExtEnv> = match deployer.deploy(&attached).await {
         Ok(runner) => runner,
         Err(ComposeRunnerError::DockerUnavailable) => return Ok(()),
-        Err(error) => return Err(anyhow::Error::new(error)),
+        Err(error) => return Err(Error::new(error)),
     };
 
     let control = attached_runner
@@ -88,12 +88,25 @@ async fn service_started_at(project: &str, service: &str) -> Result<String> {
     ])
     .await?;
 
-    let container_id = container_id
+    let container_ids: Vec<&str> = container_id
         .lines()
-        .next()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| anyhow!("no running container found for service '{service}'"))?;
+        .collect();
+
+    let container_id = match container_ids.as_slice() {
+        [] => {
+            return Err(anyhow!(
+                "no running container found for service '{service}'"
+            ));
+        }
+        [id] => *id,
+        _ => {
+            return Err(anyhow!(
+                "multiple running containers found for service '{service}'"
+            ));
+        }
+    };
 
     let started_at =
         run_docker(&["inspect", "--format", "{{.State.StartedAt}}", container_id]).await?;
@@ -115,7 +128,7 @@ async fn wait_until_service_restarted(
     previous_started_at: &str,
     timeout: Duration,
 ) -> Result<()> {
-    let deadline = std::time::Instant::now() + timeout;
+    let deadline = Instant::now() + timeout;
 
     loop {
         let started_at = service_started_at(project, service).await?;
@@ -124,13 +137,13 @@ async fn wait_until_service_restarted(
             return Ok(());
         }
 
-        if std::time::Instant::now() >= deadline {
+        if Instant::now() >= deadline {
             return Err(anyhow!(
                 "timed out waiting for restarted compose service '{service}'"
             ));
         }
 
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(500)).await;
     }
 }
 

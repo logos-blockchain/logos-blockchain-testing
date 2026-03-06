@@ -29,6 +29,12 @@ pub struct ComposeDeploymentMetadata {
     pub project_name: Option<String>,
 }
 
+#[derive(Debug, thiserror::Error)]
+enum ComposeMetadataError {
+    #[error("compose deployment metadata has no project name")]
+    MissingProjectName,
+}
+
 impl ComposeDeploymentMetadata {
     /// Returns project name when deployment is bound to a specific compose
     /// project.
@@ -42,9 +48,9 @@ impl ComposeDeploymentMetadata {
         &self,
         services: Vec<String>,
     ) -> Result<AttachSource, DynError> {
-        let Some(project_name) = self.project_name() else {
-            return Err("compose metadata has no project name".into());
-        };
+        let project_name = self
+            .project_name()
+            .ok_or(ComposeMetadataError::MissingProjectName)?;
 
         Ok(AttachSource::compose(services).with_project(project_name.to_owned()))
     }

@@ -6,8 +6,8 @@ use testing_framework_core::{
         ApplicationExternalProvider, AttachSource, CleanupGuard, DeploymentPolicy, FeedHandle,
         FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
         ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
-        Runner, Scenario, ScenarioSources, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        Runner, Scenario, ScenarioSources, SourceOrchestrationPlan, SourceProviders,
+        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -102,19 +102,11 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         )
         .await?;
 
-        // Source orchestration currently runs here after managed clients are prepared.
-        let source_providers = SourceProviders::default()
-            .with_managed(Arc::new(StaticManagedProvider::new(
-                deployed.node_clients.snapshot(),
-            )))
-            .with_attach(Arc::new(ComposeAttachProvider::<E>::new(
-                compose_runner_host(),
-            )))
-            .with_external(Arc::new(ApplicationExternalProvider));
+        let source_providers = self.source_providers(deployed.node_clients.snapshot());
 
-        deployed.node_clients = orchestrate_sources_with_providers(&source_plan, source_providers)
-            .await
-            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
+        deployed.node_clients = self
+            .resolve_node_clients(&source_plan, source_providers)
+            .await?;
 
         let project_name = prepared.environment.project_name().to_owned();
 
@@ -147,25 +139,19 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     async fn deploy_attached_only<Caps>(
         &self,
         scenario: &Scenario<E, Caps>,
-        source_plan: testing_framework_core::scenario::SourceOrchestrationPlan,
+        source_plan: SourceOrchestrationPlan,
     ) -> Result<Runner<E>, ComposeRunnerError>
     where
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
         let observability = resolve_observability_inputs(scenario)?;
-        let source_providers = SourceProviders::default()
-            .with_managed(Arc::new(StaticManagedProvider::new(Vec::new())))
-            .with_attach(Arc::new(ComposeAttachProvider::<E>::new(
-                compose_runner_host(),
-            )))
-            .with_external(Arc::new(ApplicationExternalProvider));
-        let node_clients = orchestrate_sources_with_providers(&source_plan, source_providers)
-            .await
-            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
+        let source_providers = self.source_providers(Vec::new());
 
-        if node_clients.is_empty() {
-            return Err(ComposeRunnerError::RuntimePreflight);
-        }
+        let node_clients = self
+            .resolve_node_clients(&source_plan, source_providers)
+            .await?;
+
+        self.ensure_non_empty_node_clients(&node_clients)?;
 
         let node_control = self.attached_node_control::<Caps>(scenario)?;
         let (feed, feed_task) = spawn_block_feed_with_retry::<E>(&node_clients).await?;
@@ -181,6 +167,36 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
 
         let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
         Ok(Runner::new(context, Some(cleanup_guard)))
+    }
+
+    fn source_providers(&self, managed_clients: Vec<E::NodeClient>) -> SourceProviders<E> {
+        SourceProviders::default()
+            .with_managed(Arc::new(StaticManagedProvider::new(managed_clients)))
+            .with_attach(Arc::new(ComposeAttachProvider::<E>::new(
+                compose_runner_host(),
+            )))
+            .with_external(Arc::new(ApplicationExternalProvider))
+    }
+
+    async fn resolve_node_clients(
+        &self,
+        source_plan: &SourceOrchestrationPlan,
+        source_providers: SourceProviders<E>,
+    ) -> Result<NodeClients<E>, ComposeRunnerError> {
+        orchestrate_sources_with_providers(source_plan, source_providers)
+            .await
+            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })
+    }
+
+    fn ensure_non_empty_node_clients(
+        &self,
+        node_clients: &NodeClients<E>,
+    ) -> Result<(), ComposeRunnerError> {
+        if node_clients.is_empty() {
+            return Err(ComposeRunnerError::RuntimePreflight);
+        }
+
+        Ok(())
     }
 
     fn attached_node_control<Caps>(

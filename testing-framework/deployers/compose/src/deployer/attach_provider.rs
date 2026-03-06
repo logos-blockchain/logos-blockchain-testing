@@ -18,6 +18,12 @@ pub(super) struct ComposeAttachProvider<E: ComposeDeployEnv> {
     _env: PhantomData<E>,
 }
 
+#[derive(Debug, thiserror::Error)]
+enum ComposeAttachDiscoveryError {
+    #[error("compose attach source requires an explicit project name")]
+    MissingProjectName,
+}
+
 impl<E: ComposeDeployEnv> ComposeAttachProvider<E> {
     pub(super) fn new(host: String) -> Self {
         Self {
@@ -45,7 +51,7 @@ impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
         let project = project
             .as_ref()
             .ok_or_else(|| AttachProviderError::Discovery {
-                source: "compose attach source requires an explicit project name".into(),
+                source: ComposeAttachDiscoveryError::MissingProjectName.into(),
             })?;
 
         let services = resolve_services(project, services)
@@ -57,9 +63,11 @@ impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
             let container_id = discover_service_container_id(project, service)
                 .await
                 .map_err(to_discovery_error)?;
+
             let api_port = discover_api_port(&container_id)
                 .await
                 .map_err(to_discovery_error)?;
+
             let endpoint =
                 build_service_endpoint(&self.host, api_port).map_err(to_discovery_error)?;
             let source = ExternalNodeSource::new(service.clone(), endpoint.to_string());
@@ -84,15 +92,7 @@ async fn resolve_services(project: &str, requested: &[String]) -> Result<Vec<Str
         return Ok(requested.to_owned());
     }
 
-    let discovered = discover_attachable_services(project).await?;
-
-    if discovered.is_empty() {
-        return Err(
-            format!("no running compose services discovered for project '{project}'").into(),
-        );
-    }
-
-    Ok(discovered)
+    discover_attachable_services(project).await
 }
 
 async fn discover_api_port(container_id: &str) -> Result<u16, DynError> {
