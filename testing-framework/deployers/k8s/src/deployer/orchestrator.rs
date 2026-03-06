@@ -1,20 +1,22 @@
-use std::{env, fmt::Debug, marker::PhantomData, time::Duration};
+use std::{env, fmt::Debug, marker::PhantomData, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, CleanupGuard, Deployer, DynError, FeedHandle, FeedRuntime,
-        HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
+        Application, ApplicationExternalProvider, AttachSource, CleanupGuard, Deployer, DynError,
+        FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
         ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
-        Runner, Scenario, build_source_orchestration_plan, orchestrate_sources,
+        Runner, Scenario, ScenarioSources, SourceOrchestrationPlan, SourceProviders,
+        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
 use tracing::{error, info};
 
 use crate::{
+    deployer::{K8sDeploymentMetadata, attach_provider::K8sAttachProvider},
     env::K8sDeployEnv,
     infrastructure::cluster::{
         ClusterEnvironment, ClusterEnvironmentError, NodeClientError, PortSpecs,
@@ -55,6 +57,17 @@ impl<E: K8sDeployEnv> K8sDeployer<E> {
     pub const fn with_readiness(mut self, enabled: bool) -> Self {
         self.readiness_checks = enabled;
         self
+    }
+
+    /// Deploy and return k8s-specific metadata alongside the generic runner.
+    pub async fn deploy_with_metadata<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
+    where
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
+    {
+        deploy_with_observability(self, scenario).await
     }
 }
 
@@ -115,7 +128,9 @@ where
     type Error = K8sRunnerError;
 
     async fn deploy(&self, scenario: &Scenario<E, Caps>) -> Result<Runner<E>, Self::Error> {
-        deploy_with_observability(self, scenario).await
+        self.deploy_with_metadata(scenario)
+            .await
+            .map(|(runner, _)| runner)
     }
 }
 
@@ -147,10 +162,10 @@ fn ensure_supported_topology<E: K8sDeployEnv>(
 async fn deploy_with_observability<E, Caps>(
     deployer: &K8sDeployer<E>,
     scenario: &Scenario<E, Caps>,
-) -> Result<Runner<E>, K8sRunnerError>
+) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
 where
     E: K8sDeployEnv,
-    Caps: ObservabilityCapabilityProvider,
+    Caps: ObservabilityCapabilityProvider + Send + Sync,
 {
     // Source planning is currently resolved here before deployer-specific setup.
     let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
@@ -160,21 +175,132 @@ where
     })?;
 
     let observability = resolve_observability_inputs(scenario.capabilities())?;
+
+    if scenario.sources().is_attached() {
+        let runner = deploy_attached_only::<E, Caps>(scenario, source_plan, observability).await?;
+        return Ok((runner, attached_metadata(scenario)));
+    }
+
     let deployment = build_k8s_deployment::<E, Caps>(deployer, scenario, &observability).await?;
+    let metadata = K8sDeploymentMetadata {
+        namespace: Some(deployment.cluster.namespace().to_owned()),
+        label_selector: Some(E::attach_node_service_selector(
+            deployment.cluster.release(),
+        )),
+    };
     let mut cluster = Some(deployment.cluster);
 
     let mut runtime = build_runtime_artifacts::<E>(&mut cluster, &observability).await?;
 
-    // Source orchestration currently runs here after managed clients are prepared.
-    runtime.node_clients = orchestrate_sources(&source_plan, runtime.node_clients)
-        .await
-        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+    let source_providers = source_providers::<E>(
+        client_from_cluster(&cluster)?,
+        runtime.node_clients.snapshot(),
+    );
+
+    runtime.node_clients = resolve_node_clients(&source_plan, source_providers).await?;
+    ensure_non_empty_node_clients(&runtime.node_clients)?;
 
     let parts = build_runner_parts(scenario, deployment.node_count, runtime);
 
     log_configured_observability(&observability);
     maybe_print_endpoints::<E>(&observability, &parts.node_clients);
-    finalize_runner::<E>(&mut cluster, parts)
+    let runner = finalize_runner::<E>(&mut cluster, parts)?;
+    Ok((runner, metadata))
+}
+
+async fn deploy_attached_only<E, Caps>(
+    scenario: &Scenario<E, Caps>,
+    source_plan: SourceOrchestrationPlan,
+    observability: ObservabilityInputs,
+) -> Result<Runner<E>, K8sRunnerError>
+where
+    E: K8sDeployEnv,
+    Caps: ObservabilityCapabilityProvider + Send + Sync,
+{
+    let client = init_kube_client().await?;
+    let source_providers = source_providers::<E>(client, Vec::new());
+    let node_clients = resolve_node_clients(&source_plan, source_providers).await?;
+
+    ensure_non_empty_node_clients(&node_clients)?;
+
+    let telemetry = observability.telemetry_handle()?;
+    let (feed, feed_task) = spawn_block_feed_with::<E>(&node_clients).await?;
+    let context = RunContext::new(
+        scenario.deployment().clone(),
+        node_clients,
+        scenario.duration(),
+        scenario.expectation_cooldown(),
+        telemetry,
+        feed,
+        None,
+    );
+
+    Ok(Runner::new(context, Some(Box::new(feed_task))))
+}
+
+fn attached_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
+where
+    E: K8sDeployEnv,
+    Caps: Send + Sync,
+{
+    match scenario.sources() {
+        ScenarioSources::Attached {
+            attach:
+                AttachSource::K8s {
+                    namespace,
+                    label_selector,
+                },
+            ..
+        } => K8sDeploymentMetadata {
+            namespace: namespace.clone(),
+            label_selector: Some(label_selector.clone()),
+        },
+        _ => K8sDeploymentMetadata {
+            namespace: None,
+            label_selector: None,
+        },
+    }
+}
+
+fn client_from_cluster(cluster: &Option<ClusterEnvironment>) -> Result<Client, K8sRunnerError> {
+    let client = cluster
+        .as_ref()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "cluster must exist while resolving source providers".to_owned(),
+        })?
+        .client()
+        .clone();
+
+    Ok(client)
+}
+
+fn source_providers<E: K8sDeployEnv>(
+    client: Client,
+    managed_clients: Vec<E::NodeClient>,
+) -> SourceProviders<E> {
+    SourceProviders::default()
+        .with_managed(Arc::new(StaticManagedProvider::new(managed_clients)))
+        .with_attach(Arc::new(K8sAttachProvider::<E>::new(client)))
+        .with_external(Arc::new(ApplicationExternalProvider))
+}
+
+async fn resolve_node_clients<E: K8sDeployEnv>(
+    source_plan: &SourceOrchestrationPlan,
+    source_providers: SourceProviders<E>,
+) -> Result<NodeClients<E>, K8sRunnerError> {
+    orchestrate_sources_with_providers(source_plan, source_providers)
+        .await
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })
+}
+
+fn ensure_non_empty_node_clients<E: K8sDeployEnv>(
+    node_clients: &NodeClients<E>,
+) -> Result<(), K8sRunnerError> {
+    if node_clients.is_empty() {
+        return Err(K8sRunnerError::RuntimePreflight);
+    }
+
+    Ok(())
 }
 
 struct BuiltK8sDeployment {

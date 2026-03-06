@@ -94,6 +94,10 @@ impl ClusterEnvironment {
         &self.release
     }
 
+    pub fn client(&self) -> &Client {
+        &self.client
+    }
+
     pub fn node_ports(&self) -> (&[u16], &[u16]) {
         (&self.node_api_ports, &self.node_testing_ports)
     }
