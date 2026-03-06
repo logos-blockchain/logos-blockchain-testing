@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use lb_ext::{CoreBuilderExt as _, LbcComposeDeployer, LbcExtEnv, ScenarioBuilder};
-use testing_framework_core::scenario::{Deployer as _, Runner};
+use testing_framework_core::scenario::{AttachSource, Deployer as _, Runner};
 use testing_framework_runner_compose::{ComposeDeploymentMetadata, ComposeRunnerError};
 
 #[tokio::test]
@@ -21,13 +21,11 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
             Err(error) => return Err(anyhow::Error::new(error)),
         };
 
-    let services = metadata
-        .discover_services()
-        .await
-        .map_err(|err| anyhow!("{err}"))?;
-    let attach_source = metadata
-        .attach_source_for_services(services.clone())
-        .map_err(|err| anyhow!("{err}"))?;
+    let project_name = metadata
+        .project_name()
+        .ok_or_else(|| anyhow!("compose deployment metadata has no project name"))?
+        .to_owned();
+    let attach_source = AttachSource::compose(vec![]).with_project(project_name);
 
     let attached = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
         .enable_node_control()
@@ -45,6 +43,17 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         .context()
         .node_control()
         .ok_or_else(|| anyhow!("attached compose node control is unavailable"))?;
+
+    let services: Vec<String> = attached_runner
+        .context()
+        .borrowed_nodes()
+        .into_iter()
+        .map(|node| node.identity)
+        .collect();
+
+    if services.is_empty() {
+        return Err(anyhow!("attached compose runner discovered no services"));
+    }
 
     for service in services {
         let pre_restart_started_at = metadata

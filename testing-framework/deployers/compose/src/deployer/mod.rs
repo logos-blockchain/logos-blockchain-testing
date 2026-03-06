@@ -50,21 +50,6 @@ impl ComposeDeploymentMetadata {
         Ok(AttachSource::compose(services).with_project(project_name.to_owned()))
     }
 
-    /// Discovers compose node services and builds an attach source for them.
-    pub async fn attach_source_for_discovered_services(&self) -> Result<AttachSource, DynError> {
-        let services = self.discover_services().await?;
-        self.attach_source_for_services(services)
-    }
-
-    /// Discovers node services for this compose deployment.
-    pub async fn discover_services(&self) -> Result<Vec<String>, DynError> {
-        let Some(project_name) = self.project_name() else {
-            return Err("compose metadata has no project name".into());
-        };
-
-        crate::docker::attached::discover_attachable_services(project_name).await
-    }
-
     /// Returns the current StartedAt timestamp for a compose service container.
     pub async fn service_started_at(&self, service: &str) -> Result<String, DynError> {
         let Some(project_name) = self.project_name() else {
