@@ -6,7 +6,7 @@ pub mod errors;
 pub mod infrastructure;
 pub mod lifecycle;
 
-pub use deployer::ComposeDeployer;
+pub use deployer::{ComposeDeployer, ComposeDeploymentMetadata};
 pub use descriptor::{ComposeDescriptor, EnvEntry, NodeDescriptor};
 pub use docker::{
     commands::{ComposeCommandError, compose_down, compose_up, dump_compose_logs},
