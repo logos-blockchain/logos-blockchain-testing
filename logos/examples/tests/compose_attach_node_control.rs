@@ -25,12 +25,8 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         .discover_services()
         .await
         .map_err(|err| anyhow!("{err}"))?;
-    let service = services
-        .first()
-        .cloned()
-        .ok_or_else(|| anyhow!("compose deployment metadata discovered no services"))?;
     let attach_source = metadata
-        .attach_source_for_services(services)
+        .attach_source_for_services(services.clone())
         .map_err(|err| anyhow!("{err}"))?;
 
     let attached = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
@@ -45,25 +41,31 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         Err(error) => return Err(anyhow::Error::new(error)),
     };
 
-    let pre_restart_started_at = metadata
-        .service_started_at(&service)
-        .await
-        .map_err(|err| anyhow!("{err}"))?;
-
     let control = attached_runner
         .context()
         .node_control()
         .ok_or_else(|| anyhow!("attached compose node control is unavailable"))?;
 
-    control
-        .restart_node(&service)
-        .await
-        .map_err(|err| anyhow!("attached restart failed: {err}"))?;
+    for service in services {
+        let pre_restart_started_at = metadata
+            .service_started_at(&service)
+            .await
+            .map_err(|err| anyhow!("{err}"))?;
 
-    metadata
-        .wait_until_service_restarted(&service, &pre_restart_started_at, Duration::from_secs(30))
-        .await
-        .map_err(|err| anyhow!("{err}"))?;
+        control
+            .restart_node(&service)
+            .await
+            .map_err(|err| anyhow!("attached restart failed for {service}: {err}"))?;
+
+        metadata
+            .wait_until_service_restarted(
+                &service,
+                &pre_restart_started_at,
+                Duration::from_secs(30),
+            )
+            .await
+            .map_err(|err| anyhow!("{err}"))?;
+    }
 
     Ok(())
 }
