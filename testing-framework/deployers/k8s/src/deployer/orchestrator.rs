@@ -195,6 +195,7 @@ where
     let mut cluster = Some(deployment.cluster);
 
     let mut runtime = build_runtime_artifacts::<E>(&mut cluster, &observability).await?;
+    let cluster_wait = managed_cluster_wait::<E>(&cluster, &metadata)?;
 
     let source_providers = source_providers::<E>(
         client_from_cluster(&cluster)?,
@@ -204,17 +205,7 @@ where
     runtime.node_clients = resolve_node_clients(&source_plan, source_providers).await?;
     ensure_non_empty_node_clients(&runtime.node_clients)?;
 
-    let parts = build_runner_parts(
-        scenario,
-        deployment.node_count,
-        runtime,
-        Arc::new(K8sAttachedClusterWait::<E>::new(
-            client_from_cluster(&cluster)?,
-            metadata
-                .attach_source()
-                .map_err(|source| K8sRunnerError::SourceOrchestration { source })?,
-        )),
-    );
+    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait);
 
     log_configured_observability(&observability);
     maybe_print_endpoints::<E>(&observability, &parts.node_clients);
@@ -295,6 +286,21 @@ where
     Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
         client,
         attach.clone(),
+    )))
+}
+
+fn managed_cluster_wait<E: K8sDeployEnv>(
+    cluster: &Option<ClusterEnvironment>,
+    metadata: &K8sDeploymentMetadata,
+) -> Result<Arc<dyn ClusterWaitHandle<E>>, K8sRunnerError> {
+    let client = client_from_cluster(cluster)?;
+    let attach_source = metadata
+        .attach_source()
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+
+    Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
+        client,
+        attach_source,
     )))
 }
 
