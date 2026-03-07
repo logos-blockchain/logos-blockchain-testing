@@ -12,9 +12,9 @@ async fn k8s_attach_mode_queries_node_api_opt_in() -> Result<()> {
         .with_run_duration(Duration::from_secs(5))
         .build()?;
 
-    let deployer = LbcK8sDeployer::default();
+    let managed_deployer = LbcK8sDeployer::default();
     let (_managed_runner, metadata): (Runner<LbcExtEnv>, K8sDeploymentMetadata) =
-        match deployer.deploy_with_metadata(&managed).await {
+        match managed_deployer.deploy_with_metadata(&managed).await {
             Ok(result) => result,
             Err(K8sRunnerError::ClientInit { .. }) => return Ok(()),
             Err(error) => return Err(Error::new(error)),
@@ -26,7 +26,8 @@ async fn k8s_attach_mode_queries_node_api_opt_in() -> Result<()> {
         .with_attach_source(attach_source)
         .build()?;
 
-    let attached_runner: Runner<LbcExtEnv> = match deployer.deploy(&attached).await {
+    let attached_deployer = LbcK8sDeployer::default();
+    let attached_runner: Runner<LbcExtEnv> = match attached_deployer.deploy(&attached).await {
         Ok(runner) => runner,
         Err(K8sRunnerError::ClientInit { .. }) => return Ok(()),
         Err(error) => return Err(Error::new(error)),
