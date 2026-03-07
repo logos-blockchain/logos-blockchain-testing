@@ -158,7 +158,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         let node_control = self.attached_node_control::<Caps>(scenario)?;
         let cluster_wait = self.attached_cluster_wait(scenario)?;
         let (feed, feed_task) = spawn_block_feed_with_retry::<E>(&node_clients).await?;
-        let context = RunContext::new(
+        let context = build_run_context(
             scenario.deployment().clone(),
             node_clients,
             scenario.duration(),
@@ -166,8 +166,8 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             observability.telemetry_handle()?,
             feed,
             node_control,
-        )
-        .with_cluster_wait(cluster_wait);
+            cluster_wait,
+        );
 
         let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
         Ok(Runner::new(context, Some(cleanup_guard)))
@@ -274,6 +274,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     {
         let telemetry = observability.telemetry_handle()?;
         let node_control = self.maybe_node_control::<Caps>(&prepared.environment);
+        let cluster_wait = self.managed_cluster_wait(project_name);
 
         log_observability_endpoints(&observability);
         log_profiling_urls(&deployed.host, &deployed.host_ports);
@@ -287,10 +288,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             telemetry,
             environment: &mut prepared.environment,
             node_control,
-            cluster_wait: Arc::new(ComposeAttachedClusterWait::<E>::new(
-                compose_runner_host(),
-                AttachSource::compose(Vec::new()).with_project(project_name),
-            )),
+            cluster_wait,
         };
         let runtime = build_compose_runtime::<E>(input).await?;
         let cleanup_guard =
@@ -318,6 +316,13 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
                 project_name: environment.project_name().to_owned(),
             }) as Arc<dyn NodeControlHandle<E>>
         })
+    }
+
+    fn managed_cluster_wait(&self, project_name: String) -> Arc<dyn ClusterWaitHandle<E>> {
+        Arc::new(ComposeAttachedClusterWait::<E>::new(
+            compose_runner_host(),
+            AttachSource::compose(Vec::new()).with_project(project_name),
+        ))
     }
 
     fn log_deploy_start<Caps>(

@@ -6,6 +6,12 @@ use crate::scenario::{
     NodeControlHandle,
 };
 
+#[derive(Debug, thiserror::Error)]
+enum RunContextCapabilityError {
+    #[error("wait_network_ready is not available for this runner")]
+    MissingClusterWait,
+}
+
 /// Shared runtime context available to workloads and expectations.
 pub struct RunContext<E: Application> {
     descriptors: E::Deployment,
@@ -131,16 +137,17 @@ impl<E: Application> RunContext<E> {
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), DynError> {
-        let Some(cluster_wait) = self.cluster_wait() else {
-            return Err("wait_network_ready is not available for this runner".into());
-        };
-
-        cluster_wait.wait_network_ready().await
+        self.require_cluster_wait()?.wait_network_ready().await
     }
 
     #[must_use]
     pub const fn cluster_client(&self) -> ClusterClient<'_, E> {
         self.node_clients.cluster_client()
+    }
+
+    fn require_cluster_wait(&self) -> Result<Arc<dyn ClusterWaitHandle<E>>, DynError> {
+        self.cluster_wait()
+            .ok_or_else(|| RunContextCapabilityError::MissingClusterWait.into())
     }
 }
 

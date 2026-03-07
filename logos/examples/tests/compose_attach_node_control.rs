@@ -93,12 +93,7 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         .context()
         .node_control()
         .ok_or_else(|| anyhow!("attached compose node control is unavailable"))?;
-
     let services = discover_attached_services(&project_name).await?;
-
-    if services.is_empty() {
-        return Err(anyhow!("attached compose runner discovered no services"));
-    }
 
     for service in services {
         let pre_restart_started_at = service_started_at(&project_name, &service).await?;
@@ -121,7 +116,7 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
 }
 
 async fn service_started_at(project: &str, service: &str) -> Result<String> {
-    let container_id = run_docker(&[
+    let container_output = run_docker(&[
         "ps",
         "--filter",
         &format!("label=com.docker.compose.project={project}"),
@@ -131,26 +126,7 @@ async fn service_started_at(project: &str, service: &str) -> Result<String> {
         "{{.ID}}",
     ])
     .await?;
-
-    let container_ids: Vec<&str> = container_id
-        .lines()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .collect();
-
-    let container_id = match container_ids.as_slice() {
-        [] => {
-            return Err(anyhow!(
-                "no running container found for service '{service}'"
-            ));
-        }
-        [id] => *id,
-        _ => {
-            return Err(anyhow!(
-                "multiple running containers found for service '{service}'"
-            ));
-        }
-    };
+    let container_id = single_container_id(service, &container_output)?;
 
     let started_at =
         run_docker(&["inspect", "--format", "{{.State.StartedAt}}", container_id]).await?;
@@ -164,6 +140,24 @@ async fn service_started_at(project: &str, service: &str) -> Result<String> {
     }
 
     Ok(started_at)
+}
+
+fn single_container_id<'a>(service: &str, output: &'a str) -> Result<&'a str> {
+    let container_ids: Vec<&str> = output
+        .lines()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect();
+
+    match container_ids.as_slice() {
+        [] => Err(anyhow!(
+            "no running container found for service '{service}'"
+        )),
+        [id] => Ok(*id),
+        _ => Err(anyhow!(
+            "multiple running containers found for service '{service}'"
+        )),
+    }
 }
 
 async fn discover_attached_services(project: &str) -> Result<Vec<String>> {

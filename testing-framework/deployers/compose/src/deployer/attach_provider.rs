@@ -51,50 +51,29 @@ impl<E: ComposeDeployEnv> ComposeAttachedClusterWait<E> {
     }
 }
 
+struct ComposeAttachRequest<'a> {
+    project: &'a str,
+    services: &'a [String],
+}
+
 #[async_trait]
 impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
     async fn discover(
         &self,
         source: &AttachSource,
     ) -> Result<Vec<AttachedNode<E>>, AttachProviderError> {
-        let (project, services) = match source {
-            AttachSource::Compose { project, services } => (project, services),
-            _ => {
-                return Err(AttachProviderError::UnsupportedSource {
-                    attach_source: source.clone(),
-                });
-            }
-        };
-
-        let project = project
-            .as_ref()
-            .ok_or_else(|| AttachProviderError::Discovery {
-                source: ComposeAttachDiscoveryError::MissingProjectName.into(),
-            })?;
-
-        let services = resolve_services(project, services)
+        let request = compose_attach_request(source)?;
+        let services = resolve_services(request.project, request.services)
             .await
             .map_err(to_discovery_error)?;
 
         let mut attached = Vec::with_capacity(services.len());
         for service in &services {
-            let container_id = discover_service_container_id(project, service)
-                .await
-                .map_err(to_discovery_error)?;
-
-            let api_port = discover_api_port(&container_id)
-                .await
-                .map_err(to_discovery_error)?;
-
-            let endpoint =
-                build_service_endpoint(&self.host, api_port).map_err(to_discovery_error)?;
-            let source = ExternalNodeSource::new(service.clone(), endpoint.to_string());
-            let client = E::external_node_client(&source).map_err(to_discovery_error)?;
-
-            attached.push(AttachedNode {
-                identity_hint: Some(service.clone()),
-                client,
-            });
+            attached.push(
+                build_attached_node::<E>(&self.host, request.project, service)
+                    .await
+                    .map_err(to_discovery_error)?,
+            );
         }
 
         Ok(attached)
@@ -103,6 +82,41 @@ impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
 
 fn to_discovery_error(source: DynError) -> AttachProviderError {
     AttachProviderError::Discovery { source }
+}
+
+fn compose_attach_request(
+    source: &AttachSource,
+) -> Result<ComposeAttachRequest<'_>, AttachProviderError> {
+    let AttachSource::Compose { project, services } = source else {
+        return Err(AttachProviderError::UnsupportedSource {
+            attach_source: source.clone(),
+        });
+    };
+
+    let project = project
+        .as_deref()
+        .ok_or_else(|| AttachProviderError::Discovery {
+            source: ComposeAttachDiscoveryError::MissingProjectName.into(),
+        })?;
+
+    Ok(ComposeAttachRequest { project, services })
+}
+
+async fn build_attached_node<E: ComposeDeployEnv>(
+    host: &str,
+    project: &str,
+    service: &str,
+) -> Result<AttachedNode<E>, DynError> {
+    let container_id = discover_service_container_id(project, service).await?;
+    let api_port = discover_api_port(&container_id).await?;
+    let endpoint = build_service_endpoint(host, api_port)?;
+    let source = ExternalNodeSource::new(service.to_owned(), endpoint.to_string());
+    let client = E::external_node_client(&source)?;
+
+    Ok(AttachedNode {
+        identity_hint: Some(service.to_owned()),
+        client,
+    })
 }
 
 pub(super) async fn resolve_services(
@@ -147,28 +161,45 @@ pub(super) fn build_service_endpoint(host: &str, port: u16) -> Result<Url, DynEr
 #[async_trait]
 impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeAttachedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
-        let AttachSource::Compose { project, services } = &self.source else {
-            return Err("compose cluster wait requires a compose attach source".into());
-        };
-
-        let project = project
-            .as_ref()
-            .ok_or(ComposeAttachDiscoveryError::MissingProjectName)?;
-        let services = resolve_services(project, services).await?;
-
-        let mut endpoints = Vec::with_capacity(services.len());
-        for service in &services {
-            let container_id = discover_service_container_id(project, service).await?;
-            let api_port = discover_api_port(&container_id).await?;
-            let mut endpoint = build_service_endpoint(&self.host, api_port)?;
-            endpoint.set_path(E::readiness_path());
-            endpoints.push(endpoint);
-        }
+        let request = compose_wait_request(&self.source)?;
+        let services = resolve_services(request.project, request.services).await?;
+        let endpoints =
+            collect_readiness_endpoints::<E>(&self.host, request.project, &services).await?;
 
         wait_http_readiness(&endpoints, HttpReadinessRequirement::AllNodesReady).await?;
 
         Ok(())
     }
+}
+
+fn compose_wait_request(source: &AttachSource) -> Result<ComposeAttachRequest<'_>, DynError> {
+    let AttachSource::Compose { project, services } = source else {
+        return Err("compose cluster wait requires a compose attach source".into());
+    };
+
+    let project = project
+        .as_deref()
+        .ok_or(ComposeAttachDiscoveryError::MissingProjectName)?;
+
+    Ok(ComposeAttachRequest { project, services })
+}
+
+async fn collect_readiness_endpoints<E: ComposeDeployEnv>(
+    host: &str,
+    project: &str,
+    services: &[String],
+) -> Result<Vec<Url>, DynError> {
+    let mut endpoints = Vec::with_capacity(services.len());
+
+    for service in services {
+        let container_id = discover_service_container_id(project, service).await?;
+        let api_port = discover_api_port(&container_id).await?;
+        let mut endpoint = build_service_endpoint(host, api_port)?;
+        endpoint.set_path(E::readiness_path());
+        endpoints.push(endpoint);
+    }
+
+    Ok(endpoints)
 }
 
 #[cfg(test)]
