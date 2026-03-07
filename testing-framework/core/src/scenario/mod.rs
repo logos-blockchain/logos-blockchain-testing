@@ -25,7 +25,7 @@ pub use capabilities::{
     StartNodeOptions, StartedNode,
 };
 pub use common_builder_ext::CoreBuilderExt;
-pub use control::NodeControlHandle;
+pub use control::{ClusterWaitHandle, NodeControlHandle};
 #[doc(hidden)]
 pub use definition::{
     Builder as CoreBuilder, // internal adapter-facing core builder

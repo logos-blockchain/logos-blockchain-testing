@@ -20,6 +20,7 @@ services:
 {% endfor %}
     labels:
       testing-framework.node: "true"
+      testing-framework.api-container-port: "{{ node.api_container_port }}"
     environment:
 {% for env in node.environment %}
       {{ env.key }}: "{{ env.value }}"

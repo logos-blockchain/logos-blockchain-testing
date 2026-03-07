@@ -2,19 +2,27 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    AttachProvider, AttachProviderError, AttachSource, AttachedNode, DynError, ExternalNodeSource,
+    AttachProvider, AttachProviderError, AttachSource, AttachedNode, ClusterWaitHandle, DynError,
+    ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
 };
 use url::Url;
 
 use crate::{
     docker::attached::{
-        discover_attachable_services, discover_service_container_id, inspect_mapped_tcp_ports,
+        discover_attachable_services, discover_service_container_id,
+        inspect_api_container_port_label, inspect_mapped_tcp_ports,
     },
     env::ComposeDeployEnv,
 };
 
 pub(super) struct ComposeAttachProvider<E: ComposeDeployEnv> {
     host: String,
+    _env: PhantomData<E>,
+}
+
+pub(super) struct ComposeAttachedClusterWait<E: ComposeDeployEnv> {
+    host: String,
+    source: AttachSource,
     _env: PhantomData<E>,
 }
 
@@ -28,6 +36,16 @@ impl<E: ComposeDeployEnv> ComposeAttachProvider<E> {
     pub(super) fn new(host: String) -> Self {
         Self {
             host,
+            _env: PhantomData,
+        }
+    }
+}
+
+impl<E: ComposeDeployEnv> ComposeAttachedClusterWait<E> {
+    pub(super) fn new(host: String, source: AttachSource) -> Self {
+        Self {
+            host,
+            source,
             _env: PhantomData,
         }
     }
@@ -87,7 +105,10 @@ fn to_discovery_error(source: DynError) -> AttachProviderError {
     AttachProviderError::Discovery { source }
 }
 
-async fn resolve_services(project: &str, requested: &[String]) -> Result<Vec<String>, DynError> {
+pub(super) async fn resolve_services(
+    project: &str,
+    requested: &[String],
+) -> Result<Vec<String>, DynError> {
     if !requested.is_empty() {
         return Ok(requested.to_owned());
     }
@@ -95,32 +116,59 @@ async fn resolve_services(project: &str, requested: &[String]) -> Result<Vec<Str
     discover_attachable_services(project).await
 }
 
-async fn discover_api_port(container_id: &str) -> Result<u16, DynError> {
+pub(super) async fn discover_api_port(container_id: &str) -> Result<u16, DynError> {
     let mapped_ports = inspect_mapped_tcp_ports(container_id).await?;
-    match mapped_ports.as_slice() {
-        [] => Err(format!(
-            "no mapped tcp ports discovered for attached compose service container '{container_id}'"
-        )
-        .into()),
-        [port] => Ok(port.host_port),
-        _ => {
-            let mapped_ports = mapped_ports
-                .iter()
-                .map(|port| format!("{}->{}", port.container_port, port.host_port))
-                .collect::<Vec<_>>()
-                .join(", ");
+    let api_container_port = inspect_api_container_port_label(container_id).await?;
+    let Some(api_port) = mapped_ports
+        .iter()
+        .find(|port| port.container_port == api_container_port)
+        .map(|port| port.host_port)
+    else {
+        let mapped_ports = mapped_ports
+            .iter()
+            .map(|port| format!("{}->{}", port.container_port, port.host_port))
+            .collect::<Vec<_>>()
+            .join(", ");
 
-            Err(format!(
-                "attached compose service container '{container_id}' has multiple mapped tcp ports ({mapped_ports}); provide a single exposed API port"
-            )
-            .into())
-        }
-    }
+        return Err(format!(
+            "attached compose service container '{container_id}' does not expose labeled API container port {api_container_port}; mapped tcp ports: {mapped_ports}"
+        )
+        .into());
+    };
+
+    Ok(api_port)
 }
 
-fn build_service_endpoint(host: &str, port: u16) -> Result<Url, DynError> {
+pub(super) fn build_service_endpoint(host: &str, port: u16) -> Result<Url, DynError> {
     let endpoint = Url::parse(&format!("http://{host}:{port}/"))?;
     Ok(endpoint)
+}
+
+#[async_trait]
+impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeAttachedClusterWait<E> {
+    async fn wait_network_ready(&self) -> Result<(), DynError> {
+        let AttachSource::Compose { project, services } = &self.source else {
+            return Err("compose cluster wait requires a compose attach source".into());
+        };
+
+        let project = project
+            .as_ref()
+            .ok_or(ComposeAttachDiscoveryError::MissingProjectName)?;
+        let services = resolve_services(project, services).await?;
+
+        let mut endpoints = Vec::with_capacity(services.len());
+        for service in &services {
+            let container_id = discover_service_container_id(project, service).await?;
+            let api_port = discover_api_port(&container_id).await?;
+            let mut endpoint = build_service_endpoint(&self.host, api_port)?;
+            endpoint.set_path(E::readiness_path());
+            endpoints.push(endpoint);
+        }
+
+        wait_http_readiness(&endpoints, HttpReadinessRequirement::AllNodesReady).await?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

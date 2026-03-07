@@ -3,11 +3,12 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        ApplicationExternalProvider, AttachSource, CleanupGuard, DeploymentPolicy, FeedHandle,
-        FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
-        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
-        Runner, Scenario, ScenarioSources, SourceOrchestrationPlan, SourceProviders,
-        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
+        ApplicationExternalProvider, AttachSource, CleanupGuard, ClusterWaitHandle,
+        DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
+        RequiresNodeControl, RunContext, Runner, Scenario, ScenarioSources,
+        SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+        build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -15,7 +16,7 @@ use tracing::info;
 
 use super::{
     ComposeDeployer, ComposeDeploymentMetadata,
-    attach_provider::ComposeAttachProvider,
+    attach_provider::{ComposeAttachProvider, ComposeAttachedClusterWait},
     clients::ClientBuilder,
     make_cleanup_guard,
     ports::PortManager,
@@ -117,6 +118,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
                 deployed,
                 observability,
                 readiness_enabled,
+                project_name.clone(),
             )
             .await?;
 
@@ -154,6 +156,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         self.ensure_non_empty_node_clients(&node_clients)?;
 
         let node_control = self.attached_node_control::<Caps>(scenario)?;
+        let cluster_wait = self.attached_cluster_wait(scenario)?;
         let (feed, feed_task) = spawn_block_feed_with_retry::<E>(&node_clients).await?;
         let context = RunContext::new(
             scenario.deployment().clone(),
@@ -163,7 +166,8 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             observability.telemetry_handle()?,
             feed,
             node_control,
-        );
+        )
+        .with_cluster_wait(cluster_wait);
 
         let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
         Ok(Runner::new(context, Some(cleanup_guard)))
@@ -237,6 +241,25 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         }) as Arc<dyn NodeControlHandle<E>>))
     }
 
+    fn attached_cluster_wait<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<Arc<dyn ClusterWaitHandle<E>>, ComposeRunnerError>
+    where
+        Caps: Send + Sync,
+    {
+        let ScenarioSources::Attached { attach, .. } = scenario.sources() else {
+            return Err(ComposeRunnerError::InternalInvariant {
+                message: "compose attached cluster wait requested outside attached source mode",
+            });
+        };
+
+        Ok(Arc::new(ComposeAttachedClusterWait::<E>::new(
+            compose_runner_host(),
+            attach.clone(),
+        )))
+    }
+
     async fn build_runner<Caps>(
         &self,
         scenario: &Scenario<E, Caps>,
@@ -244,6 +267,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         deployed: DeployedNodes<E>,
         observability: ObservabilityInputs,
         readiness_enabled: bool,
+        project_name: String,
     ) -> Result<Runner<E>, ComposeRunnerError>
     where
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
@@ -263,6 +287,10 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             telemetry,
             environment: &mut prepared.environment,
             node_control,
+            cluster_wait: Arc::new(ComposeAttachedClusterWait::<E>::new(
+                compose_runner_host(),
+                AttachSource::compose(Vec::new()).with_project(project_name),
+            )),
         };
         let runtime = build_compose_runtime::<E>(input).await?;
         let cleanup_guard =
@@ -376,6 +404,7 @@ struct RuntimeBuildInput<'a, E: ComposeDeployEnv> {
     telemetry: Metrics,
     environment: &'a mut StackEnvironment,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 }
 
 async fn build_compose_runtime<E: ComposeDeployEnv>(
@@ -400,6 +429,7 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
         input.telemetry,
         feed,
         input.node_control,
+        input.cluster_wait,
     );
 
     Ok(ComposeRuntime { context, feed_task })
@@ -443,6 +473,7 @@ fn build_run_context<E: ComposeDeployEnv>(
     telemetry: Metrics,
     feed: <E::FeedRuntime as FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> RunContext<E> {
     RunContext::new(
         descriptors,
@@ -453,6 +484,7 @@ fn build_run_context<E: ComposeDeployEnv>(
         feed,
         node_control,
     )
+    .with_cluster_wait(cluster_wait)
 }
 
 fn resolve_observability_inputs<E, Caps>(

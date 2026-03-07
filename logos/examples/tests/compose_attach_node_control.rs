@@ -33,6 +33,11 @@ async fn compose_attach_mode_queries_node_api_opt_in() -> Result<()> {
         Err(error) => return Err(Error::new(error)),
     };
 
+    attached_runner
+        .wait_network_ready()
+        .await
+        .map_err(|err| anyhow!("compose attached runner readiness failed: {err}"))?;
+
     if attached_runner.context().node_clients().is_empty() {
         return Err(anyhow!("compose attach resolved no node clients"));
     }
@@ -89,12 +94,7 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         .node_control()
         .ok_or_else(|| anyhow!("attached compose node control is unavailable"))?;
 
-    let services: Vec<String> = attached_runner
-        .context()
-        .borrowed_nodes()
-        .into_iter()
-        .map(|node| node.identity)
-        .collect();
+    let services = discover_attached_services(&project_name).await?;
 
     if services.is_empty() {
         return Err(anyhow!("attached compose runner discovered no services"));
@@ -164,6 +164,36 @@ async fn service_started_at(project: &str, service: &str) -> Result<String> {
     }
 
     Ok(started_at)
+}
+
+async fn discover_attached_services(project: &str) -> Result<Vec<String>> {
+    let output = run_docker(&[
+        "ps",
+        "--filter",
+        &format!("label=com.docker.compose.project={project}"),
+        "--filter",
+        "label=testing-framework.node=true",
+        "--format",
+        "{{.Label \"com.docker.compose.service\"}}",
+    ])
+    .await?;
+
+    let mut services: Vec<String> = output
+        .lines()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+    services.sort();
+    services.dedup();
+
+    if services.is_empty() {
+        return Err(anyhow!(
+            "attached compose runner discovered no labeled services"
+        ));
+    }
+
+    Ok(services)
 }
 
 async fn wait_until_service_restarted(

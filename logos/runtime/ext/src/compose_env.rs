@@ -254,6 +254,7 @@ fn build_compose_node_descriptor(
         base_volumes(),
         default_extra_hosts(),
         ports,
+        api_port,
         environment,
         platform,
     )

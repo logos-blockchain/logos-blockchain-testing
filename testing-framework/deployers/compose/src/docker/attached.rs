@@ -6,6 +6,7 @@ use tokio::process::Command;
 
 pub const ATTACHABLE_NODE_LABEL_KEY: &str = "testing-framework.node";
 pub const ATTACHABLE_NODE_LABEL_VALUE: &str = "true";
+pub const API_CONTAINER_PORT_LABEL_KEY: &str = "testing-framework.api-container-port";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MappedTcpPort {
@@ -73,6 +74,18 @@ pub async fn inspect_mapped_tcp_ports(container_id: &str) -> Result<Vec<MappedTc
     .await?;
 
     parse_mapped_tcp_ports(&stdout)
+}
+
+pub async fn inspect_api_container_port_label(container_id: &str) -> Result<u16, DynError> {
+    let stdout = run_docker_capture([
+        "inspect",
+        "--format",
+        "{{index .Config.Labels \"testing-framework.api-container-port\"}}",
+        container_id,
+    ])
+    .await?;
+
+    parse_api_container_port_label(&stdout)
 }
 
 pub fn parse_mapped_tcp_ports(raw: &str) -> Result<Vec<MappedTcpPort>, DynError> {
@@ -193,4 +206,22 @@ fn parse_host_port_binding(binding: &Value) -> Option<u16> {
         .and_then(Value::as_str)?
         .parse::<u16>()
         .ok()
+}
+
+fn parse_api_container_port_label(raw: &str) -> Result<u16, DynError> {
+    let value = raw.trim();
+
+    if value.is_empty() || value == "<no value>" {
+        return Err(format!(
+            "attached compose container is missing required label '{API_CONTAINER_PORT_LABEL_KEY}'"
+        )
+        .into());
+    }
+
+    value.parse::<u16>().map_err(|err| {
+        format!(
+            "attached compose container label '{API_CONTAINER_PORT_LABEL_KEY}' has invalid value '{value}': {err}"
+        )
+        .into()
+    })
 }

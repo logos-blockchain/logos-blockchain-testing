@@ -43,6 +43,10 @@ impl<E: Application> Runner<E> {
         Arc::clone(&self.context)
     }
 
+    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
+        self.context.wait_network_ready().await
+    }
+
     pub(crate) fn cleanup(&mut self) {
         if let Some(guard) = self.cleanup_guard.take() {
             guard.cleanup();

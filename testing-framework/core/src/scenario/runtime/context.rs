@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use super::{metrics::Metrics, node_clients::ClusterClient};
-use crate::scenario::{Application, BorrowedNode, ManagedNode, NodeClients, NodeControlHandle};
+use crate::scenario::{
+    Application, BorrowedNode, ClusterWaitHandle, DynError, ManagedNode, NodeClients,
+    NodeControlHandle,
+};
 
 /// Shared runtime context available to workloads and expectations.
 pub struct RunContext<E: Application> {
@@ -12,6 +15,7 @@ pub struct RunContext<E: Application> {
     telemetry: Metrics,
     feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
 
 impl<E: Application> RunContext<E> {
@@ -36,7 +40,14 @@ impl<E: Application> RunContext<E> {
             telemetry,
             feed,
             node_control,
+            cluster_wait: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
+        self.cluster_wait = Some(cluster_wait);
+        self
     }
 
     #[must_use]
@@ -105,8 +116,26 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
+    pub fn cluster_wait(&self) -> Option<Arc<dyn ClusterWaitHandle<E>>> {
+        self.cluster_wait.clone()
+    }
+
+    #[must_use]
     pub const fn controls_nodes(&self) -> bool {
         self.node_control.is_some()
+    }
+
+    #[must_use]
+    pub const fn can_wait_network_ready(&self) -> bool {
+        self.cluster_wait.is_some()
+    }
+
+    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
+        let Some(cluster_wait) = self.cluster_wait() else {
+            return Err("wait_network_ready is not available for this runner".into());
+        };
+
+        cluster_wait.wait_network_ready().await
     }
 
     #[must_use]
@@ -155,6 +184,10 @@ impl<E: Application> RunHandle<E> {
     /// Access the shared run context.
     pub fn context(&self) -> &RunContext<E> {
         &self.run_context
+    }
+
+    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
+        self.run_context.wait_network_ready().await
     }
 }
 
