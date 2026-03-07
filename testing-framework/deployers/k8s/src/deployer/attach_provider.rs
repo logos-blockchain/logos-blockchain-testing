@@ -7,8 +7,10 @@ use kube::{
     api::{ListParams, ObjectList},
 };
 use testing_framework_core::scenario::{
-    AttachProvider, AttachProviderError, AttachSource, AttachedNode, DynError, ExternalNodeSource,
+    AttachProvider, AttachProviderError, AttachSource, AttachedNode, ClusterWaitHandle, DynError,
+    ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
 };
+use url::Url;
 
 use crate::{env::K8sDeployEnv, host::node_host};
 
@@ -31,10 +33,26 @@ pub(super) struct K8sAttachProvider<E: K8sDeployEnv> {
     _env: PhantomData<E>,
 }
 
+pub(super) struct K8sAttachedClusterWait<E: K8sDeployEnv> {
+    client: Client,
+    source: AttachSource,
+    _env: PhantomData<E>,
+}
+
 impl<E: K8sDeployEnv> K8sAttachProvider<E> {
     pub(super) fn new(client: Client) -> Self {
         Self {
             client,
+            _env: PhantomData,
+        }
+    }
+}
+
+impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
+    pub(super) fn new(client: Client, source: AttachSource) -> Self {
+        Self {
+            client,
+            source,
             _env: PhantomData,
         }
     }
@@ -100,7 +118,7 @@ fn to_discovery_error(source: DynError) -> AttachProviderError {
     AttachProviderError::Discovery { source }
 }
 
-async fn discover_services(
+pub(super) async fn discover_services(
     client: &Client,
     namespace: &str,
     selector: &str,
@@ -151,7 +169,7 @@ fn tcp_node_ports(service: &Service) -> Vec<(String, u16)> {
         .collect()
 }
 
-fn extract_api_node_port(service: &Service) -> Result<u16, DynError> {
+pub(super) fn extract_api_node_port(service: &Service) -> Result<u16, DynError> {
     let service_name = service
         .metadata
         .name
@@ -195,6 +213,39 @@ fn api_port_candidates(ports: Vec<(String, u16)>) -> Vec<u16> {
     }
 
     ports.into_iter().map(|(_, port)| port).collect()
+}
+
+#[async_trait]
+impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
+    async fn wait_network_ready(&self) -> Result<(), DynError> {
+        let AttachSource::K8s {
+            namespace,
+            label_selector,
+        } = &self.source
+        else {
+            return Err("k8s cluster wait requires a k8s attach source".into());
+        };
+
+        if label_selector.trim().is_empty() {
+            return Err(K8sAttachDiscoveryError::EmptyLabelSelector.into());
+        }
+
+        let namespace = namespace.as_deref().unwrap_or("default");
+        let services = discover_services(&self.client, namespace, label_selector).await?;
+        let host = node_host();
+        let mut endpoints = Vec::with_capacity(services.items.len());
+
+        for service in &services.items {
+            let api_port = extract_api_node_port(service)?;
+            let mut endpoint = Url::parse(&format!("http://{host}:{api_port}/"))?;
+            endpoint.set_path(E::readiness_path());
+            endpoints.push(endpoint);
+        }
+
+        wait_http_readiness(&endpoints, HttpReadinessRequirement::AllNodesReady).await?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

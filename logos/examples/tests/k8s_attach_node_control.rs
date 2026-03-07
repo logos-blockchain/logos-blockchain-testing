@@ -32,6 +32,11 @@ async fn k8s_attach_mode_queries_node_api_opt_in() -> Result<()> {
         Err(error) => return Err(Error::new(error)),
     };
 
+    attached_runner
+        .wait_network_ready()
+        .await
+        .map_err(|err| anyhow!("k8s attached runner readiness failed: {err}"))?;
+
     if attached_runner.context().node_clients().is_empty() {
         return Err(anyhow!("k8s attach resolved no node clients"));
     }
