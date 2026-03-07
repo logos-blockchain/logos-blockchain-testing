@@ -27,6 +27,12 @@ pub struct Runner<E: Application> {
     cleanup_guard: Option<Box<dyn CleanupGuard>>,
 }
 
+impl<E: Application> Drop for Runner<E> {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
 impl<E: Application> Runner<E> {
     /// Construct a runner from the run context and optional cleanup guard.
     #[must_use]
