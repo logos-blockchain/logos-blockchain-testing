@@ -1,11 +1,9 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Error, Result, anyhow};
 use lb_ext::{CoreBuilderExt as _, LbcExtEnv, LbcK8sDeployer, ScenarioBuilder};
-use lb_framework::NodeHttpClient;
 use testing_framework_core::scenario::{Deployer as _, Runner};
 use testing_framework_runner_k8s::{K8sDeploymentMetadata, K8sRunnerError};
-use tokio::time::sleep;
 
 #[tokio::test]
 #[ignore = "requires k8s cluster access and mutates k8s runtime state"]
@@ -39,27 +37,13 @@ async fn k8s_attach_mode_queries_node_api_opt_in() -> Result<()> {
     }
 
     for node_client in attached_runner.context().node_clients().snapshot() {
-        wait_until_node_api_ready(&node_client, Duration::from_secs(20)).await?;
+        node_client.consensus_info().await.map_err(|err| {
+            anyhow!(
+                "attached node api query failed at {}: {err}",
+                node_client.base_url()
+            )
+        })?;
     }
 
     Ok(())
-}
-
-async fn wait_until_node_api_ready(client: &NodeHttpClient, timeout: Duration) -> Result<()> {
-    let deadline = Instant::now() + timeout;
-
-    loop {
-        if client.consensus_info().await.is_ok() {
-            return Ok(());
-        }
-
-        if Instant::now() >= deadline {
-            return Err(anyhow!(
-                "timed out waiting for attached node api readiness at {}",
-                client.base_url()
-            ));
-        }
-
-        sleep(Duration::from_millis(500)).await;
-    }
 }
