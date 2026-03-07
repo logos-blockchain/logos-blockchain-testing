@@ -43,6 +43,16 @@ impl ComposeDeploymentMetadata {
         self.project_name.as_deref()
     }
 
+    /// Builds an attach source for the same compose project using deployer
+    /// discovery to resolve services.
+    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+        let project_name = self
+            .project_name()
+            .ok_or(ComposeMetadataError::MissingProjectName)?;
+
+        Ok(AttachSource::compose(Vec::new()).with_project(project_name.to_owned()))
+    }
+
     /// Builds an attach source for the same compose project.
     pub fn attach_source_for_services(
         &self,

@@ -2,9 +2,52 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Error, Result, anyhow};
 use lb_ext::{CoreBuilderExt as _, LbcComposeDeployer, LbcExtEnv, ScenarioBuilder};
-use testing_framework_core::scenario::{AttachSource, Deployer as _, Runner};
+use testing_framework_core::scenario::{Deployer as _, Runner};
 use testing_framework_runner_compose::{ComposeDeploymentMetadata, ComposeRunnerError};
 use tokio::{process::Command, time::sleep};
+
+#[tokio::test]
+#[ignore = "requires Docker and mutates compose runtime state"]
+async fn compose_attach_mode_queries_node_api_opt_in() -> Result<()> {
+    let managed = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
+        .with_run_duration(Duration::from_secs(5))
+        .build()?;
+
+    let deployer = LbcComposeDeployer::default();
+    let (_managed_runner, metadata): (Runner<LbcExtEnv>, ComposeDeploymentMetadata) =
+        match deployer.deploy_with_metadata(&managed).await {
+            Ok(result) => result,
+            Err(ComposeRunnerError::DockerUnavailable) => return Ok(()),
+            Err(error) => return Err(Error::new(error)),
+        };
+
+    let attach_source = metadata.attach_source().map_err(|err| anyhow!("{err}"))?;
+    let attached = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
+        .with_run_duration(Duration::from_secs(5))
+        .with_attach_source(attach_source)
+        .build()?;
+
+    let attached_runner: Runner<LbcExtEnv> = match deployer.deploy(&attached).await {
+        Ok(runner) => runner,
+        Err(ComposeRunnerError::DockerUnavailable) => return Ok(()),
+        Err(error) => return Err(Error::new(error)),
+    };
+
+    if attached_runner.context().node_clients().is_empty() {
+        return Err(anyhow!("compose attach resolved no node clients"));
+    }
+
+    for node_client in attached_runner.context().node_clients().snapshot() {
+        node_client.consensus_info().await.map_err(|err| {
+            anyhow!(
+                "attached node api query failed at {}: {err}",
+                node_client.base_url()
+            )
+        })?;
+    }
+
+    Ok(())
+}
 
 #[tokio::test]
 #[ignore = "requires Docker and mutates compose runtime state"]
@@ -26,7 +69,8 @@ async fn compose_attach_mode_restart_node_opt_in() -> Result<()> {
         .project_name()
         .ok_or_else(|| anyhow!("compose deployment metadata has no project name"))?
         .to_owned();
-    let attach_source = AttachSource::compose(vec![]).with_project(project_name.clone());
+
+    let attach_source = metadata.attach_source().map_err(|err| anyhow!("{err}"))?;
 
     let attached = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
         .enable_node_control()
