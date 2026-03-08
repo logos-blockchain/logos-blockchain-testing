@@ -4,7 +4,7 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, AttachSource, DeploymentPolicy, DynError, ExternalNodeSource,
+    Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
     HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability, ScenarioSources,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
@@ -119,7 +119,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
-    pub fn existing_cluster(&self) -> Option<&AttachSource> {
+    pub fn existing_cluster(&self) -> Option<&ExistingCluster> {
         self.sources.existing_cluster()
     }
 
@@ -130,7 +130,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
 
     #[must_use]
     #[doc(hidden)]
-    pub fn attached_source(&self) -> Option<&AttachSource> {
+    pub fn attached_source(&self) -> Option<&ExistingCluster> {
         self.existing_cluster()
     }
 
@@ -255,13 +255,13 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
-            pub fn with_existing_cluster(self, cluster: AttachSource) -> Self {
+            pub fn with_existing_cluster(self, cluster: ExistingCluster) -> Self {
                 self.map_core_builder(|builder| builder.with_existing_cluster(cluster))
             }
 
             #[must_use]
             #[doc(hidden)]
-            pub fn with_attach_source(self, attach: AttachSource) -> Self {
+            pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
                 self.with_existing_cluster(attach)
             }
 
@@ -574,14 +574,14 @@ impl<E: Application, Caps> Builder<E, Caps> {
     }
 
     #[must_use]
-    pub fn with_existing_cluster(mut self, cluster: AttachSource) -> Self {
+    pub fn with_existing_cluster(mut self, cluster: ExistingCluster) -> Self {
         self.sources = self.sources.with_attach(cluster);
         self
     }
 
     #[must_use]
     #[doc(hidden)]
-    pub fn with_attach_source(self, attach: AttachSource) -> Self {
+    pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
         self.with_existing_cluster(attach)
     }
 

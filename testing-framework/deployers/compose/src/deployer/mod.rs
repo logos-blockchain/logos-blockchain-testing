@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    AttachSource, CleanupGuard, Deployer, DynError, FeedHandle, ObservabilityCapabilityProvider,
+    CleanupGuard, Deployer, DynError, ExistingCluster, FeedHandle, ObservabilityCapabilityProvider,
     RequiresNodeControl, Runner, Scenario,
 };
 
@@ -45,12 +45,12 @@ impl ComposeDeploymentMetadata {
 
     /// Builds an existing-cluster descriptor for the same compose project
     /// using deployer discovery to resolve services.
-    pub fn existing_cluster(&self) -> Result<AttachSource, DynError> {
+    pub fn existing_cluster(&self) -> Result<ExistingCluster, DynError> {
         let project_name = self
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(AttachSource::compose_in_project(
+        Ok(ExistingCluster::compose_in_project(
             Vec::new(),
             project_name.to_owned(),
         ))
@@ -60,19 +60,19 @@ impl ComposeDeploymentMetadata {
     pub fn existing_cluster_for_services(
         &self,
         services: Vec<String>,
-    ) -> Result<AttachSource, DynError> {
+    ) -> Result<ExistingCluster, DynError> {
         let project_name = self
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(AttachSource::compose_in_project(
+        Ok(ExistingCluster::compose_in_project(
             services,
             project_name.to_owned(),
         ))
     }
 
     #[doc(hidden)]
-    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+    pub fn attach_source(&self) -> Result<ExistingCluster, DynError> {
         self.existing_cluster()
     }
 
@@ -80,7 +80,7 @@ impl ComposeDeploymentMetadata {
     pub fn attach_source_for_services(
         &self,
         services: Vec<String>,
-    ) -> Result<AttachSource, DynError> {
+    ) -> Result<ExistingCluster, DynError> {
         self.existing_cluster_for_services(services)
     }
 }

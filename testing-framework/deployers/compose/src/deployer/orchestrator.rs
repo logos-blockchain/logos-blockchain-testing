@@ -3,8 +3,8 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        ApplicationExternalProvider, AttachSource, CleanupGuard, ClusterWaitHandle,
-        DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, DeploymentPolicy,
+        ExistingCluster, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
         NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
         RequiresNodeControl, RunContext, Runner, Scenario, SourceOrchestrationPlan,
         SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
@@ -315,7 +315,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     fn managed_cluster_wait(&self, project_name: String) -> Arc<dyn ClusterWaitHandle<E>> {
         Arc::new(ComposeAttachedClusterWait::<E>::new(
             compose_runner_host(),
-            AttachSource::compose_in_project(Vec::new(), project_name),
+            ExistingCluster::compose_in_project(Vec::new(), project_name),
         ))
     }
 

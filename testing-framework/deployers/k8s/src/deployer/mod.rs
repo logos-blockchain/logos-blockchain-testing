@@ -2,7 +2,7 @@ mod attach_provider;
 mod orchestrator;
 
 pub use orchestrator::{K8sDeployer, K8sRunnerError};
-use testing_framework_core::scenario::{AttachSource, DynError};
+use testing_framework_core::scenario::{DynError, ExistingCluster};
 
 /// Kubernetes deployment metadata returned by k8s-specific deployment APIs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,20 +35,20 @@ impl K8sDeploymentMetadata {
     }
 
     /// Builds an existing-cluster descriptor for the same k8s deployment scope.
-    pub fn existing_cluster(&self) -> Result<AttachSource, DynError> {
+    pub fn existing_cluster(&self) -> Result<ExistingCluster, DynError> {
         let namespace = self.namespace().ok_or(K8sMetadataError::MissingNamespace)?;
         let label_selector = self
             .label_selector()
             .ok_or(K8sMetadataError::MissingLabelSelector)?;
 
-        Ok(AttachSource::k8s_in_namespace(
+        Ok(ExistingCluster::k8s_in_namespace(
             label_selector.to_owned(),
             namespace.to_owned(),
         ))
     }
 
     #[doc(hidden)]
-    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+    pub fn attach_source(&self) -> Result<ExistingCluster, DynError> {
         self.existing_cluster()
     }
 }

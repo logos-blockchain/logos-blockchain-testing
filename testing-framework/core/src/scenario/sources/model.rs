@@ -1,6 +1,6 @@
 /// Typed attach source for existing clusters.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AttachSource {
+pub enum ExistingCluster {
     K8s {
         namespace: Option<String>,
         label_selector: String,
@@ -11,7 +11,7 @@ pub enum AttachSource {
     },
 }
 
-impl AttachSource {
+impl ExistingCluster {
     #[must_use]
     pub fn k8s(label_selector: String) -> Self {
         Self::K8s {
@@ -77,6 +77,9 @@ impl AttachSource {
     }
 }
 
+#[doc(hidden)]
+pub type AttachSource = ExistingCluster;
+
 /// Static external node endpoint that should be included in the runtime
 /// inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -110,7 +113,7 @@ pub enum ScenarioSources {
         external: Vec<ExternalNodeSource>,
     },
     Attached {
-        attach: AttachSource,
+        attach: ExistingCluster,
         external: Vec<ExternalNodeSource>,
     },
     ExternalOnly {
@@ -135,7 +138,7 @@ impl ScenarioSources {
     }
 
     #[must_use]
-    pub fn attached(attach: AttachSource) -> Self {
+    pub fn attached(attach: ExistingCluster) -> Self {
         Self::Attached {
             attach,
             external: Vec::new(),
@@ -159,7 +162,7 @@ impl ScenarioSources {
     }
 
     #[must_use]
-    pub fn with_attach(self, attach: AttachSource) -> Self {
+    pub fn with_attach(self, attach: ExistingCluster) -> Self {
         let external = self.external_nodes().to_vec();
 
         Self::Attached { attach, external }

@@ -7,8 +7,8 @@ use kube::{
     api::{ListParams, ObjectList},
 };
 use testing_framework_core::scenario::{
-    AttachProvider, AttachProviderError, AttachSource, AttachedNode, ClusterWaitHandle, DynError,
-    ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
+    AttachProvider, AttachProviderError, AttachedNode, ClusterWaitHandle, DynError,
+    ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
 };
 use url::Url;
 
@@ -37,7 +37,7 @@ pub(super) struct K8sAttachProvider<E: K8sDeployEnv> {
 
 pub(super) struct K8sAttachedClusterWait<E: K8sDeployEnv> {
     client: Client,
-    source: AttachSource,
+    source: ExistingCluster,
     _env: PhantomData<E>,
 }
 
@@ -56,7 +56,7 @@ impl<E: K8sDeployEnv> K8sAttachProvider<E> {
 }
 
 impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
-    pub(super) fn new(client: Client, source: AttachSource) -> Self {
+    pub(super) fn new(client: Client, source: ExistingCluster) -> Self {
         Self {
             client,
             source,
@@ -69,7 +69,7 @@ impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
 impl<E: K8sDeployEnv> AttachProvider<E> for K8sAttachProvider<E> {
     async fn discover(
         &self,
-        source: &AttachSource,
+        source: &ExistingCluster,
     ) -> Result<Vec<AttachedNode<E>>, AttachProviderError> {
         let request = k8s_attach_request(source)?;
         let services = discover_services(&self.client, request.namespace, request.label_selector)
@@ -90,7 +90,9 @@ fn to_discovery_error(source: DynError) -> AttachProviderError {
     AttachProviderError::Discovery { source }
 }
 
-fn k8s_attach_request(source: &AttachSource) -> Result<K8sAttachRequest<'_>, AttachProviderError> {
+fn k8s_attach_request(
+    source: &ExistingCluster,
+) -> Result<K8sAttachRequest<'_>, AttachProviderError> {
     let Some(label_selector) = source.k8s_label_selector() else {
         return Err(AttachProviderError::UnsupportedSource {
             attach_source: source.clone(),
@@ -242,7 +244,7 @@ impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
     }
 }
 
-fn k8s_wait_request(source: &AttachSource) -> Result<K8sAttachRequest<'_>, DynError> {
+fn k8s_wait_request(source: &ExistingCluster) -> Result<K8sAttachRequest<'_>, DynError> {
     let label_selector = source
         .k8s_label_selector()
         .ok_or_else(|| DynError::from("k8s cluster wait requires a k8s attach source"))?;

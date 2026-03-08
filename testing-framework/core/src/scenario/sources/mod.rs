@@ -1,3 +1,5 @@
 mod model;
 
-pub use model::{AttachSource, ExternalNodeSource, ScenarioSources};
+#[doc(hidden)]
+pub use model::AttachSource;
+pub use model::{ExistingCluster, ExternalNodeSource, ScenarioSources};
