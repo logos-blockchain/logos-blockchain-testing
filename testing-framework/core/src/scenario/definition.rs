@@ -765,10 +765,10 @@ where
 {
     let profile = sources.control_profile();
 
-    if Caps::REQUIRED && !profile.supports_node_control() {
+    if Caps::REQUIRED && matches!(profile, ClusterControlProfile::ExternalUncontrolled) {
         return Err(ScenarioBuildError::SourceConfiguration {
             message: format!(
-                "node control requires a controllable cluster surface, but cluster mode '{}' uses control profile '{}'",
+                "node control is not available for cluster mode '{}' with control profile '{}'",
                 sources.cluster_mode().as_str(),
                 profile.as_str(),
             ),
@@ -905,7 +905,7 @@ mod tests {
         ));
         assert_eq!(
             error.to_string(),
-            "invalid scenario source configuration: node control requires a controllable cluster surface, but cluster mode 'external-only' uses control profile 'external-uncontrolled'"
+            "invalid scenario source configuration: node control is not available for cluster mode 'external-only' with control profile 'external-uncontrolled'"
         );
     }
 

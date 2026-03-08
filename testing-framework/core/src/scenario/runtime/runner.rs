@@ -192,10 +192,10 @@ impl<E: Application> Runner<E> {
     }
 
     fn settle_wait_duration(context: &RunContext<E>) -> Option<Duration> {
-        let control_profile = context.cluster_control_profile();
+        let has_node_control = context.node_control().is_some();
         let configured_wait = context.expectation_cooldown();
 
-        if configured_wait.is_zero() && !control_profile.supports_node_control() {
+        if configured_wait.is_zero() && !has_node_control {
             return None;
         }
 

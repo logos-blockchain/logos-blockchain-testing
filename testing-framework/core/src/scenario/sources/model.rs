@@ -142,7 +142,7 @@ impl ClusterMode {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClusterControlProfile {
     FrameworkManaged,
-    ExistingClusterControlled,
+    ExistingClusterAttached,
     ExternalUncontrolled,
     ManualControlled,
 }
@@ -152,7 +152,7 @@ impl ClusterControlProfile {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::FrameworkManaged => "framework-managed",
-            Self::ExistingClusterControlled => "existing-cluster-controlled",
+            Self::ExistingClusterAttached => "existing-cluster-attached",
             Self::ExternalUncontrolled => "external-uncontrolled",
             Self::ManualControlled => "manual-controlled",
         }
@@ -161,11 +161,6 @@ impl ClusterControlProfile {
     #[must_use]
     pub const fn framework_owns_lifecycle(self) -> bool {
         matches!(self, Self::FrameworkManaged)
-    }
-
-    #[must_use]
-    pub const fn supports_node_control(self) -> bool {
-        !matches!(self, Self::ExternalUncontrolled)
     }
 }
 
@@ -249,7 +244,7 @@ impl ScenarioSources {
     pub(crate) const fn control_profile(&self) -> ClusterControlProfile {
         match self.cluster_mode() {
             ClusterMode::Managed => ClusterControlProfile::FrameworkManaged,
-            ClusterMode::ExistingCluster => ClusterControlProfile::ExistingClusterControlled,
+            ClusterMode::ExistingCluster => ClusterControlProfile::ExistingClusterAttached,
             ClusterMode::ExternalOnly => ClusterControlProfile::ExternalUncontrolled,
         }
     }
@@ -274,7 +269,7 @@ mod tests {
 
         assert_eq!(
             sources.control_profile(),
-            ClusterControlProfile::ExistingClusterControlled,
+            ClusterControlProfile::ExistingClusterAttached,
         );
     }
 
