@@ -372,6 +372,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     }
 }
 
+<<<<<<< HEAD
 fn validate_supported_cluster_mode<E: Application, Caps>(
     scenario: &Scenario<E, Caps>,
 ) -> Result<(), DynError> {
@@ -421,6 +422,8 @@ mod tests {
         );
     }
 }
+=======
+>>>>>>> 5baf93d (Align attach wording with existing-cluster mode)
 fn existing_cluster_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> ComposeDeploymentMetadata
 where
     E: ComposeDeployEnv,
