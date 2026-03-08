@@ -29,7 +29,7 @@ impl<E: Application> NodeClients<E> {
     /// Build clients from preconstructed vectors.
     pub fn new(nodes: Vec<E::NodeClient>) -> Self {
         Self {
-            inventory: NodeInventory::from_managed_clients(nodes),
+            inventory: NodeInventory::from_clients(nodes),
         }
     }
 
@@ -72,7 +72,7 @@ impl<E: Application> NodeClients<E> {
     }
 
     pub fn add_node(&self, client: E::NodeClient) {
-        self.inventory.add_managed_node(client, None);
+        self.inventory.add_client(client);
     }
 
     pub fn clear(&self) {
