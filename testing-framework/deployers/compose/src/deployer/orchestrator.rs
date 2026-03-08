@@ -5,9 +5,9 @@ use testing_framework_core::{
     scenario::{
         ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, DeploymentPolicy, FeedHandle,
         FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
-        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
-        Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders,
-        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
+        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+        build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -157,7 +157,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         let node_control = self.attached_node_control::<Caps>(scenario)?;
         let cluster_wait = self.attached_cluster_wait(scenario)?;
         let (feed, feed_task) = spawn_block_feed_with_retry::<E>(&node_clients).await?;
-        let context = build_run_context(
+        let assembly = build_runtime_assembly(
             scenario.deployment().clone(),
             node_clients,
             scenario.duration(),
@@ -169,7 +169,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         );
 
         let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
-        Ok(RuntimeAssembly::from(context).build_runner(Some(cleanup_guard)))
+        Ok(assembly.build_runner(Some(cleanup_guard)))
     }
 
     fn source_providers(&self, managed_clients: Vec<E::NodeClient>) -> SourceProviders<E> {
@@ -283,7 +283,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             "compose runtime prepared"
         );
 
-        Ok(RuntimeAssembly::from(runtime.context).build_runner(Some(cleanup_guard)))
+        Ok(runtime.assembly.build_runner(Some(cleanup_guard)))
     }
 
     fn maybe_node_control<Caps>(
@@ -379,7 +379,7 @@ struct DeployedNodes<E: ComposeDeployEnv> {
 }
 
 struct ComposeRuntime<E: ComposeDeployEnv> {
-    context: RunContext<E>,
+    assembly: RuntimeAssembly<E>,
     feed_task: FeedHandle,
 }
 
@@ -408,7 +408,7 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
         .start_block_feed(&node_clients, input.environment)
         .await?;
 
-    let context = build_run_context(
+    let assembly = build_runtime_assembly(
         input.descriptors,
         node_clients,
         input.duration,
@@ -419,7 +419,10 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
         input.cluster_wait,
     );
 
-    Ok(ComposeRuntime { context, feed_task })
+    Ok(ComposeRuntime {
+        assembly,
+        feed_task,
+    })
 }
 
 async fn deploy_nodes<E: ComposeDeployEnv>(
@@ -452,7 +455,7 @@ async fn deploy_nodes<E: ComposeDeployEnv>(
     })
 }
 
-fn build_run_context<E: ComposeDeployEnv>(
+fn build_runtime_assembly<E: ComposeDeployEnv>(
     descriptors: E::Deployment,
     node_clients: NodeClients<E>,
     run_duration: Duration,
@@ -461,7 +464,7 @@ fn build_run_context<E: ComposeDeployEnv>(
     feed: <E::FeedRuntime as FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
-) -> RunContext<E> {
+) -> RuntimeAssembly<E> {
     let mut assembly = RuntimeAssembly::new(
         descriptors,
         node_clients,
@@ -476,7 +479,7 @@ fn build_run_context<E: ComposeDeployEnv>(
         assembly = assembly.with_node_control(node_control);
     }
 
-    assembly.build_context()
+    assembly
 }
 
 fn resolve_observability_inputs<E, Caps>(

@@ -8,7 +8,7 @@ use testing_framework_core::{
         Application, ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, Deployer,
         DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError,
         NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl,
-        RunContext, Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders,
+        Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders,
         StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
@@ -204,10 +204,10 @@ where
     runtime.node_clients = resolve_node_clients(&source_plan, source_providers).await?;
     ensure_non_empty_node_clients(&runtime.node_clients)?;
 
-    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait);
-
     log_configured_observability(&observability);
-    maybe_print_endpoints::<E>(&observability, &parts.node_clients);
+    maybe_print_endpoints::<E>(&observability, &runtime.node_clients);
+
+    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait);
     let runner = finalize_runner::<E>(&mut cluster, parts)?;
     Ok((runner, metadata))
 }
@@ -497,15 +497,18 @@ fn build_runner_parts<E: K8sDeployEnv, Caps>(
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> K8sRunnerParts<E> {
     K8sRunnerParts {
-        descriptors: scenario.deployment().clone(),
-        node_clients: runtime.node_clients,
-        duration: scenario.duration(),
-        expectation_cooldown: scenario.expectation_cooldown(),
-        telemetry: runtime.telemetry,
-        feed: runtime.feed,
+        assembly: build_k8s_runtime_assembly(
+            scenario.deployment().clone(),
+            runtime.node_clients,
+            scenario.duration(),
+            scenario.expectation_cooldown(),
+            runtime.telemetry,
+            runtime.feed,
+            cluster_wait,
+        ),
         feed_task: runtime.feed_task,
         node_count,
-        cluster_wait,
+        duration_secs: scenario.duration().as_secs(),
     }
 }
 
@@ -593,15 +596,10 @@ fn maybe_print_endpoints<E: K8sDeployEnv>(
 }
 
 struct K8sRunnerParts<E: K8sDeployEnv> {
-    descriptors: E::Deployment,
-    node_clients: NodeClients<E>,
-    duration: Duration,
-    expectation_cooldown: Duration,
-    telemetry: Metrics,
-    feed: Feed<E>,
+    assembly: RuntimeAssembly<E>,
     feed_task: FeedHandle,
     node_count: usize,
-    cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
+    duration_secs: u64,
 }
 
 fn finalize_runner<E: K8sDeployEnv>(
@@ -612,36 +610,21 @@ fn finalize_runner<E: K8sDeployEnv>(
     let (cleanup, port_forwards) = environment.into_cleanup()?;
 
     let K8sRunnerParts {
-        descriptors,
-        node_clients,
-        duration,
-        expectation_cooldown,
-        telemetry,
-        feed,
+        assembly,
         feed_task,
         node_count,
-        cluster_wait,
+        duration_secs,
     } = parts;
-    let duration_secs = duration.as_secs();
 
     let cleanup_guard: Box<dyn CleanupGuard> =
         Box::new(K8sCleanupGuard::new(cleanup, feed_task, port_forwards));
-    let context = build_k8s_run_context(
-        descriptors,
-        node_clients,
-        duration,
-        expectation_cooldown,
-        telemetry,
-        feed,
-        cluster_wait,
-    );
 
     info!(
         nodes = node_count,
         duration_secs, "k8s deployment ready; handing control to scenario runner"
     );
 
-    Ok(RuntimeAssembly::from(context).build_runner(Some(cleanup_guard)))
+    Ok(assembly.build_runner(Some(cleanup_guard)))
 }
 
 fn take_ready_cluster(
@@ -654,7 +637,7 @@ fn take_ready_cluster(
         })
 }
 
-fn build_k8s_run_context<E: K8sDeployEnv>(
+fn build_k8s_runtime_assembly<E: K8sDeployEnv>(
     descriptors: E::Deployment,
     node_clients: NodeClients<E>,
     duration: Duration,
@@ -662,7 +645,7 @@ fn build_k8s_run_context<E: K8sDeployEnv>(
     telemetry: Metrics,
     feed: Feed<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
-) -> RunContext<E> {
+) -> RuntimeAssembly<E> {
     RuntimeAssembly::new(
         descriptors,
         node_clients,
@@ -672,7 +655,6 @@ fn build_k8s_run_context<E: K8sDeployEnv>(
         feed,
     )
     .with_cluster_wait(cluster_wait)
-    .build_context()
 }
 
 fn endpoint_or_disabled(endpoint: Option<&Url>) -> String {

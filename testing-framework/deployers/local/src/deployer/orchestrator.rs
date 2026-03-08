@@ -12,8 +12,8 @@ use testing_framework_core::{
     scenario::{
         Application, CleanupGuard, Deployer, DeploymentPolicy, DynError, FeedHandle, FeedRuntime,
         HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, RunContext, Runner, RuntimeAssembly, Scenario, ScenarioError,
-        SourceOrchestrationPlan, build_source_orchestration_plan, spawn_feed,
+        RetryPolicy, Runner, RuntimeAssembly, Scenario, ScenarioError, SourceOrchestrationPlan,
+        build_source_orchestration_plan, spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -218,7 +218,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let cleanup_guard: Box<dyn CleanupGuard> =
             Box::new(LocalProcessGuard::<E>::new(nodes, runtime.feed_task));
 
-        Ok(RuntimeAssembly::from(runtime.context).build_runner(Some(cleanup_guard)))
+        Ok(runtime.assembly.build_runner(Some(cleanup_guard)))
     }
 
     async fn deploy_with_node_control(
@@ -252,7 +252,9 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         )
         .await?;
 
-        Ok(RuntimeAssembly::from(runtime.context).build_runner(Some(Box::new(runtime.feed_task))))
+        Ok(runtime
+            .assembly
+            .build_runner(Some(Box::new(runtime.feed_task))))
     }
 
     fn node_control_from(
@@ -472,7 +474,7 @@ fn log_local_deploy_start(node_count: usize, policy: DeploymentPolicy, has_node_
 }
 
 struct RuntimeContext<E: Application> {
-    context: RunContext<E>,
+    assembly: RuntimeAssembly<E>,
     feed_task: FeedHandle,
 }
 
@@ -500,7 +502,8 @@ async fn run_context_for<E: Application>(
         assembly = assembly.with_node_control(node_control);
     }
 
-    let context = assembly.build_context();
-
-    Ok(RuntimeContext { context, feed_task })
+    Ok(RuntimeContext {
+        assembly,
+        feed_task,
+    })
 }
