@@ -1,8 +1,8 @@
 use testing_framework_core::{
     manual::ManualClusterHandle,
     scenario::{
-        DynError, ExternalNodeSource, NodeClients, NodeControlHandle, ReadinessError,
-        StartNodeOptions, StartedNode,
+        ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
+        ReadinessError, StartNodeOptions, StartedNode,
     },
 };
 use thiserror::Error;
@@ -157,19 +157,11 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: LocalDeployerEnv> ManualClusterHandle<E> for ManualCluster<E> {
-    async fn start_node_with(
-        &self,
-        name: &str,
-        options: StartNodeOptions<E>,
-    ) -> Result<StartedNode<E>, DynError> {
-        self.nodes
-            .start_node_with(name, options)
-            .await
-            .map_err(|err| err.into())
-    }
-
+impl<E: LocalDeployerEnv> ClusterWaitHandle<E> for ManualCluster<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         self.wait_network_ready().await.map_err(|err| err.into())
     }
 }
+
+#[async_trait::async_trait]
+impl<E: LocalDeployerEnv> ManualClusterHandle<E> for ManualCluster<E> {}
