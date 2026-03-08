@@ -52,7 +52,7 @@ pub async fn resolve_sources<E: Application>(
     plan: &SourceOrchestrationPlan,
     providers: &SourceProviders<E>,
 ) -> Result<ResolvedSources<E>, SourceResolveError> {
-    match &plan.mode {
+    match plan.mode() {
         SourceOrchestrationMode::Managed { managed, .. } => {
             let managed_nodes = providers.managed.provide(managed).await?;
             let external_nodes = providers.external.provide(plan.external_sources()).await?;
@@ -115,7 +115,8 @@ pub async fn orchestrate_sources_with_providers<E: Application>(
 ) -> Result<NodeClients<E>, DynError> {
     let resolved = resolve_sources(plan, &providers).await?;
 
-    if matches!(plan.mode, SourceOrchestrationMode::Managed { .. }) && resolved.managed.is_empty() {
+    if matches!(plan.mode(), SourceOrchestrationMode::Managed { .. }) && resolved.managed.is_empty()
+    {
         return Err(SourceResolveError::ManagedNodesMissing.into());
     }
 

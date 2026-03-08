@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::scenario::{AttachSource, ExternalNodeSource, ScenarioSources, SourceReadinessPolicy};
 
 /// Explicit descriptor for managed node sourcing.
@@ -15,7 +13,7 @@ pub enum ManagedSource {
 /// This is scaffolding-only and is intentionally not executed by deployers
 /// yet.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SourceOrchestrationMode {
+pub(crate) enum SourceOrchestrationMode {
     Managed {
         managed: ManagedSource,
         external: Vec<ExternalNodeSource>,
@@ -34,28 +32,15 @@ pub enum SourceOrchestrationMode {
 /// This captures only mapping-time source intent and readiness policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceOrchestrationPlan {
-    pub mode: SourceOrchestrationMode,
-    pub readiness_policy: SourceReadinessPolicy,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SourceModeName {
-    Attached,
-}
-
-impl fmt::Display for SourceModeName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Attached => f.write_str("Attached"),
-        }
-    }
+    mode: SourceOrchestrationMode,
+    readiness_policy: SourceReadinessPolicy,
 }
 
 /// Validation failure while building orchestration plan from sources.
 #[derive(Debug, thiserror::Error)]
 pub enum SourceOrchestrationPlanError {
     #[error("source mode '{mode}' is not wired into deployers yet")]
-    SourceModeNotWiredYet { mode: SourceModeName },
+    SourceModeNotWiredYet { mode: &'static str },
 }
 
 impl SourceOrchestrationPlan {
@@ -69,6 +54,11 @@ impl SourceOrchestrationPlan {
             mode,
             readiness_policy,
         })
+    }
+
+    #[must_use]
+    pub(crate) fn mode(&self) -> &SourceOrchestrationMode {
+        &self.mode
     }
 
     #[must_use]
@@ -94,7 +84,7 @@ mod tests {
                 .expect("attached sources should build a source orchestration plan");
 
         assert!(matches!(
-            plan.mode,
+            plan.mode(),
             SourceOrchestrationMode::Attached { .. }
         ));
     }

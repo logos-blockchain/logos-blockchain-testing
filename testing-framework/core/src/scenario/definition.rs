@@ -11,7 +11,7 @@ use super::{
     expectation::Expectation,
     runtime::{
         context::RunMetrics,
-        orchestration::{SourceModeName, SourceOrchestrationPlan, SourceOrchestrationPlanError},
+        orchestration::{SourceOrchestrationPlan, SourceOrchestrationPlanError},
     },
     workload::Workload,
 };
@@ -724,16 +724,8 @@ fn build_source_orchestration_plan(
 fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> ScenarioBuildError {
     match error {
         SourceOrchestrationPlanError::SourceModeNotWiredYet { mode } => {
-            ScenarioBuildError::SourceModeNotWiredYet {
-                mode: source_mode_name(mode),
-            }
+            ScenarioBuildError::SourceModeNotWiredYet { mode }
         }
-    }
-}
-
-const fn source_mode_name(mode: SourceModeName) -> &'static str {
-    match mode {
-        SourceModeName::Attached => "Attached",
     }
 }
 
