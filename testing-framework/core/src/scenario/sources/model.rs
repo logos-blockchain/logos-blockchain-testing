@@ -1,3 +1,5 @@
+use crate::scenario::DynError;
+
 /// Typed descriptor for an existing cluster.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExistingCluster {
@@ -91,6 +93,23 @@ impl ExistingCluster {
             ExistingClusterKind::K8s { label_selector, .. } => Some(label_selector),
             ExistingClusterKind::Compose { .. } => None,
         }
+    }
+}
+
+/// Converts a value into an existing-cluster descriptor.
+pub trait IntoExistingCluster {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError>;
+}
+
+impl IntoExistingCluster for ExistingCluster {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        Ok(self)
+    }
+}
+
+impl IntoExistingCluster for &ExistingCluster {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        Ok(self.clone())
     }
 }
 

@@ -5,8 +5,8 @@ use tracing::{debug, info};
 
 use super::{
     Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError, ExistingCluster,
-    ExternalNodeSource, HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
-    RequiresNodeControl,
+    ExternalNodeSource, HttpReadinessRequirement, IntoExistingCluster, NodeControlCapability,
+    ObservabilityCapability, RequiresNodeControl,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
     runtime::{
@@ -263,6 +263,16 @@ macro_rules! impl_common_builder_methods {
             #[must_use]
             pub fn with_existing_cluster(self, cluster: ExistingCluster) -> Self {
                 self.map_core_builder(|builder| builder.with_existing_cluster(cluster))
+            }
+
+            #[must_use]
+            pub fn with_existing_cluster_from(
+                self,
+                cluster: impl IntoExistingCluster,
+            ) -> Result<Self, DynError> {
+                let cluster = cluster.into_existing_cluster()?;
+
+                Ok(self.with_existing_cluster(cluster))
             }
 
             #[must_use]
@@ -599,6 +609,16 @@ impl<E: Application, Caps> Builder<E, Caps> {
     pub fn with_existing_cluster(mut self, cluster: ExistingCluster) -> Self {
         self.sources = self.sources.with_attach(cluster);
         self
+    }
+
+    #[must_use]
+    pub fn with_existing_cluster_from(
+        self,
+        cluster: impl IntoExistingCluster,
+    ) -> Result<Self, DynError> {
+        let cluster = cluster.into_existing_cluster()?;
+
+        Ok(self.with_existing_cluster(cluster))
     }
 
     #[must_use]

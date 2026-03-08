@@ -9,8 +9,8 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    CleanupGuard, Deployer, DynError, ExistingCluster, FeedHandle, ObservabilityCapabilityProvider,
-    RequiresNodeControl, Runner, Scenario,
+    CleanupGuard, Deployer, DynError, ExistingCluster, FeedHandle, IntoExistingCluster,
+    ObservabilityCapabilityProvider, RequiresNodeControl, Runner, Scenario,
 };
 
 use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
@@ -97,6 +97,18 @@ impl ComposeDeploymentMetadata {
         services: Vec<String>,
     ) -> Result<ExistingCluster, DynError> {
         self.existing_cluster_for_services(services)
+    }
+}
+
+impl IntoExistingCluster for ComposeDeploymentMetadata {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
+    }
+}
+
+impl IntoExistingCluster for &ComposeDeploymentMetadata {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
     }
 }
 

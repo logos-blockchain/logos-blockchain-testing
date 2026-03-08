@@ -2,7 +2,7 @@ mod attach_provider;
 mod orchestrator;
 
 pub use orchestrator::{K8sDeployer, K8sRunnerError};
-use testing_framework_core::scenario::{DynError, ExistingCluster};
+use testing_framework_core::scenario::{DynError, ExistingCluster, IntoExistingCluster};
 
 /// Kubernetes deployment metadata returned by k8s-specific deployment APIs.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,6 +61,18 @@ impl K8sDeploymentMetadata {
 
     #[doc(hidden)]
     pub fn attach_source(&self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
+    }
+}
+
+impl IntoExistingCluster for K8sDeploymentMetadata {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
+    }
+}
+
+impl IntoExistingCluster for &K8sDeploymentMetadata {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
         self.existing_cluster()
     }
 }
