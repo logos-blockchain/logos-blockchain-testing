@@ -118,8 +118,14 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
+    pub fn existing_cluster(&self) -> Option<&AttachSource> {
+        self.sources.existing_cluster()
+    }
+
+    #[must_use]
+    #[doc(hidden)]
     pub fn attached_source(&self) -> Option<&AttachSource> {
-        self.sources.attached_source()
+        self.existing_cluster()
     }
 
     #[must_use]
@@ -243,8 +249,14 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
+            pub fn with_existing_cluster(self, cluster: AttachSource) -> Self {
+                self.map_core_builder(|builder| builder.with_existing_cluster(cluster))
+            }
+
+            #[must_use]
+            #[doc(hidden)]
             pub fn with_attach_source(self, attach: AttachSource) -> Self {
-                self.map_core_builder(|builder| builder.with_attach_source(attach))
+                self.with_existing_cluster(attach)
             }
 
             #[must_use]
@@ -556,9 +568,15 @@ impl<E: Application, Caps> Builder<E, Caps> {
     }
 
     #[must_use]
-    pub fn with_attach_source(mut self, attach: AttachSource) -> Self {
-        self.sources = self.sources.with_attach(attach);
+    pub fn with_existing_cluster(mut self, cluster: AttachSource) -> Self {
+        self.sources = self.sources.with_attach(cluster);
         self
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn with_attach_source(self, attach: AttachSource) -> Self {
+        self.with_existing_cluster(attach)
     }
 
     #[must_use]

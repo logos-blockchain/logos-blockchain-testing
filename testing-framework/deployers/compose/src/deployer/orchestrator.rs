@@ -71,7 +71,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             }
         })?;
 
-        if scenario.sources().is_attached() {
+        if scenario.sources().uses_existing_cluster() {
             return self
                 .deploy_attached_only::<Caps>(scenario, source_plan)
                 .await
@@ -215,7 +215,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         }
 
         let attach = scenario
-            .attached_source()
+            .existing_cluster()
             .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "attached node control requested outside attached source mode",
             })?;
@@ -243,7 +243,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         Caps: Send + Sync,
     {
         let attach = scenario
-            .attached_source()
+            .existing_cluster()
             .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "compose attached cluster wait requested outside attached source mode",
             })?;
@@ -373,7 +373,7 @@ where
     Caps: Send + Sync,
 {
     let project_name = scenario
-        .attached_source()
+        .existing_cluster()
         .and_then(|attach| attach.compose_project())
         .map(ToOwned::to_owned);
 

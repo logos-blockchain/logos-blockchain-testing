@@ -173,7 +173,7 @@ impl ScenarioSources {
     }
 
     #[must_use]
-    pub fn attached_source(&self) -> Option<&AttachSource> {
+    pub fn existing_cluster(&self) -> Option<&AttachSource> {
         match self {
             Self::Attached { attach, .. } => Some(attach),
             Self::Managed { .. } | Self::ExternalOnly { .. } => None,
@@ -197,6 +197,11 @@ impl ScenarioSources {
     #[must_use]
     pub const fn is_attached(&self) -> bool {
         matches!(self, Self::Attached { .. })
+    }
+
+    #[must_use]
+    pub const fn uses_existing_cluster(&self) -> bool {
+        self.is_attached()
     }
 
     #[must_use]

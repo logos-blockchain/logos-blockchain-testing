@@ -179,7 +179,7 @@ where
 
     let observability = resolve_observability_inputs(scenario.capabilities())?;
 
-    if scenario.sources().is_attached() {
+    if scenario.sources().uses_existing_cluster() {
         let runner = deploy_attached_only::<E, Caps>(scenario, source_plan, observability).await?;
         return Ok((runner, attached_metadata(scenario)));
     }
@@ -250,11 +250,11 @@ where
     Caps: Send + Sync,
 {
     let namespace = scenario
-        .attached_source()
+        .existing_cluster()
         .and_then(|attach| attach.k8s_namespace())
         .map(ToOwned::to_owned);
     let label_selector = scenario
-        .attached_source()
+        .existing_cluster()
         .and_then(|attach| attach.k8s_label_selector())
         .map(ToOwned::to_owned);
 
@@ -273,7 +273,7 @@ where
     Caps: Send + Sync,
 {
     let attach = scenario
-        .attached_source()
+        .existing_cluster()
         .ok_or_else(|| K8sRunnerError::InternalInvariant {
             message: "k8s attached cluster wait requested outside attached source mode".to_owned(),
         })?;
