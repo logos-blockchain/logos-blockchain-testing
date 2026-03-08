@@ -122,21 +122,11 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    pub fn cluster_wait(&self) -> Option<Arc<dyn ClusterWaitHandle<E>>> {
-        self.cluster_wait.clone()
-    }
-
-    #[must_use]
     pub const fn controls_nodes(&self) -> bool {
         self.node_control.is_some()
     }
 
-    #[must_use]
-    pub const fn can_wait_network_ready(&self) -> bool {
-        self.cluster_wait.is_some()
-    }
-
-    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
+    pub(crate) async fn wait_network_ready(&self) -> Result<(), DynError> {
         self.require_cluster_wait()?.wait_network_ready().await
     }
 
@@ -146,7 +136,9 @@ impl<E: Application> RunContext<E> {
     }
 
     fn require_cluster_wait(&self) -> Result<Arc<dyn ClusterWaitHandle<E>>, DynError> {
-        self.cluster_wait()
+        self.cluster_wait
+            .as_ref()
+            .map(Arc::clone)
             .ok_or_else(|| RunContextCapabilityError::MissingClusterWait.into())
     }
 }
@@ -191,10 +183,6 @@ impl<E: Application> RunHandle<E> {
     /// Access the shared run context.
     pub fn context(&self) -> &RunContext<E> {
         &self.run_context
-    }
-
-    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
-        self.run_context.wait_network_ready().await
     }
 }
 
