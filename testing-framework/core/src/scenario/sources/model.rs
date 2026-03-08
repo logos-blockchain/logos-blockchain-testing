@@ -128,22 +128,29 @@ impl ScenarioSources {
         Self::ExternalOnly { external }
     }
 
-    pub(crate) fn add_external_node(&mut self, node: ExternalNodeSource) {
-        match self {
+    #[must_use]
+    pub fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
+        match &mut self {
             Self::Managed { external }
             | Self::Attached { external, .. }
             | Self::ExternalOnly { external } => external.push(node),
         }
+
+        self
     }
 
-    pub(crate) fn set_attach(&mut self, attach: AttachSource) {
+    #[must_use]
+    pub fn with_attach(self, attach: AttachSource) -> Self {
         let external = self.external_nodes().to_vec();
-        *self = Self::Attached { attach, external };
+
+        Self::Attached { attach, external }
     }
 
-    pub(crate) fn set_external_only(&mut self) {
+    #[must_use]
+    pub fn into_external_only(self) -> Self {
         let external = self.external_nodes().to_vec();
-        *self = Self::ExternalOnly { external };
+
+        Self::ExternalOnly { external }
     }
 
     #[must_use]

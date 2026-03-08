@@ -569,13 +569,13 @@ impl<E: Application, Caps> Builder<E, Caps> {
 
     #[must_use]
     pub fn with_attach_source(mut self, attach: AttachSource) -> Self {
-        self.sources.set_attach(attach);
+        self.sources = self.sources.with_attach(attach);
         self
     }
 
     #[must_use]
     pub fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
-        self.sources.add_external_node(node);
+        self.sources = self.sources.with_external_node(node);
         self
     }
 
@@ -591,7 +591,7 @@ impl<E: Application, Caps> Builder<E, Caps> {
 
     #[must_use]
     pub fn with_external_only_sources(mut self) -> Self {
-        self.sources.set_external_only();
+        self.sources = self.sources.into_external_only();
         self
     }
 
