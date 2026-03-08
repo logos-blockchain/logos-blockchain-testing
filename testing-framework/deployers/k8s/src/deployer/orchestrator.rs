@@ -8,7 +8,7 @@ use testing_framework_core::{
         Application, ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, Deployer,
         DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError,
         NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl,
-        RunContext, Runner, Scenario, SourceOrchestrationPlan, SourceProviders,
+        RunContext, Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders,
         StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
@@ -230,18 +230,17 @@ where
     let telemetry = observability.telemetry_handle()?;
     let (feed, feed_task) = spawn_block_feed_with::<E>(&node_clients).await?;
     let cluster_wait = attached_cluster_wait::<E, Caps>(scenario, client)?;
-    let context = RunContext::new(
+    let context = RuntimeAssembly::new(
         scenario.deployment().clone(),
         node_clients,
         scenario.duration(),
         scenario.expectation_cooldown(),
         telemetry,
         feed,
-        None,
     )
     .with_cluster_wait(cluster_wait);
 
-    Ok(Runner::new(context, Some(Box::new(feed_task))))
+    Ok(context.build_runner(Some(Box::new(feed_task))))
 }
 
 fn attached_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
@@ -642,7 +641,7 @@ fn finalize_runner<E: K8sDeployEnv>(
         duration_secs, "k8s deployment ready; handing control to scenario runner"
     );
 
-    Ok(Runner::new(context, Some(cleanup_guard)))
+    Ok(RuntimeAssembly::from(context).build_runner(Some(cleanup_guard)))
 }
 
 fn take_ready_cluster(
@@ -664,16 +663,16 @@ fn build_k8s_run_context<E: K8sDeployEnv>(
     feed: Feed<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> RunContext<E> {
-    RunContext::new(
+    RuntimeAssembly::new(
         descriptors,
         node_clients,
         duration,
         expectation_cooldown,
         telemetry,
         feed,
-        None,
     )
     .with_cluster_wait(cluster_wait)
+    .build_context()
 }
 
 fn endpoint_or_disabled(endpoint: Option<&Url>) -> String {

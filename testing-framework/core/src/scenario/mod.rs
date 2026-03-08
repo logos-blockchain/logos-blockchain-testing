@@ -39,7 +39,7 @@ pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
     ApplicationExternalProvider, AttachProvider, AttachProviderError, AttachedNode, CleanupGuard,
     Deployer, Feed, FeedHandle, FeedRuntime, HttpReadinessRequirement, ManagedSource, NodeClients,
-    ReadinessError, RunContext, RunHandle, RunMetrics, Runner, ScenarioError,
+    ReadinessError, RunContext, RunHandle, RunMetrics, Runner, RuntimeAssembly, ScenarioError,
     SourceOrchestrationPlan, SourceProviders, StabilizationConfig, StaticManagedProvider,
     build_source_orchestration_plan,
     metrics::{

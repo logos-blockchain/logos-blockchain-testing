@@ -34,10 +34,11 @@ impl<E: Application> Drop for Runner<E> {
 }
 
 impl<E: Application> Runner<E> {
-    /// Construct a runner from the run context and optional cleanup guard.
     #[must_use]
-    #[doc(hidden)]
-    pub fn new(context: RunContext<E>, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
+    pub(crate) fn new(
+        context: RunContext<E>,
+        cleanup_guard: Option<Box<dyn CleanupGuard>>,
+    ) -> Self {
         Self {
             context: Arc::new(context),
             cleanup_guard,

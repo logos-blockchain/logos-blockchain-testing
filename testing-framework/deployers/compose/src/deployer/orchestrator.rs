@@ -6,8 +6,8 @@ use testing_framework_core::{
         ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, DeploymentPolicy, FeedHandle,
         FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
         ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
-        Runner, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders,
+        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -169,7 +169,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         );
 
         let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
-        Ok(Runner::new(context, Some(cleanup_guard)))
+        Ok(RuntimeAssembly::from(context).build_runner(Some(cleanup_guard)))
     }
 
     fn source_providers(&self, managed_clients: Vec<E::NodeClient>) -> SourceProviders<E> {
@@ -283,7 +283,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             "compose runtime prepared"
         );
 
-        Ok(Runner::new(runtime.context, Some(cleanup_guard)))
+        Ok(RuntimeAssembly::from(runtime.context).build_runner(Some(cleanup_guard)))
     }
 
     fn maybe_node_control<Caps>(
@@ -462,16 +462,21 @@ fn build_run_context<E: ComposeDeployEnv>(
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> RunContext<E> {
-    RunContext::new(
+    let mut assembly = RuntimeAssembly::new(
         descriptors,
         node_clients,
         run_duration,
         expectation_cooldown,
         telemetry,
         feed,
-        node_control,
     )
-    .with_cluster_wait(cluster_wait)
+    .with_cluster_wait(cluster_wait);
+
+    if let Some(node_control) = node_control {
+        assembly = assembly.with_node_control(node_control);
+    }
+
+    assembly.build_context()
 }
 
 fn resolve_observability_inputs<E, Caps>(

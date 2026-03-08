@@ -12,8 +12,8 @@ use testing_framework_core::{
     scenario::{
         Application, CleanupGuard, Deployer, DeploymentPolicy, DynError, FeedHandle, FeedRuntime,
         HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, RunContext, Runner, Scenario, ScenarioError, SourceOrchestrationPlan,
-        build_source_orchestration_plan, spawn_feed,
+        RetryPolicy, RunContext, Runner, RuntimeAssembly, Scenario, ScenarioError,
+        SourceOrchestrationPlan, build_source_orchestration_plan, spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -218,7 +218,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let cleanup_guard: Box<dyn CleanupGuard> =
             Box::new(LocalProcessGuard::<E>::new(nodes, runtime.feed_task));
 
-        Ok(Runner::new(runtime.context, Some(cleanup_guard)))
+        Ok(RuntimeAssembly::from(runtime.context).build_runner(Some(cleanup_guard)))
     }
 
     async fn deploy_with_node_control(
@@ -252,10 +252,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         )
         .await?;
 
-        Ok(Runner::new(
-            runtime.context,
-            Some(Box::new(runtime.feed_task)),
-        ))
+        Ok(RuntimeAssembly::from(runtime.context).build_runner(Some(Box::new(runtime.feed_task))))
     }
 
     fn node_control_from(
@@ -491,15 +488,19 @@ async fn run_context_for<E: Application>(
     }
 
     let (feed, feed_task) = spawn_feed_with::<E>(&node_clients).await?;
-    let context = RunContext::new(
+    let mut assembly = RuntimeAssembly::new(
         descriptors,
         node_clients,
         duration,
         expectation_cooldown,
         Metrics::empty(),
         feed,
-        node_control,
     );
+    if let Some(node_control) = node_control {
+        assembly = assembly.with_node_control(node_control);
+    }
+
+    let context = assembly.build_context();
 
     Ok(RuntimeContext { context, feed_task })
 }

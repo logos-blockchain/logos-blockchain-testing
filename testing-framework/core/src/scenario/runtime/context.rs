@@ -21,11 +21,23 @@ pub struct RunContext<E: Application> {
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
 
+/// Low-level runtime assembly input used by deployers to build a runnable
+/// cluster context.
+pub struct RuntimeAssembly<E: Application> {
+    descriptors: E::Deployment,
+    node_clients: NodeClients<E>,
+    run_duration: Duration,
+    expectation_cooldown: Duration,
+    telemetry: Metrics,
+    feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
+    node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
+}
+
 impl<E: Application> RunContext<E> {
     /// Builds a run context from prepared deployment/runtime artifacts.
     #[must_use]
-    #[doc(hidden)]
-    pub fn new(
+    pub(crate) fn new(
         descriptors: E::Deployment,
         node_clients: NodeClients<E>,
         run_duration: Duration,
@@ -49,8 +61,7 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    #[doc(hidden)]
-    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
+    pub(crate) fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
         self.cluster_wait = Some(cluster_wait);
         self
     }
@@ -122,6 +133,79 @@ impl<E: Application> RunContext<E> {
     }
 }
 
+impl<E: Application> RuntimeAssembly<E> {
+    #[must_use]
+    pub fn new(
+        descriptors: E::Deployment,
+        node_clients: NodeClients<E>,
+        run_duration: Duration,
+        expectation_cooldown: Duration,
+        telemetry: Metrics,
+        feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
+    ) -> Self {
+        Self {
+            descriptors,
+            node_clients,
+            run_duration,
+            expectation_cooldown,
+            telemetry,
+            feed,
+            node_control: None,
+            cluster_wait: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_node_control(mut self, node_control: Arc<dyn NodeControlHandle<E>>) -> Self {
+        self.node_control = Some(node_control);
+        self
+    }
+
+    #[must_use]
+    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
+        self.cluster_wait = Some(cluster_wait);
+        self
+    }
+
+    #[must_use]
+    pub fn build_context(self) -> RunContext<E> {
+        let context = RunContext::new(
+            self.descriptors,
+            self.node_clients,
+            self.run_duration,
+            self.expectation_cooldown,
+            self.telemetry,
+            self.feed,
+            self.node_control,
+        );
+
+        match self.cluster_wait {
+            Some(cluster_wait) => context.with_cluster_wait(cluster_wait),
+            None => context,
+        }
+    }
+
+    #[must_use]
+    pub fn build_runner(self, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> super::Runner<E> {
+        super::Runner::new(self.build_context(), cleanup_guard)
+    }
+}
+
+impl<E: Application> From<RunContext<E>> for RuntimeAssembly<E> {
+    fn from(context: RunContext<E>) -> Self {
+        Self {
+            descriptors: context.descriptors,
+            node_clients: context.node_clients,
+            run_duration: context.metrics.run_duration(),
+            expectation_cooldown: context.expectation_cooldown,
+            telemetry: context.telemetry,
+            feed: context.feed,
+            node_control: context.node_control,
+            cluster_wait: context.cluster_wait,
+        }
+    }
+}
+
 /// Handle returned by the runner to control the lifecycle of the run.
 pub struct RunHandle<E: Application> {
     run_context: Arc<RunContext<E>>,
@@ -137,16 +221,6 @@ impl<E: Application> Drop for RunHandle<E> {
 }
 
 impl<E: Application> RunHandle<E> {
-    #[must_use]
-    /// Build a handle from owned context and optional cleanup guard.
-    #[doc(hidden)]
-    pub fn new(context: RunContext<E>, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
-        Self {
-            run_context: Arc::new(context),
-            cleanup_guard,
-        }
-    }
-
     #[must_use]
     /// Build a handle from a shared context reference.
     pub(crate) fn from_shared(
