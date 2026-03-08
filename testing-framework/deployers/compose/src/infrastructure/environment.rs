@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::anyhow;
 use reqwest::Url;
-use testing_framework_core::{scenario::CleanupGuard, topology::DeploymentDescriptor};
+use testing_framework_core::{scenario::internal::CleanupGuard, topology::DeploymentDescriptor};
 use tokio::{net::TcpStream, process::Command};
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::{debug, error, info, warn};

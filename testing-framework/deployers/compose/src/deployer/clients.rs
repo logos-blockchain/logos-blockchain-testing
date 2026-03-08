@@ -1,6 +1,8 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use testing_framework_core::scenario::{Application, FeedHandle, FeedRuntime, NodeClients};
+use testing_framework_core::scenario::{
+    Application, FeedRuntime, NodeClients, internal::FeedHandle,
+};
 use tracing::{info, warn};
 
 use crate::{

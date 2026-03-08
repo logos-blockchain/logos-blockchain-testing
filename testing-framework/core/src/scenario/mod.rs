@@ -10,6 +10,7 @@ mod control;
 mod definition;
 mod deployment_policy;
 mod expectation;
+pub mod internal;
 mod observability;
 mod runtime;
 mod sources;
@@ -18,31 +19,16 @@ mod workload;
 pub type DynError = Box<dyn Error + Send + Sync + 'static>;
 
 pub use builder_ext::{BuilderInputError, ObservabilityBuilderExt};
-#[doc(hidden)]
-pub use builder_ops::CoreBuilderAccess;
 pub use capabilities::{
     NodeControlCapability, ObservabilityCapability, PeerSelection, RequiresNodeControl,
     StartNodeOptions, StartedNode,
 };
 pub use common_builder_ext::CoreBuilderExt;
 pub use control::{ClusterWaitHandle, NodeControlHandle};
-#[doc(hidden)]
-pub use definition::{
-    Builder as CoreBuilder, // internal adapter-facing core builder
-    NodeControlScenarioBuilder,
-    ObservabilityScenarioBuilder,
-};
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
-#[doc(hidden)]
-pub use runtime::{
-    ApplicationExternalProvider, AttachProvider, AttachProviderError, AttachedNode, CleanupGuard,
-    FeedHandle, ManagedSource, RuntimeAssembly, SourceOrchestrationPlan, SourceProviders,
-    StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources,
-    orchestrate_sources_with_providers, resolve_sources,
-};
 pub use runtime::{
     Deployer, Feed, FeedRuntime, HttpReadinessRequirement, NodeClients, ReadinessError, RunContext,
     RunHandle, RunMetrics, Runner, ScenarioError, StabilizationConfig,

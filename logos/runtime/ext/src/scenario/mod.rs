@@ -9,7 +9,7 @@ use lb_framework::{
 };
 pub use testing_framework_core::scenario::ObservabilityBuilderExt;
 use testing_framework_core::{
-    scenario::{NodeControlScenarioBuilder, ObservabilityScenarioBuilder},
+    scenario::internal::{NodeControlScenarioBuilder, ObservabilityScenarioBuilder},
     topology::{DeploymentProvider, DeploymentSeed, DynTopologyError},
 };
 use tracing::warn;
@@ -18,7 +18,7 @@ use crate::LbcExtEnv;
 
 pub type ScenarioBuilder = testing_framework_core::scenario::ScenarioBuilder<LbcExtEnv>;
 pub type ScenarioBuilderWith<Caps = ()> =
-    testing_framework_core::scenario::CoreBuilder<LbcExtEnv, Caps>;
+    testing_framework_core::scenario::internal::CoreBuilder<LbcExtEnv, Caps>;
 
 pub trait CoreBuilderExt: Sized {
     fn deployment_with(f: impl FnOnce(DeploymentBuilder) -> DeploymentBuilder) -> Self;

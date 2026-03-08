@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use super::{
-    Application, CleanupPolicy, CoreBuilderAccess, DeploymentPolicy, Expectation,
-    HttpReadinessRequirement, RetryPolicy, Workload,
+    Application, CleanupPolicy, DeploymentPolicy, Expectation, HttpReadinessRequirement,
+    RetryPolicy, Workload, internal::CoreBuilderAccess,
 };
 use crate::topology::{DeploymentProvider, DeploymentSeed};
 

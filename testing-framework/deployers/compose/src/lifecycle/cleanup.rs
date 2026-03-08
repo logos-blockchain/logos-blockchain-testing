@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use testing_framework_core::scenario::CleanupGuard;
+use testing_framework_core::scenario::internal::CleanupGuard;
 use tracing::{debug, info, warn};
 
 use crate::{

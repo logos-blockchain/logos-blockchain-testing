@@ -3,12 +3,15 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
-        ClusterWaitHandle, DeploymentPolicy, DynError, ExistingCluster, FeedHandle, FeedRuntime,
-        HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
-        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
-        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        Application, ClusterControlProfile, ClusterMode, ClusterWaitHandle, DeploymentPolicy,
+        DynError, ExistingCluster, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
+        RequiresNodeControl, Runner, Scenario,
+        internal::{
+            ApplicationExternalProvider, CleanupGuard, FeedHandle, RuntimeAssembly,
+            SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+            build_source_orchestration_plan, orchestrate_sources_with_providers,
+        },
     },
     topology::DeploymentDescriptor,
 };

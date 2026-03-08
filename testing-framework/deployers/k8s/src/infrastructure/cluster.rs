@@ -1,7 +1,7 @@
 use kube::Client;
 use reqwest::Url;
 use testing_framework_core::scenario::{
-    CleanupGuard, DynError, HttpReadinessRequirement, NodeClients,
+    DynError, HttpReadinessRequirement, NodeClients, internal::CleanupGuard,
 };
 use tracing::{debug, info};
 use url::ParseError;

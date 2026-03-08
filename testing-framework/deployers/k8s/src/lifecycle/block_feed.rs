@@ -1,5 +1,5 @@
 use testing_framework_core::scenario::{
-    Application, FeedHandle, FeedRuntime, NodeClients, spawn_feed,
+    Application, FeedRuntime, NodeClients, internal::FeedHandle, spawn_feed,
 };
 use tracing::{debug, info};
 

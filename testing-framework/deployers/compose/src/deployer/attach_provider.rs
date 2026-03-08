@@ -2,8 +2,9 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    AttachProvider, AttachProviderError, AttachedNode, ClusterWaitHandle, DynError,
-    ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
+    ClusterWaitHandle, DynError, ExistingCluster, ExternalNodeSource, HttpReadinessRequirement,
+    internal::{AttachProvider, AttachProviderError, AttachedNode},
+    wait_http_readiness,
 };
 use url::Url;
 

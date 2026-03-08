@@ -2,7 +2,7 @@ use std::{io, process::Output, thread};
 
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{Api, Client, api::DeleteParams};
-use testing_framework_core::scenario::CleanupGuard;
+use testing_framework_core::scenario::internal::CleanupGuard;
 use tokio::{
     process::Command,
     runtime::{Handle, Runtime},
