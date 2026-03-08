@@ -4,8 +4,8 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, ClusterMode, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
-    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
+    Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError, ExistingCluster,
+    ExternalNodeSource, HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
     runtime::{
@@ -121,6 +121,11 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     #[must_use]
     pub const fn cluster_mode(&self) -> ClusterMode {
         self.sources.cluster_mode()
+    }
+
+    #[must_use]
+    pub const fn cluster_control_profile(&self) -> ClusterControlProfile {
+        self.sources.control_profile()
     }
 
     #[must_use]
