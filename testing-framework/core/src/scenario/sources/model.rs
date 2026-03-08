@@ -18,8 +18,7 @@ enum ExistingClusterKind {
 
 impl ExistingCluster {
     #[must_use]
-    #[doc(hidden)]
-    pub fn k8s(label_selector: String) -> Self {
+    pub fn for_k8s_selector(label_selector: String) -> Self {
         Self {
             kind: ExistingClusterKind::K8s {
                 namespace: None,
@@ -29,8 +28,7 @@ impl ExistingCluster {
     }
 
     #[must_use]
-    #[doc(hidden)]
-    pub fn k8s_in_namespace(label_selector: String, namespace: String) -> Self {
+    pub fn for_k8s_selector_in_namespace(namespace: String, label_selector: String) -> Self {
         Self {
             kind: ExistingClusterKind::K8s {
                 namespace: Some(namespace),
@@ -40,19 +38,17 @@ impl ExistingCluster {
     }
 
     #[must_use]
-    #[doc(hidden)]
-    pub fn compose(services: Vec<String>) -> Self {
+    pub fn for_compose_project(project: String) -> Self {
         Self {
             kind: ExistingClusterKind::Compose {
-                project: None,
-                services,
+                project: Some(project),
+                services: Vec::new(),
             },
         }
     }
 
     #[must_use]
-    #[doc(hidden)]
-    pub fn compose_in_project(services: Vec<String>, project: String) -> Self {
+    pub fn for_compose_services(project: String, services: Vec<String>) -> Self {
         Self {
             kind: ExistingClusterKind::Compose {
                 project: Some(project),

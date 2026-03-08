@@ -73,8 +73,11 @@ mod tests {
 
     #[test]
     fn attached_sources_are_planned() {
-        let sources = ScenarioSources::default()
-            .with_attach(ExistingCluster::compose(vec!["node-0".to_string()]));
+        let sources =
+            ScenarioSources::default().with_attach(ExistingCluster::for_compose_services(
+                "test-project".to_string(),
+                vec!["node-0".to_string()],
+            ));
         let plan = SourceOrchestrationPlan::try_from_sources(&sources)
             .expect("attached sources should build a source orchestration plan");
 

@@ -66,8 +66,7 @@ impl ComposeDeploymentMetadata {
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(ExistingCluster::compose_in_project(
-            Vec::new(),
+        Ok(ExistingCluster::for_compose_project(
             project_name.to_owned(),
         ))
     }
@@ -81,9 +80,9 @@ impl ComposeDeploymentMetadata {
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(ExistingCluster::compose_in_project(
-            services,
+        Ok(ExistingCluster::for_compose_services(
             project_name.to_owned(),
+            services,
         ))
     }
 

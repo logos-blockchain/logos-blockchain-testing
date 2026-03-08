@@ -53,9 +53,9 @@ impl K8sDeploymentMetadata {
             .label_selector()
             .ok_or(K8sMetadataError::MissingLabelSelector)?;
 
-        Ok(ExistingCluster::k8s_in_namespace(
-            label_selector.to_owned(),
+        Ok(ExistingCluster::for_k8s_selector_in_namespace(
             namespace.to_owned(),
+            label_selector.to_owned(),
         ))
     }
 
