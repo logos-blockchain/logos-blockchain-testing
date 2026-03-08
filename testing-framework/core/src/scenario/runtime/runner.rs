@@ -192,10 +192,10 @@ impl<E: Application> Runner<E> {
     }
 
     fn settle_wait_duration(context: &RunContext<E>) -> Option<Duration> {
-        let has_node_control = context.controls_nodes();
+        let control_profile = context.cluster_control_profile();
         let configured_wait = context.expectation_cooldown();
 
-        if configured_wait.is_zero() && !has_node_control {
+        if configured_wait.is_zero() && !control_profile.supports_node_control() {
             return None;
         }
 
@@ -233,7 +233,7 @@ impl<E: Application> Runner<E> {
     fn cooldown_duration(context: &RunContext<E>) -> Option<Duration> {
         // Managed environments need a minimum cooldown so feed and expectations
         // observe stabilized state.
-        let needs_stabilization = context.controls_nodes();
+        let needs_stabilization = context.cluster_control_profile().framework_owns_lifecycle();
 
         let mut wait = context.expectation_cooldown();
 

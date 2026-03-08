@@ -10,10 +10,10 @@ use std::{
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, CleanupGuard, Deployer, DeploymentPolicy, DynError, FeedHandle, FeedRuntime,
-        HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, Runner, RuntimeAssembly, Scenario, ScenarioError, SourceOrchestrationPlan,
-        build_source_orchestration_plan, spawn_feed,
+        Application, CleanupGuard, ClusterControlProfile, Deployer, DeploymentPolicy, DynError,
+        FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        NodeControlCapability, NodeControlHandle, RetryPolicy, Runner, RuntimeAssembly, Scenario,
+        ScenarioError, SourceOrchestrationPlan, build_source_orchestration_plan, spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -211,6 +211,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
+            scenario.cluster_control_profile(),
             None,
         )
         .await?;
@@ -248,6 +249,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
+            scenario.cluster_control_profile(),
             Some(node_control),
         )
         .await?;
@@ -483,6 +485,7 @@ async fn run_context_for<E: Application>(
     node_clients: NodeClients<E>,
     duration: Duration,
     expectation_cooldown: Duration,
+    cluster_control_profile: ClusterControlProfile,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<RuntimeContext<E>, ProcessDeployerError> {
     if node_clients.is_empty() {
@@ -495,6 +498,7 @@ async fn run_context_for<E: Application>(
         node_clients,
         duration,
         expectation_cooldown,
+        cluster_control_profile,
         Metrics::empty(),
         feed,
     );

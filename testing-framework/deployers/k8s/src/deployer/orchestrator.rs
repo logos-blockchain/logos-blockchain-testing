@@ -5,9 +5,9 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, ApplicationExternalProvider, CleanupGuard, ClusterMode, ClusterWaitHandle,
-        Deployer, DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics,
-        MetricsError, NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs,
+        Application, ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
+        ClusterWaitHandle, Deployer, DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement,
+        Metrics, MetricsError, NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs,
         RequiresNodeControl, Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan,
         SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
         orchestrate_sources_with_providers,
@@ -236,6 +236,7 @@ where
         node_clients,
         scenario.duration(),
         scenario.expectation_cooldown(),
+        scenario.cluster_control_profile(),
         telemetry,
         feed,
     )
@@ -503,6 +504,7 @@ fn build_runner_parts<E: K8sDeployEnv, Caps>(
             runtime.node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
+            scenario.cluster_control_profile(),
             runtime.telemetry,
             runtime.feed,
             cluster_wait,
@@ -643,6 +645,7 @@ fn build_k8s_runtime_assembly<E: K8sDeployEnv>(
     node_clients: NodeClients<E>,
     duration: Duration,
     expectation_cooldown: Duration,
+    cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
     feed: Feed<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
@@ -652,6 +655,7 @@ fn build_k8s_runtime_assembly<E: K8sDeployEnv>(
         node_clients,
         duration,
         expectation_cooldown,
+        cluster_control_profile,
         telemetry,
         feed,
     )

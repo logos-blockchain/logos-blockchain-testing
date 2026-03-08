@@ -1,7 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
 use super::{metrics::Metrics, node_clients::ClusterClient};
-use crate::scenario::{Application, ClusterWaitHandle, DynError, NodeClients, NodeControlHandle};
+use crate::scenario::{
+    Application, ClusterControlProfile, ClusterWaitHandle, DynError, NodeClients, NodeControlHandle,
+};
 
 #[derive(Debug, thiserror::Error)]
 enum RunContextCapabilityError {
@@ -15,6 +17,7 @@ pub struct RunContext<E: Application> {
     node_clients: NodeClients<E>,
     metrics: RunMetrics,
     expectation_cooldown: Duration,
+    cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
     feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
@@ -28,6 +31,7 @@ pub struct RuntimeAssembly<E: Application> {
     node_clients: NodeClients<E>,
     run_duration: Duration,
     expectation_cooldown: Duration,
+    cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
     feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
@@ -42,6 +46,7 @@ impl<E: Application> RunContext<E> {
         node_clients: NodeClients<E>,
         run_duration: Duration,
         expectation_cooldown: Duration,
+        cluster_control_profile: ClusterControlProfile,
         telemetry: Metrics,
         feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
         node_control: Option<Arc<dyn NodeControlHandle<E>>>,
@@ -53,6 +58,7 @@ impl<E: Application> RunContext<E> {
             node_clients,
             metrics,
             expectation_cooldown,
+            cluster_control_profile,
             telemetry,
             feed,
             node_control,
@@ -102,13 +108,13 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    pub fn node_control(&self) -> Option<Arc<dyn NodeControlHandle<E>>> {
-        self.node_control.clone()
+    pub const fn cluster_control_profile(&self) -> ClusterControlProfile {
+        self.cluster_control_profile
     }
 
     #[must_use]
-    pub(crate) const fn controls_nodes(&self) -> bool {
-        self.node_control.is_some()
+    pub fn node_control(&self) -> Option<Arc<dyn NodeControlHandle<E>>> {
+        self.node_control.clone()
     }
 
     pub(crate) async fn wait_network_ready(&self) -> Result<(), DynError> {
@@ -135,6 +141,7 @@ impl<E: Application> RuntimeAssembly<E> {
         node_clients: NodeClients<E>,
         run_duration: Duration,
         expectation_cooldown: Duration,
+        cluster_control_profile: ClusterControlProfile,
         telemetry: Metrics,
         feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     ) -> Self {
@@ -143,6 +150,7 @@ impl<E: Application> RuntimeAssembly<E> {
             node_clients,
             run_duration,
             expectation_cooldown,
+            cluster_control_profile,
             telemetry,
             feed,
             node_control: None,
@@ -169,6 +177,7 @@ impl<E: Application> RuntimeAssembly<E> {
             self.node_clients,
             self.run_duration,
             self.expectation_cooldown,
+            self.cluster_control_profile,
             self.telemetry,
             self.feed,
             self.node_control,
@@ -193,6 +202,7 @@ impl<E: Application> From<RunContext<E>> for RuntimeAssembly<E> {
             node_clients: context.node_clients,
             run_duration: context.metrics.run_duration(),
             expectation_cooldown: context.expectation_cooldown,
+            cluster_control_profile: context.cluster_control_profile,
             telemetry: context.telemetry,
             feed: context.feed,
             node_control: context.node_control,
