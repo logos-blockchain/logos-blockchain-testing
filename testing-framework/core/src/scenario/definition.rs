@@ -140,6 +140,21 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
+    pub const fn is_managed(&self) -> bool {
+        self.sources.is_managed()
+    }
+
+    #[must_use]
+    pub const fn is_external_only(&self) -> bool {
+        self.sources.is_external_only()
+    }
+
+    #[must_use]
+    pub fn has_external_nodes(&self) -> bool {
+        !self.sources.external_nodes().is_empty()
+    }
+
+    #[must_use]
     pub const fn source_orchestration_plan(&self) -> &SourceOrchestrationPlan {
         &self.source_orchestration_plan
     }

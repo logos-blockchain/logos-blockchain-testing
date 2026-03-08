@@ -52,8 +52,8 @@ pub use runtime::{
     wait_http_readiness, wait_until_stable,
 };
 #[doc(hidden)]
-pub use sources::AttachSource;
-pub use sources::{ExistingCluster, ExternalNodeSource, ScenarioSources};
+pub use sources::{AttachSource, ScenarioSources};
+pub use sources::{ExistingCluster, ExternalNodeSource};
 pub use workload::Workload;
 
 pub use crate::env::Application;
