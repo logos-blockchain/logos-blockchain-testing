@@ -21,13 +21,10 @@ impl AttachSource {
     }
 
     #[must_use]
-    pub fn with_namespace(self, namespace: String) -> Self {
-        match self {
-            Self::K8s { label_selector, .. } => Self::K8s {
-                namespace: Some(namespace),
-                label_selector,
-            },
-            other => other,
+    pub fn k8s_in_namespace(label_selector: String, namespace: String) -> Self {
+        Self::K8s {
+            namespace: Some(namespace),
+            label_selector,
         }
     }
 
@@ -40,13 +37,10 @@ impl AttachSource {
     }
 
     #[must_use]
-    pub fn with_project(self, project: String) -> Self {
-        match self {
-            Self::Compose { services, .. } => Self::Compose {
-                project: Some(project),
-                services,
-            },
-            other => other,
+    pub fn compose_in_project(services: Vec<String>, project: String) -> Self {
+        Self::Compose {
+            project: Some(project),
+            services,
         }
     }
 }

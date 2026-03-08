@@ -50,7 +50,10 @@ impl ComposeDeploymentMetadata {
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(AttachSource::compose(Vec::new()).with_project(project_name.to_owned()))
+        Ok(AttachSource::compose_in_project(
+            Vec::new(),
+            project_name.to_owned(),
+        ))
     }
 
     /// Builds an attach source for the same compose project.
@@ -62,7 +65,10 @@ impl ComposeDeploymentMetadata {
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(AttachSource::compose(services).with_project(project_name.to_owned()))
+        Ok(AttachSource::compose_in_project(
+            services,
+            project_name.to_owned(),
+        ))
     }
 }
 
