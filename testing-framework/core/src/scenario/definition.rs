@@ -135,21 +135,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
-    pub const fn uses_existing_cluster(&self) -> bool {
-        matches!(self.cluster_mode(), ClusterMode::ExistingCluster)
-    }
-
-    #[must_use]
-    pub const fn is_managed(&self) -> bool {
-        matches!(self.cluster_mode(), ClusterMode::Managed)
-    }
-
-    #[must_use]
-    pub const fn is_external_only(&self) -> bool {
-        matches!(self.cluster_mode(), ClusterMode::ExternalOnly)
-    }
-
-    #[must_use]
     pub fn has_external_nodes(&self) -> bool {
         !self.sources.external_nodes().is_empty()
     }
