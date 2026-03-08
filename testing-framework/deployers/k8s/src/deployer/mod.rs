@@ -34,8 +34,8 @@ impl K8sDeploymentMetadata {
         self.label_selector.as_deref()
     }
 
-    /// Builds an attach source for the same k8s deployment scope.
-    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+    /// Builds an existing-cluster descriptor for the same k8s deployment scope.
+    pub fn existing_cluster(&self) -> Result<AttachSource, DynError> {
         let namespace = self.namespace().ok_or(K8sMetadataError::MissingNamespace)?;
         let label_selector = self
             .label_selector()
@@ -45,5 +45,10 @@ impl K8sDeploymentMetadata {
             label_selector.to_owned(),
             namespace.to_owned(),
         ))
+    }
+
+    #[doc(hidden)]
+    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+        self.existing_cluster()
     }
 }

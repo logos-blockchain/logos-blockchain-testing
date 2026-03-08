@@ -290,7 +290,7 @@ fn managed_cluster_wait<E: K8sDeployEnv>(
 ) -> Result<Arc<dyn ClusterWaitHandle<E>>, K8sRunnerError> {
     let client = client_from_cluster(cluster)?;
     let attach_source = metadata
-        .attach_source()
+        .existing_cluster()
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
     Ok(Arc::new(K8sAttachedClusterWait::<E>::new(

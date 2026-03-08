@@ -43,9 +43,9 @@ impl ComposeDeploymentMetadata {
         self.project_name.as_deref()
     }
 
-    /// Builds an attach source for the same compose project using deployer
-    /// discovery to resolve services.
-    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+    /// Builds an existing-cluster descriptor for the same compose project
+    /// using deployer discovery to resolve services.
+    pub fn existing_cluster(&self) -> Result<AttachSource, DynError> {
         let project_name = self
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
@@ -56,8 +56,8 @@ impl ComposeDeploymentMetadata {
         ))
     }
 
-    /// Builds an attach source for the same compose project.
-    pub fn attach_source_for_services(
+    /// Builds an existing-cluster descriptor for the same compose project.
+    pub fn existing_cluster_for_services(
         &self,
         services: Vec<String>,
     ) -> Result<AttachSource, DynError> {
@@ -69,6 +69,19 @@ impl ComposeDeploymentMetadata {
             services,
             project_name.to_owned(),
         ))
+    }
+
+    #[doc(hidden)]
+    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+        self.existing_cluster()
+    }
+
+    #[doc(hidden)]
+    pub fn attach_source_for_services(
+        &self,
+        services: Vec<String>,
+    ) -> Result<AttachSource, DynError> {
+        self.existing_cluster_for_services(services)
     }
 }
 
