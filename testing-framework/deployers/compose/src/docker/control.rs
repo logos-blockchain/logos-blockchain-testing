@@ -155,7 +155,7 @@ impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
     }
 }
 
-/// Node control handle for compose attached mode.
+/// Node control handle for compose existing-cluster mode.
 pub struct ComposeAttachedNodeControl {
     pub(crate) project_name: String,
 }

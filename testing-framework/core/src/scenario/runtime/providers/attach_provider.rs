@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::scenario::{Application, DynError, ExistingCluster};
 
-/// Attached node discovered from an existing external cluster source.
+/// Node discovered from an existing cluster descriptor.
 #[derive(Clone, Debug)]
 pub struct AttachedNode<E: Application> {
     /// Optional stable identity hint used by runtime inventory dedup logic.
@@ -14,7 +14,7 @@ pub struct AttachedNode<E: Application> {
 /// Errors returned by attach providers while discovering attached nodes.
 #[derive(Debug, thiserror::Error)]
 pub enum AttachProviderError {
-    #[error("attach source is not supported by this provider: {attach_source:?}")]
+    #[error("existing cluster descriptor is not supported by this provider: {attach_source:?}")]
     UnsupportedSource { attach_source: ExistingCluster },
     #[error("attach discovery failed: {source}")]
     Discovery {
@@ -23,13 +23,13 @@ pub enum AttachProviderError {
     },
 }
 
-/// Internal adapter interface for discovering pre-existing nodes.
+/// Internal adapter interface for discovering nodes in an existing cluster.
 ///
 /// This is scaffolding-only in phase 1 and is intentionally not wired into
 /// deployer runtime orchestration yet.
 #[async_trait]
 pub trait AttachProvider<E: Application>: Send + Sync {
-    /// Discovers node clients for the requested attach source.
+    /// Discovers node clients for the requested existing cluster.
     async fn discover(
         &self,
         source: &ExistingCluster,

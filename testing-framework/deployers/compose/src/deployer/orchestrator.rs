@@ -73,9 +73,9 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
 
         if matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
             return self
-                .deploy_attached_only::<Caps>(scenario, source_plan)
+                .deploy_existing_cluster::<Caps>(scenario, source_plan)
                 .await
-                .map(|runner| (runner, attached_metadata(scenario)));
+                .map(|runner| (runner, existing_cluster_metadata(scenario)));
         }
 
         let deployment = scenario.deployment();
@@ -138,7 +138,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         ))
     }
 
-    async fn deploy_attached_only<Caps>(
+    async fn deploy_existing_cluster<Caps>(
         &self,
         scenario: &Scenario<E, Caps>,
         source_plan: SourceOrchestrationPlan,
@@ -218,7 +218,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         let attach = scenario
             .existing_cluster()
             .ok_or(ComposeRunnerError::InternalInvariant {
-                message: "attached node control requested outside attached source mode",
+                message: "existing-cluster node control requested outside existing-cluster mode",
             })?;
         let node_control = ComposeAttachedNodeControl::try_from_existing_cluster(attach)
             .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
@@ -236,7 +236,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         let attach = scenario
             .existing_cluster()
             .ok_or(ComposeRunnerError::InternalInvariant {
-                message: "compose attached cluster wait requested outside attached source mode",
+                message: "compose cluster wait requested outside existing-cluster mode",
             })?;
         let cluster_wait = ComposeAttachedClusterWait::<E>::try_new(compose_runner_host(), attach)
             .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
@@ -366,7 +366,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     }
 }
 
-fn attached_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> ComposeDeploymentMetadata
+fn existing_cluster_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> ComposeDeploymentMetadata
 where
     E: ComposeDeployEnv,
     Caps: Send + Sync,

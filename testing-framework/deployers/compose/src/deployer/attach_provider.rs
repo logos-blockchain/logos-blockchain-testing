@@ -176,12 +176,12 @@ impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeAttachedClusterWait<E>
 }
 
 fn compose_wait_request(source: &ExistingCluster) -> Result<ComposeAttachRequest<'_>, DynError> {
-    let project = source
-        .compose_project()
-        .ok_or_else(|| DynError::from("compose cluster wait requires a compose attach source"))?;
-    let services = source
-        .compose_services()
-        .ok_or_else(|| DynError::from("compose cluster wait requires a compose attach source"))?;
+    let project = source.compose_project().ok_or_else(|| {
+        DynError::from("compose cluster wait requires a compose existing-cluster descriptor")
+    })?;
+    let services = source.compose_services().ok_or_else(|| {
+        DynError::from("compose cluster wait requires a compose existing-cluster descriptor")
+    })?;
 
     Ok(ComposeAttachRequest { project, services })
 }

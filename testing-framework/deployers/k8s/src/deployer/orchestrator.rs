@@ -181,8 +181,9 @@ where
     let observability = resolve_observability_inputs(scenario.capabilities())?;
 
     if matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
-        let runner = deploy_attached_only::<E, Caps>(scenario, source_plan, observability).await?;
-        return Ok((runner, attached_metadata(scenario)));
+        let runner =
+            deploy_existing_cluster::<E, Caps>(scenario, source_plan, observability).await?;
+        return Ok((runner, existing_cluster_metadata(scenario)));
     }
 
     let deployment = build_k8s_deployment::<E, Caps>(deployer, scenario, &observability).await?;
@@ -213,7 +214,7 @@ where
     Ok((runner, metadata))
 }
 
-async fn deploy_attached_only<E, Caps>(
+async fn deploy_existing_cluster<E, Caps>(
     scenario: &Scenario<E, Caps>,
     source_plan: SourceOrchestrationPlan,
     observability: ObservabilityInputs,
@@ -245,7 +246,7 @@ where
     Ok(context.build_runner(Some(Box::new(feed_task))))
 }
 
-fn attached_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
+fn existing_cluster_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
 where
     E: K8sDeployEnv,
     Caps: Send + Sync,
@@ -264,7 +265,7 @@ where
     let attach = scenario
         .existing_cluster()
         .ok_or_else(|| K8sRunnerError::InternalInvariant {
-            message: "k8s attached cluster wait requested outside attached source mode".to_owned(),
+            message: "k8s cluster wait requested outside existing-cluster mode".to_owned(),
         })?;
     let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, attach)
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
