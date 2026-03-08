@@ -127,6 +127,17 @@ pub enum ClusterMode {
     ExternalOnly,
 }
 
+impl ClusterMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Managed => "managed",
+            Self::ExistingCluster => "existing-cluster",
+            Self::ExternalOnly => "external-only",
+        }
+    }
+}
+
 /// High-level control/lifecycle expectation for a cluster surface.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ClusterControlProfile {
@@ -137,6 +148,16 @@ pub enum ClusterControlProfile {
 }
 
 impl ClusterControlProfile {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FrameworkManaged => "framework-managed",
+            Self::ExistingClusterControlled => "existing-cluster-controlled",
+            Self::ExternalUncontrolled => "external-uncontrolled",
+            Self::ManualControlled => "manual-controlled",
+        }
+    }
+
     #[must_use]
     pub const fn framework_owns_lifecycle(self) -> bool {
         matches!(self, Self::FrameworkManaged)
