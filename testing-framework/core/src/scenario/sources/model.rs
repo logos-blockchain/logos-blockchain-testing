@@ -70,19 +70,6 @@ impl ExternalNodeSource {
     }
 }
 
-/// Planned readiness strategy for mixed managed/attached/external sources.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
-pub enum SourceReadinessPolicy {
-    /// Phase 1 default: require every known node to pass readiness checks.
-    #[default]
-    AllReady,
-    /// Optional relaxed policy for large/partial environments.
-    Quorum,
-    /// Future policy for per-source constraints (for example managed minimum
-    /// plus overall quorum).
-    SourceAware,
-}
-
 /// Source model that makes invalid managed+attached combinations
 /// unrepresentable by type.
 #[derive(Clone, Debug, Eq, PartialEq)]

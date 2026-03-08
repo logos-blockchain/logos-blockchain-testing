@@ -1,4 +1,4 @@
-use crate::scenario::{AttachSource, ExternalNodeSource, ScenarioSources, SourceReadinessPolicy};
+use crate::scenario::{AttachSource, ExternalNodeSource, ScenarioSources};
 
 /// Explicit descriptor for managed node sourcing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,7 +33,6 @@ pub(crate) enum SourceOrchestrationMode {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceOrchestrationPlan {
     mode: SourceOrchestrationMode,
-    readiness_policy: SourceReadinessPolicy,
 }
 
 /// Validation failure while building orchestration plan from sources.
@@ -46,14 +45,10 @@ pub enum SourceOrchestrationPlanError {
 impl SourceOrchestrationPlan {
     pub fn try_from_sources(
         sources: &ScenarioSources,
-        readiness_policy: SourceReadinessPolicy,
     ) -> Result<Self, SourceOrchestrationPlanError> {
         let mode = mode_from_sources(sources);
 
-        Ok(Self {
-            mode,
-            readiness_policy,
-        })
+        Ok(Self { mode })
     }
 
     #[must_use]
@@ -74,14 +69,13 @@ impl SourceOrchestrationPlan {
 #[cfg(test)]
 mod tests {
     use super::{SourceOrchestrationMode, SourceOrchestrationPlan};
-    use crate::scenario::{AttachSource, ScenarioSources, SourceReadinessPolicy};
+    use crate::scenario::{AttachSource, ScenarioSources};
 
     #[test]
     fn attached_sources_are_planned() {
         let sources = ScenarioSources::attached(AttachSource::compose(vec!["node-0".to_string()]));
-        let plan =
-            SourceOrchestrationPlan::try_from_sources(&sources, SourceReadinessPolicy::AllReady)
-                .expect("attached sources should build a source orchestration plan");
+        let plan = SourceOrchestrationPlan::try_from_sources(&sources)
+            .expect("attached sources should build a source orchestration plan");
 
         assert!(matches!(
             plan.mode(),

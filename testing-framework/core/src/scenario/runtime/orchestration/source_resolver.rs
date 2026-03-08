@@ -41,10 +41,7 @@ pub enum SourceResolveError {
 pub fn build_source_orchestration_plan<E: Application, Caps>(
     scenario: &Scenario<E, Caps>,
 ) -> Result<SourceOrchestrationPlan, SourceOrchestrationPlanError> {
-    SourceOrchestrationPlan::try_from_sources(
-        scenario.sources(),
-        scenario.source_readiness_policy(),
-    )
+    SourceOrchestrationPlan::try_from_sources(scenario.sources())
 }
 
 /// Resolves runtime source nodes via unified providers from orchestration plan.
