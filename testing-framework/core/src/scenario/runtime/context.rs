@@ -97,13 +97,8 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    pub const fn expectation_cooldown(&self) -> Duration {
+    pub(crate) const fn expectation_cooldown(&self) -> Duration {
         self.expectation_cooldown
-    }
-
-    #[must_use]
-    pub const fn run_metrics(&self) -> RunMetrics {
-        self.metrics
     }
 
     #[must_use]
@@ -112,7 +107,7 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    pub const fn controls_nodes(&self) -> bool {
+    pub(crate) const fn controls_nodes(&self) -> bool {
         self.node_control.is_some()
     }
 
