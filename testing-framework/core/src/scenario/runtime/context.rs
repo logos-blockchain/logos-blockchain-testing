@@ -24,6 +24,7 @@ pub struct RunContext<E: Application> {
 impl<E: Application> RunContext<E> {
     /// Builds a run context from prepared deployment/runtime artifacts.
     #[must_use]
+    #[doc(hidden)]
     pub fn new(
         descriptors: E::Deployment,
         node_clients: NodeClients<E>,
@@ -48,6 +49,7 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
+    #[doc(hidden)]
     pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
         self.cluster_wait = Some(cluster_wait);
         self
@@ -137,6 +139,7 @@ impl<E: Application> Drop for RunHandle<E> {
 impl<E: Application> RunHandle<E> {
     #[must_use]
     /// Build a handle from owned context and optional cleanup guard.
+    #[doc(hidden)]
     pub fn new(context: RunContext<E>, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
         Self {
             run_context: Arc::new(context),
