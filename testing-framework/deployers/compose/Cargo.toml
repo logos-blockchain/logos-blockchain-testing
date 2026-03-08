@@ -17,6 +17,7 @@ anyhow                 = "1"
 async-trait            = { workspace = true }
 reqwest                = { features = ["json"], workspace = true }
 serde                  = { features = ["derive"], workspace = true }
+serde_json             = { workspace = true }
 tempfile               = { workspace = true }
 tera                   = "1.19"
 testing-framework-core = { path = "../../core" }
@@ -30,5 +31,4 @@ uuid                   = { features = ["v4"], version = "1" }
 [dev-dependencies]
 groth16                       = { workspace = true }
 key-management-system-service = { workspace = true }
-serde_json                    = { workspace = true }
 zksign                        = { workspace = true }

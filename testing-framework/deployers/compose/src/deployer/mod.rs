@@ -1,3 +1,4 @@
+mod attach_provider;
 pub mod clients;
 pub mod orchestrator;
 pub mod ports;
@@ -8,8 +9,8 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    CleanupGuard, Deployer, FeedHandle, ObservabilityCapabilityProvider, RequiresNodeControl,
-    Runner, Scenario,
+    AttachSource, CleanupGuard, Deployer, DynError, FeedHandle, ObservabilityCapabilityProvider,
+    RequiresNodeControl, Runner, Scenario,
 };
 
 use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
@@ -19,6 +20,50 @@ use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanu
 pub struct ComposeDeployer<E: ComposeDeployEnv> {
     readiness_checks: bool,
     _env: PhantomData<E>,
+}
+
+/// Compose deployment metadata returned by compose-specific deployment APIs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComposeDeploymentMetadata {
+    /// Docker Compose project name used for this deployment when available.
+    pub project_name: Option<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum ComposeMetadataError {
+    #[error("compose deployment metadata has no project name")]
+    MissingProjectName,
+}
+
+impl ComposeDeploymentMetadata {
+    /// Returns project name when deployment is bound to a specific compose
+    /// project.
+    #[must_use]
+    pub fn project_name(&self) -> Option<&str> {
+        self.project_name.as_deref()
+    }
+
+    /// Builds an attach source for the same compose project using deployer
+    /// discovery to resolve services.
+    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+        let project_name = self
+            .project_name()
+            .ok_or(ComposeMetadataError::MissingProjectName)?;
+
+        Ok(AttachSource::compose(Vec::new()).with_project(project_name.to_owned()))
+    }
+
+    /// Builds an attach source for the same compose project.
+    pub fn attach_source_for_services(
+        &self,
+        services: Vec<String>,
+    ) -> Result<AttachSource, DynError> {
+        let project_name = self
+            .project_name()
+            .ok_or(ComposeMetadataError::MissingProjectName)?;
+
+        Ok(AttachSource::compose(services).with_project(project_name.to_owned()))
+    }
 }
 
 impl<E: ComposeDeployEnv> Default for ComposeDeployer<E> {
@@ -40,6 +85,25 @@ impl<E: ComposeDeployEnv> ComposeDeployer<E> {
     pub const fn with_readiness(mut self, enabled: bool) -> Self {
         self.readiness_checks = enabled;
         self
+    }
+
+    /// Deploy and return compose-specific metadata alongside the generic
+    /// runner.
+    pub async fn deploy_with_metadata<Caps>(
+        &self,
+        scenario: &Scenario<E, Caps>,
+    ) -> Result<(Runner<E>, ComposeDeploymentMetadata), ComposeRunnerError>
+    where
+        Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
+    {
+        let deployer = Self {
+            readiness_checks: self.readiness_checks,
+            _env: PhantomData,
+        };
+
+        orchestrator::DeploymentOrchestrator::new(deployer)
+            .deploy_with_metadata(scenario)
+            .await
     }
 }
 

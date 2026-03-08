@@ -1,3 +1,4 @@
+pub mod attached;
 pub mod commands;
 pub mod control;
 pub mod platform;

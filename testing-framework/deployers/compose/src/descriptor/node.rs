@@ -9,6 +9,7 @@ pub struct NodeDescriptor {
     volumes: Vec<String>,
     extra_hosts: Vec<String>,
     ports: Vec<String>,
+    api_container_port: u16,
     environment: Vec<EnvEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
@@ -49,6 +50,7 @@ impl NodeDescriptor {
         volumes: Vec<String>,
         extra_hosts: Vec<String>,
         ports: Vec<String>,
+        api_container_port: u16,
         environment: Vec<EnvEntry>,
         platform: Option<String>,
     ) -> Self {
@@ -59,6 +61,7 @@ impl NodeDescriptor {
             volumes,
             extra_hosts,
             ports,
+            api_container_port,
             environment,
             platform,
         }
@@ -76,5 +79,10 @@ impl NodeDescriptor {
     #[cfg(test)]
     pub fn environment(&self) -> &[EnvEntry] {
         &self.environment
+    }
+
+    #[cfg(test)]
+    pub fn api_container_port(&self) -> u16 {
+        self.api_container_port
     }
 }

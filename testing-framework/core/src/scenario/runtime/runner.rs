@@ -27,6 +27,12 @@ pub struct Runner<E: Application> {
     cleanup_guard: Option<Box<dyn CleanupGuard>>,
 }
 
+impl<E: Application> Drop for Runner<E> {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
 impl<E: Application> Runner<E> {
     /// Construct a runner from the run context and optional cleanup guard.
     #[must_use]
@@ -41,6 +47,10 @@ impl<E: Application> Runner<E> {
     #[must_use]
     pub fn context(&self) -> Arc<RunContext<E>> {
         Arc::clone(&self.context)
+    }
+
+    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
+        self.context.wait_network_ready().await
     }
 
     pub(crate) fn cleanup(&mut self) {

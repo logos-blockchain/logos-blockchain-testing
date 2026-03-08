@@ -25,7 +25,7 @@ pub use capabilities::{
     StartNodeOptions, StartedNode,
 };
 pub use common_builder_ext::CoreBuilderExt;
-pub use control::NodeControlHandle;
+pub use control::{ClusterWaitHandle, NodeControlHandle};
 #[doc(hidden)]
 pub use definition::{
     Builder as CoreBuilder, // internal adapter-facing core builder
@@ -37,7 +37,8 @@ pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
-    BorrowedNode, BorrowedOrigin, CleanupGuard, Deployer, Feed, FeedHandle, FeedRuntime,
+    ApplicationExternalProvider, AttachProvider, AttachProviderError, AttachedNode, BorrowedNode,
+    BorrowedOrigin, CleanupGuard, Deployer, Feed, FeedHandle, FeedRuntime,
     HttpReadinessRequirement, ManagedNode, ManagedSource, NodeClients, NodeHandle, NodeInventory,
     ReadinessError, RunContext, RunHandle, RunMetrics, Runner, ScenarioError,
     SourceOrchestrationPlan, SourceProviders, StabilizationConfig, StaticManagedProvider,
@@ -46,9 +47,10 @@ pub use runtime::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
         PrometheusEndpoint, PrometheusInstantSample,
     },
-    orchestrate_sources, resolve_sources, spawn_feed, wait_for_http_ports,
-    wait_for_http_ports_with_host, wait_for_http_ports_with_host_and_requirement,
-    wait_for_http_ports_with_requirement, wait_http_readiness, wait_until_stable,
+    orchestrate_sources, orchestrate_sources_with_providers, resolve_sources, spawn_feed,
+    wait_for_http_ports, wait_for_http_ports_with_host,
+    wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
+    wait_http_readiness, wait_until_stable,
 };
 pub use sources::{AttachSource, ExternalNodeSource, ScenarioSources, SourceReadinessPolicy};
 pub use workload::Workload;

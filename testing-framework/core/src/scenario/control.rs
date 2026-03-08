@@ -33,3 +33,11 @@ pub trait NodeControlHandle<E: Application>: Send + Sync {
         None
     }
 }
+
+/// Deployer-agnostic wait surface for cluster readiness checks.
+#[async_trait]
+pub trait ClusterWaitHandle<E: Application>: Send + Sync {
+    async fn wait_network_ready(&self) -> Result<(), DynError> {
+        Err("wait_network_ready not supported by this deployer".into())
+    }
+}
