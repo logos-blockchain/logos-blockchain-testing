@@ -51,8 +51,6 @@ pub use runtime::{
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
     wait_http_readiness, wait_until_stable,
 };
-#[doc(hidden)]
-pub use sources::{AttachSource, ScenarioSources};
 pub use sources::{ExistingCluster, ExternalNodeSource};
 pub use workload::Workload;
 

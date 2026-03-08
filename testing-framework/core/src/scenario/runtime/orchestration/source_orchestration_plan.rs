@@ -1,4 +1,4 @@
-use crate::scenario::{ExistingCluster, ExternalNodeSource, ScenarioSources};
+use crate::scenario::{ExistingCluster, ExternalNodeSource, sources::ScenarioSources};
 
 /// Explicit descriptor for managed node sourcing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,7 +43,7 @@ pub enum SourceOrchestrationPlanError {
 }
 
 impl SourceOrchestrationPlan {
-    pub fn try_from_sources(
+    pub(crate) fn try_from_sources(
         sources: &ScenarioSources,
     ) -> Result<Self, SourceOrchestrationPlanError> {
         let mode = mode_from_sources(sources);
@@ -69,12 +69,12 @@ impl SourceOrchestrationPlan {
 #[cfg(test)]
 mod tests {
     use super::{SourceOrchestrationMode, SourceOrchestrationPlan};
-    use crate::scenario::{ExistingCluster, ScenarioSources};
+    use crate::scenario::{ExistingCluster, sources::ScenarioSources};
 
     #[test]
     fn attached_sources_are_planned() {
-        let sources =
-            ScenarioSources::attached(ExistingCluster::compose(vec!["node-0".to_string()]));
+        let sources = ScenarioSources::default()
+            .with_attach(ExistingCluster::compose(vec!["node-0".to_string()]));
         let plan = SourceOrchestrationPlan::try_from_sources(&sources)
             .expect("attached sources should build a source orchestration plan");
 

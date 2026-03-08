@@ -5,13 +5,14 @@ use tracing::{debug, info};
 
 use super::{
     Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
-    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability, ScenarioSources,
+    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
     runtime::{
         context::RunMetrics,
         orchestration::{SourceOrchestrationPlan, SourceOrchestrationPlanError},
     },
+    sources::ScenarioSources,
     workload::Workload,
 };
 use crate::topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, DynTopologyError};
@@ -110,12 +111,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     #[must_use]
     pub const fn deployment_policy(&self) -> DeploymentPolicy {
         self.deployment_policy
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn sources(&self) -> &ScenarioSources {
-        &self.sources
     }
 
     #[must_use]
