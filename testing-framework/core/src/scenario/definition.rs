@@ -405,14 +405,20 @@ impl<E: Application> ScenarioBuilder<E> {
     }
 
     #[must_use]
-    pub fn enable_node_control(self) -> NodeControlScenarioBuilder<E> {
+    pub fn with_node_control(self) -> NodeControlScenarioBuilder<E> {
         NodeControlScenarioBuilder {
             inner: self.inner.with_capabilities(NodeControlCapability),
         }
     }
 
     #[must_use]
-    pub fn enable_observability(self) -> ObservabilityScenarioBuilder<E> {
+    #[doc(hidden)]
+    pub fn enable_node_control(self) -> NodeControlScenarioBuilder<E> {
+        self.with_node_control()
+    }
+
+    #[must_use]
+    pub fn with_observability(self) -> ObservabilityScenarioBuilder<E> {
         ObservabilityScenarioBuilder {
             inner: self
                 .inner
@@ -420,11 +426,17 @@ impl<E: Application> ScenarioBuilder<E> {
         }
     }
 
+    #[must_use]
+    #[doc(hidden)]
+    pub fn enable_observability(self) -> ObservabilityScenarioBuilder<E> {
+        self.with_observability()
+    }
+
     pub fn build(self) -> Result<Scenario<E>, ScenarioBuildError> {
         self.inner.build()
     }
 
-    pub(crate) fn with_observability(
+    pub(crate) fn with_observability_capability(
         self,
         observability: ObservabilityCapability,
     ) -> ObservabilityScenarioBuilder<E> {
@@ -842,13 +854,25 @@ where
 
 impl<E: Application> Builder<E, ()> {
     #[must_use]
-    pub fn enable_node_control(self) -> Builder<E, NodeControlCapability> {
+    pub fn with_node_control(self) -> Builder<E, NodeControlCapability> {
         self.with_capabilities(NodeControlCapability)
     }
 
     #[must_use]
-    pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
+    #[doc(hidden)]
+    pub fn enable_node_control(self) -> Builder<E, NodeControlCapability> {
+        self.with_node_control()
+    }
+
+    #[must_use]
+    pub fn with_observability(self) -> Builder<E, ObservabilityCapability> {
         self.with_capabilities(ObservabilityCapability::default())
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
+        self.with_observability()
     }
 }
 

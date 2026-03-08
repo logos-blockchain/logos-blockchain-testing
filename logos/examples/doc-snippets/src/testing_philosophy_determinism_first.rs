@@ -16,7 +16,7 @@ pub fn determinism_first() -> SnippetResult<()> {
 
     // Separate: chaos test (introduces randomness)
     let _chaos_plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-        .enable_node_control()
+        .with_node_control()
         .chaos_with(|c| {
             c.restart()
                 .min_delay(Duration::from_secs(30))

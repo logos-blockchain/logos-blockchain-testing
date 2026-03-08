@@ -7,7 +7,7 @@ use testing_framework_workflows::{ChaosBuilderExt, ScenarioBuilderExt};
 
 pub async fn aggressive_chaos_test() -> Result<()> {
     let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(4))
-        .enable_node_control()
+        .with_node_control()
         .wallets(50)
         .transactions_with(|txs| txs.rate(10).users(20))
         .chaos_with(|c| {

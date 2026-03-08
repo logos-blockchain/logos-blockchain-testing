@@ -8,7 +8,7 @@ use crate::SnippetResult;
 pub fn chaos_plan()
 -> SnippetResult<testing_framework_core::scenario::Scenario<NodeControlCapability>> {
     ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-        .enable_node_control() // Enable node control capability
+        .with_node_control() // Enable node control capability
         .chaos_with(|c| {
             c.restart() // Random restart chaos
                 .min_delay(Duration::from_secs(30)) // Min time between restarts

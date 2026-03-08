@@ -63,7 +63,7 @@ impl CoreBuilderExt for ScenarioBuilder {
 
 impl CoreBuilderExt for NodeControlScenarioBuilder<LbcExtEnv> {
     fn deployment_with(f: impl FnOnce(DeploymentBuilder) -> DeploymentBuilder) -> Self {
-        ScenarioBuilder::deployment_with(f).enable_node_control()
+        ScenarioBuilder::deployment_with(f).with_node_control()
     }
 
     fn with_wallet_config(self, wallet: WalletConfig) -> Self {
@@ -82,7 +82,7 @@ impl CoreBuilderExt for NodeControlScenarioBuilder<LbcExtEnv> {
 
 impl CoreBuilderExt for ObservabilityScenarioBuilder<LbcExtEnv> {
     fn deployment_with(f: impl FnOnce(DeploymentBuilder) -> DeploymentBuilder) -> Self {
-        ScenarioBuilder::deployment_with(f).enable_observability()
+        ScenarioBuilder::deployment_with(f).with_observability()
     }
 
     fn with_wallet_config(self, wallet: WalletConfig) -> Self {
