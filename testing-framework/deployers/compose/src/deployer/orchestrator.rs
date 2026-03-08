@@ -71,7 +71,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             }
         })?;
 
-        if scenario.sources().uses_existing_cluster() {
+        if scenario.uses_existing_cluster() {
             return self
                 .deploy_attached_only::<Caps>(scenario, source_plan)
                 .await

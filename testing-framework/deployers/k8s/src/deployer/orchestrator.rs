@@ -179,7 +179,7 @@ where
 
     let observability = resolve_observability_inputs(scenario.capabilities())?;
 
-    if scenario.sources().uses_existing_cluster() {
+    if scenario.uses_existing_cluster() {
         let runner = deploy_attached_only::<E, Caps>(scenario, source_plan, observability).await?;
         return Ok((runner, attached_metadata(scenario)));
     }

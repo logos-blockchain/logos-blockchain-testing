@@ -113,6 +113,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
+    #[doc(hidden)]
     pub fn sources(&self) -> &ScenarioSources {
         &self.sources
     }
@@ -120,6 +121,11 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     #[must_use]
     pub fn existing_cluster(&self) -> Option<&AttachSource> {
         self.sources.existing_cluster()
+    }
+
+    #[must_use]
+    pub const fn uses_existing_cluster(&self) -> bool {
+        self.sources.uses_existing_cluster()
     }
 
     #[must_use]
