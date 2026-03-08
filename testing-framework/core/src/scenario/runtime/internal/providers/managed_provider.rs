@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::scenario::{Application, DynError, runtime::orchestration::ManagedSource};
+use crate::scenario::{Application, DynError, runtime::ManagedSource};
 
 /// Managed node produced by the managed provider path.
 #[derive(Clone, Debug)]

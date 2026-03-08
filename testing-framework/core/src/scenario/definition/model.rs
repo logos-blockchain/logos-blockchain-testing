@@ -7,8 +7,7 @@ use crate::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError,
         ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, expectation::Expectation,
-        runtime::orchestration::SourceOrchestrationPlan, sources::ScenarioSources,
-        workload::Workload,
+        runtime::SourceOrchestrationPlan, sources::ScenarioSources, workload::Workload,
     },
     topology::DynTopologyError,
 };

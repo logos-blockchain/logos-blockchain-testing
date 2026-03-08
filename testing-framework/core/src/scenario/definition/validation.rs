@@ -6,10 +6,7 @@ use super::model::ScenarioBuildError;
 use crate::scenario::{
     Application, ClusterControlProfile, ClusterMode, DynError, RequiresNodeControl,
     expectation::Expectation,
-    runtime::{
-        context::RunMetrics,
-        orchestration::{SourceOrchestrationPlan, SourceOrchestrationPlanError},
-    },
+    runtime::{SourceOrchestrationPlan, SourceOrchestrationPlanError, context::RunMetrics},
     sources::ScenarioSources,
     workload::Workload,
 };

@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
+use super::{SourceOrchestrationMode, SourceOrchestrationPlan, SourceOrchestrationPlanError};
 use crate::scenario::{
     Application, DynError, NodeClients, Scenario,
     runtime::{
-        orchestration::{
-            SourceOrchestrationMode, SourceOrchestrationPlan, SourceOrchestrationPlanError,
-        },
-        providers::{
-            ApplicationExternalProvider, AttachProviderError, AttachedNode, ExternalNode,
-            ExternalProviderError, ManagedProviderError, ManagedProvisionedNode, SourceProviders,
-            StaticManagedProvider,
+        ApplicationExternalProvider, AttachProviderError, AttachedNode, SourceProviders,
+        StaticManagedProvider,
+        internal::{
+            ExternalNode, ExternalProviderError, ManagedProviderError, ManagedProvisionedNode,
         },
     },
 };
