@@ -45,8 +45,8 @@ impl<E: Application> Runner<E> {
 
     /// Access the underlying run context.
     #[must_use]
-    pub fn context(&self) -> Arc<RunContext<E>> {
-        Arc::clone(&self.context)
+    pub fn context(&self) -> &RunContext<E> {
+        self.context.as_ref()
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), DynError> {
@@ -71,7 +71,7 @@ impl<E: Application> Runner<E> {
     where
         Caps: Send + Sync,
     {
-        let context = self.context();
+        let context = Arc::clone(&self.context);
         let run_duration = scenario.duration();
         let workloads = scenario.workloads().to_vec();
         let expectation_count = scenario.expectations().len();
