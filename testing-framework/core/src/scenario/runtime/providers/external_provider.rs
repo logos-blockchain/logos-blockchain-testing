@@ -71,11 +71,11 @@ impl<E: Application> ExternalProvider<E> for ApplicationExternalProvider {
             .map(|source| {
                 E::external_node_client(source)
                     .map(|client| ExternalNode {
-                        identity_hint: Some(source.label.clone()),
+                        identity_hint: Some(source.label().to_string()),
                         client,
                     })
                     .map_err(|build_error| ExternalProviderError::Build {
-                        source_label: source.label.clone(),
+                        source_label: source.label().to_string(),
                         source: build_error,
                     })
             })

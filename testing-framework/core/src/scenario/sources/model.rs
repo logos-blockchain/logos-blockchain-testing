@@ -49,14 +49,24 @@ impl AttachSource {
 /// inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExternalNodeSource {
-    pub label: String,
-    pub endpoint: String,
+    label: String,
+    endpoint: String,
 }
 
 impl ExternalNodeSource {
     #[must_use]
     pub fn new(label: String, endpoint: String) -> Self {
         Self { label, endpoint }
+    }
+
+    #[must_use]
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    #[must_use]
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
     }
 }
 
