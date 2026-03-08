@@ -3,11 +3,12 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, DeploymentPolicy, FeedHandle,
-        FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
-        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
-        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        ApplicationExternalProvider, CleanupGuard, ClusterMode, ClusterWaitHandle,
+        DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
+        RequiresNodeControl, Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan,
+        SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
+        orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -70,7 +71,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             }
         })?;
 
-        if scenario.uses_existing_cluster() {
+        if matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
             return self
                 .deploy_attached_only::<Caps>(scenario, source_plan)
                 .await

@@ -4,7 +4,7 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
+    Application, ClusterMode, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
     HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
@@ -119,8 +119,8 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
-    pub const fn uses_existing_cluster(&self) -> bool {
-        self.sources.uses_existing_cluster()
+    pub const fn cluster_mode(&self) -> ClusterMode {
+        self.sources.cluster_mode()
     }
 
     #[must_use]
@@ -135,13 +135,18 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
+    pub const fn uses_existing_cluster(&self) -> bool {
+        matches!(self.cluster_mode(), ClusterMode::ExistingCluster)
+    }
+
+    #[must_use]
     pub const fn is_managed(&self) -> bool {
-        self.sources.is_managed()
+        matches!(self.cluster_mode(), ClusterMode::Managed)
     }
 
     #[must_use]
     pub const fn is_external_only(&self) -> bool {
-        self.sources.is_external_only()
+        matches!(self.cluster_mode(), ClusterMode::ExternalOnly)
     }
 
     #[must_use]

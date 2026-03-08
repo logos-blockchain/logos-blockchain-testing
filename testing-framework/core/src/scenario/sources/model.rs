@@ -119,6 +119,14 @@ impl ExternalNodeSource {
     }
 }
 
+/// High-level source mode of a scenario cluster.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClusterMode {
+    Managed,
+    ExistingCluster,
+    ExternalOnly,
+}
+
 /// Source model that makes invalid managed+attached combinations
 /// unrepresentable by type.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -187,17 +195,11 @@ impl ScenarioSources {
     }
 
     #[must_use]
-    pub(crate) const fn is_managed(&self) -> bool {
-        matches!(self, Self::Managed { .. })
-    }
-
-    #[must_use]
-    pub(crate) const fn uses_existing_cluster(&self) -> bool {
-        matches!(self, Self::Attached { .. })
-    }
-
-    #[must_use]
-    pub(crate) const fn is_external_only(&self) -> bool {
-        matches!(self, Self::ExternalOnly { .. })
+    pub(crate) const fn cluster_mode(&self) -> ClusterMode {
+        match self {
+            Self::Managed { .. } => ClusterMode::Managed,
+            Self::Attached { .. } => ClusterMode::ExistingCluster,
+            Self::ExternalOnly { .. } => ClusterMode::ExternalOnly,
+        }
     }
 }

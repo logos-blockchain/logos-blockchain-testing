@@ -5,11 +5,12 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, Deployer,
-        DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError,
-        NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl,
-        Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders,
-        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
+        Application, ApplicationExternalProvider, CleanupGuard, ClusterMode, ClusterWaitHandle,
+        Deployer, DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics,
+        MetricsError, NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs,
+        RequiresNodeControl, Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan,
+        SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
+        orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -179,7 +180,7 @@ where
 
     let observability = resolve_observability_inputs(scenario.capabilities())?;
 
-    if scenario.uses_existing_cluster() {
+    if matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
         let runner = deploy_attached_only::<E, Caps>(scenario, source_plan, observability).await?;
         return Ok((runner, attached_metadata(scenario)));
     }

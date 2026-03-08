@@ -1,4 +1,4 @@
-use crate::scenario::{ExistingCluster, ExternalNodeSource, sources::ScenarioSources};
+use crate::scenario::{ClusterMode, ExistingCluster, ExternalNodeSource, sources::ScenarioSources};
 
 /// Explicit descriptor for managed node sourcing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,17 +89,32 @@ mod tests {
 }
 
 fn mode_from_sources(sources: &ScenarioSources) -> SourceOrchestrationMode {
-    match sources {
-        ScenarioSources::Managed { external } => SourceOrchestrationMode::Managed {
-            managed: ManagedSource::DeployerManaged,
-            external: external.clone(),
+    match sources.cluster_mode() {
+        ClusterMode::Managed => match sources {
+            ScenarioSources::Managed { external } => SourceOrchestrationMode::Managed {
+                managed: ManagedSource::DeployerManaged,
+                external: external.clone(),
+            },
+            ScenarioSources::Attached { .. } | ScenarioSources::ExternalOnly { .. } => {
+                unreachable!("cluster mode and source storage must stay aligned")
+            }
         },
-        ScenarioSources::Attached { attach, external } => SourceOrchestrationMode::Attached {
-            attach: attach.clone(),
-            external: external.clone(),
+        ClusterMode::ExistingCluster => match sources {
+            ScenarioSources::Attached { attach, external } => SourceOrchestrationMode::Attached {
+                attach: attach.clone(),
+                external: external.clone(),
+            },
+            ScenarioSources::Managed { .. } | ScenarioSources::ExternalOnly { .. } => {
+                unreachable!("cluster mode and source storage must stay aligned")
+            }
         },
-        ScenarioSources::ExternalOnly { external } => SourceOrchestrationMode::ExternalOnly {
-            external: external.clone(),
+        ClusterMode::ExternalOnly => match sources {
+            ScenarioSources::ExternalOnly { external } => SourceOrchestrationMode::ExternalOnly {
+                external: external.clone(),
+            },
+            ScenarioSources::Managed { .. } | ScenarioSources::Attached { .. } => {
+                unreachable!("cluster mode and source storage must stay aligned")
+            }
         },
     }
 }
