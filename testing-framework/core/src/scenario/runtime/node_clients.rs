@@ -1,6 +1,6 @@
 use rand::{seq::SliceRandom as _, thread_rng};
 
-use super::inventory::{BorrowedNode, ManagedNode, NodeInventory};
+use super::inventory::NodeInventory;
 use crate::scenario::{Application, DynError};
 
 /// Collection of API clients for the node set.
@@ -77,30 +77,6 @@ impl<E: Application> NodeClients<E> {
 
     pub fn clear(&self) {
         self.inventory.clear();
-    }
-
-    #[must_use]
-    /// Returns a cloned snapshot of managed node handles.
-    pub fn managed_nodes(&self) -> Vec<ManagedNode<E>> {
-        self.inventory.managed_nodes()
-    }
-
-    #[must_use]
-    /// Returns a cloned snapshot of borrowed node handles.
-    pub fn borrowed_nodes(&self) -> Vec<BorrowedNode<E>> {
-        self.inventory.borrowed_nodes()
-    }
-
-    #[must_use]
-    /// Finds a managed node by canonical identity.
-    pub fn find_managed(&self, identity: &str) -> Option<ManagedNode<E>> {
-        self.inventory.find_managed(identity)
-    }
-
-    #[must_use]
-    /// Finds a borrowed node by canonical identity.
-    pub fn find_borrowed(&self, identity: &str) -> Option<BorrowedNode<E>> {
-        self.inventory.find_borrowed(identity)
     }
 
     fn shuffled_snapshot(&self) -> Vec<E::NodeClient> {
