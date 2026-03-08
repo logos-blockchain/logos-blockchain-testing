@@ -56,12 +56,14 @@ impl<E: K8sDeployEnv> K8sAttachProvider<E> {
 }
 
 impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
-    pub(super) fn new(client: Client, source: ExistingCluster) -> Self {
-        Self {
+    pub(super) fn try_new(client: Client, source: &ExistingCluster) -> Result<Self, DynError> {
+        let _ = k8s_wait_request(source)?;
+
+        Ok(Self {
             client,
-            source,
+            source: source.clone(),
             _env: PhantomData,
-        }
+        })
     }
 }
 

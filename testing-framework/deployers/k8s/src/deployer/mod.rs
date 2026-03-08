@@ -22,6 +22,18 @@ enum K8sMetadataError {
 }
 
 impl K8sDeploymentMetadata {
+    #[must_use]
+    pub fn from_existing_cluster(cluster: Option<&ExistingCluster>) -> Self {
+        Self {
+            namespace: cluster
+                .and_then(ExistingCluster::k8s_namespace)
+                .map(ToOwned::to_owned),
+            label_selector: cluster
+                .and_then(ExistingCluster::k8s_label_selector)
+                .map(ToOwned::to_owned),
+        }
+    }
+
     /// Returns namespace when deployment is bound to a specific namespace.
     #[must_use]
     pub fn namespace(&self) -> Option<&str> {

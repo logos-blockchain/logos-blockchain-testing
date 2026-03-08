@@ -249,19 +249,7 @@ where
     E: K8sDeployEnv,
     Caps: Send + Sync,
 {
-    let namespace = scenario
-        .existing_cluster()
-        .and_then(|attach| attach.k8s_namespace())
-        .map(ToOwned::to_owned);
-    let label_selector = scenario
-        .existing_cluster()
-        .and_then(|attach| attach.k8s_label_selector())
-        .map(ToOwned::to_owned);
-
-    K8sDeploymentMetadata {
-        namespace,
-        label_selector,
-    }
+    K8sDeploymentMetadata::from_existing_cluster(scenario.existing_cluster())
 }
 
 fn attached_cluster_wait<E, Caps>(
@@ -277,11 +265,10 @@ where
         .ok_or_else(|| K8sRunnerError::InternalInvariant {
             message: "k8s attached cluster wait requested outside attached source mode".to_owned(),
         })?;
+    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, attach)
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
-    Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
-        client,
-        attach.clone(),
-    )))
+    Ok(Arc::new(cluster_wait))
 }
 
 fn managed_cluster_wait<E: K8sDeployEnv>(
@@ -292,11 +279,10 @@ fn managed_cluster_wait<E: K8sDeployEnv>(
     let attach_source = metadata
         .existing_cluster()
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, &attach_source)
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
-    Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
-        client,
-        attach_source,
-    )))
+    Ok(Arc::new(cluster_wait))
 }
 
 fn client_from_cluster(cluster: &Option<ClusterEnvironment>) -> Result<Client, K8sRunnerError> {

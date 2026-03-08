@@ -3,12 +3,11 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, DeploymentPolicy,
-        ExistingCluster, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
-        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, RunContext, Runner, Scenario, SourceOrchestrationPlan,
-        SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
-        orchestrate_sources_with_providers,
+        ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, DeploymentPolicy, FeedHandle,
+        FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, RunContext,
+        Runner, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+        build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -219,20 +218,10 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "attached node control requested outside attached source mode",
             })?;
+        let node_control = ComposeAttachedNodeControl::try_from_existing_cluster(attach)
+            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
 
-        let Some(project_name) = attach
-            .compose_project()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        else {
-            return Err(ComposeRunnerError::InternalInvariant {
-                message: "attached compose mode requires explicit project name for node control",
-            });
-        };
-
-        Ok(Some(Arc::new(ComposeAttachedNodeControl {
-            project_name: project_name.to_owned(),
-        }) as Arc<dyn NodeControlHandle<E>>))
+        Ok(Some(Arc::new(node_control) as Arc<dyn NodeControlHandle<E>>))
     }
 
     fn attached_cluster_wait<Caps>(
@@ -247,11 +236,10 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "compose attached cluster wait requested outside attached source mode",
             })?;
+        let cluster_wait = ComposeAttachedClusterWait::<E>::try_new(compose_runner_host(), attach)
+            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
 
-        Ok(Arc::new(ComposeAttachedClusterWait::<E>::new(
-            compose_runner_host(),
-            attach.clone(),
-        )))
+        Ok(Arc::new(cluster_wait))
     }
 
     async fn build_runner<Caps>(
@@ -268,7 +256,8 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     {
         let telemetry = observability.telemetry_handle()?;
         let node_control = self.maybe_node_control::<Caps>(&prepared.environment);
-        let cluster_wait = self.managed_cluster_wait(project_name);
+        let cluster_wait =
+            self.managed_cluster_wait(ComposeDeploymentMetadata::for_project(project_name))?;
 
         log_observability_endpoints(&observability);
         log_profiling_urls(&deployed.host, &deployed.host_ports);
@@ -312,11 +301,18 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
         })
     }
 
-    fn managed_cluster_wait(&self, project_name: String) -> Arc<dyn ClusterWaitHandle<E>> {
-        Arc::new(ComposeAttachedClusterWait::<E>::new(
-            compose_runner_host(),
-            ExistingCluster::compose_in_project(Vec::new(), project_name),
-        ))
+    fn managed_cluster_wait(
+        &self,
+        metadata: ComposeDeploymentMetadata,
+    ) -> Result<Arc<dyn ClusterWaitHandle<E>>, ComposeRunnerError> {
+        let existing_cluster = metadata
+            .existing_cluster()
+            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
+        let cluster_wait =
+            ComposeAttachedClusterWait::<E>::try_new(compose_runner_host(), &existing_cluster)
+                .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
+
+        Ok(Arc::new(cluster_wait))
     }
 
     fn log_deploy_start<Caps>(
@@ -372,12 +368,7 @@ where
     E: ComposeDeployEnv,
     Caps: Send + Sync,
 {
-    let project_name = scenario
-        .existing_cluster()
-        .and_then(|attach| attach.compose_project())
-        .map(ToOwned::to_owned);
-
-    ComposeDeploymentMetadata { project_name }
+    ComposeDeploymentMetadata::from_existing_cluster(scenario.existing_cluster())
 }
 
 struct DeployedNodes<E: ComposeDeployEnv> {

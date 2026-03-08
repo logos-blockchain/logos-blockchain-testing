@@ -42,12 +42,14 @@ impl<E: ComposeDeployEnv> ComposeAttachProvider<E> {
 }
 
 impl<E: ComposeDeployEnv> ComposeAttachedClusterWait<E> {
-    pub(super) fn new(host: String, source: ExistingCluster) -> Self {
-        Self {
+    pub(super) fn try_new(host: String, source: &ExistingCluster) -> Result<Self, DynError> {
+        let _ = compose_wait_request(source)?;
+
+        Ok(Self {
             host,
-            source,
+            source: source.clone(),
             _env: PhantomData,
-        }
+        })
     }
 }
 

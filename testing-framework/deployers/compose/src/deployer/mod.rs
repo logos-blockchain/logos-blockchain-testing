@@ -36,6 +36,22 @@ enum ComposeMetadataError {
 }
 
 impl ComposeDeploymentMetadata {
+    #[must_use]
+    pub fn for_project(project_name: String) -> Self {
+        Self {
+            project_name: Some(project_name),
+        }
+    }
+
+    #[must_use]
+    pub fn from_existing_cluster(cluster: Option<&ExistingCluster>) -> Self {
+        Self {
+            project_name: cluster
+                .and_then(ExistingCluster::compose_project)
+                .map(ToOwned::to_owned),
+        }
+    }
+
     /// Returns project name when deployment is bound to a specific compose
     /// project.
     #[must_use]
