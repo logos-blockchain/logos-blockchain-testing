@@ -3,11 +3,11 @@ use std::{env, sync::Arc, time::Duration};
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
-        ClusterWaitHandle, DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement,
-        Metrics, NodeClients, NodeControlHandle, ObservabilityCapabilityProvider,
-        ObservabilityInputs, RequiresNodeControl, Runner, RuntimeAssembly, Scenario,
-        SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+        Application, ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
+        ClusterWaitHandle, DeploymentPolicy, DynError, ExistingCluster, FeedHandle, FeedRuntime,
+        HttpReadinessRequirement, Metrics, NodeClients, NodeControlHandle,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
+        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
         build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
@@ -64,6 +64,12 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     where
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
+        validate_supported_cluster_mode(scenario).map_err(|source| {
+            ComposeRunnerError::SourceOrchestration {
+                source: source.into(),
+            }
+        })?;
+
         // Source planning is currently resolved here before deployer-specific setup.
         let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
             ComposeRunnerError::SourceOrchestration {
@@ -362,6 +368,56 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             effective_readiness = readiness_enabled,
             host,
             "compose deployment ready; handing control to scenario runner"
+        );
+    }
+}
+
+fn validate_supported_cluster_mode<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+) -> Result<(), DynError> {
+    if !matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
+        return Ok(());
+    }
+
+    let cluster = scenario
+        .existing_cluster()
+        .ok_or_else(|| DynError::from("existing-cluster mode requires an existing cluster"))?;
+
+    ensure_compose_existing_cluster(cluster)
+}
+
+fn ensure_compose_existing_cluster(cluster: &ExistingCluster) -> Result<(), DynError> {
+    if cluster.compose_project().is_some() && cluster.compose_services().is_some() {
+        return Ok(());
+    }
+
+    Err("compose deployer requires a compose existing-cluster descriptor".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::ExistingCluster;
+
+    use super::ensure_compose_existing_cluster;
+
+    #[test]
+    fn compose_cluster_validator_accepts_compose_descriptor() {
+        ensure_compose_existing_cluster(&ExistingCluster::for_compose_project(
+            "project".to_owned(),
+        ))
+        .expect("compose descriptor should be accepted");
+    }
+
+    #[test]
+    fn compose_cluster_validator_rejects_k8s_descriptor() {
+        let error = ensure_compose_existing_cluster(&ExistingCluster::for_k8s_selector(
+            "app=node".to_owned(),
+        ))
+        .expect_err("k8s descriptor should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "compose deployer requires a compose existing-cluster descriptor"
         );
     }
 }

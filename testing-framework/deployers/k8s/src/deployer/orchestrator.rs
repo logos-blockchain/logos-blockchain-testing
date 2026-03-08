@@ -6,11 +6,11 @@ use reqwest::Url;
 use testing_framework_core::{
     scenario::{
         Application, ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
-        ClusterWaitHandle, Deployer, DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement,
-        Metrics, MetricsError, NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, Runner, RuntimeAssembly, Scenario, SourceOrchestrationPlan,
-        SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
-        orchestrate_sources_with_providers,
+        ClusterWaitHandle, Deployer, DynError, ExistingCluster, FeedHandle, FeedRuntime,
+        HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
+        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+        build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -171,6 +171,9 @@ where
     E: K8sDeployEnv,
     Caps: ObservabilityCapabilityProvider + Send + Sync,
 {
+    validate_supported_cluster_mode(scenario)
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+
     // Source planning is currently resolved here before deployer-specific setup.
     let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
         K8sRunnerError::SourceOrchestration {
@@ -271,6 +274,54 @@ where
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
     Ok(Arc::new(cluster_wait))
+}
+
+fn validate_supported_cluster_mode<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+) -> Result<(), DynError> {
+    if !matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
+        return Ok(());
+    }
+
+    let cluster = scenario
+        .existing_cluster()
+        .ok_or_else(|| DynError::from("existing-cluster mode requires an existing cluster"))?;
+
+    ensure_k8s_existing_cluster(cluster)
+}
+
+fn ensure_k8s_existing_cluster(cluster: &ExistingCluster) -> Result<(), DynError> {
+    if cluster.k8s_label_selector().is_some() {
+        return Ok(());
+    }
+
+    Err("k8s deployer requires a k8s existing-cluster descriptor".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::ExistingCluster;
+
+    use super::ensure_k8s_existing_cluster;
+
+    #[test]
+    fn k8s_cluster_validator_accepts_k8s_descriptor() {
+        ensure_k8s_existing_cluster(&ExistingCluster::for_k8s_selector("app=node".to_owned()))
+            .expect("k8s descriptor should be accepted");
+    }
+
+    #[test]
+    fn k8s_cluster_validator_rejects_compose_descriptor() {
+        let error = ensure_k8s_existing_cluster(&ExistingCluster::for_compose_project(
+            "project".to_owned(),
+        ))
+        .expect_err("compose descriptor should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "k8s deployer requires a k8s existing-cluster descriptor"
+        );
+    }
 }
 
 fn managed_cluster_wait<E: K8sDeployEnv>(

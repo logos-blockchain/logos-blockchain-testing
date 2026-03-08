@@ -10,8 +10,8 @@ use std::{
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, CleanupGuard, ClusterControlProfile, Deployer, DeploymentPolicy, DynError,
-        FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        Application, CleanupGuard, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy,
+        DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
         NodeControlCapability, NodeControlHandle, RetryPolicy, Runner, RuntimeAssembly, Scenario,
         ScenarioError, SourceOrchestrationPlan, build_source_orchestration_plan, spawn_feed,
     },
@@ -187,6 +187,8 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         &self,
         scenario: &Scenario<E, ()>,
     ) -> Result<Runner<E>, ProcessDeployerError> {
+        validate_supported_cluster_mode(scenario)?;
+
         // Source planning is currently resolved here before node spawn/runtime setup.
         let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
             ProcessDeployerError::SourceOrchestration {
@@ -226,6 +228,8 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         &self,
         scenario: &Scenario<E, NodeControlCapability>,
     ) -> Result<Runner<E>, ProcessDeployerError> {
+        validate_supported_cluster_mode(scenario)?;
+
         // Source planning is currently resolved here before node spawn/runtime setup.
         let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
             ProcessDeployerError::SourceOrchestration {
@@ -313,6 +317,22 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
     }
 }
 
+fn validate_supported_cluster_mode<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+) -> Result<(), ProcessDeployerError> {
+    ensure_local_cluster_mode(scenario.cluster_mode())
+}
+
+fn ensure_local_cluster_mode(mode: ClusterMode) -> Result<(), ProcessDeployerError> {
+    if matches!(mode, ClusterMode::ExistingCluster) {
+        return Err(ProcessDeployerError::SourceOrchestration {
+            source: DynError::from("local deployer does not support existing-cluster mode"),
+        });
+    }
+
+    Ok(())
+}
+
 fn merge_source_clients_for_local<E: LocalDeployerEnv>(
     source_plan: &SourceOrchestrationPlan,
     node_clients: NodeClients<E>,
@@ -338,6 +358,29 @@ fn build_retry_execution_config(
     };
 
     (retry_policy, execution)
+}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::ClusterMode;
+
+    use super::ensure_local_cluster_mode;
+
+    #[test]
+    fn local_cluster_validator_accepts_managed_mode() {
+        ensure_local_cluster_mode(ClusterMode::Managed).expect("managed mode should be accepted");
+    }
+
+    #[test]
+    fn local_cluster_validator_rejects_existing_cluster_mode() {
+        let error = ensure_local_cluster_mode(ClusterMode::ExistingCluster)
+            .expect_err("existing-cluster mode should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "source orchestration failed: local deployer does not support existing-cluster mode"
+        );
+    }
 }
 
 async fn run_retry_attempt<E: LocalDeployerEnv>(
