@@ -31,7 +31,7 @@ use crate::{
 
 const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
 const K8S_FULLNAME_OVERRIDE: &str = "logos-runner";
-const DEFAULT_K8S_TESTNET_IMAGE: &str = "public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test";
+const DEFAULT_K8S_TESTNET_IMAGE: &str = "logos-blockchain-testing:local";
 
 /// Paths and image metadata required to deploy the Helm chart.
 pub struct K8sAssets {

@@ -106,6 +106,11 @@ pub trait K8sDeployEnv: Application {
         format!("{release}-node-{index}")
     }
 
+    /// Label selector used to discover managed node services in attached mode.
+    fn attach_node_service_selector(release: &str) -> String {
+        format!("app.kubernetes.io/instance={release}")
+    }
+
     /// Wait for HTTP readiness on provided ports for a given host.
     async fn wait_for_node_http(
         ports: &[u16],
