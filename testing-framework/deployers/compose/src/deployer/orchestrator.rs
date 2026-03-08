@@ -6,9 +6,9 @@ use testing_framework_core::{
         ApplicationExternalProvider, AttachSource, CleanupGuard, ClusterWaitHandle,
         DeploymentPolicy, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
         NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, RunContext, Runner, Scenario, ScenarioSources,
-        SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        RequiresNodeControl, RunContext, Runner, Scenario, SourceOrchestrationPlan,
+        SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
+        orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -214,21 +214,15 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
             return Ok(None);
         }
 
-        let ScenarioSources::Attached { attach, .. } = scenario.sources() else {
-            return Err(ComposeRunnerError::InternalInvariant {
+        let attach = scenario
+            .attached_source()
+            .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "attached node control requested outside attached source mode",
-            });
-        };
+            })?;
 
-        let AttachSource::Compose { project, .. } = attach else {
-            return Err(ComposeRunnerError::InternalInvariant {
-                message: "compose deployer requires compose attach source for node control",
-            });
-        };
-
-        let Some(project_name) = project
-            .as_ref()
-            .map(|value| value.trim())
+        let Some(project_name) = attach
+            .compose_project()
+            .map(str::trim)
             .filter(|value| !value.is_empty())
         else {
             return Err(ComposeRunnerError::InternalInvariant {
@@ -248,11 +242,11 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     where
         Caps: Send + Sync,
     {
-        let ScenarioSources::Attached { attach, .. } = scenario.sources() else {
-            return Err(ComposeRunnerError::InternalInvariant {
+        let attach = scenario
+            .attached_source()
+            .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "compose attached cluster wait requested outside attached source mode",
-            });
-        };
+            })?;
 
         Ok(Arc::new(ComposeAttachedClusterWait::<E>::new(
             compose_runner_host(),
@@ -378,13 +372,10 @@ where
     E: ComposeDeployEnv,
     Caps: Send + Sync,
 {
-    let project_name = match scenario.sources() {
-        ScenarioSources::Attached {
-            attach: AttachSource::Compose { project, .. },
-            ..
-        } => project.clone(),
-        _ => None,
-    };
+    let project_name = scenario
+        .attached_source()
+        .and_then(|attach| attach.compose_project())
+        .map(ToOwned::to_owned);
 
     ComposeDeploymentMetadata { project_name }
 }

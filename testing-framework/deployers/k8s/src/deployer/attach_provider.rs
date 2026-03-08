@@ -91,11 +91,7 @@ fn to_discovery_error(source: DynError) -> AttachProviderError {
 }
 
 fn k8s_attach_request(source: &AttachSource) -> Result<K8sAttachRequest<'_>, AttachProviderError> {
-    let AttachSource::K8s {
-        namespace,
-        label_selector,
-    } = source
-    else {
+    let Some(label_selector) = source.k8s_label_selector() else {
         return Err(AttachProviderError::UnsupportedSource {
             attach_source: source.clone(),
         });
@@ -108,7 +104,7 @@ fn k8s_attach_request(source: &AttachSource) -> Result<K8sAttachRequest<'_>, Att
     }
 
     Ok(K8sAttachRequest {
-        namespace: namespace.as_deref().unwrap_or("default"),
+        namespace: source.k8s_namespace().unwrap_or("default"),
         label_selector,
     })
 }
@@ -247,20 +243,16 @@ impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
 }
 
 fn k8s_wait_request(source: &AttachSource) -> Result<K8sAttachRequest<'_>, DynError> {
-    let AttachSource::K8s {
-        namespace,
-        label_selector,
-    } = source
-    else {
-        return Err("k8s cluster wait requires a k8s attach source".into());
-    };
+    let label_selector = source
+        .k8s_label_selector()
+        .ok_or_else(|| DynError::from("k8s cluster wait requires a k8s attach source"))?;
 
     if label_selector.trim().is_empty() {
         return Err(K8sAttachDiscoveryError::EmptyLabelSelector.into());
     }
 
     Ok(K8sAttachRequest {
-        namespace: namespace.as_deref().unwrap_or("default"),
+        namespace: source.k8s_namespace().unwrap_or("default"),
         label_selector,
     })
 }

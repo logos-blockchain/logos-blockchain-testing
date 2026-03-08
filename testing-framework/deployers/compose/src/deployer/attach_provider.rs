@@ -87,14 +87,15 @@ fn to_discovery_error(source: DynError) -> AttachProviderError {
 fn compose_attach_request(
     source: &AttachSource,
 ) -> Result<ComposeAttachRequest<'_>, AttachProviderError> {
-    let AttachSource::Compose { project, services } = source else {
-        return Err(AttachProviderError::UnsupportedSource {
-            attach_source: source.clone(),
-        });
-    };
+    let services =
+        source
+            .compose_services()
+            .ok_or_else(|| AttachProviderError::UnsupportedSource {
+                attach_source: source.clone(),
+            })?;
 
-    let project = project
-        .as_deref()
+    let project = source
+        .compose_project()
         .ok_or_else(|| AttachProviderError::Discovery {
             source: ComposeAttachDiscoveryError::MissingProjectName.into(),
         })?;
@@ -173,13 +174,12 @@ impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeAttachedClusterWait<E>
 }
 
 fn compose_wait_request(source: &AttachSource) -> Result<ComposeAttachRequest<'_>, DynError> {
-    let AttachSource::Compose { project, services } = source else {
-        return Err("compose cluster wait requires a compose attach source".into());
-    };
-
-    let project = project
-        .as_deref()
-        .ok_or(ComposeAttachDiscoveryError::MissingProjectName)?;
+    let project = source
+        .compose_project()
+        .ok_or_else(|| DynError::from("compose cluster wait requires a compose attach source"))?;
+    let services = source
+        .compose_services()
+        .ok_or_else(|| DynError::from("compose cluster wait requires a compose attach source"))?;
 
     Ok(ComposeAttachRequest { project, services })
 }

@@ -118,6 +118,16 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
+    pub fn attached_source(&self) -> Option<&AttachSource> {
+        self.sources.attached_source()
+    }
+
+    #[must_use]
+    pub fn external_nodes(&self) -> &[ExternalNodeSource] {
+        self.sources.external_nodes()
+    }
+
+    #[must_use]
     pub const fn source_orchestration_plan(&self) -> &SourceOrchestrationPlan {
         &self.source_orchestration_plan
     }

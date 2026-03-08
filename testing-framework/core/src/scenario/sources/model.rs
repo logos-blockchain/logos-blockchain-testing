@@ -43,6 +43,38 @@ impl AttachSource {
             services,
         }
     }
+
+    #[must_use]
+    pub fn compose_project(&self) -> Option<&str> {
+        match self {
+            Self::Compose { project, .. } => project.as_deref(),
+            Self::K8s { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn compose_services(&self) -> Option<&[String]> {
+        match self {
+            Self::Compose { services, .. } => Some(services),
+            Self::K8s { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn k8s_namespace(&self) -> Option<&str> {
+        match self {
+            Self::K8s { namespace, .. } => namespace.as_deref(),
+            Self::Compose { .. } => None,
+        }
+    }
+
+    #[must_use]
+    pub fn k8s_label_selector(&self) -> Option<&str> {
+        match self {
+            Self::K8s { label_selector, .. } => Some(label_selector),
+            Self::Compose { .. } => None,
+        }
+    }
 }
 
 /// Static external node endpoint that should be included in the runtime
@@ -138,6 +170,14 @@ impl ScenarioSources {
         let external = self.external_nodes().to_vec();
 
         Self::ExternalOnly { external }
+    }
+
+    #[must_use]
+    pub fn attached_source(&self) -> Option<&AttachSource> {
+        match self {
+            Self::Attached { attach, .. } => Some(attach),
+            Self::Managed { .. } | Self::ExternalOnly { .. } => None,
+        }
     }
 
     #[must_use]

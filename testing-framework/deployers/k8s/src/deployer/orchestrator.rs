@@ -5,12 +5,11 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, ApplicationExternalProvider, AttachSource, CleanupGuard, ClusterWaitHandle,
-        Deployer, DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics,
-        MetricsError, NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, RunContext, Runner, Scenario, ScenarioSources,
-        SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        Application, ApplicationExternalProvider, CleanupGuard, ClusterWaitHandle, Deployer,
+        DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError,
+        NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl,
+        RunContext, Runner, Scenario, SourceOrchestrationPlan, SourceProviders,
+        StaticManagedProvider, build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
 };
@@ -250,22 +249,18 @@ where
     E: K8sDeployEnv,
     Caps: Send + Sync,
 {
-    match scenario.sources() {
-        ScenarioSources::Attached {
-            attach:
-                AttachSource::K8s {
-                    namespace,
-                    label_selector,
-                },
-            ..
-        } => K8sDeploymentMetadata {
-            namespace: namespace.clone(),
-            label_selector: Some(label_selector.clone()),
-        },
-        _ => K8sDeploymentMetadata {
-            namespace: None,
-            label_selector: None,
-        },
+    let namespace = scenario
+        .attached_source()
+        .and_then(|attach| attach.k8s_namespace())
+        .map(ToOwned::to_owned);
+    let label_selector = scenario
+        .attached_source()
+        .and_then(|attach| attach.k8s_label_selector())
+        .map(ToOwned::to_owned);
+
+    K8sDeploymentMetadata {
+        namespace,
+        label_selector,
     }
 }
 
@@ -277,11 +272,11 @@ where
     E: K8sDeployEnv,
     Caps: Send + Sync,
 {
-    let ScenarioSources::Attached { attach, .. } = scenario.sources() else {
-        return Err(K8sRunnerError::InternalInvariant {
+    let attach = scenario
+        .attached_source()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
             message: "k8s attached cluster wait requested outside attached source mode".to_owned(),
-        });
-    };
+        })?;
 
     Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
         client,
