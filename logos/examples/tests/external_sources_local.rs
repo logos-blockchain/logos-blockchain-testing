@@ -145,8 +145,7 @@ async fn scenario_managed_plus_external_sources_are_orchestrated() -> Result<()>
 
     let mut scenario = ScenarioBuilder::new(Box::new(deployment_builder))
         .with_run_duration(Duration::from_secs(5))
-        .with_external_node(seed_cluster.external_sources()[0].clone())
-        .with_external_node(seed_cluster.external_sources()[1].clone())
+        .with_external_nodes(seed_cluster.external_sources().to_vec())
         .build()?;
 
     let deployer = ProcessDeployer::<LbcExtEnv>::default();

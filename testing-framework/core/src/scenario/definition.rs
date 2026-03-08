@@ -277,8 +277,24 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
+            pub fn with_external_nodes(
+                self,
+                nodes: impl IntoIterator<Item = ExternalNodeSource>,
+            ) -> Self {
+                self.map_core_builder(|builder| builder.with_external_nodes(nodes))
+            }
+
+            #[must_use]
             pub fn with_external_only_sources(self) -> Self {
                 self.map_core_builder(|builder| builder.with_external_only_sources())
+            }
+
+            #[must_use]
+            pub fn with_external_only_nodes(
+                self,
+                nodes: impl IntoIterator<Item = ExternalNodeSource>,
+            ) -> Self {
+                self.map_core_builder(|builder| builder.with_external_only_nodes(nodes))
             }
 
             #[must_use]
@@ -598,9 +614,29 @@ impl<E: Application, Caps> Builder<E, Caps> {
     }
 
     #[must_use]
+    pub fn with_external_nodes(
+        mut self,
+        nodes: impl IntoIterator<Item = ExternalNodeSource>,
+    ) -> Self {
+        for node in nodes {
+            self.sources = self.sources.with_external_node(node);
+        }
+
+        self
+    }
+
+    #[must_use]
     pub fn with_external_only_sources(mut self) -> Self {
         self.sources = self.sources.into_external_only();
         self
+    }
+
+    #[must_use]
+    pub fn with_external_only_nodes(
+        self,
+        nodes: impl IntoIterator<Item = ExternalNodeSource>,
+    ) -> Self {
+        self.with_external_only_sources().with_external_nodes(nodes)
     }
 
     fn add_workload(&mut self, workload: Box<dyn Workload<E>>) {
