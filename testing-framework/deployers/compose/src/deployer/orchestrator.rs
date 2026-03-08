@@ -421,7 +421,6 @@ mod tests {
         );
     }
 }
-
 fn existing_cluster_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> ComposeDeploymentMetadata
 where
     E: ComposeDeployEnv,
