@@ -1,10 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use super::{metrics::Metrics, node_clients::ClusterClient};
-use crate::scenario::{
-    Application, BorrowedNode, ClusterWaitHandle, DynError, ManagedNode, NodeClients,
-    NodeControlHandle,
-};
+use crate::scenario::{Application, ClusterWaitHandle, DynError, NodeClients, NodeControlHandle};
 
 #[derive(Debug, thiserror::Error)]
 enum RunContextCapabilityError {
@@ -69,26 +66,6 @@ impl<E: Application> RunContext<E> {
     #[must_use]
     pub fn random_node_client(&self) -> Option<E::NodeClient> {
         self.node_clients.random_client()
-    }
-
-    #[must_use]
-    pub fn managed_nodes(&self) -> Vec<ManagedNode<E>> {
-        self.node_clients.managed_nodes()
-    }
-
-    #[must_use]
-    pub fn borrowed_nodes(&self) -> Vec<BorrowedNode<E>> {
-        self.node_clients.borrowed_nodes()
-    }
-
-    #[must_use]
-    pub fn find_managed_node(&self, identity: &str) -> Option<ManagedNode<E>> {
-        self.node_clients.find_managed(identity)
-    }
-
-    #[must_use]
-    pub fn find_borrowed_node(&self, identity: &str) -> Option<BorrowedNode<E>> {
-        self.node_clients.find_borrowed(identity)
     }
 
     #[must_use]
