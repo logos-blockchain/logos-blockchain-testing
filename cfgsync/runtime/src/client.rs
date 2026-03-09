@@ -5,7 +5,9 @@ use std::{
 };
 
 use anyhow::{Context as _, Result, bail};
-use cfgsync_core::{CFGSYNC_SCHEMA_VERSION, CfgSyncClient, CfgSyncFile, CfgSyncPayload, ClientIp};
+use cfgsync_core::{
+    CFGSYNC_SCHEMA_VERSION, CfgSyncClient, CfgSyncFile, CfgSyncPayload, NodeRegistration,
+};
 use thiserror::Error;
 use tokio::time::{Duration, sleep};
 use tracing::info;
@@ -19,7 +21,7 @@ enum ClientEnvError {
     InvalidIp { value: String },
 }
 
-async fn fetch_with_retry(payload: &ClientIp, server_addr: &str) -> Result<CfgSyncPayload> {
+async fn fetch_with_retry(payload: &NodeRegistration, server_addr: &str) -> Result<CfgSyncPayload> {
     let client = CfgSyncClient::new(server_addr);
 
     for attempt in 1..=FETCH_ATTEMPTS {
@@ -40,13 +42,15 @@ async fn fetch_with_retry(payload: &ClientIp, server_addr: &str) -> Result<CfgSy
     unreachable!("cfgsync fetch loop always returns before exhausting attempts");
 }
 
-async fn fetch_once(client: &CfgSyncClient, payload: &ClientIp) -> Result<CfgSyncPayload> {
+async fn fetch_once(client: &CfgSyncClient, payload: &NodeRegistration) -> Result<CfgSyncPayload> {
     let response = client.fetch_node_config(payload).await?;
 
     Ok(response)
 }
 
-async fn pull_config_files(payload: ClientIp, server_addr: &str) -> Result<()> {
+async fn pull_config_files(payload: NodeRegistration, server_addr: &str) -> Result<()> {
+    register_node(&payload, server_addr).await?;
+
     let config = fetch_with_retry(&payload, server_addr)
         .await
         .context("fetching cfgsync node config")?;
@@ -61,6 +65,30 @@ async fn pull_config_files(payload: ClientIp, server_addr: &str) -> Result<()> {
     info!(files = files.len(), "cfgsync files saved");
 
     Ok(())
+}
+
+async fn register_node(payload: &NodeRegistration, server_addr: &str) -> Result<()> {
+    let client = CfgSyncClient::new(server_addr);
+
+    for attempt in 1..=FETCH_ATTEMPTS {
+        match client.register_node(payload).await {
+            Ok(()) => {
+                info!(identifier = %payload.identifier, "cfgsync node registered");
+                return Ok(());
+            }
+            Err(error) => {
+                if attempt == FETCH_ATTEMPTS {
+                    return Err(error).with_context(|| {
+                        format!("registering node with cfgsync after {attempt} attempts")
+                    });
+                }
+
+                sleep(FETCH_RETRY_DELAY).await;
+            }
+        }
+    }
+
+    unreachable!("cfgsync register loop always returns before exhausting attempts");
 }
 
 fn ensure_schema_version(config: &CfgSyncPayload) -> Result<()> {
@@ -118,7 +146,7 @@ pub async fn run_cfgsync_client_from_env(default_port: u16) -> Result<()> {
     let identifier =
         env::var("CFG_HOST_IDENTIFIER").unwrap_or_else(|_| "unidentified-node".to_owned());
 
-    pull_config_files(ClientIp { ip, identifier }, &server_addr).await
+    pull_config_files(NodeRegistration { ip, identifier }, &server_addr).await
 }
 
 fn parse_ip_env(ip_str: &str) -> Result<Ipv4Addr> {
@@ -164,7 +192,7 @@ mod tests {
         });
 
         pull_config_files(
-            ClientIp {
+            NodeRegistration {
                 ip: "127.0.0.1".parse().expect("parse ip"),
                 identifier: "node-1".to_owned(),
             },

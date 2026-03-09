@@ -5,7 +5,7 @@ pub mod repo;
 pub mod server;
 
 pub use bundle::{CfgSyncBundle, CfgSyncBundleNode};
-pub use client::{CfgSyncClient, ClientError};
+pub use client::{CfgSyncClient, ClientError, ConfigFetchStatus};
 pub use render::{
     CfgsyncConfigOverrides, CfgsyncOutputPaths, RenderedCfgsync, apply_cfgsync_overrides,
     apply_timeout_floor, ensure_bundle_path, load_cfgsync_template_yaml,
@@ -13,6 +13,7 @@ pub use render::{
 };
 pub use repo::{
     CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, CfgSyncFile, CfgSyncPayload,
-    ConfigProvider, ConfigRepo, FileConfigProvider, FileConfigProviderError, RepoResponse,
+    ConfigProvider, ConfigRepo, FileConfigProvider, FileConfigProviderError, NodeRegistration,
+    RegistrationResponse, RepoResponse,
 };
-pub use server::{CfgSyncState, ClientIp, RunCfgsyncError, cfgsync_app, run_cfgsync};
+pub use server::{CfgSyncState, RunCfgsyncError, cfgsync_app, run_cfgsync};

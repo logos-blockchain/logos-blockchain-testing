@@ -1,19 +1,11 @@
-use std::{io, net::Ipv4Addr, sync::Arc};
+use std::{io, sync::Arc};
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::repo::{CfgSyncErrorCode, ConfigProvider, RepoResponse};
-
-/// Request payload used by cfgsync client for node config resolution.
-#[derive(Serialize, Deserialize)]
-pub struct ClientIp {
-    /// Node IP that can be used by clients for observability/logging.
-    pub ip: Ipv4Addr,
-    /// Stable node identifier used as key in cfgsync bundle lookup.
-    pub identifier: String,
-}
+use crate::repo::{
+    CfgSyncErrorCode, ConfigProvider, NodeRegistration, RegistrationResponse, RepoResponse,
+};
 
 /// Runtime state shared across cfgsync HTTP handlers.
 pub struct CfgSyncState {
@@ -45,13 +37,27 @@ pub enum RunCfgsyncError {
 
 async fn node_config(
     State(state): State<Arc<CfgSyncState>>,
-    Json(payload): Json<ClientIp>,
+    Json(payload): Json<NodeRegistration>,
 ) -> impl IntoResponse {
     let response = resolve_node_config_response(&state, &payload.identifier);
 
     match response {
         RepoResponse::Config(payload_data) => (StatusCode::OK, Json(payload_data)).into_response(),
         RepoResponse::Error(error) => {
+            let status = error_status(&error.code);
+
+            (status, Json(error)).into_response()
+        }
+    }
+}
+
+async fn register_node(
+    State(state): State<Arc<CfgSyncState>>,
+    Json(payload): Json<NodeRegistration>,
+) -> impl IntoResponse {
+    match state.repo.register(payload) {
+        RegistrationResponse::Registered => StatusCode::ACCEPTED.into_response(),
+        RegistrationResponse::Error(error) => {
             let status = error_status(&error.code);
 
             (status, Json(error)).into_response()
@@ -66,12 +72,14 @@ fn resolve_node_config_response(state: &CfgSyncState, identifier: &str) -> RepoR
 fn error_status(code: &CfgSyncErrorCode) -> StatusCode {
     match code {
         CfgSyncErrorCode::MissingConfig => StatusCode::NOT_FOUND,
+        CfgSyncErrorCode::NotReady => StatusCode::TOO_EARLY,
         CfgSyncErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
 pub fn cfgsync_app(state: CfgSyncState) -> Router {
     Router::new()
+        .route("/register", post(register_node))
         .route("/node", post(node_config))
         .route("/init-with-node", post(node_config))
         .with_state(Arc::new(state))
@@ -100,10 +108,10 @@ mod tests {
 
     use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-    use super::{CfgSyncState, ClientIp, node_config};
+    use super::{CfgSyncState, NodeRegistration, node_config, register_node};
     use crate::repo::{
         CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, CfgSyncFile,
-        CfgSyncPayload, ConfigProvider, RepoResponse,
+        CfgSyncPayload, ConfigProvider, RegistrationResponse, RepoResponse,
     };
 
     struct StaticProvider {
@@ -111,6 +119,16 @@ mod tests {
     }
 
     impl ConfigProvider for StaticProvider {
+        fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+            if self.data.contains_key(&registration.identifier) {
+                RegistrationResponse::Registered
+            } else {
+                RegistrationResponse::Error(CfgSyncErrorResponse::missing_config(
+                    &registration.identifier,
+                ))
+            }
+        }
+
         fn resolve(&self, identifier: &str) -> RepoResponse {
             self.data.get(identifier).cloned().map_or_else(
                 || RepoResponse::Error(CfgSyncErrorResponse::missing_config(identifier)),
@@ -131,12 +149,16 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("node-a".to_owned(), sample_payload());
 
-        let provider = Arc::new(StaticProvider { data });
+        let provider = crate::repo::ConfigRepo::from_bundle(data);
         let state = Arc::new(CfgSyncState::new(provider));
-        let payload = ClientIp {
+        let payload = NodeRegistration {
             ip: "127.0.0.1".parse().expect("valid ip"),
             identifier: "node-a".to_owned(),
         };
+
+        let _ = register_node(State(state.clone()), Json(payload.clone()))
+            .await
+            .into_response();
 
         let response = node_config(State(state), Json(payload))
             .await
@@ -151,7 +173,7 @@ mod tests {
             data: HashMap::new(),
         });
         let state = Arc::new(CfgSyncState::new(provider));
-        let payload = ClientIp {
+        let payload = NodeRegistration {
             ip: "127.0.0.1".parse().expect("valid ip"),
             identifier: "missing-node".to_owned(),
         };
@@ -168,5 +190,24 @@ mod tests {
         let error = CfgSyncErrorResponse::missing_config("missing-node");
 
         assert!(matches!(error.code, CfgSyncErrorCode::MissingConfig));
+    }
+
+    #[tokio::test]
+    async fn node_config_returns_not_ready_before_registration() {
+        let mut data = HashMap::new();
+        data.insert("node-a".to_owned(), sample_payload());
+
+        let provider = crate::repo::ConfigRepo::from_bundle(data);
+        let state = Arc::new(CfgSyncState::new(provider));
+        let payload = NodeRegistration {
+            ip: "127.0.0.1".parse().expect("valid ip"),
+            identifier: "node-a".to_owned(),
+        };
+
+        let response = node_config(State(state), Json(payload))
+            .await
+            .into_response();
+
+        assert_eq!(response.status(), StatusCode::TOO_EARLY);
     }
 }

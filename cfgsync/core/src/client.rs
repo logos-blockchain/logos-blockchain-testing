@@ -1,10 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{
-    repo::{CfgSyncErrorResponse, CfgSyncPayload},
-    server::ClientIp,
-};
+use crate::repo::{CfgSyncErrorResponse, CfgSyncPayload, NodeRegistration};
 
 /// cfgsync client-side request/response failures.
 #[derive(Debug, Error)]
@@ -19,6 +16,12 @@ pub enum ClientError {
     },
     #[error("failed to parse cfgsync response: {0}")]
     Decode(serde_json::Error),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigFetchStatus {
+    Ready,
+    NotReady,
 }
 
 /// Reusable HTTP client for cfgsync server endpoints.
@@ -46,10 +49,15 @@ impl CfgSyncClient {
         &self.base_url
     }
 
+    /// Registers a node before requesting config.
+    pub async fn register_node(&self, payload: &NodeRegistration) -> Result<(), ClientError> {
+        self.post_status_only("/register", payload).await
+    }
+
     /// Fetches `/node` payload for a node identifier.
     pub async fn fetch_node_config(
         &self,
-        payload: &ClientIp,
+        payload: &NodeRegistration,
     ) -> Result<CfgSyncPayload, ClientError> {
         self.post_json("/node", payload).await
     }
@@ -57,9 +65,27 @@ impl CfgSyncClient {
     /// Fetches `/init-with-node` payload for a node identifier.
     pub async fn fetch_init_with_node_config(
         &self,
-        payload: &ClientIp,
+        payload: &NodeRegistration,
     ) -> Result<CfgSyncPayload, ClientError> {
         self.post_json("/init-with-node", payload).await
+    }
+
+    pub async fn fetch_node_config_status(
+        &self,
+        payload: &NodeRegistration,
+    ) -> Result<ConfigFetchStatus, ClientError> {
+        match self.fetch_node_config(payload).await {
+            Ok(_) => Ok(ConfigFetchStatus::Ready),
+            Err(ClientError::Status {
+                status,
+                error: Some(error),
+                ..
+            }) if status == reqwest::StatusCode::TOO_EARLY => {
+                let _ = error;
+                Ok(ConfigFetchStatus::NotReady)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Posts JSON payload to a cfgsync endpoint and decodes cfgsync payload.
@@ -87,6 +113,32 @@ impl CfgSyncClient {
         }
 
         serde_json::from_str(&body).map_err(ClientError::Decode)
+    }
+
+    async fn post_status_only<P: Serialize>(
+        &self,
+        path: &str,
+        payload: &P,
+    ) -> Result<(), ClientError> {
+        let url = self.endpoint_url(path);
+        let response = self.http.post(url).json(payload).send().await?;
+
+        let status = response.status();
+        let body = response.text().await?;
+        if !status.is_success() {
+            let error = serde_json::from_str::<CfgSyncErrorResponse>(&body).ok();
+            let message = error
+                .as_ref()
+                .map(|err| err.message.clone())
+                .unwrap_or_else(|| body.clone());
+            return Err(ClientError::Status {
+                status,
+                message,
+                error,
+            });
+        }
+
+        Ok(())
     }
 
     fn endpoint_url(&self, path: &str) -> String {

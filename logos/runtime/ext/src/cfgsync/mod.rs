@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cfgsync_adapter::{CfgsyncEnv, build_cfgsync_node_configs};
+use cfgsync_adapter::{CfgsyncEnv, build_cfgsync_node_catalog};
 pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
 use cfgsync_core::{
     CfgSyncBundle, CfgSyncBundleNode,
@@ -49,7 +49,7 @@ fn build_cfgsync_bundle<E: CfgsyncEnv>(
     topology: &E::Deployment,
     hostnames: &[String],
 ) -> Result<CfgSyncBundle> {
-    let nodes = build_cfgsync_node_configs::<E>(topology, hostnames)?;
+    let nodes = build_cfgsync_node_catalog::<E>(topology, hostnames)?.into_configs();
     let nodes = nodes
         .into_iter()
         .map(|node| CfgSyncBundleNode {

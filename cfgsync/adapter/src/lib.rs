@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
 use thiserror::Error;
 
@@ -12,6 +12,44 @@ pub struct CfgsyncNodeConfig {
     pub identifier: String,
     /// Serialized config payload for the node.
     pub config_yaml: String,
+}
+
+/// Precomputed node configs indexed by stable identifier.
+#[derive(Debug, Clone, Default)]
+pub struct CfgsyncNodeCatalog {
+    nodes: HashMap<String, CfgsyncNodeConfig>,
+}
+
+impl CfgsyncNodeCatalog {
+    #[must_use]
+    pub fn new(nodes: Vec<CfgsyncNodeConfig>) -> Self {
+        let nodes = nodes
+            .into_iter()
+            .map(|node| (node.identifier.clone(), node))
+            .collect();
+
+        Self { nodes }
+    }
+
+    #[must_use]
+    pub fn resolve(&self, identifier: &str) -> Option<&CfgsyncNodeConfig> {
+        self.nodes.get(identifier)
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    #[must_use]
+    pub fn into_configs(self) -> Vec<CfgsyncNodeConfig> {
+        self.nodes.into_values().collect()
+    }
 }
 
 /// Adapter contract for converting an application deployment model into
@@ -71,6 +109,14 @@ pub fn build_cfgsync_node_configs<E: CfgsyncEnv>(
     deployment: &E::Deployment,
     hostnames: &[String],
 ) -> Result<Vec<CfgsyncNodeConfig>, BuildCfgsyncNodesError> {
+    Ok(build_cfgsync_node_catalog::<E>(deployment, hostnames)?.into_configs())
+}
+
+/// Builds cfgsync node configs and indexes them by stable identifier.
+pub fn build_cfgsync_node_catalog<E: CfgsyncEnv>(
+    deployment: &E::Deployment,
+    hostnames: &[String],
+) -> Result<CfgsyncNodeCatalog, BuildCfgsyncNodesError> {
     let nodes = E::nodes(deployment);
     ensure_hostname_count(nodes.len(), hostnames.len())?;
 
@@ -79,7 +125,7 @@ pub fn build_cfgsync_node_configs<E: CfgsyncEnv>(
         output.push(build_node_entry::<E>(deployment, node, index, hostnames)?);
     }
 
-    Ok(output)
+    Ok(CfgsyncNodeCatalog::new(output))
 }
 
 fn ensure_hostname_count(nodes: usize, hostnames: usize) -> Result<(), BuildCfgsyncNodesError> {
@@ -116,4 +162,21 @@ fn build_rewritten_node_config<E: CfgsyncEnv>(
         .map_err(adapter_error)?;
 
     Ok(node_config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CfgsyncNodeCatalog, CfgsyncNodeConfig};
+
+    #[test]
+    fn catalog_resolves_identifier() {
+        let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
+            identifier: "node-1".to_owned(),
+            config_yaml: "key: value".to_owned(),
+        }]);
+
+        let node = catalog.resolve("node-1").expect("resolve node config");
+
+        assert_eq!(node.config_yaml, "key: value");
+    }
 }
