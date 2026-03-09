@@ -1,0 +1,17 @@
+[package]
+categories  = { workspace = true }
+description = "App-agnostic cfgsync artifact model"
+edition     = { workspace = true }
+keywords    = { workspace = true }
+license     = { workspace = true }
+name        = "cfgsync-artifacts"
+readme      = { workspace = true }
+repository  = { workspace = true }
+version     = { workspace = true }
+
+[lints]
+workspace = true
+
+[dependencies]
+serde     = { workspace = true }
+thiserror = { workspace = true }

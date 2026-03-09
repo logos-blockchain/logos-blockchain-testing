@@ -1,3 +1,7 @@
+#[deprecated(
+    since = "0.1.0",
+    note = "testing-framework-core::cfgsync moved to cfgsync-adapter; update imports"
+)]
 pub mod cfgsync;
 pub mod env;
 pub mod runtime;

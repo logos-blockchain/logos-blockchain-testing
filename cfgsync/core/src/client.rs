@@ -6,6 +6,7 @@ use crate::{
     server::ClientIp,
 };
 
+/// cfgsync client-side request/response failures.
 #[derive(Debug, Error)]
 pub enum ClientError {
     #[error("request failed: {0}")]
@@ -20,6 +21,7 @@ pub enum ClientError {
     Decode(serde_json::Error),
 }
 
+/// Reusable HTTP client for cfgsync server endpoints.
 #[derive(Clone, Debug)]
 pub struct CfgSyncClient {
     base_url: String,
@@ -44,6 +46,7 @@ impl CfgSyncClient {
         &self.base_url
     }
 
+    /// Fetches `/node` payload for a node identifier.
     pub async fn fetch_node_config(
         &self,
         payload: &ClientIp,
@@ -51,6 +54,7 @@ impl CfgSyncClient {
         self.post_json("/node", payload).await
     }
 
+    /// Fetches `/init-with-node` payload for a node identifier.
     pub async fn fetch_init_with_node_config(
         &self,
         payload: &ClientIp,
@@ -58,6 +62,7 @@ impl CfgSyncClient {
         self.post_json("/init-with-node", payload).await
     }
 
+    /// Posts JSON payload to a cfgsync endpoint and decodes cfgsync payload.
     pub async fn post_json<P: Serialize>(
         &self,
         path: &str,

@@ -1,7 +1,8 @@
-use anyhow::{Result, anyhow};
-pub(crate) use cfgsync_runtime::render::CfgsyncOutputPaths;
-use cfgsync_runtime::{
-    bundle::{CfgSyncBundle, CfgSyncBundleNode, build_cfgsync_bundle_with_hostnames},
+use anyhow::Result;
+use cfgsync_adapter::{CfgsyncEnv, build_cfgsync_node_configs};
+pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
+use cfgsync_core::{
+    CfgSyncBundle, CfgSyncBundleNode,
     render::{
         CfgsyncConfigOverrides, RenderedCfgsync, ensure_bundle_path,
         render_cfgsync_yaml_from_template, write_rendered_cfgsync,
@@ -9,13 +10,21 @@ use cfgsync_runtime::{
 };
 use reqwest::Url;
 use serde_yaml::{Mapping, Value};
-use testing_framework_core::cfgsync::CfgsyncEnv;
+use thiserror::Error;
 
 pub(crate) struct CfgsyncRenderOptions {
     pub port: Option<u16>,
     pub bundle_path: Option<String>,
     pub min_timeout_secs: Option<u64>,
     pub metrics_otlp_ingest_url: Option<Url>,
+}
+
+#[derive(Debug, Error)]
+enum BundleRenderError {
+    #[error("cfgsync bundle node `{identifier}` is missing `/config.yaml`")]
+    MissingConfigFile { identifier: String },
+    #[error("cfgsync config file is missing `{key}`")]
+    MissingYamlKey { key: String },
 }
 
 pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
@@ -26,7 +35,7 @@ pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
     let cfg = build_cfgsync_server_config();
     let overrides = build_overrides::<E>(topology, options);
     let config_yaml = render_cfgsync_yaml_from_template(cfg, &overrides)?;
-    let mut bundle = build_cfgsync_bundle_with_hostnames::<E>(topology, hostnames)?;
+    let mut bundle = build_cfgsync_bundle::<E>(topology, hostnames)?;
     append_deployment_files(&mut bundle)?;
     let bundle_yaml = serde_yaml::to_string(&bundle)?;
 
@@ -36,14 +45,32 @@ pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
     })
 }
 
+fn build_cfgsync_bundle<E: CfgsyncEnv>(
+    topology: &E::Deployment,
+    hostnames: &[String],
+) -> Result<CfgSyncBundle> {
+    let nodes = build_cfgsync_node_configs::<E>(topology, hostnames)?;
+    let nodes = nodes
+        .into_iter()
+        .map(|node| CfgSyncBundleNode {
+            identifier: node.identifier,
+            files: vec![build_bundle_file("/config.yaml", node.config_yaml)],
+        })
+        .collect();
+
+    Ok(CfgSyncBundle::new(nodes))
+}
+
 fn append_deployment_files(bundle: &mut CfgSyncBundle) -> Result<()> {
     for node in &mut bundle.nodes {
         if has_file_path(node, "/deployment.yaml") {
             continue;
         }
 
-        let config_content = config_file_content(node)
-            .ok_or_else(|| anyhow!("cfgsync bundle node missing /config.yaml"))?;
+        let config_content =
+            config_file_content(node).ok_or_else(|| BundleRenderError::MissingConfigFile {
+                identifier: node.identifier.clone(),
+            })?;
         let deployment_yaml = extract_yaml_key(&config_content, "deployment")?;
 
         node.files
@@ -75,7 +102,9 @@ fn extract_yaml_key(content: &str, key: &str) -> Result<String> {
     let value = document
         .get(key)
         .cloned()
-        .ok_or_else(|| anyhow!("config yaml missing `{key}`"))?;
+        .ok_or_else(|| BundleRenderError::MissingYamlKey {
+            key: key.to_owned(),
+        })?;
 
     Ok(serde_yaml::to_string(&value)?)
 }

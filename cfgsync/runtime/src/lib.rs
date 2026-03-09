@@ -1,6 +1,3 @@
-pub mod bundle;
-pub mod render;
-
 pub use cfgsync_core as core;
 
 mod client;
