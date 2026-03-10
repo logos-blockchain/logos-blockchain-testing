@@ -125,6 +125,15 @@ pub trait CfgsyncMaterializer: Send + Sync {
     ) -> Result<Option<CfgsyncNodeArtifacts>, DynCfgsyncError>;
 }
 
+/// Adapter contract for materializing a whole registration snapshot into
+/// per-node cfgsync artifacts.
+pub trait CfgsyncSnapshotMaterializer: Send + Sync {
+    fn materialize_snapshot(
+        &self,
+        registrations: &RegistrationSnapshot,
+    ) -> Result<Option<CfgsyncNodeCatalog>, DynCfgsyncError>;
+}
+
 impl CfgsyncMaterializer for CfgsyncNodeCatalog {
     fn materialize(
         &self,
@@ -136,6 +145,15 @@ impl CfgsyncMaterializer for CfgsyncNodeCatalog {
             .map(build_node_artifacts_from_config);
 
         Ok(artifacts)
+    }
+}
+
+impl CfgsyncSnapshotMaterializer for CfgsyncNodeCatalog {
+    fn materialize_snapshot(
+        &self,
+        _registrations: &RegistrationSnapshot,
+    ) -> Result<Option<CfgsyncNodeCatalog>, DynCfgsyncError> {
+        Ok(Some(self.clone()))
     }
 }
 
@@ -170,6 +188,88 @@ impl<M> MaterializingConfigProvider<M> {
             .expect("cfgsync registration store should not be poisoned");
 
         RegistrationSnapshot::new(registrations.values().cloned().collect())
+    }
+}
+
+/// Registration-aware provider backed by a snapshot materializer.
+pub struct SnapshotMaterializingConfigProvider<M> {
+    materializer: M,
+    registrations: Mutex<HashMap<String, NodeRegistration>>,
+}
+
+impl<M> SnapshotMaterializingConfigProvider<M> {
+    #[must_use]
+    pub fn new(materializer: M) -> Self {
+        Self {
+            materializer,
+            registrations: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn registration_for(&self, identifier: &str) -> Option<NodeRegistration> {
+        let registrations = self
+            .registrations
+            .lock()
+            .expect("cfgsync registration store should not be poisoned");
+
+        registrations.get(identifier).cloned()
+    }
+
+    fn registration_snapshot(&self) -> RegistrationSnapshot {
+        let registrations = self
+            .registrations
+            .lock()
+            .expect("cfgsync registration store should not be poisoned");
+
+        RegistrationSnapshot::new(registrations.values().cloned().collect())
+    }
+}
+
+impl<M> ConfigProvider for SnapshotMaterializingConfigProvider<M>
+where
+    M: CfgsyncSnapshotMaterializer,
+{
+    fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+        let mut registrations = self
+            .registrations
+            .lock()
+            .expect("cfgsync registration store should not be poisoned");
+        registrations.insert(registration.identifier.clone(), registration);
+
+        RegistrationResponse::Registered
+    }
+
+    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+        let registration = match self.registration_for(&registration.identifier) {
+            Some(registration) => registration,
+            None => {
+                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                    &registration.identifier,
+                ));
+            }
+        };
+
+        let registrations = self.registration_snapshot();
+        let catalog = match self.materializer.materialize_snapshot(&registrations) {
+            Ok(Some(catalog)) => catalog,
+            Ok(None) => {
+                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                    &registration.identifier,
+                ));
+            }
+            Err(error) => {
+                return RepoResponse::Error(CfgSyncErrorResponse::internal(format!(
+                    "failed to materialize config snapshot: {error}"
+                )));
+            }
+        };
+
+        match catalog.resolve(&registration.identifier) {
+            Some(config) => RepoResponse::Config(CfgSyncPayload::from_files(config.files.clone())),
+            None => RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+                &registration.identifier,
+            )),
+        }
     }
 }
 
