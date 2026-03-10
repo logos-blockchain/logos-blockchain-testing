@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc};
 
 use anyhow::Context as _;
-use cfgsync_adapter::{CfgsyncNodeCatalog, MaterializingConfigProvider};
+use cfgsync_adapter::{NodeArtifacts, NodeArtifactsCatalog, RegistrationConfigProvider};
 use cfgsync_core::{CfgSyncBundle, CfgSyncState, ConfigProvider, FileConfigProvider, run_cfgsync};
 use serde::Deserialize;
 
@@ -35,7 +35,7 @@ fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn ConfigProv
 fn load_materializing_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn ConfigProvider>> {
     let bundle = load_bundle_yaml(bundle_path)?;
     let catalog = build_node_catalog(bundle);
-    let provider = MaterializingConfigProvider::new(catalog);
+    let provider = RegistrationConfigProvider::new(catalog);
 
     Ok(Arc::new(provider))
 }
@@ -48,17 +48,17 @@ fn load_bundle_yaml(bundle_path: &Path) -> anyhow::Result<CfgSyncBundle> {
         .with_context(|| format!("parsing cfgsync bundle from {}", bundle_path.display()))
 }
 
-fn build_node_catalog(bundle: CfgSyncBundle) -> CfgsyncNodeCatalog {
+fn build_node_catalog(bundle: CfgSyncBundle) -> NodeArtifactsCatalog {
     let nodes = bundle
         .nodes
         .into_iter()
-        .map(|node| cfgsync_adapter::CfgsyncNodeConfig {
+        .map(|node| NodeArtifacts {
             identifier: node.identifier,
             files: node.files,
         })
         .collect();
 
-    CfgsyncNodeCatalog::new(nodes)
+    NodeArtifactsCatalog::new(nodes)
 }
 
 fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::PathBuf {

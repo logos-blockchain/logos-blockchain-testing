@@ -11,28 +11,28 @@ use thiserror::Error;
 /// Type-erased cfgsync adapter error used to preserve source context.
 pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
 
-/// Per-node rendered config output used to build cfgsync bundles.
+/// Per-node artifact payload served by cfgsync for one registered node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CfgsyncNodeConfig {
+pub struct NodeArtifacts {
     /// Stable node identifier resolved by the adapter.
     pub identifier: String,
     /// Files served to the node after cfgsync registration.
     pub files: Vec<ArtifactFile>,
 }
 
-/// Node artifacts produced by a cfgsync materializer.
+/// Materialized artifact files for a single registered node.
 #[derive(Debug, Clone, Default)]
-pub struct CfgsyncNodeArtifacts {
+pub struct ArtifactSet {
     files: Vec<ArtifactFile>,
 }
 
 /// Immutable view of registrations currently known to cfgsync.
 #[derive(Debug, Clone, Default)]
-pub struct RegistrationSnapshot {
+pub struct RegistrationSet {
     registrations: Vec<NodeRegistration>,
 }
 
-impl RegistrationSnapshot {
+impl RegistrationSet {
     #[must_use]
     pub fn new(registrations: Vec<NodeRegistration>) -> Self {
         Self { registrations }
@@ -61,7 +61,7 @@ impl RegistrationSnapshot {
     }
 }
 
-impl CfgsyncNodeArtifacts {
+impl ArtifactSet {
     #[must_use]
     pub fn new(files: Vec<ArtifactFile>) -> Self {
         Self { files }
@@ -78,15 +78,15 @@ impl CfgsyncNodeArtifacts {
     }
 }
 
-/// Precomputed node configs indexed by stable identifier.
+/// Artifact payloads indexed by stable node identifier.
 #[derive(Debug, Clone, Default)]
-pub struct CfgsyncNodeCatalog {
-    nodes: HashMap<String, CfgsyncNodeConfig>,
+pub struct NodeArtifactsCatalog {
+    nodes: HashMap<String, NodeArtifacts>,
 }
 
-impl CfgsyncNodeCatalog {
+impl NodeArtifactsCatalog {
     #[must_use]
-    pub fn new(nodes: Vec<CfgsyncNodeConfig>) -> Self {
+    pub fn new(nodes: Vec<NodeArtifacts>) -> Self {
         let nodes = nodes
             .into_iter()
             .map(|node| (node.identifier.clone(), node))
@@ -96,7 +96,7 @@ impl CfgsyncNodeCatalog {
     }
 
     #[must_use]
-    pub fn resolve(&self, identifier: &str) -> Option<&CfgsyncNodeConfig> {
+    pub fn resolve(&self, identifier: &str) -> Option<&NodeArtifacts> {
         self.nodes.get(identifier)
     }
 
@@ -111,35 +111,51 @@ impl CfgsyncNodeCatalog {
     }
 
     #[must_use]
-    pub fn into_configs(self) -> Vec<CfgsyncNodeConfig> {
+    pub fn into_nodes(self) -> Vec<NodeArtifacts> {
         self.nodes.into_values().collect()
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn into_configs(self) -> Vec<NodeArtifacts> {
+        self.into_nodes()
     }
 }
 
-/// Adapter-side node config materialization contract used by cfgsync server.
-pub trait CfgsyncMaterializer: Send + Sync {
+/// Adapter-side materialization contract for a single registered node.
+pub trait NodeArtifactsMaterializer: Send + Sync {
     fn materialize(
         &self,
         registration: &NodeRegistration,
-        registrations: &RegistrationSnapshot,
-    ) -> Result<Option<CfgsyncNodeArtifacts>, DynCfgsyncError>;
+        registrations: &RegistrationSet,
+    ) -> Result<Option<ArtifactSet>, DynCfgsyncError>;
 }
 
-/// Adapter contract for materializing a whole registration snapshot into
+/// Backward-compatible alias for the previous materializer trait name.
+pub trait CfgsyncMaterializer: NodeArtifactsMaterializer {}
+
+impl<T> CfgsyncMaterializer for T where T: NodeArtifactsMaterializer + ?Sized {}
+
+/// Adapter contract for materializing a whole registration set into
 /// per-node cfgsync artifacts.
-pub trait CfgsyncSnapshotMaterializer: Send + Sync {
+pub trait RegistrationSetMaterializer: Send + Sync {
     fn materialize_snapshot(
         &self,
-        registrations: &RegistrationSnapshot,
-    ) -> Result<Option<CfgsyncNodeCatalog>, DynCfgsyncError>;
+        registrations: &RegistrationSet,
+    ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError>;
 }
 
-impl CfgsyncMaterializer for CfgsyncNodeCatalog {
+/// Backward-compatible alias for the previous snapshot materializer trait name.
+pub trait CfgsyncSnapshotMaterializer: RegistrationSetMaterializer {}
+
+impl<T> CfgsyncSnapshotMaterializer for T where T: RegistrationSetMaterializer + ?Sized {}
+
+impl NodeArtifactsMaterializer for NodeArtifactsCatalog {
     fn materialize(
         &self,
         registration: &NodeRegistration,
-        _registrations: &RegistrationSnapshot,
-    ) -> Result<Option<CfgsyncNodeArtifacts>, DynCfgsyncError> {
+        _registrations: &RegistrationSet,
+    ) -> Result<Option<ArtifactSet>, DynCfgsyncError> {
         let artifacts = self
             .resolve(&registration.identifier)
             .map(build_node_artifacts_from_config);
@@ -148,22 +164,22 @@ impl CfgsyncMaterializer for CfgsyncNodeCatalog {
     }
 }
 
-impl CfgsyncSnapshotMaterializer for CfgsyncNodeCatalog {
+impl RegistrationSetMaterializer for NodeArtifactsCatalog {
     fn materialize_snapshot(
         &self,
-        _registrations: &RegistrationSnapshot,
-    ) -> Result<Option<CfgsyncNodeCatalog>, DynCfgsyncError> {
+        _registrations: &RegistrationSet,
+    ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
         Ok(Some(self.clone()))
     }
 }
 
 /// Registration-aware provider backed by an adapter materializer.
-pub struct MaterializingConfigProvider<M> {
+pub struct RegistrationConfigProvider<M> {
     materializer: M,
     registrations: Mutex<HashMap<String, NodeRegistration>>,
 }
 
-impl<M> MaterializingConfigProvider<M> {
+impl<M> RegistrationConfigProvider<M> {
     #[must_use]
     pub fn new(materializer: M) -> Self {
         Self {
@@ -181,23 +197,23 @@ impl<M> MaterializingConfigProvider<M> {
         registrations.get(identifier).cloned()
     }
 
-    fn registration_snapshot(&self) -> RegistrationSnapshot {
+    fn registration_set(&self) -> RegistrationSet {
         let registrations = self
             .registrations
             .lock()
             .expect("cfgsync registration store should not be poisoned");
 
-        RegistrationSnapshot::new(registrations.values().cloned().collect())
+        RegistrationSet::new(registrations.values().cloned().collect())
     }
 }
 
 /// Registration-aware provider backed by a snapshot materializer.
-pub struct SnapshotMaterializingConfigProvider<M> {
+pub struct SnapshotConfigProvider<M> {
     materializer: M,
     registrations: Mutex<HashMap<String, NodeRegistration>>,
 }
 
-impl<M> SnapshotMaterializingConfigProvider<M> {
+impl<M> SnapshotConfigProvider<M> {
     #[must_use]
     pub fn new(materializer: M) -> Self {
         Self {
@@ -215,19 +231,19 @@ impl<M> SnapshotMaterializingConfigProvider<M> {
         registrations.get(identifier).cloned()
     }
 
-    fn registration_snapshot(&self) -> RegistrationSnapshot {
+    fn registration_set(&self) -> RegistrationSet {
         let registrations = self
             .registrations
             .lock()
             .expect("cfgsync registration store should not be poisoned");
 
-        RegistrationSnapshot::new(registrations.values().cloned().collect())
+        RegistrationSet::new(registrations.values().cloned().collect())
     }
 }
 
-impl<M> ConfigProvider for SnapshotMaterializingConfigProvider<M>
+impl<M> ConfigProvider for SnapshotConfigProvider<M>
 where
-    M: CfgsyncSnapshotMaterializer,
+    M: RegistrationSetMaterializer,
 {
     fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
         let mut registrations = self
@@ -249,7 +265,7 @@ where
             }
         };
 
-        let registrations = self.registration_snapshot();
+        let registrations = self.registration_set();
         let catalog = match self.materializer.materialize_snapshot(&registrations) {
             Ok(Some(catalog)) => catalog,
             Ok(None) => {
@@ -273,9 +289,9 @@ where
     }
 }
 
-impl<M> ConfigProvider for MaterializingConfigProvider<M>
+impl<M> ConfigProvider for RegistrationConfigProvider<M>
 where
-    M: CfgsyncMaterializer,
+    M: NodeArtifactsMaterializer,
 {
     fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
         let mut registrations = self
@@ -296,7 +312,7 @@ where
                 ));
             }
         };
-        let registrations = self.registration_snapshot();
+        let registrations = self.registration_set();
 
         match self.materializer.materialize(&registration, &registrations) {
             Ok(Some(artifacts)) => {
@@ -340,6 +356,11 @@ pub trait CfgsyncEnv {
     fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error>;
 }
 
+/// Preferred public name for application-side cfgsync integration.
+pub trait DeploymentAdapter: CfgsyncEnv {}
+
+impl<T> DeploymentAdapter for T where T: CfgsyncEnv + ?Sized {}
+
 /// High-level failures while building adapter output for cfgsync.
 #[derive(Debug, Error)]
 pub enum BuildCfgsyncNodesError {
@@ -370,14 +391,14 @@ pub fn build_cfgsync_node_configs<E: CfgsyncEnv>(
     deployment: &E::Deployment,
     hostnames: &[String],
 ) -> Result<Vec<CfgsyncNodeConfig>, BuildCfgsyncNodesError> {
-    Ok(build_cfgsync_node_catalog::<E>(deployment, hostnames)?.into_configs())
+    Ok(build_node_artifact_catalog::<E>(deployment, hostnames)?.into_nodes())
 }
 
 /// Builds cfgsync node configs and indexes them by stable identifier.
-pub fn build_cfgsync_node_catalog<E: CfgsyncEnv>(
+pub fn build_node_artifact_catalog<E: DeploymentAdapter>(
     deployment: &E::Deployment,
     hostnames: &[String],
-) -> Result<CfgsyncNodeCatalog, BuildCfgsyncNodesError> {
+) -> Result<NodeArtifactsCatalog, BuildCfgsyncNodesError> {
     let nodes = E::nodes(deployment);
     ensure_hostname_count(nodes.len(), hostnames.len())?;
 
@@ -386,7 +407,15 @@ pub fn build_cfgsync_node_catalog<E: CfgsyncEnv>(
         output.push(build_node_entry::<E>(deployment, node, index, hostnames)?);
     }
 
-    Ok(CfgsyncNodeCatalog::new(output))
+    Ok(NodeArtifactsCatalog::new(output))
+}
+
+#[doc(hidden)]
+pub fn build_cfgsync_node_catalog<E: CfgsyncEnv>(
+    deployment: &E::Deployment,
+    hostnames: &[String],
+) -> Result<NodeArtifactsCatalog, BuildCfgsyncNodesError> {
+    build_node_artifact_catalog::<E>(deployment, hostnames)
 }
 
 fn ensure_hostname_count(nodes: usize, hostnames: usize) -> Result<(), BuildCfgsyncNodesError> {
@@ -397,22 +426,22 @@ fn ensure_hostname_count(nodes: usize, hostnames: usize) -> Result<(), BuildCfgs
     Ok(())
 }
 
-fn build_node_entry<E: CfgsyncEnv>(
+fn build_node_entry<E: DeploymentAdapter>(
     deployment: &E::Deployment,
     node: &E::Node,
     index: usize,
     hostnames: &[String],
-) -> Result<CfgsyncNodeConfig, BuildCfgsyncNodesError> {
+) -> Result<NodeArtifacts, BuildCfgsyncNodesError> {
     let node_config = build_rewritten_node_config::<E>(deployment, node, index, hostnames)?;
     let config_yaml = E::serialize_node_config(&node_config).map_err(adapter_error)?;
 
-    Ok(CfgsyncNodeConfig {
+    Ok(NodeArtifacts {
         identifier: E::node_identifier(index, node),
         files: vec![ArtifactFile::new("/config.yaml", &config_yaml)],
     })
 }
 
-fn build_rewritten_node_config<E: CfgsyncEnv>(
+fn build_rewritten_node_config<E: DeploymentAdapter>(
     deployment: &E::Deployment,
     node: &E::Node,
     index: usize,
@@ -425,9 +454,27 @@ fn build_rewritten_node_config<E: CfgsyncEnv>(
     Ok(node_config)
 }
 
-fn build_node_artifacts_from_config(config: &CfgsyncNodeConfig) -> CfgsyncNodeArtifacts {
-    CfgsyncNodeArtifacts::new(config.files.clone())
+fn build_node_artifacts_from_config(config: &NodeArtifacts) -> ArtifactSet {
+    ArtifactSet::new(config.files.clone())
 }
+
+#[doc(hidden)]
+pub type CfgsyncNodeConfig = NodeArtifacts;
+
+#[doc(hidden)]
+pub type CfgsyncNodeArtifacts = ArtifactSet;
+
+#[doc(hidden)]
+pub type RegistrationSnapshot = RegistrationSet;
+
+#[doc(hidden)]
+pub type CfgsyncNodeCatalog = NodeArtifactsCatalog;
+
+#[doc(hidden)]
+pub type MaterializingConfigProvider<M> = RegistrationConfigProvider<M>;
+
+#[doc(hidden)]
+pub type SnapshotMaterializingConfigProvider<M> = SnapshotConfigProvider<M>;
 
 #[cfg(test)]
 mod tests {
@@ -437,13 +484,13 @@ mod tests {
     use cfgsync_core::{CfgSyncErrorCode, ConfigProvider, NodeRegistration, RepoResponse};
 
     use super::{
-        CfgsyncMaterializer, CfgsyncNodeArtifacts, CfgsyncNodeCatalog, CfgsyncNodeConfig,
-        DynCfgsyncError, MaterializingConfigProvider, RegistrationSnapshot,
+        ArtifactSet, DynCfgsyncError, NodeArtifacts, NodeArtifactsCatalog,
+        NodeArtifactsMaterializer, RegistrationConfigProvider, RegistrationSet,
     };
 
     #[test]
     fn catalog_resolves_identifier() {
-        let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
+        let catalog = NodeArtifactsCatalog::new(vec![NodeArtifacts {
             identifier: "node-1".to_owned(),
             files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
@@ -455,11 +502,11 @@ mod tests {
 
     #[test]
     fn materializing_provider_resolves_registered_node() {
-        let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
+        let catalog = NodeArtifactsCatalog::new(vec![NodeArtifacts {
             identifier: "node-1".to_owned(),
             files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
-        let provider = MaterializingConfigProvider::new(catalog);
+        let provider = RegistrationConfigProvider::new(catalog);
         let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
 
         let _ = provider.register(registration.clone());
@@ -472,11 +519,11 @@ mod tests {
 
     #[test]
     fn materializing_provider_reports_not_ready_before_registration() {
-        let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
+        let catalog = NodeArtifactsCatalog::new(vec![NodeArtifacts {
             identifier: "node-1".to_owned(),
             files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
-        let provider = MaterializingConfigProvider::new(catalog);
+        let provider = RegistrationConfigProvider::new(catalog);
         let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
 
         match provider.resolve(&registration) {
@@ -489,12 +536,12 @@ mod tests {
         calls: AtomicUsize,
     }
 
-    impl CfgsyncMaterializer for ThresholdMaterializer {
+    impl NodeArtifactsMaterializer for ThresholdMaterializer {
         fn materialize(
             &self,
             registration: &NodeRegistration,
-            registrations: &RegistrationSnapshot,
-        ) -> Result<Option<CfgsyncNodeArtifacts>, DynCfgsyncError> {
+            registrations: &RegistrationSet,
+        ) -> Result<Option<ArtifactSet>, DynCfgsyncError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
 
             if registrations.len() < 2 {
@@ -507,13 +554,13 @@ mod tests {
                 ArtifactFile::new("/shared.yaml", format!("peers: {peer_count}")),
             ];
 
-            Ok(Some(CfgsyncNodeArtifacts::new(files)))
+            Ok(Some(ArtifactSet::new(files)))
         }
     }
 
     #[test]
     fn materializing_provider_uses_registration_snapshot_for_readiness() {
-        let provider = MaterializingConfigProvider::new(ThresholdMaterializer {
+        let provider = RegistrationConfigProvider::new(ThresholdMaterializer {
             calls: AtomicUsize::new(0),
         });
         let node_a = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("parse ip"));
