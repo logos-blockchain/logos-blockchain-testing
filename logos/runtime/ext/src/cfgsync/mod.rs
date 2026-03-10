@@ -116,15 +116,17 @@ fn build_cfgsync_server_config() -> Value {
         Value::Number(4400_u64.into()),
     );
 
-    root.insert(
+    let mut source = Mapping::new();
+    source.insert(
+        Value::String("kind".to_string()),
+        Value::String("registration_bundle".to_string()),
+    );
+    source.insert(
         Value::String("bundle_path".to_string()),
         Value::String("cfgsync.bundle.yaml".to_string()),
     );
 
-    root.insert(
-        Value::String("serving_mode".to_string()),
-        Value::String("registration".to_string()),
-    );
+    root.insert(Value::String("source".to_string()), Value::Mapping(source));
 
     Value::Mapping(root)
 }

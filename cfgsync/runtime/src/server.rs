@@ -10,24 +10,36 @@ use cfgsync_core::{
     BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, RunCfgsyncError,
     build_cfgsync_router, serve_cfgsync,
 };
-use serde::Deserialize;
+use serde::{Deserialize, de::Error as _};
 use thiserror::Error;
 
 /// Runtime cfgsync server config loaded from YAML.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CfgsyncServerConfig {
     pub port: u16,
-    pub bundle_path: String,
-    #[serde(default)]
-    pub serving_mode: CfgsyncServingMode,
+    pub source: CfgsyncServerSource,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CfgsyncServerSource {
+    Bundle { bundle_path: String },
+    RegistrationBundle { bundle_path: String },
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum CfgsyncServingMode {
-    #[default]
+enum LegacyServingMode {
     Bundle,
     Registration,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCfgsyncServerConfig {
+    port: u16,
+    source: Option<CfgsyncServerSource>,
+    bundle_path: Option<String>,
+    serving_mode: Option<LegacyServingMode>,
 }
 
 #[derive(Debug, Error)]
@@ -56,11 +68,17 @@ impl CfgsyncServerConfig {
                 source,
             })?;
 
-        serde_yaml::from_str(&config_content).map_err(|source| {
-            LoadCfgsyncServerConfigError::Parse {
-                path: config_path,
-                source,
-            }
+        let raw: RawCfgsyncServerConfig =
+            serde_yaml::from_str(&config_content).map_err(|source| {
+                LoadCfgsyncServerConfigError::Parse {
+                    path: config_path,
+                    source,
+                }
+            })?;
+
+        Self::from_raw(raw).map_err(|source| LoadCfgsyncServerConfigError::Parse {
+            path: path.display().to_string(),
+            source,
         })
     }
 
@@ -68,18 +86,42 @@ impl CfgsyncServerConfig {
     pub fn for_bundle(port: u16, bundle_path: impl Into<String>) -> Self {
         Self {
             port,
-            bundle_path: bundle_path.into(),
-            serving_mode: CfgsyncServingMode::Bundle,
+            source: CfgsyncServerSource::Bundle {
+                bundle_path: bundle_path.into(),
+            },
         }
     }
 
     #[must_use]
-    pub fn for_registration(port: u16, bundle_path: impl Into<String>) -> Self {
+    pub fn for_registration_bundle(port: u16, bundle_path: impl Into<String>) -> Self {
         Self {
             port,
-            bundle_path: bundle_path.into(),
-            serving_mode: CfgsyncServingMode::Registration,
+            source: CfgsyncServerSource::RegistrationBundle {
+                bundle_path: bundle_path.into(),
+            },
         }
+    }
+
+    fn from_raw(raw: RawCfgsyncServerConfig) -> Result<Self, serde_yaml::Error> {
+        let source = match (raw.source, raw.bundle_path, raw.serving_mode) {
+            (Some(source), _, _) => source,
+            (None, Some(bundle_path), Some(LegacyServingMode::Registration)) => {
+                CfgsyncServerSource::RegistrationBundle { bundle_path }
+            }
+            (None, Some(bundle_path), None | Some(LegacyServingMode::Bundle)) => {
+                CfgsyncServerSource::Bundle { bundle_path }
+            }
+            (None, None, _) => {
+                return Err(serde_yaml::Error::custom(
+                    "cfgsync server config requires source.kind or legacy bundle_path",
+                ));
+            }
+        };
+
+        Ok(Self {
+            port: raw.port,
+            source,
+        })
     }
 }
 
@@ -137,7 +179,7 @@ fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::Path
 /// Loads runtime config and starts cfgsync HTTP server process.
 pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()> {
     let config = CfgsyncServerConfig::load_from_file(config_path)?;
-    let bundle_path = resolve_bundle_path(config_path, &config.bundle_path);
+    let bundle_path = resolve_source_path(config_path, &config.source);
 
     let state = build_server_state(&config, &bundle_path)?;
     serve_cfgsync(config.port, state).await?;
@@ -209,12 +251,21 @@ async fn serve_router(port: u16, router: Router) -> Result<(), RunCfgsyncError> 
 
 fn build_server_state(
     config: &CfgsyncServerConfig,
-    bundle_path: &Path,
+    source_path: &Path,
 ) -> anyhow::Result<CfgsyncServerState> {
-    let repo = match config.serving_mode {
-        CfgsyncServingMode::Bundle => load_bundle_provider(bundle_path)?,
-        CfgsyncServingMode::Registration => load_registration_source(bundle_path)?,
+    let repo = match &config.source {
+        CfgsyncServerSource::Bundle { .. } => load_bundle_provider(source_path)?,
+        CfgsyncServerSource::RegistrationBundle { .. } => load_registration_source(source_path)?,
     };
 
     Ok(CfgsyncServerState::new(repo))
+}
+
+fn resolve_source_path(config_path: &Path, source: &CfgsyncServerSource) -> std::path::PathBuf {
+    match source {
+        CfgsyncServerSource::Bundle { bundle_path }
+        | CfgsyncServerSource::RegistrationBundle { bundle_path } => {
+            resolve_bundle_path(config_path, bundle_path)
+        }
+    }
 }
