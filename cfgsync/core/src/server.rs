@@ -4,7 +4,7 @@ use axum::{Json, Router, extract::State, http::StatusCode, response::IntoRespons
 use thiserror::Error;
 
 use crate::repo::{
-    CfgSyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
+    CfgsyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
     RegisterNodeResponse,
 };
 
@@ -75,15 +75,15 @@ fn resolve_node_config_response(
     state.repo.resolve(registration)
 }
 
-fn error_status(code: &CfgSyncErrorCode) -> StatusCode {
+fn error_status(code: &CfgsyncErrorCode) -> StatusCode {
     match code {
-        CfgSyncErrorCode::MissingConfig => StatusCode::NOT_FOUND,
-        CfgSyncErrorCode::NotReady => StatusCode::TOO_EARLY,
-        CfgSyncErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+        CfgsyncErrorCode::MissingConfig => StatusCode::NOT_FOUND,
+        CfgsyncErrorCode::NotReady => StatusCode::TOO_EARLY,
+        CfgsyncErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
-pub fn cfgsync_app(state: CfgsyncServerState) -> Router {
+pub fn build_cfgsync_router(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
         .route("/node", post(node_config))
@@ -92,8 +92,8 @@ pub fn cfgsync_app(state: CfgsyncServerState) -> Router {
 }
 
 /// Runs cfgsync HTTP server on the provided port until shutdown/error.
-pub async fn run_cfgsync(port: u16, state: CfgsyncServerState) -> Result<(), RunCfgsyncError> {
-    let app = cfgsync_app(state);
+pub async fn serve_cfgsync(port: u16, state: CfgsyncServerState) -> Result<(), RunCfgsyncError> {
+    let app = build_cfgsync_router(state);
     println!("Server running on http://0.0.0.0:{port}");
 
     let bind_addr = format!("0.0.0.0:{port}");
@@ -111,6 +111,11 @@ pub async fn run_cfgsync(port: u16, state: CfgsyncServerState) -> Result<(), Run
 #[doc(hidden)]
 pub type CfgSyncState = CfgsyncServerState;
 
+#[doc(hidden)]
+pub use build_cfgsync_router as cfgsync_app;
+#[doc(hidden)]
+pub use serve_cfgsync as run_cfgsync;
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, sync::Arc};
@@ -119,7 +124,7 @@ mod tests {
 
     use super::{CfgsyncServerState, NodeRegistration, node_config, register_node};
     use crate::repo::{
-        CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, ConfigResolveResponse,
+        CFGSYNC_SCHEMA_VERSION, CfgsyncErrorCode, CfgsyncErrorResponse, ConfigResolveResponse,
         NodeArtifactFile, NodeArtifactsPayload, NodeConfigSource, RegisterNodeResponse,
     };
 
@@ -132,7 +137,7 @@ mod tests {
             if self.data.contains_key(&registration.identifier) {
                 RegisterNodeResponse::Registered
             } else {
-                RegisterNodeResponse::Error(CfgSyncErrorResponse::missing_config(
+                RegisterNodeResponse::Error(CfgsyncErrorResponse::missing_config(
                     &registration.identifier,
                 ))
             }
@@ -144,7 +149,7 @@ mod tests {
                 .cloned()
                 .map_or_else(
                     || {
-                        ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
+                        ConfigResolveResponse::Error(CfgsyncErrorResponse::missing_config(
                             &registration.identifier,
                         ))
                     },
@@ -161,7 +166,7 @@ mod tests {
     impl NodeConfigSource for RegistrationAwareProvider {
         fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
             if !self.data.contains_key(&registration.identifier) {
-                return RegisterNodeResponse::Error(CfgSyncErrorResponse::missing_config(
+                return RegisterNodeResponse::Error(CfgsyncErrorResponse::missing_config(
                     &registration.identifier,
                 ));
             }
@@ -182,7 +187,7 @@ mod tests {
                 .expect("test registration store should not be poisoned");
 
             if !registrations.contains_key(&registration.identifier) {
-                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
@@ -192,7 +197,7 @@ mod tests {
                 .cloned()
                 .map_or_else(
                     || {
-                        ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
+                        ConfigResolveResponse::Error(CfgsyncErrorResponse::missing_config(
                             &registration.identifier,
                         ))
                     },
@@ -248,9 +253,9 @@ mod tests {
 
     #[test]
     fn missing_config_error_uses_expected_code() {
-        let error = CfgSyncErrorResponse::missing_config("missing-node");
+        let error = CfgsyncErrorResponse::missing_config("missing-node");
 
-        assert!(matches!(error.code, CfgSyncErrorCode::MissingConfig));
+        assert!(matches!(error.code, CfgsyncErrorCode::MissingConfig));
     }
 
     #[tokio::test]

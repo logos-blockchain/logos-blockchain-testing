@@ -159,7 +159,7 @@ impl NodeArtifactsPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CfgSyncErrorCode {
+pub enum CfgsyncErrorCode {
     MissingConfig,
     NotReady,
     Internal,
@@ -168,16 +168,16 @@ pub enum CfgSyncErrorCode {
 /// Structured error body returned by cfgsync server.
 #[derive(Debug, Clone, Serialize, Deserialize, Error)]
 #[error("{code:?}: {message}")]
-pub struct CfgSyncErrorResponse {
-    pub code: CfgSyncErrorCode,
+pub struct CfgsyncErrorResponse {
+    pub code: CfgsyncErrorCode,
     pub message: String,
 }
 
-impl CfgSyncErrorResponse {
+impl CfgsyncErrorResponse {
     #[must_use]
     pub fn missing_config(identifier: &str) -> Self {
         Self {
-            code: CfgSyncErrorCode::MissingConfig,
+            code: CfgsyncErrorCode::MissingConfig,
             message: format!("missing config for host {identifier}"),
         }
     }
@@ -185,7 +185,7 @@ impl CfgSyncErrorResponse {
     #[must_use]
     pub fn not_ready(identifier: &str) -> Self {
         Self {
-            code: CfgSyncErrorCode::NotReady,
+            code: CfgsyncErrorCode::NotReady,
             message: format!("config for host {identifier} is not ready"),
         }
     }
@@ -193,7 +193,7 @@ impl CfgSyncErrorResponse {
     #[must_use]
     pub fn internal(message: impl Into<String>) -> Self {
         Self {
-            code: CfgSyncErrorCode::Internal,
+            code: CfgsyncErrorCode::Internal,
             message: message.into(),
         }
     }
@@ -202,13 +202,13 @@ impl CfgSyncErrorResponse {
 /// Resolution outcome for a requested node identifier.
 pub enum ConfigResolveResponse {
     Config(NodeArtifactsPayload),
-    Error(CfgSyncErrorResponse),
+    Error(CfgsyncErrorResponse),
 }
 
 /// Outcome for a node registration request.
 pub enum RegisterNodeResponse {
     Registered,
-    Error(CfgSyncErrorResponse),
+    Error(CfgsyncErrorResponse),
 }
 
 /// Source of cfgsync node payloads.
@@ -235,7 +235,7 @@ impl NodeConfigSource for StaticConfigSource {
         if self.configs.contains_key(&registration.identifier) {
             RegisterNodeResponse::Registered
         } else {
-            RegisterNodeResponse::Error(CfgSyncErrorResponse::missing_config(
+            RegisterNodeResponse::Error(CfgsyncErrorResponse::missing_config(
                 &registration.identifier,
             ))
         }
@@ -247,7 +247,7 @@ impl NodeConfigSource for StaticConfigSource {
             .cloned()
             .map_or_else(
                 || {
-                    ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
+                    ConfigResolveResponse::Error(CfgsyncErrorResponse::missing_config(
                         &registration.identifier,
                     ))
                 },
@@ -372,7 +372,7 @@ mod tests {
         )) {
             ConfigResolveResponse::Config(_) => panic!("expected missing-config error"),
             ConfigResolveResponse::Error(error) => {
-                assert!(matches!(error.code, CfgSyncErrorCode::MissingConfig));
+                assert!(matches!(error.code, CfgsyncErrorCode::MissingConfig));
                 assert!(error.message.contains("unknown-node"));
             }
         }
@@ -515,3 +515,9 @@ pub type CfgSyncFile = NodeArtifactFile;
 
 #[doc(hidden)]
 pub type CfgSyncPayload = NodeArtifactsPayload;
+
+#[doc(hidden)]
+pub type CfgSyncErrorCode = CfgsyncErrorCode;
+
+#[doc(hidden)]
+pub type CfgSyncErrorResponse = CfgsyncErrorResponse;

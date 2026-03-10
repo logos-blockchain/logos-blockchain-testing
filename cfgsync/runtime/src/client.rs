@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use cfgsync_core::{
-    CFGSYNC_SCHEMA_VERSION, CfgSyncClient, NodeArtifactFile, NodeArtifactsPayload,
+    CFGSYNC_SCHEMA_VERSION, CfgsyncClient, NodeArtifactFile, NodeArtifactsPayload,
     NodeRegistration, RegistrationPayload,
 };
 use thiserror::Error;
@@ -26,7 +26,7 @@ async fn fetch_with_retry(
     payload: &NodeRegistration,
     server_addr: &str,
 ) -> Result<NodeArtifactsPayload> {
-    let client = CfgSyncClient::new(server_addr);
+    let client = CfgsyncClient::new(server_addr);
 
     for attempt in 1..=FETCH_ATTEMPTS {
         match fetch_once(&client, payload).await {
@@ -47,7 +47,7 @@ async fn fetch_with_retry(
 }
 
 async fn fetch_once(
-    client: &CfgSyncClient,
+    client: &CfgsyncClient,
     payload: &NodeRegistration,
 ) -> Result<NodeArtifactsPayload> {
     let response = client.fetch_node_config(payload).await?;
@@ -75,7 +75,7 @@ async fn pull_config_files(payload: NodeRegistration, server_addr: &str) -> Resu
 }
 
 async fn register_node(payload: &NodeRegistration, server_addr: &str) -> Result<()> {
-    let client = CfgSyncClient::new(server_addr);
+    let client = CfgsyncClient::new(server_addr);
 
     for attempt in 1..=FETCH_ATTEMPTS {
         match client.register_node(payload).await {
@@ -188,7 +188,7 @@ mod tests {
 
     use cfgsync_core::{
         CfgsyncServerState, NodeArtifactsBundle, NodeArtifactsBundleEntry, NodeArtifactsPayload,
-        StaticConfigSource, run_cfgsync,
+        StaticConfigSource, serve_cfgsync,
     };
     use tempfile::tempdir;
 
@@ -213,7 +213,9 @@ mod tests {
         let port = allocate_test_port();
         let address = format!("http://127.0.0.1:{port}");
         let server = tokio::spawn(async move {
-            run_cfgsync(port, state).await.expect("run cfgsync server");
+            serve_cfgsync(port, state)
+                .await
+                .expect("run cfgsync server");
         });
 
         pull_config_files(

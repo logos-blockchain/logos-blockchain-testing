@@ -1,7 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::repo::{CfgSyncErrorResponse, NodeArtifactsPayload, NodeRegistration};
+use crate::repo::{CfgsyncErrorCode, CfgsyncErrorResponse, NodeArtifactsPayload, NodeRegistration};
 
 /// cfgsync client-side request/response failures.
 #[derive(Debug, Error)]
@@ -12,7 +12,7 @@ pub enum ClientError {
     Status {
         status: reqwest::StatusCode,
         message: String,
-        error: Option<CfgSyncErrorResponse>,
+        error: Option<CfgsyncErrorResponse>,
     },
     #[error("failed to parse cfgsync response: {0}")]
     Decode(serde_json::Error),
@@ -22,16 +22,17 @@ pub enum ClientError {
 pub enum ConfigFetchStatus {
     Ready,
     NotReady,
+    Missing,
 }
 
 /// Reusable HTTP client for cfgsync server endpoints.
 #[derive(Clone, Debug)]
-pub struct CfgSyncClient {
+pub struct CfgsyncClient {
     base_url: String,
     http: reqwest::Client,
 }
 
-impl CfgSyncClient {
+impl CfgsyncClient {
     #[must_use]
     pub fn new(base_url: impl Into<String>) -> Self {
         let mut base_url = base_url.into();
@@ -80,10 +81,15 @@ impl CfgSyncClient {
                 status,
                 error: Some(error),
                 ..
-            }) if status == reqwest::StatusCode::TOO_EARLY => {
-                let _ = error;
-                Ok(ConfigFetchStatus::NotReady)
-            }
+            }) => match error.code {
+                CfgsyncErrorCode::NotReady => Ok(ConfigFetchStatus::NotReady),
+                CfgsyncErrorCode::MissingConfig => Ok(ConfigFetchStatus::Missing),
+                CfgsyncErrorCode::Internal => Err(ClientError::Status {
+                    status,
+                    message: error.message.clone(),
+                    error: Some(error),
+                }),
+            },
             Err(error) => Err(error),
         }
     }
@@ -100,7 +106,7 @@ impl CfgSyncClient {
         let status = response.status();
         let body = response.text().await?;
         if !status.is_success() {
-            let error = serde_json::from_str::<CfgSyncErrorResponse>(&body).ok();
+            let error = serde_json::from_str::<CfgsyncErrorResponse>(&body).ok();
             let message = error
                 .as_ref()
                 .map(|err| err.message.clone())
@@ -126,7 +132,7 @@ impl CfgSyncClient {
         let status = response.status();
         let body = response.text().await?;
         if !status.is_success() {
-            let error = serde_json::from_str::<CfgSyncErrorResponse>(&body).ok();
+            let error = serde_json::from_str::<CfgsyncErrorResponse>(&body).ok();
             let message = error
                 .as_ref()
                 .map(|err| err.message.clone())
@@ -149,3 +155,6 @@ impl CfgSyncClient {
         }
     }
 }
+
+#[doc(hidden)]
+pub type CfgSyncClient = CfgsyncClient;

@@ -3,7 +3,7 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::Context as _;
 use cfgsync_adapter::{NodeArtifacts, NodeArtifactsCatalog, RegistrationConfigProvider};
 use cfgsync_core::{
-    BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, run_cfgsync,
+    BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, serve_cfgsync,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -159,7 +159,7 @@ pub async fn run_cfgsync_server(config_path: &Path) -> anyhow::Result<()> {
     let bundle_path = resolve_bundle_path(config_path, &config.bundle_path);
 
     let state = build_server_state(&config, &bundle_path)?;
-    run_cfgsync(config.port, state).await?;
+    serve_cfgsync(config.port, state).await?;
 
     Ok(())
 }

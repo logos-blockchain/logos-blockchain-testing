@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error, sync::Mutex};
 
 use cfgsync_artifacts::ArtifactFile;
 use cfgsync_core::{
-    CfgSyncErrorResponse, ConfigResolveResponse, NodeArtifactsPayload, NodeConfigSource,
+    CfgsyncErrorResponse, ConfigResolveResponse, NodeArtifactsPayload, NodeConfigSource,
     NodeRegistration, RegisterNodeResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -259,7 +259,7 @@ where
         let registration = match self.registration_for(&registration.identifier) {
             Some(registration) => registration,
             None => {
-                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
@@ -269,12 +269,12 @@ where
         let catalog = match self.materializer.materialize_snapshot(&registrations) {
             Ok(Some(catalog)) => catalog,
             Ok(None) => {
-                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
             Err(error) => {
-                return ConfigResolveResponse::Error(CfgSyncErrorResponse::internal(format!(
+                return ConfigResolveResponse::Error(CfgsyncErrorResponse::internal(format!(
                     "failed to materialize config snapshot: {error}"
                 )));
             }
@@ -284,7 +284,7 @@ where
             Some(config) => ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(
                 config.files.clone(),
             )),
-            None => ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
+            None => ConfigResolveResponse::Error(CfgsyncErrorResponse::missing_config(
                 &registration.identifier,
             )),
         }
@@ -309,7 +309,7 @@ where
         let registration = match self.registration_for(&registration.identifier) {
             Some(registration) => registration,
             None => {
-                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
@@ -320,10 +320,10 @@ where
             Ok(Some(artifacts)) => ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(
                 artifacts.files().to_vec(),
             )),
-            Ok(None) => ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
+            Ok(None) => ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                 &registration.identifier,
             )),
-            Err(error) => ConfigResolveResponse::Error(CfgSyncErrorResponse::internal(format!(
+            Err(error) => ConfigResolveResponse::Error(CfgsyncErrorResponse::internal(format!(
                 "failed to materialize config for host {}: {error}",
                 registration.identifier
             ))),
@@ -484,7 +484,7 @@ mod tests {
 
     use cfgsync_artifacts::ArtifactFile;
     use cfgsync_core::{
-        CfgSyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
+        CfgsyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
     };
 
     use super::{
@@ -535,7 +535,7 @@ mod tests {
         match provider.resolve(&registration) {
             ConfigResolveResponse::Config(_) => panic!("expected not-ready error"),
             ConfigResolveResponse::Error(error) => {
-                assert!(matches!(error.code, CfgSyncErrorCode::NotReady))
+                assert!(matches!(error.code, CfgsyncErrorCode::NotReady))
             }
         }
     }
@@ -579,7 +579,7 @@ mod tests {
         match provider.resolve(&node_a) {
             ConfigResolveResponse::Config(_) => panic!("expected not-ready error"),
             ConfigResolveResponse::Error(error) => {
-                assert!(matches!(error.code, CfgSyncErrorCode::NotReady))
+                assert!(matches!(error.code, CfgsyncErrorCode::NotReady))
             }
         }
 
