@@ -122,8 +122,8 @@ fn build_cfgsync_server_config() -> Value {
     );
 
     root.insert(
-        Value::String("registration_flow".to_string()),
-        Value::Bool(true),
+        Value::String("serving_mode".to_string()),
+        Value::String("registration".to_string()),
     );
 
     Value::Mapping(root)
