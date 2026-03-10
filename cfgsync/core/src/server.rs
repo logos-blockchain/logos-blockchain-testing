@@ -119,12 +119,12 @@ mod tests {
 
     use super::{CfgsyncServerState, NodeRegistration, node_config, register_node};
     use crate::repo::{
-        CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, CfgSyncFile,
-        CfgSyncPayload, ConfigResolveResponse, NodeConfigSource, RegisterNodeResponse,
+        CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, ConfigResolveResponse,
+        NodeArtifactFile, NodeArtifactsPayload, NodeConfigSource, RegisterNodeResponse,
     };
 
     struct StaticProvider {
-        data: HashMap<String, CfgSyncPayload>,
+        data: HashMap<String, NodeArtifactsPayload>,
     }
 
     impl NodeConfigSource for StaticProvider {
@@ -154,7 +154,7 @@ mod tests {
     }
 
     struct RegistrationAwareProvider {
-        data: HashMap<String, CfgSyncPayload>,
+        data: HashMap<String, NodeArtifactsPayload>,
         registrations: std::sync::Mutex<HashMap<String, NodeRegistration>>,
     }
 
@@ -201,10 +201,10 @@ mod tests {
         }
     }
 
-    fn sample_payload() -> CfgSyncPayload {
-        CfgSyncPayload {
+    fn sample_payload() -> NodeArtifactsPayload {
+        NodeArtifactsPayload {
             schema_version: CFGSYNC_SCHEMA_VERSION,
-            files: vec![CfgSyncFile::new("/app-config.yaml", "app: test")],
+            files: vec![NodeArtifactFile::new("/app-config.yaml", "app: test")],
         }
     }
 

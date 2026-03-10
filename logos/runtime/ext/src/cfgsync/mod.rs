@@ -2,7 +2,7 @@ use anyhow::Result;
 use cfgsync_adapter::{CfgsyncEnv, build_cfgsync_node_catalog};
 pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
 use cfgsync_core::{
-    CfgSyncBundle, CfgSyncBundleNode,
+    NodeArtifactsBundle, NodeArtifactsBundleEntry,
     render::{
         CfgsyncConfigOverrides, RenderedCfgsync, ensure_bundle_path,
         render_cfgsync_yaml_from_template, write_rendered_cfgsync,
@@ -48,20 +48,20 @@ pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
 fn build_cfgsync_bundle<E: CfgsyncEnv>(
     topology: &E::Deployment,
     hostnames: &[String],
-) -> Result<CfgSyncBundle> {
+) -> Result<NodeArtifactsBundle> {
     let nodes = build_cfgsync_node_catalog::<E>(topology, hostnames)?.into_configs();
     let nodes = nodes
         .into_iter()
-        .map(|node| CfgSyncBundleNode {
+        .map(|node| NodeArtifactsBundleEntry {
             identifier: node.identifier,
             files: node.files,
         })
         .collect();
 
-    Ok(CfgSyncBundle::new(nodes))
+    Ok(NodeArtifactsBundle::new(nodes))
 }
 
-fn append_deployment_files(bundle: &mut CfgSyncBundle) -> Result<()> {
+fn append_deployment_files(bundle: &mut NodeArtifactsBundle) -> Result<()> {
     for node in &mut bundle.nodes {
         if has_file_path(node, "/deployment.yaml") {
             continue;
@@ -80,18 +80,18 @@ fn append_deployment_files(bundle: &mut CfgSyncBundle) -> Result<()> {
     Ok(())
 }
 
-fn has_file_path(node: &CfgSyncBundleNode, path: &str) -> bool {
+fn has_file_path(node: &NodeArtifactsBundleEntry, path: &str) -> bool {
     node.files.iter().any(|file| file.path == path)
 }
 
-fn config_file_content(node: &CfgSyncBundleNode) -> Option<String> {
+fn config_file_content(node: &NodeArtifactsBundleEntry) -> Option<String> {
     node.files
         .iter()
         .find_map(|file| (file.path == "/config.yaml").then_some(file.content.clone()))
 }
 
-fn build_bundle_file(path: &str, content: String) -> cfgsync_core::CfgSyncFile {
-    cfgsync_core::CfgSyncFile {
+fn build_bundle_file(path: &str, content: String) -> cfgsync_core::NodeArtifactFile {
+    cfgsync_core::NodeArtifactFile {
         path: path.to_owned(),
         content,
     }

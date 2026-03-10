@@ -1,26 +1,32 @@
 use serde::{Deserialize, Serialize};
 
-use crate::CfgSyncFile;
+use crate::NodeArtifactFile;
 
 /// Top-level cfgsync bundle containing per-node file payloads.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CfgSyncBundle {
-    pub nodes: Vec<CfgSyncBundleNode>,
+pub struct NodeArtifactsBundle {
+    pub nodes: Vec<NodeArtifactsBundleEntry>,
 }
 
-impl CfgSyncBundle {
+impl NodeArtifactsBundle {
     #[must_use]
-    pub fn new(nodes: Vec<CfgSyncBundleNode>) -> Self {
+    pub fn new(nodes: Vec<NodeArtifactsBundleEntry>) -> Self {
         Self { nodes }
     }
 }
 
 /// Artifact set for a single node resolved by identifier.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CfgSyncBundleNode {
+pub struct NodeArtifactsBundleEntry {
     /// Stable node identifier used by cfgsync lookup.
     pub identifier: String,
     /// Files that should be materialized for the node.
     #[serde(default)]
-    pub files: Vec<CfgSyncFile>,
+    pub files: Vec<NodeArtifactFile>,
 }
+
+#[doc(hidden)]
+pub type CfgSyncBundle = NodeArtifactsBundle;
+
+#[doc(hidden)]
+pub type CfgSyncBundleNode = NodeArtifactsBundleEntry;

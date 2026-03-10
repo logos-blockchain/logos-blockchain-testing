@@ -4,7 +4,9 @@ pub mod render;
 pub mod repo;
 pub mod server;
 
+#[doc(hidden)]
 pub use bundle::{CfgSyncBundle, CfgSyncBundleNode};
+pub use bundle::{NodeArtifactsBundle, NodeArtifactsBundleEntry};
 pub use client::{CfgSyncClient, ClientError, ConfigFetchStatus};
 pub use render::{
     CfgsyncConfigOverrides, CfgsyncOutputPaths, RenderedCfgsync, apply_cfgsync_overrides,
@@ -13,13 +15,14 @@ pub use render::{
 };
 pub use repo::{
     BundleConfigSource, BundleConfigSourceError, CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode,
-    CfgSyncErrorResponse, CfgSyncFile, CfgSyncPayload, ConfigResolveResponse, NodeConfigSource,
-    NodeRegistration, RegisterNodeResponse, RegistrationPayload, StaticConfigSource,
+    CfgSyncErrorResponse, ConfigResolveResponse, NodeArtifactFile, NodeArtifactsPayload,
+    NodeConfigSource, NodeRegistration, RegisterNodeResponse, RegistrationPayload,
+    StaticConfigSource,
 };
 #[doc(hidden)]
 pub use repo::{
-    ConfigProvider, ConfigRepo, FileConfigProvider, FileConfigProviderError, RegistrationResponse,
-    RepoResponse,
+    CfgSyncFile, CfgSyncPayload, ConfigProvider, ConfigRepo, FileConfigProvider,
+    FileConfigProviderError, RegistrationResponse, RepoResponse,
 };
 #[doc(hidden)]
 pub use server::CfgSyncState;

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::repo::{CfgSyncErrorResponse, CfgSyncPayload, NodeRegistration};
+use crate::repo::{CfgSyncErrorResponse, NodeArtifactsPayload, NodeRegistration};
 
 /// cfgsync client-side request/response failures.
 #[derive(Debug, Error)]
@@ -58,7 +58,7 @@ impl CfgSyncClient {
     pub async fn fetch_node_config(
         &self,
         payload: &NodeRegistration,
-    ) -> Result<CfgSyncPayload, ClientError> {
+    ) -> Result<NodeArtifactsPayload, ClientError> {
         self.post_json("/node", payload).await
     }
 
@@ -66,7 +66,7 @@ impl CfgSyncClient {
     pub async fn fetch_init_with_node_config(
         &self,
         payload: &NodeRegistration,
-    ) -> Result<CfgSyncPayload, ClientError> {
+    ) -> Result<NodeArtifactsPayload, ClientError> {
         self.post_json("/init-with-node", payload).await
     }
 
@@ -93,7 +93,7 @@ impl CfgSyncClient {
         &self,
         path: &str,
         payload: &P,
-    ) -> Result<CfgSyncPayload, ClientError> {
+    ) -> Result<NodeArtifactsPayload, ClientError> {
         let url = self.endpoint_url(path);
         let response = self.http.post(url).json(payload).send().await?;
 

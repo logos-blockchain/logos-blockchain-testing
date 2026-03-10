@@ -3,7 +3,7 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::Context as _;
 use cfgsync_adapter::{NodeArtifacts, NodeArtifactsCatalog, RegistrationConfigProvider};
 use cfgsync_core::{
-    BundleConfigSource, CfgSyncBundle, CfgsyncServerState, NodeConfigSource, run_cfgsync,
+    BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, run_cfgsync,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -120,7 +120,7 @@ fn load_materializing_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn Nod
     Ok(Arc::new(provider))
 }
 
-fn load_bundle_yaml(bundle_path: &Path) -> anyhow::Result<CfgSyncBundle> {
+fn load_bundle_yaml(bundle_path: &Path) -> anyhow::Result<NodeArtifactsBundle> {
     let raw = fs::read_to_string(bundle_path)
         .with_context(|| format!("reading cfgsync bundle from {}", bundle_path.display()))?;
 
@@ -128,7 +128,7 @@ fn load_bundle_yaml(bundle_path: &Path) -> anyhow::Result<CfgSyncBundle> {
         .with_context(|| format!("parsing cfgsync bundle from {}", bundle_path.display()))
 }
 
-fn build_node_catalog(bundle: CfgSyncBundle) -> NodeArtifactsCatalog {
+fn build_node_catalog(bundle: NodeArtifactsBundle) -> NodeArtifactsCatalog {
     let nodes = bundle
         .nodes
         .into_iter()

@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error, sync::Mutex};
 
 use cfgsync_artifacts::ArtifactFile;
 use cfgsync_core::{
-    CfgSyncErrorResponse, CfgSyncPayload, ConfigResolveResponse, NodeConfigSource,
+    CfgSyncErrorResponse, ConfigResolveResponse, NodeArtifactsPayload, NodeConfigSource,
     NodeRegistration, RegisterNodeResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -281,9 +281,9 @@ where
         };
 
         match catalog.resolve(&registration.identifier) {
-            Some(config) => {
-                ConfigResolveResponse::Config(CfgSyncPayload::from_files(config.files.clone()))
-            }
+            Some(config) => ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(
+                config.files.clone(),
+            )),
             None => ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
                 &registration.identifier,
             )),
@@ -317,7 +317,7 @@ where
         let registrations = self.registration_set();
 
         match self.materializer.materialize(&registration, &registrations) {
-            Ok(Some(artifacts)) => ConfigResolveResponse::Config(CfgSyncPayload::from_files(
+            Ok(Some(artifacts)) => ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(
                 artifacts.files().to_vec(),
             )),
             Ok(None) => ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(

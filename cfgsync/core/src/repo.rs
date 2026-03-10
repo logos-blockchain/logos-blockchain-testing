@@ -5,22 +5,22 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::{CfgSyncBundle, CfgSyncBundleNode};
+use crate::{NodeArtifactsBundle, NodeArtifactsBundleEntry};
 
 /// Schema version served by cfgsync payload responses.
 pub const CFGSYNC_SCHEMA_VERSION: u16 = 1;
 
 /// Canonical cfgsync file type used in payloads and bundles.
-pub type CfgSyncFile = ArtifactFile;
+pub type NodeArtifactFile = ArtifactFile;
 
 /// Payload returned by cfgsync server for one node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CfgSyncPayload {
+pub struct NodeArtifactsPayload {
     /// Payload schema version for compatibility checks.
     pub schema_version: u16,
     /// Files that must be written on the target node.
     #[serde(default)]
-    pub files: Vec<CfgSyncFile>,
+    pub files: Vec<NodeArtifactFile>,
 }
 
 /// Adapter-owned registration payload stored alongside a generic node identity.
@@ -137,9 +137,9 @@ impl NodeRegistration {
     }
 }
 
-impl CfgSyncPayload {
+impl NodeArtifactsPayload {
     #[must_use]
-    pub fn from_files(files: Vec<CfgSyncFile>) -> Self {
+    pub fn from_files(files: Vec<NodeArtifactFile>) -> Self {
         Self {
             schema_version: CFGSYNC_SCHEMA_VERSION,
             files,
@@ -147,7 +147,7 @@ impl CfgSyncPayload {
     }
 
     #[must_use]
-    pub fn files(&self) -> &[CfgSyncFile] {
+    pub fn files(&self) -> &[NodeArtifactFile] {
         &self.files
     }
 
@@ -201,7 +201,7 @@ impl CfgSyncErrorResponse {
 
 /// Resolution outcome for a requested node identifier.
 pub enum ConfigResolveResponse {
-    Config(CfgSyncPayload),
+    Config(NodeArtifactsPayload),
     Error(CfgSyncErrorResponse),
 }
 
@@ -220,12 +220,12 @@ pub trait NodeConfigSource: Send + Sync {
 
 /// In-memory map-backed source used by cfgsync server state.
 pub struct StaticConfigSource {
-    configs: HashMap<String, CfgSyncPayload>,
+    configs: HashMap<String, NodeArtifactsPayload>,
 }
 
 impl StaticConfigSource {
     #[must_use]
-    pub fn from_bundle(configs: HashMap<String, CfgSyncPayload>) -> Arc<Self> {
+    pub fn from_bundle(configs: HashMap<String, NodeArtifactsPayload>) -> Arc<Self> {
         Arc::new(Self { configs })
     }
 }
@@ -273,19 +273,19 @@ pub enum BundleLoadError {
 }
 
 #[must_use]
-pub fn bundle_to_payload_map(bundle: CfgSyncBundle) -> HashMap<String, CfgSyncPayload> {
+pub fn bundle_to_payload_map(bundle: NodeArtifactsBundle) -> HashMap<String, NodeArtifactsPayload> {
     bundle
         .nodes
         .into_iter()
         .map(|node| {
-            let CfgSyncBundleNode { identifier, files } = node;
+            let NodeArtifactsBundleEntry { identifier, files } = node;
 
-            (identifier, CfgSyncPayload::from_files(files))
+            (identifier, NodeArtifactsPayload::from_files(files))
         })
         .collect()
 }
 
-pub fn load_bundle(path: &Path) -> Result<CfgSyncBundle, BundleLoadError> {
+pub fn load_bundle(path: &Path) -> Result<NodeArtifactsBundle, BundleLoadError> {
     let path_string = path.display().to_string();
     let raw = fs::read_to_string(path).map_err(|source| BundleLoadError::ReadBundle {
         path: path_string.clone(),
@@ -337,8 +337,8 @@ mod tests {
         assert_eq!(typed.service, "blend");
     }
 
-    fn sample_payload() -> CfgSyncPayload {
-        CfgSyncPayload::from_files(vec![CfgSyncFile::new("/config.yaml", "key: value")])
+    fn sample_payload() -> NodeArtifactsPayload {
+        NodeArtifactsPayload::from_files(vec![NodeArtifactFile::new("/config.yaml", "key: value")])
     }
 
     #[test]
@@ -455,7 +455,7 @@ impl BundleConfigSource {
             source,
         })?;
 
-        let bundle: CfgSyncBundle =
+        let bundle: NodeArtifactsBundle =
             serde_yaml::from_str(&raw).map_err(|source| BundleConfigSourceError::Parse {
                 path: path.display().to_string(),
                 source,
@@ -483,8 +483,11 @@ impl NodeConfigSource for BundleConfigSource {
     }
 }
 
-fn payload_from_bundle_node(node: CfgSyncBundleNode) -> (String, CfgSyncPayload) {
-    (node.identifier, CfgSyncPayload::from_files(node.files))
+fn payload_from_bundle_node(node: NodeArtifactsBundleEntry) -> (String, NodeArtifactsPayload) {
+    (
+        node.identifier,
+        NodeArtifactsPayload::from_files(node.files),
+    )
 }
 
 #[doc(hidden)]
@@ -506,3 +509,9 @@ pub type FileConfigProvider = BundleConfigSource;
 
 #[doc(hidden)]
 pub type FileConfigProviderError = BundleConfigSourceError;
+
+#[doc(hidden)]
+pub type CfgSyncFile = NodeArtifactFile;
+
+#[doc(hidden)]
+pub type CfgSyncPayload = NodeArtifactsPayload;

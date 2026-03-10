@@ -6,8 +6,8 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use cfgsync_core::{
-    CFGSYNC_SCHEMA_VERSION, CfgSyncClient, CfgSyncFile, CfgSyncPayload, NodeRegistration,
-    RegistrationPayload,
+    CFGSYNC_SCHEMA_VERSION, CfgSyncClient, NodeArtifactFile, NodeArtifactsPayload,
+    NodeRegistration, RegistrationPayload,
 };
 use thiserror::Error;
 use tokio::time::{Duration, sleep};
@@ -22,7 +22,10 @@ enum ClientEnvError {
     InvalidIp { value: String },
 }
 
-async fn fetch_with_retry(payload: &NodeRegistration, server_addr: &str) -> Result<CfgSyncPayload> {
+async fn fetch_with_retry(
+    payload: &NodeRegistration,
+    server_addr: &str,
+) -> Result<NodeArtifactsPayload> {
     let client = CfgSyncClient::new(server_addr);
 
     for attempt in 1..=FETCH_ATTEMPTS {
@@ -43,7 +46,10 @@ async fn fetch_with_retry(payload: &NodeRegistration, server_addr: &str) -> Resu
     unreachable!("cfgsync fetch loop always returns before exhausting attempts");
 }
 
-async fn fetch_once(client: &CfgSyncClient, payload: &NodeRegistration) -> Result<CfgSyncPayload> {
+async fn fetch_once(
+    client: &CfgSyncClient,
+    payload: &NodeRegistration,
+) -> Result<NodeArtifactsPayload> {
     let response = client.fetch_node_config(payload).await?;
 
     Ok(response)
@@ -92,7 +98,7 @@ async fn register_node(payload: &NodeRegistration, server_addr: &str) -> Result<
     unreachable!("cfgsync register loop always returns before exhausting attempts");
 }
 
-fn ensure_schema_version(config: &CfgSyncPayload) -> Result<()> {
+fn ensure_schema_version(config: &NodeArtifactsPayload) -> Result<()> {
     if config.schema_version != CFGSYNC_SCHEMA_VERSION {
         bail!(
             "unsupported cfgsync payload schema version {}, expected {}",
@@ -104,7 +110,7 @@ fn ensure_schema_version(config: &CfgSyncPayload) -> Result<()> {
     Ok(())
 }
 
-fn collect_payload_files(config: &CfgSyncPayload) -> Result<&[CfgSyncFile]> {
+fn collect_payload_files(config: &NodeArtifactsPayload) -> Result<&[NodeArtifactFile]> {
     if config.is_empty() {
         bail!("cfgsync payload contains no files");
     }
@@ -112,7 +118,7 @@ fn collect_payload_files(config: &CfgSyncPayload) -> Result<&[CfgSyncFile]> {
     Ok(config.files())
 }
 
-fn write_cfgsync_file(file: &CfgSyncFile) -> Result<()> {
+fn write_cfgsync_file(file: &NodeArtifactFile) -> Result<()> {
     let path = PathBuf::from(&file.path);
 
     ensure_parent_dir(&path)?;
@@ -181,8 +187,8 @@ mod tests {
     use std::collections::HashMap;
 
     use cfgsync_core::{
-        CfgSyncBundle, CfgSyncBundleNode, CfgSyncPayload, CfgsyncServerState, StaticConfigSource,
-        run_cfgsync,
+        CfgsyncServerState, NodeArtifactsBundle, NodeArtifactsBundleEntry, NodeArtifactsPayload,
+        StaticConfigSource, run_cfgsync,
     };
     use tempfile::tempdir;
 
@@ -194,11 +200,11 @@ mod tests {
         let app_config_path = dir.path().join("config.yaml");
         let deployment_path = dir.path().join("deployment.yaml");
 
-        let bundle = CfgSyncBundle::new(vec![CfgSyncBundleNode {
+        let bundle = NodeArtifactsBundle::new(vec![NodeArtifactsBundleEntry {
             identifier: "node-1".to_owned(),
             files: vec![
-                CfgSyncFile::new(app_config_path.to_string_lossy(), "app_key: app_value"),
-                CfgSyncFile::new(deployment_path.to_string_lossy(), "mode: local"),
+                NodeArtifactFile::new(app_config_path.to_string_lossy(), "app_key: app_value"),
+                NodeArtifactFile::new(deployment_path.to_string_lossy(), "mode: local"),
             ],
         }]);
 
@@ -227,14 +233,14 @@ mod tests {
         assert_eq!(deployment, "mode: local");
     }
 
-    fn bundle_to_payload_map(bundle: CfgSyncBundle) -> HashMap<String, CfgSyncPayload> {
+    fn bundle_to_payload_map(bundle: NodeArtifactsBundle) -> HashMap<String, NodeArtifactsPayload> {
         bundle
             .nodes
             .into_iter()
             .map(|node| {
-                let CfgSyncBundleNode { identifier, files } = node;
+                let NodeArtifactsBundleEntry { identifier, files } = node;
 
-                (identifier, CfgSyncPayload::from_files(files))
+                (identifier, NodeArtifactsPayload::from_files(files))
             })
             .collect()
     }
