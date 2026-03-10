@@ -212,10 +212,7 @@ mod tests {
             registrations: std::sync::Mutex::new(HashMap::new()),
         });
         let state = Arc::new(CfgSyncState::new(provider));
-        let payload = NodeRegistration {
-            ip: "127.0.0.1".parse().expect("valid ip"),
-            identifier: "node-a".to_owned(),
-        };
+        let payload = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("valid ip"));
 
         let _ = register_node(State(state.clone()), Json(payload.clone()))
             .await
@@ -234,10 +231,7 @@ mod tests {
             data: HashMap::new(),
         });
         let state = Arc::new(CfgSyncState::new(provider));
-        let payload = NodeRegistration {
-            ip: "127.0.0.1".parse().expect("valid ip"),
-            identifier: "missing-node".to_owned(),
-        };
+        let payload = NodeRegistration::new("missing-node", "127.0.0.1".parse().expect("valid ip"));
 
         let response = node_config(State(state), Json(payload))
             .await
@@ -263,10 +257,7 @@ mod tests {
             registrations: std::sync::Mutex::new(HashMap::new()),
         });
         let state = Arc::new(CfgSyncState::new(provider));
-        let payload = NodeRegistration {
-            ip: "127.0.0.1".parse().expect("valid ip"),
-            identifier: "node-a".to_owned(),
-        };
+        let payload = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("valid ip"));
 
         let response = node_config(State(state), Json(payload))
             .await

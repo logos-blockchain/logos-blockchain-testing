@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, net::Ipv4Addr, path::Path, sync::Arc};
 
 use cfgsync_artifacts::ArtifactFile;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::{CfgSyncBundle, CfgSyncBundleNode};
@@ -22,11 +23,84 @@ pub struct CfgSyncPayload {
     pub files: Vec<CfgSyncFile>,
 }
 
+/// Adapter-owned registration metadata stored alongside a generic node
+/// identity.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct RegistrationMetadata {
+    values: Map<String, Value>,
+}
+
+impl RegistrationMetadata {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    #[must_use]
+    pub fn get(&self, key: &str) -> Option<&Value> {
+        self.values.get(key)
+    }
+
+    pub fn insert_json_value(&mut self, key: impl Into<String>, value: Value) {
+        self.values.insert(key.into(), value);
+    }
+
+    pub fn insert_serialized<T>(
+        &mut self,
+        key: impl Into<String>,
+        value: T,
+    ) -> Result<(), serde_json::Error>
+    where
+        T: Serialize,
+    {
+        let value = serde_json::to_value(value)?;
+        self.insert_json_value(key, value);
+
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &Map<String, Value> {
+        &self.values
+    }
+}
+
+impl From<Map<String, Value>> for RegistrationMetadata {
+    fn from(values: Map<String, Value>) -> Self {
+        Self { values }
+    }
+}
+
 /// Node metadata recorded before config materialization.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NodeRegistration {
     pub identifier: String,
     pub ip: Ipv4Addr,
+    #[serde(default, skip_serializing_if = "RegistrationMetadata::is_empty")]
+    pub metadata: RegistrationMetadata,
+}
+
+impl NodeRegistration {
+    #[must_use]
+    pub fn new(identifier: impl Into<String>, ip: Ipv4Addr) -> Self {
+        Self {
+            identifier: identifier.into(),
+            ip,
+            metadata: RegistrationMetadata::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_metadata(mut self, metadata: RegistrationMetadata) -> Self {
+        self.metadata = metadata;
+        self
+    }
 }
 
 impl CfgSyncPayload {
@@ -228,10 +302,10 @@ mod tests {
         configs.insert("node-1".to_owned(), sample_payload());
         let repo = ConfigRepo { configs };
 
-        match repo.resolve(&NodeRegistration {
-            identifier: "node-1".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        }) {
+        match repo.resolve(&NodeRegistration::new(
+            "node-1",
+            "127.0.0.1".parse().expect("parse ip"),
+        )) {
             RepoResponse::Config(payload) => {
                 assert_eq!(payload.schema_version, CFGSYNC_SCHEMA_VERSION);
                 assert_eq!(payload.files.len(), 1);
@@ -247,10 +321,10 @@ mod tests {
             configs: HashMap::new(),
         };
 
-        match repo.resolve(&NodeRegistration {
-            identifier: "unknown-node".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        }) {
+        match repo.resolve(&NodeRegistration::new(
+            "unknown-node",
+            "127.0.0.1".parse().expect("parse ip"),
+        )) {
             RepoResponse::Config(_) => panic!("expected missing-config error"),
             RepoResponse::Error(error) => {
                 assert!(matches!(error.code, CfgSyncErrorCode::MissingConfig));
@@ -276,15 +350,15 @@ nodes:
         let provider =
             FileConfigProvider::from_yaml_file(bundle_file.path()).expect("load file provider");
 
-        let _ = provider.register(NodeRegistration {
-            identifier: "node-1".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        });
+        let _ = provider.register(NodeRegistration::new(
+            "node-1",
+            "127.0.0.1".parse().expect("parse ip"),
+        ));
 
-        match provider.resolve(&NodeRegistration {
-            identifier: "node-1".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        }) {
+        match provider.resolve(&NodeRegistration::new(
+            "node-1",
+            "127.0.0.1".parse().expect("parse ip"),
+        )) {
             RepoResponse::Config(payload) => assert_eq!(payload.files.len(), 1),
             RepoResponse::Error(error) => panic!("expected config, got {error}"),
         }
@@ -296,12 +370,39 @@ nodes:
         configs.insert("node-1".to_owned(), sample_payload());
         let repo = ConfigRepo { configs };
 
-        match repo.resolve(&NodeRegistration {
-            identifier: "node-1".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        }) {
+        match repo.resolve(&NodeRegistration::new(
+            "node-1",
+            "127.0.0.1".parse().expect("parse ip"),
+        )) {
             RepoResponse::Config(_) => {}
             RepoResponse::Error(error) => panic!("expected config, got {error}"),
         }
+    }
+
+    #[test]
+    fn registration_metadata_serializes_as_object() {
+        let mut metadata = RegistrationMetadata::new();
+        metadata
+            .insert_serialized("network_port", 3000_u16)
+            .expect("serialize metadata");
+        metadata.insert_json_value("service", Value::String("blend".to_owned()));
+
+        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"))
+            .with_metadata(metadata);
+
+        let encoded = serde_json::to_value(&registration).expect("serialize registration");
+        let metadata = encoded
+            .get("metadata")
+            .and_then(Value::as_object)
+            .expect("registration metadata object");
+
+        assert_eq!(
+            metadata.get("network_port"),
+            Some(&Value::Number(3000_u16.into()))
+        );
+        assert_eq!(
+            metadata.get("service"),
+            Some(&Value::String("blend".to_owned()))
+        );
     }
 }

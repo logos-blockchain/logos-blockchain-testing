@@ -14,6 +14,6 @@ pub use render::{
 pub use repo::{
     CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, CfgSyncFile, CfgSyncPayload,
     ConfigProvider, ConfigRepo, FileConfigProvider, FileConfigProviderError, NodeRegistration,
-    RegistrationResponse, RepoResponse,
+    RegistrationMetadata, RegistrationResponse, RepoResponse,
 };
 pub use server::{CfgSyncState, RunCfgsyncError, cfgsync_app, run_cfgsync};

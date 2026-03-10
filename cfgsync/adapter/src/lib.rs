@@ -308,10 +308,7 @@ mod tests {
             files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
         let provider = MaterializingConfigProvider::new(catalog);
-        let registration = NodeRegistration {
-            identifier: "node-1".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        };
+        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
 
         let _ = provider.register(registration.clone());
 
@@ -328,10 +325,7 @@ mod tests {
             files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
         let provider = MaterializingConfigProvider::new(catalog);
-        let registration = NodeRegistration {
-            identifier: "node-1".to_owned(),
-            ip: "127.0.0.1".parse().expect("parse ip"),
-        };
+        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
 
         match provider.resolve(&registration) {
             RepoResponse::Config(_) => panic!("expected not-ready error"),
