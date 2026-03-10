@@ -15,4 +15,5 @@ workspace = true
 [dependencies]
 cfgsync-artifacts = { workspace = true }
 cfgsync-core      = { workspace = true }
+serde             = { workspace = true }
 thiserror         = { workspace = true }

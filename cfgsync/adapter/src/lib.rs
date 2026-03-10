@@ -5,18 +5,19 @@ use cfgsync_core::{
     CfgSyncErrorResponse, CfgSyncPayload, ConfigProvider, NodeRegistration, RegistrationResponse,
     RepoResponse,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Type-erased cfgsync adapter error used to preserve source context.
 pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
 
 /// Per-node rendered config output used to build cfgsync bundles.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CfgsyncNodeConfig {
     /// Stable node identifier resolved by the adapter.
     pub identifier: String,
-    /// Serialized config payload for the node.
-    pub config_yaml: String,
+    /// Files served to the node after cfgsync registration.
+    pub files: Vec<ArtifactFile>,
 }
 
 /// Node artifacts produced by a cfgsync materializer.
@@ -260,7 +261,7 @@ fn build_node_entry<E: CfgsyncEnv>(
 
     Ok(CfgsyncNodeConfig {
         identifier: E::node_identifier(index, node),
-        config_yaml,
+        files: vec![ArtifactFile::new("/config.yaml", &config_yaml)],
     })
 }
 
@@ -278,11 +279,12 @@ fn build_rewritten_node_config<E: CfgsyncEnv>(
 }
 
 fn build_node_artifacts_from_config(config: &CfgsyncNodeConfig) -> CfgsyncNodeArtifacts {
-    CfgsyncNodeArtifacts::new(vec![ArtifactFile::new("/config.yaml", &config.config_yaml)])
+    CfgsyncNodeArtifacts::new(config.files.clone())
 }
 
 #[cfg(test)]
 mod tests {
+    use cfgsync_artifacts::ArtifactFile;
     use cfgsync_core::{CfgSyncErrorCode, ConfigProvider, NodeRegistration, RepoResponse};
 
     use super::{CfgsyncNodeCatalog, CfgsyncNodeConfig, MaterializingConfigProvider};
@@ -291,19 +293,19 @@ mod tests {
     fn catalog_resolves_identifier() {
         let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
             identifier: "node-1".to_owned(),
-            config_yaml: "key: value".to_owned(),
+            files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
 
         let node = catalog.resolve("node-1").expect("resolve node config");
 
-        assert_eq!(node.config_yaml, "key: value");
+        assert_eq!(node.files[0].content, "key: value");
     }
 
     #[test]
     fn materializing_provider_resolves_registered_node() {
         let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
             identifier: "node-1".to_owned(),
-            config_yaml: "key: value".to_owned(),
+            files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
         let provider = MaterializingConfigProvider::new(catalog);
         let registration = NodeRegistration {
@@ -323,7 +325,7 @@ mod tests {
     fn materializing_provider_reports_not_ready_before_registration() {
         let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
             identifier: "node-1".to_owned(),
-            config_yaml: "key: value".to_owned(),
+            files: vec![ArtifactFile::new("/config.yaml", "key: value")],
         }]);
         let provider = MaterializingConfigProvider::new(catalog);
         let registration = NodeRegistration {

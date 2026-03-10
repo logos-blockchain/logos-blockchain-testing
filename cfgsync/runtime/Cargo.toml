@@ -13,14 +13,15 @@ version     = { workspace = true }
 workspace = true
 
 [dependencies]
-anyhow       = "1"
-cfgsync-core = { workspace = true }
-clap         = { version = "4", features = ["derive"] }
-serde        = { workspace = true }
-serde_yaml   = { workspace = true }
-thiserror    = { workspace = true }
-tokio        = { default-features = false, features = ["macros", "net", "rt-multi-thread"], version = "1" }
-tracing      = { workspace = true }
+anyhow          = "1"
+cfgsync-adapter = { workspace = true }
+cfgsync-core    = { workspace = true }
+clap            = { version = "4", features = ["derive"] }
+serde           = { workspace = true }
+serde_yaml      = { workspace = true }
+thiserror       = { workspace = true }
+tokio           = { default-features = false, features = ["macros", "net", "rt-multi-thread"], version = "1" }
+tracing         = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

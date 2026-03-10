@@ -54,7 +54,7 @@ fn build_cfgsync_bundle<E: CfgsyncEnv>(
         .into_iter()
         .map(|node| CfgSyncBundleNode {
             identifier: node.identifier,
-            files: vec![build_bundle_file("/config.yaml", node.config_yaml)],
+            files: node.files,
         })
         .collect();
 
@@ -119,6 +119,11 @@ fn build_cfgsync_server_config() -> Value {
     root.insert(
         Value::String("bundle_path".to_string()),
         Value::String("cfgsync.bundle.yaml".to_string()),
+    );
+
+    root.insert(
+        Value::String("registration_flow".to_string()),
+        Value::Bool(true),
     );
 
     Value::Mapping(root)

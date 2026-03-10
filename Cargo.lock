@@ -922,6 +922,7 @@ version = "0.1.0"
 dependencies = [
  "cfgsync-artifacts",
  "cfgsync-core",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -954,6 +955,7 @@ name = "cfgsync-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cfgsync-adapter",
  "cfgsync-core",
  "clap",
  "serde",
