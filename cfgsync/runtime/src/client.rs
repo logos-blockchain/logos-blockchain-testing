@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env, fs,
     net::Ipv4Addr,
     path::{Path, PathBuf},
@@ -15,6 +16,36 @@ use tracing::info;
 
 const FETCH_ATTEMPTS: usize = 5;
 const FETCH_RETRY_DELAY: Duration = Duration::from_millis(250);
+
+/// Output routing for fetched artifact files.
+#[derive(Debug, Clone, Default)]
+pub struct ArtifactOutputMap {
+    routes: HashMap<String, PathBuf>,
+}
+
+impl ArtifactOutputMap {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn route(
+        mut self,
+        artifact_path: impl Into<String>,
+        output_path: impl Into<PathBuf>,
+    ) -> Self {
+        self.routes.insert(artifact_path.into(), output_path.into());
+        self
+    }
+
+    fn resolve_path(&self, file: &NodeArtifactFile) -> PathBuf {
+        self.routes
+            .get(&file.path)
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from(&file.path))
+    }
+}
 
 #[derive(Debug, Error)]
 enum ClientEnvError {
@@ -55,25 +86,6 @@ async fn fetch_once(
     Ok(response)
 }
 
-async fn pull_config_files(payload: NodeRegistration, server_addr: &str) -> Result<()> {
-    register_node(&payload, server_addr).await?;
-
-    let config = fetch_with_retry(&payload, server_addr)
-        .await
-        .context("fetching cfgsync node config")?;
-    ensure_schema_version(&config)?;
-
-    let files = collect_payload_files(&config)?;
-
-    for file in files {
-        write_cfgsync_file(file)?;
-    }
-
-    info!(files = files.len(), "cfgsync files saved");
-
-    Ok(())
-}
-
 async fn register_node(payload: &NodeRegistration, server_addr: &str) -> Result<()> {
     let client = CfgsyncClient::new(server_addr);
 
@@ -98,6 +110,40 @@ async fn register_node(payload: &NodeRegistration, server_addr: &str) -> Result<
     unreachable!("cfgsync register loop always returns before exhausting attempts");
 }
 
+/// Registers a node and fetches its artifact payload from cfgsync.
+pub async fn register_and_fetch_artifacts(
+    registration: &NodeRegistration,
+    server_addr: &str,
+) -> Result<NodeArtifactsPayload> {
+    register_node(registration, server_addr).await?;
+
+    let payload = fetch_with_retry(registration, server_addr)
+        .await
+        .context("fetching cfgsync node config")?;
+    ensure_schema_version(&payload)?;
+
+    Ok(payload)
+}
+
+/// Registers a node, fetches its artifact payload, and writes the files using
+/// the provided output routing policy.
+pub async fn fetch_and_write_artifacts(
+    registration: &NodeRegistration,
+    server_addr: &str,
+    outputs: &ArtifactOutputMap,
+) -> Result<()> {
+    let payload = register_and_fetch_artifacts(registration, server_addr).await?;
+    let files = collect_payload_files(&payload)?;
+
+    for file in files {
+        write_cfgsync_file(file, outputs)?;
+    }
+
+    info!(files = files.len(), "cfgsync files saved");
+
+    Ok(())
+}
+
 fn ensure_schema_version(config: &NodeArtifactsPayload) -> Result<()> {
     if config.schema_version != CFGSYNC_SCHEMA_VERSION {
         bail!(
@@ -118,8 +164,8 @@ fn collect_payload_files(config: &NodeArtifactsPayload) -> Result<&[NodeArtifact
     Ok(config.files())
 }
 
-fn write_cfgsync_file(file: &NodeArtifactFile) -> Result<()> {
-    let path = PathBuf::from(&file.path);
+fn write_cfgsync_file(file: &NodeArtifactFile, outputs: &ArtifactOutputMap) -> Result<()> {
+    let path = outputs.resolve_path(file);
 
     ensure_parent_dir(&path)?;
 
@@ -153,10 +199,12 @@ pub async fn run_cfgsync_client_from_env(default_port: u16) -> Result<()> {
     let identifier =
         env::var("CFG_HOST_IDENTIFIER").unwrap_or_else(|_| "unidentified-node".to_owned());
     let metadata = parse_registration_payload_env()?;
+    let outputs = build_output_map();
 
-    pull_config_files(
-        NodeRegistration::new(identifier, ip).with_payload(metadata),
+    fetch_and_write_artifacts(
+        &NodeRegistration::new(identifier, ip).with_payload(metadata),
         &server_addr,
+        &outputs,
     )
     .await
 }
@@ -180,6 +228,25 @@ fn parse_registration_payload_env() -> Result<RegistrationPayload> {
 
 fn parse_registration_payload(raw: &str) -> Result<RegistrationPayload> {
     RegistrationPayload::from_json_str(raw).context("parsing CFG_REGISTRATION_METADATA_JSON")
+}
+
+fn build_output_map() -> ArtifactOutputMap {
+    let mut outputs = ArtifactOutputMap::default();
+
+    if let Ok(path) = env::var("CFG_FILE_PATH") {
+        outputs = outputs
+            .route("/config.yaml", path.clone())
+            .route("config.yaml", path);
+    }
+
+    if let Ok(path) = env::var("CFG_DEPLOYMENT_PATH") {
+        outputs = outputs
+            .route("/deployment.yaml", path.clone())
+            .route("deployment-settings.yaml", path.clone())
+            .route("/deployment-settings.yaml", path);
+    }
+
+    outputs
 }
 
 #[cfg(test)]
@@ -216,9 +283,10 @@ mod tests {
                 .expect("run cfgsync server");
         });
 
-        pull_config_files(
-            NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip")),
+        fetch_and_write_artifacts(
+            &NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip")),
             &address,
+            &ArtifactOutputMap::default(),
         )
         .await
         .expect("pull config files");

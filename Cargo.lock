@@ -923,6 +923,7 @@ dependencies = [
  "cfgsync-artifacts",
  "cfgsync-core",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -959,7 +960,6 @@ dependencies = [
  "cfgsync-core",
  "clap",
  "serde",
- "serde_json",
  "serde_yaml",
  "tempfile",
  "thiserror 2.0.18",

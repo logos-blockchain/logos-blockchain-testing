@@ -18,7 +18,6 @@ cfgsync-adapter = { workspace = true }
 cfgsync-core    = { workspace = true }
 clap            = { version = "4", features = ["derive"] }
 serde           = { workspace = true }
-serde_json      = { workspace = true }
 serde_yaml      = { workspace = true }
 thiserror       = { workspace = true }
 tokio           = { default-features = false, features = ["macros", "net", "rt-multi-thread"], version = "1" }

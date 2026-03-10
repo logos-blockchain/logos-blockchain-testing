@@ -1,9 +1,13 @@
 use std::{fs, path::Path, sync::Arc};
 
 use anyhow::Context as _;
-use cfgsync_adapter::{MaterializingConfigSource, NodeArtifacts, NodeArtifactsCatalog};
+use cfgsync_adapter::{
+    CachedSnapshotMaterializer, MaterializingConfigSource, NodeArtifacts, NodeArtifactsCatalog,
+    RegistrationSnapshotMaterializer, SnapshotConfigSource,
+};
 use cfgsync_core::{
-    BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, serve_cfgsync,
+    BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, RunCfgsyncError,
+    serve_cfgsync,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -135,6 +139,18 @@ pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()>
     serve_cfgsync(config.port, state).await?;
 
     Ok(())
+}
+
+/// Runs a registration-backed cfgsync server directly from a snapshot
+/// materializer.
+pub async fn serve_snapshot_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
+where
+    M: RegistrationSnapshotMaterializer + 'static,
+{
+    let provider = SnapshotConfigSource::new(CachedSnapshotMaterializer::new(materializer));
+    let state = CfgsyncServerState::new(Arc::new(provider));
+
+    serve_cfgsync(port, state).await
 }
 
 fn build_server_state(

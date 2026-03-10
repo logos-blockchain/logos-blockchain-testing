@@ -204,8 +204,8 @@ mod tests {
 
     use super::{MaterializingConfigSource, SnapshotConfigSource};
     use crate::{
-        DynCfgsyncError, NodeArtifacts, NodeArtifactsCatalog, NodeArtifactsMaterializer,
-        RegistrationSnapshot, RegistrationSnapshotMaterializer,
+        CachedSnapshotMaterializer, DynCfgsyncError, NodeArtifacts, NodeArtifactsCatalog,
+        NodeArtifactsMaterializer, RegistrationSnapshot, RegistrationSnapshotMaterializer,
     };
 
     #[test]
@@ -361,5 +361,48 @@ mod tests {
             }
             ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
+    }
+
+    struct CountingSnapshotMaterializer {
+        calls: std::sync::Arc<AtomicUsize>,
+    }
+
+    impl RegistrationSnapshotMaterializer for CountingSnapshotMaterializer {
+        fn materialize_snapshot(
+            &self,
+            registrations: &RegistrationSnapshot,
+        ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+
+            Ok(Some(NodeArtifactsCatalog::new(
+                registrations
+                    .iter()
+                    .map(|registration| NodeArtifacts {
+                        identifier: registration.identifier.clone(),
+                        files: vec![ArtifactFile::new("/config.yaml", "cached: true")],
+                    })
+                    .collect(),
+            )))
+        }
+    }
+
+    #[test]
+    fn cached_snapshot_materializer_reuses_previous_result() {
+        let calls = std::sync::Arc::new(AtomicUsize::new(0));
+        let source = SnapshotConfigSource::new(CachedSnapshotMaterializer::new(
+            CountingSnapshotMaterializer {
+                calls: std::sync::Arc::clone(&calls),
+            },
+        ));
+        let node_a = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("parse ip"));
+        let node_b = NodeRegistration::new("node-b", "127.0.0.2".parse().expect("parse ip"));
+
+        let _ = source.register(node_a.clone());
+        let _ = source.register(node_b.clone());
+
+        let _ = source.resolve(&node_a);
+        let _ = source.resolve(&node_b);
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

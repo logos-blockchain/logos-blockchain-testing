@@ -10,7 +10,8 @@ pub use deployment::{
     build_node_artifact_catalog,
 };
 pub use materializer::{
-    DynCfgsyncError, NodeArtifactsMaterializer, RegistrationSnapshotMaterializer,
+    CachedSnapshotMaterializer, DynCfgsyncError, NodeArtifactsMaterializer,
+    RegistrationSnapshotMaterializer,
 };
 pub use registrations::RegistrationSnapshot;
 pub use sources::{MaterializingConfigSource, SnapshotConfigSource};
