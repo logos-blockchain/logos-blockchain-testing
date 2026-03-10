@@ -12,8 +12,8 @@ pub use deployment::{
     build_node_artifact_catalog,
 };
 pub use materializer::{
-    CachedSnapshotMaterializer, DynCfgsyncError, MaterializationResult, NodeArtifactsMaterializer,
-    RegistrationSnapshotMaterializer,
+    CachedSnapshotMaterializer, DynCfgsyncError, MaterializationResult, MaterializedArtifactsSink,
+    NodeArtifactsMaterializer, PersistingSnapshotMaterializer, RegistrationSnapshotMaterializer,
 };
 pub use registrations::RegistrationSnapshot;
 pub use sources::{MaterializingConfigSource, SnapshotConfigSource};
