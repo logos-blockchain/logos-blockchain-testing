@@ -199,59 +199,59 @@ impl CfgSyncErrorResponse {
     }
 }
 
-/// Repository resolution outcome for a requested node identifier.
-pub enum RepoResponse {
+/// Resolution outcome for a requested node identifier.
+pub enum ConfigResolveResponse {
     Config(CfgSyncPayload),
     Error(CfgSyncErrorResponse),
 }
 
-/// Repository outcome for a node registration request.
-pub enum RegistrationResponse {
+/// Outcome for a node registration request.
+pub enum RegisterNodeResponse {
     Registered,
     Error(CfgSyncErrorResponse),
 }
 
-/// Read-only source for cfgsync node payloads.
-pub trait ConfigProvider: Send + Sync {
-    fn register(&self, registration: NodeRegistration) -> RegistrationResponse;
+/// Source of cfgsync node payloads.
+pub trait NodeConfigSource: Send + Sync {
+    fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse;
 
-    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse;
+    fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse;
 }
 
-/// In-memory map-backed provider used by cfgsync server state.
-pub struct ConfigRepo {
+/// In-memory map-backed source used by cfgsync server state.
+pub struct StaticConfigSource {
     configs: HashMap<String, CfgSyncPayload>,
 }
 
-impl ConfigRepo {
+impl StaticConfigSource {
     #[must_use]
     pub fn from_bundle(configs: HashMap<String, CfgSyncPayload>) -> Arc<Self> {
         Arc::new(Self { configs })
     }
 }
 
-impl ConfigProvider for ConfigRepo {
-    fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+impl NodeConfigSource for StaticConfigSource {
+    fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
         if self.configs.contains_key(&registration.identifier) {
-            RegistrationResponse::Registered
+            RegisterNodeResponse::Registered
         } else {
-            RegistrationResponse::Error(CfgSyncErrorResponse::missing_config(
+            RegisterNodeResponse::Error(CfgSyncErrorResponse::missing_config(
                 &registration.identifier,
             ))
         }
     }
 
-    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+    fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
         self.configs
             .get(&registration.identifier)
             .cloned()
             .map_or_else(
                 || {
-                    RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+                    ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
                         &registration.identifier,
                     ))
                 },
-                RepoResponse::Config,
+                ConfigResolveResponse::Config,
             )
     }
 }
@@ -345,24 +345,24 @@ mod tests {
     fn resolves_existing_identifier() {
         let mut configs = HashMap::new();
         configs.insert("node-1".to_owned(), sample_payload());
-        let repo = ConfigRepo { configs };
+        let repo = StaticConfigSource { configs };
 
         match repo.resolve(&NodeRegistration::new(
             "node-1",
             "127.0.0.1".parse().expect("parse ip"),
         )) {
-            RepoResponse::Config(payload) => {
+            ConfigResolveResponse::Config(payload) => {
                 assert_eq!(payload.schema_version, CFGSYNC_SCHEMA_VERSION);
                 assert_eq!(payload.files.len(), 1);
                 assert_eq!(payload.files[0].path, "/config.yaml");
             }
-            RepoResponse::Error(error) => panic!("expected config response, got {error}"),
+            ConfigResolveResponse::Error(error) => panic!("expected config response, got {error}"),
         }
     }
 
     #[test]
     fn reports_missing_identifier() {
-        let repo = ConfigRepo {
+        let repo = StaticConfigSource {
             configs: HashMap::new(),
         };
 
@@ -370,8 +370,8 @@ mod tests {
             "unknown-node",
             "127.0.0.1".parse().expect("parse ip"),
         )) {
-            RepoResponse::Config(_) => panic!("expected missing-config error"),
-            RepoResponse::Error(error) => {
+            ConfigResolveResponse::Config(_) => panic!("expected missing-config error"),
+            ConfigResolveResponse::Error(error) => {
                 assert!(matches!(error.code, CfgSyncErrorCode::MissingConfig));
                 assert!(error.message.contains("unknown-node"));
             }
@@ -393,7 +393,7 @@ nodes:
             .expect("write bundle yaml");
 
         let provider =
-            FileConfigProvider::from_yaml_file(bundle_file.path()).expect("load file provider");
+            BundleConfigSource::from_yaml_file(bundle_file.path()).expect("load file provider");
 
         let _ = provider.register(NodeRegistration::new(
             "node-1",
@@ -404,8 +404,8 @@ nodes:
             "node-1",
             "127.0.0.1".parse().expect("parse ip"),
         )) {
-            RepoResponse::Config(payload) => assert_eq!(payload.files.len(), 1),
-            RepoResponse::Error(error) => panic!("expected config, got {error}"),
+            ConfigResolveResponse::Config(payload) => assert_eq!(payload.files.len(), 1),
+            ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
     }
 
@@ -413,21 +413,21 @@ nodes:
     fn resolve_accepts_known_registration_without_gating() {
         let mut configs = HashMap::new();
         configs.insert("node-1".to_owned(), sample_payload());
-        let repo = ConfigRepo { configs };
+        let repo = StaticConfigSource { configs };
 
         match repo.resolve(&NodeRegistration::new(
             "node-1",
             "127.0.0.1".parse().expect("parse ip"),
         )) {
-            RepoResponse::Config(_) => {}
-            RepoResponse::Error(error) => panic!("expected config, got {error}"),
+            ConfigResolveResponse::Config(_) => {}
+            ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
     }
 }
 
-/// Failures when loading a file-backed cfgsync provider.
+/// Failures when loading a bundle-backed cfgsync source.
 #[derive(Debug, Error)]
-pub enum FileConfigProviderError {
+pub enum BundleConfigSourceError {
     #[error("failed to read cfgsync bundle at {path}: {source}")]
     Read {
         path: String,
@@ -442,21 +442,21 @@ pub enum FileConfigProviderError {
     },
 }
 
-/// YAML bundle-backed provider implementation.
-pub struct FileConfigProvider {
-    inner: ConfigRepo,
+/// YAML bundle-backed source implementation.
+pub struct BundleConfigSource {
+    inner: StaticConfigSource,
 }
 
-impl FileConfigProvider {
+impl BundleConfigSource {
     /// Loads provider state from a cfgsync bundle YAML file.
-    pub fn from_yaml_file(path: &Path) -> Result<Self, FileConfigProviderError> {
-        let raw = fs::read_to_string(path).map_err(|source| FileConfigProviderError::Read {
+    pub fn from_yaml_file(path: &Path) -> Result<Self, BundleConfigSourceError> {
+        let raw = fs::read_to_string(path).map_err(|source| BundleConfigSourceError::Read {
             path: path.display().to_string(),
             source,
         })?;
 
         let bundle: CfgSyncBundle =
-            serde_yaml::from_str(&raw).map_err(|source| FileConfigProviderError::Parse {
+            serde_yaml::from_str(&raw).map_err(|source| BundleConfigSourceError::Parse {
                 path: path.display().to_string(),
                 source,
             })?;
@@ -468,17 +468,17 @@ impl FileConfigProvider {
             .collect();
 
         Ok(Self {
-            inner: ConfigRepo { configs },
+            inner: StaticConfigSource { configs },
         })
     }
 }
 
-impl ConfigProvider for FileConfigProvider {
-    fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+impl NodeConfigSource for BundleConfigSource {
+    fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
         self.inner.register(registration)
     }
 
-    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+    fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
         self.inner.resolve(registration)
     }
 }
@@ -486,3 +486,23 @@ impl ConfigProvider for FileConfigProvider {
 fn payload_from_bundle_node(node: CfgSyncBundleNode) -> (String, CfgSyncPayload) {
     (node.identifier, CfgSyncPayload::from_files(node.files))
 }
+
+#[doc(hidden)]
+pub type RepoResponse = ConfigResolveResponse;
+
+#[doc(hidden)]
+pub type RegistrationResponse = RegisterNodeResponse;
+
+#[doc(hidden)]
+pub trait ConfigProvider: NodeConfigSource {}
+
+impl<T: NodeConfigSource + ?Sized> ConfigProvider for T {}
+
+#[doc(hidden)]
+pub type ConfigRepo = StaticConfigSource;
+
+#[doc(hidden)]
+pub type FileConfigProvider = BundleConfigSource;
+
+#[doc(hidden)]
+pub type FileConfigProviderError = BundleConfigSourceError;

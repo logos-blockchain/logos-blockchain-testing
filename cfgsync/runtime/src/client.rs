@@ -181,7 +181,8 @@ mod tests {
     use std::collections::HashMap;
 
     use cfgsync_core::{
-        CfgSyncBundle, CfgSyncBundleNode, CfgSyncPayload, CfgSyncState, ConfigRepo, run_cfgsync,
+        CfgSyncBundle, CfgSyncBundleNode, CfgSyncPayload, CfgsyncServerState, StaticConfigSource,
+        run_cfgsync,
     };
     use tempfile::tempdir;
 
@@ -201,8 +202,8 @@ mod tests {
             ],
         }]);
 
-        let repo = ConfigRepo::from_bundle(bundle_to_payload_map(bundle));
-        let state = CfgSyncState::new(repo);
+        let repo = StaticConfigSource::from_bundle(bundle_to_payload_map(bundle));
+        let state = CfgsyncServerState::new(repo);
         let port = allocate_test_port();
         let address = format!("http://127.0.0.1:{port}");
         let server = tokio::spawn(async move {

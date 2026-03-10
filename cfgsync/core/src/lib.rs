@@ -12,8 +12,15 @@ pub use render::{
     render_cfgsync_yaml_from_template, write_rendered_cfgsync,
 };
 pub use repo::{
-    CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, CfgSyncFile, CfgSyncPayload,
-    ConfigProvider, ConfigRepo, FileConfigProvider, FileConfigProviderError, NodeRegistration,
-    RegistrationPayload, RegistrationResponse, RepoResponse,
+    BundleConfigSource, BundleConfigSourceError, CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode,
+    CfgSyncErrorResponse, CfgSyncFile, CfgSyncPayload, ConfigResolveResponse, NodeConfigSource,
+    NodeRegistration, RegisterNodeResponse, RegistrationPayload, StaticConfigSource,
 };
-pub use server::{CfgSyncState, RunCfgsyncError, cfgsync_app, run_cfgsync};
+#[doc(hidden)]
+pub use repo::{
+    ConfigProvider, ConfigRepo, FileConfigProvider, FileConfigProviderError, RegistrationResponse,
+    RepoResponse,
+};
+#[doc(hidden)]
+pub use server::CfgSyncState;
+pub use server::{CfgsyncServerState, RunCfgsyncError, cfgsync_app, run_cfgsync};

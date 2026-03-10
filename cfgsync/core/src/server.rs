@@ -4,17 +4,18 @@ use axum::{Json, Router, extract::State, http::StatusCode, response::IntoRespons
 use thiserror::Error;
 
 use crate::repo::{
-    CfgSyncErrorCode, ConfigProvider, NodeRegistration, RegistrationResponse, RepoResponse,
+    CfgSyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
+    RegisterNodeResponse,
 };
 
 /// Runtime state shared across cfgsync HTTP handlers.
-pub struct CfgSyncState {
-    repo: Arc<dyn ConfigProvider>,
+pub struct CfgsyncServerState {
+    repo: Arc<dyn NodeConfigSource>,
 }
 
-impl CfgSyncState {
+impl CfgsyncServerState {
     #[must_use]
-    pub fn new(repo: Arc<dyn ConfigProvider>) -> Self {
+    pub fn new(repo: Arc<dyn NodeConfigSource>) -> Self {
         Self { repo }
     }
 }
@@ -36,14 +37,16 @@ pub enum RunCfgsyncError {
 }
 
 async fn node_config(
-    State(state): State<Arc<CfgSyncState>>,
+    State(state): State<Arc<CfgsyncServerState>>,
     Json(payload): Json<NodeRegistration>,
 ) -> impl IntoResponse {
     let response = resolve_node_config_response(&state, &payload);
 
     match response {
-        RepoResponse::Config(payload_data) => (StatusCode::OK, Json(payload_data)).into_response(),
-        RepoResponse::Error(error) => {
+        ConfigResolveResponse::Config(payload_data) => {
+            (StatusCode::OK, Json(payload_data)).into_response()
+        }
+        ConfigResolveResponse::Error(error) => {
             let status = error_status(&error.code);
 
             (status, Json(error)).into_response()
@@ -52,12 +55,12 @@ async fn node_config(
 }
 
 async fn register_node(
-    State(state): State<Arc<CfgSyncState>>,
+    State(state): State<Arc<CfgsyncServerState>>,
     Json(payload): Json<NodeRegistration>,
 ) -> impl IntoResponse {
     match state.repo.register(payload) {
-        RegistrationResponse::Registered => StatusCode::ACCEPTED.into_response(),
-        RegistrationResponse::Error(error) => {
+        RegisterNodeResponse::Registered => StatusCode::ACCEPTED.into_response(),
+        RegisterNodeResponse::Error(error) => {
             let status = error_status(&error.code);
 
             (status, Json(error)).into_response()
@@ -66,9 +69,9 @@ async fn register_node(
 }
 
 fn resolve_node_config_response(
-    state: &CfgSyncState,
+    state: &CfgsyncServerState,
     registration: &NodeRegistration,
-) -> RepoResponse {
+) -> ConfigResolveResponse {
     state.repo.resolve(registration)
 }
 
@@ -80,7 +83,7 @@ fn error_status(code: &CfgSyncErrorCode) -> StatusCode {
     }
 }
 
-pub fn cfgsync_app(state: CfgSyncState) -> Router {
+pub fn cfgsync_app(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
         .route("/node", post(node_config))
@@ -89,7 +92,7 @@ pub fn cfgsync_app(state: CfgSyncState) -> Router {
 }
 
 /// Runs cfgsync HTTP server on the provided port until shutdown/error.
-pub async fn run_cfgsync(port: u16, state: CfgSyncState) -> Result<(), RunCfgsyncError> {
+pub async fn run_cfgsync(port: u16, state: CfgsyncServerState) -> Result<(), RunCfgsyncError> {
     let app = cfgsync_app(state);
     println!("Server running on http://0.0.0.0:{port}");
 
@@ -105,44 +108,47 @@ pub async fn run_cfgsync(port: u16, state: CfgSyncState) -> Result<(), RunCfgsyn
     Ok(())
 }
 
+#[doc(hidden)]
+pub type CfgSyncState = CfgsyncServerState;
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-    use super::{CfgSyncState, NodeRegistration, node_config, register_node};
+    use super::{CfgsyncServerState, NodeRegistration, node_config, register_node};
     use crate::repo::{
         CFGSYNC_SCHEMA_VERSION, CfgSyncErrorCode, CfgSyncErrorResponse, CfgSyncFile,
-        CfgSyncPayload, ConfigProvider, RegistrationResponse, RepoResponse,
+        CfgSyncPayload, ConfigResolveResponse, NodeConfigSource, RegisterNodeResponse,
     };
 
     struct StaticProvider {
         data: HashMap<String, CfgSyncPayload>,
     }
 
-    impl ConfigProvider for StaticProvider {
-        fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+    impl NodeConfigSource for StaticProvider {
+        fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
             if self.data.contains_key(&registration.identifier) {
-                RegistrationResponse::Registered
+                RegisterNodeResponse::Registered
             } else {
-                RegistrationResponse::Error(CfgSyncErrorResponse::missing_config(
+                RegisterNodeResponse::Error(CfgSyncErrorResponse::missing_config(
                     &registration.identifier,
                 ))
             }
         }
 
-        fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+        fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
             self.data
                 .get(&registration.identifier)
                 .cloned()
                 .map_or_else(
                     || {
-                        RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+                        ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
                             &registration.identifier,
                         ))
                     },
-                    RepoResponse::Config,
+                    ConfigResolveResponse::Config,
                 )
         }
     }
@@ -152,10 +158,10 @@ mod tests {
         registrations: std::sync::Mutex<HashMap<String, NodeRegistration>>,
     }
 
-    impl ConfigProvider for RegistrationAwareProvider {
-        fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+    impl NodeConfigSource for RegistrationAwareProvider {
+        fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
             if !self.data.contains_key(&registration.identifier) {
-                return RegistrationResponse::Error(CfgSyncErrorResponse::missing_config(
+                return RegisterNodeResponse::Error(CfgSyncErrorResponse::missing_config(
                     &registration.identifier,
                 ));
             }
@@ -166,17 +172,17 @@ mod tests {
                 .expect("test registration store should not be poisoned");
             registrations.insert(registration.identifier.clone(), registration);
 
-            RegistrationResponse::Registered
+            RegisterNodeResponse::Registered
         }
 
-        fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+        fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
             let registrations = self
                 .registrations
                 .lock()
                 .expect("test registration store should not be poisoned");
 
             if !registrations.contains_key(&registration.identifier) {
-                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
@@ -186,11 +192,11 @@ mod tests {
                 .cloned()
                 .map_or_else(
                     || {
-                        RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+                        ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
                             &registration.identifier,
                         ))
                     },
-                    RepoResponse::Config,
+                    ConfigResolveResponse::Config,
                 )
         }
     }
@@ -211,7 +217,7 @@ mod tests {
             data,
             registrations: std::sync::Mutex::new(HashMap::new()),
         });
-        let state = Arc::new(CfgSyncState::new(provider));
+        let state = Arc::new(CfgsyncServerState::new(provider));
         let payload = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("valid ip"));
 
         let _ = register_node(State(state.clone()), Json(payload.clone()))
@@ -230,7 +236,7 @@ mod tests {
         let provider = Arc::new(StaticProvider {
             data: HashMap::new(),
         });
-        let state = Arc::new(CfgSyncState::new(provider));
+        let state = Arc::new(CfgsyncServerState::new(provider));
         let payload = NodeRegistration::new("missing-node", "127.0.0.1".parse().expect("valid ip"));
 
         let response = node_config(State(state), Json(payload))
@@ -256,7 +262,7 @@ mod tests {
             data,
             registrations: std::sync::Mutex::new(HashMap::new()),
         });
-        let state = Arc::new(CfgSyncState::new(provider));
+        let state = Arc::new(CfgsyncServerState::new(provider));
         let payload = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("valid ip"));
 
         let response = node_config(State(state), Json(payload))

@@ -2,8 +2,8 @@ use std::{collections::HashMap, error::Error, sync::Mutex};
 
 use cfgsync_artifacts::ArtifactFile;
 use cfgsync_core::{
-    CfgSyncErrorResponse, CfgSyncPayload, ConfigProvider, NodeRegistration, RegistrationResponse,
-    RepoResponse,
+    CfgSyncErrorResponse, CfgSyncPayload, ConfigResolveResponse, NodeConfigSource,
+    NodeRegistration, RegisterNodeResponse,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -241,25 +241,25 @@ impl<M> SnapshotConfigProvider<M> {
     }
 }
 
-impl<M> ConfigProvider for SnapshotConfigProvider<M>
+impl<M> NodeConfigSource for SnapshotConfigProvider<M>
 where
     M: RegistrationSetMaterializer,
 {
-    fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+    fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
         let mut registrations = self
             .registrations
             .lock()
             .expect("cfgsync registration store should not be poisoned");
         registrations.insert(registration.identifier.clone(), registration);
 
-        RegistrationResponse::Registered
+        RegisterNodeResponse::Registered
     }
 
-    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+    fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
         let registration = match self.registration_for(&registration.identifier) {
             Some(registration) => registration,
             None => {
-                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
@@ -269,45 +269,47 @@ where
         let catalog = match self.materializer.materialize_snapshot(&registrations) {
             Ok(Some(catalog)) => catalog,
             Ok(None) => {
-                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
             Err(error) => {
-                return RepoResponse::Error(CfgSyncErrorResponse::internal(format!(
+                return ConfigResolveResponse::Error(CfgSyncErrorResponse::internal(format!(
                     "failed to materialize config snapshot: {error}"
                 )));
             }
         };
 
         match catalog.resolve(&registration.identifier) {
-            Some(config) => RepoResponse::Config(CfgSyncPayload::from_files(config.files.clone())),
-            None => RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+            Some(config) => {
+                ConfigResolveResponse::Config(CfgSyncPayload::from_files(config.files.clone()))
+            }
+            None => ConfigResolveResponse::Error(CfgSyncErrorResponse::missing_config(
                 &registration.identifier,
             )),
         }
     }
 }
 
-impl<M> ConfigProvider for RegistrationConfigProvider<M>
+impl<M> NodeConfigSource for RegistrationConfigProvider<M>
 where
     M: NodeArtifactsMaterializer,
 {
-    fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+    fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
         let mut registrations = self
             .registrations
             .lock()
             .expect("cfgsync registration store should not be poisoned");
         registrations.insert(registration.identifier.clone(), registration);
 
-        RegistrationResponse::Registered
+        RegisterNodeResponse::Registered
     }
 
-    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+    fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
         let registration = match self.registration_for(&registration.identifier) {
             Some(registration) => registration,
             None => {
-                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                return ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
             }
@@ -315,13 +317,13 @@ where
         let registrations = self.registration_set();
 
         match self.materializer.materialize(&registration, &registrations) {
-            Ok(Some(artifacts)) => {
-                RepoResponse::Config(CfgSyncPayload::from_files(artifacts.files().to_vec()))
-            }
-            Ok(None) => {
-                RepoResponse::Error(CfgSyncErrorResponse::not_ready(&registration.identifier))
-            }
-            Err(error) => RepoResponse::Error(CfgSyncErrorResponse::internal(format!(
+            Ok(Some(artifacts)) => ConfigResolveResponse::Config(CfgSyncPayload::from_files(
+                artifacts.files().to_vec(),
+            )),
+            Ok(None) => ConfigResolveResponse::Error(CfgSyncErrorResponse::not_ready(
+                &registration.identifier,
+            )),
+            Err(error) => ConfigResolveResponse::Error(CfgSyncErrorResponse::internal(format!(
                 "failed to materialize config for host {}: {error}",
                 registration.identifier
             ))),
@@ -481,7 +483,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use cfgsync_artifacts::ArtifactFile;
-    use cfgsync_core::{CfgSyncErrorCode, ConfigProvider, NodeRegistration, RepoResponse};
+    use cfgsync_core::{
+        CfgSyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
+    };
 
     use super::{
         ArtifactSet, DynCfgsyncError, NodeArtifacts, NodeArtifactsCatalog,
@@ -512,8 +516,10 @@ mod tests {
         let _ = provider.register(registration.clone());
 
         match provider.resolve(&registration) {
-            RepoResponse::Config(payload) => assert_eq!(payload.files()[0].path, "/config.yaml"),
-            RepoResponse::Error(error) => panic!("expected config, got {error}"),
+            ConfigResolveResponse::Config(payload) => {
+                assert_eq!(payload.files()[0].path, "/config.yaml")
+            }
+            ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
     }
 
@@ -527,8 +533,10 @@ mod tests {
         let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
 
         match provider.resolve(&registration) {
-            RepoResponse::Config(_) => panic!("expected not-ready error"),
-            RepoResponse::Error(error) => assert!(matches!(error.code, CfgSyncErrorCode::NotReady)),
+            ConfigResolveResponse::Config(_) => panic!("expected not-ready error"),
+            ConfigResolveResponse::Error(error) => {
+                assert!(matches!(error.code, CfgSyncErrorCode::NotReady))
+            }
         }
     }
 
@@ -569,18 +577,20 @@ mod tests {
         let _ = provider.register(node_a.clone());
 
         match provider.resolve(&node_a) {
-            RepoResponse::Config(_) => panic!("expected not-ready error"),
-            RepoResponse::Error(error) => assert!(matches!(error.code, CfgSyncErrorCode::NotReady)),
+            ConfigResolveResponse::Config(_) => panic!("expected not-ready error"),
+            ConfigResolveResponse::Error(error) => {
+                assert!(matches!(error.code, CfgSyncErrorCode::NotReady))
+            }
         }
 
         let _ = provider.register(node_b);
 
         match provider.resolve(&node_a) {
-            RepoResponse::Config(payload) => {
+            ConfigResolveResponse::Config(payload) => {
                 assert_eq!(payload.files()[0].content, "id: node-a");
                 assert_eq!(payload.files()[1].content, "peers: 2");
             }
-            RepoResponse::Error(error) => panic!("expected config, got {error}"),
+            ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
     }
 }
