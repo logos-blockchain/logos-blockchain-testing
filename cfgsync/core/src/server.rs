@@ -3,7 +3,7 @@ use std::{io, sync::Arc};
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 use thiserror::Error;
 
-use crate::repo::{
+use crate::{
     CfgsyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
     RegisterNodeResponse,
 };
@@ -87,6 +87,14 @@ pub fn build_cfgsync_router(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
         .route("/node", post(node_config))
+        .with_state(Arc::new(state))
+}
+
+#[doc(hidden)]
+pub fn build_legacy_cfgsync_router(state: CfgsyncServerState) -> Router {
+    Router::new()
+        .route("/register", post(register_node))
+        .route("/node", post(node_config))
         .route("/init-with-node", post(node_config))
         .with_state(Arc::new(state))
 }
@@ -108,14 +116,6 @@ pub async fn serve_cfgsync(port: u16, state: CfgsyncServerState) -> Result<(), R
     Ok(())
 }
 
-#[doc(hidden)]
-pub type CfgSyncState = CfgsyncServerState;
-
-#[doc(hidden)]
-pub use build_cfgsync_router as cfgsync_app;
-#[doc(hidden)]
-pub use serve_cfgsync as run_cfgsync;
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, sync::Arc};
@@ -123,7 +123,7 @@ mod tests {
     use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
     use super::{CfgsyncServerState, NodeRegistration, node_config, register_node};
-    use crate::repo::{
+    use crate::{
         CFGSYNC_SCHEMA_VERSION, CfgsyncErrorCode, CfgsyncErrorResponse, ConfigResolveResponse,
         NodeArtifactFile, NodeArtifactsPayload, NodeConfigSource, RegisterNodeResponse,
     };

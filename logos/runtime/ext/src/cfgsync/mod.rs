@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cfgsync_adapter::{CfgsyncEnv, build_cfgsync_node_catalog};
+use cfgsync_adapter::{DeploymentAdapter, build_node_artifact_catalog};
 pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
 use cfgsync_core::{
     NodeArtifactsBundle, NodeArtifactsBundleEntry,
@@ -27,7 +27,7 @@ enum BundleRenderError {
     MissingYamlKey { key: String },
 }
 
-pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
+pub(crate) fn render_cfgsync_from_template<E: DeploymentAdapter>(
     topology: &E::Deployment,
     hostnames: &[String],
     options: CfgsyncRenderOptions,
@@ -45,11 +45,11 @@ pub(crate) fn render_cfgsync_from_template<E: CfgsyncEnv>(
     })
 }
 
-fn build_cfgsync_bundle<E: CfgsyncEnv>(
+fn build_cfgsync_bundle<E: DeploymentAdapter>(
     topology: &E::Deployment,
     hostnames: &[String],
 ) -> Result<NodeArtifactsBundle> {
-    let nodes = build_cfgsync_node_catalog::<E>(topology, hostnames)?.into_configs();
+    let nodes = build_node_artifact_catalog::<E>(topology, hostnames)?.into_nodes();
     let nodes = nodes
         .into_iter()
         .map(|node| NodeArtifactsBundleEntry {
@@ -129,7 +129,7 @@ fn build_cfgsync_server_config() -> Value {
     Value::Mapping(root)
 }
 
-pub(crate) fn render_and_write_cfgsync_from_template<E: CfgsyncEnv>(
+pub(crate) fn render_and_write_cfgsync_from_template<E: DeploymentAdapter>(
     topology: &E::Deployment,
     hostnames: &[String],
     mut options: CfgsyncRenderOptions,
@@ -143,7 +143,7 @@ pub(crate) fn render_and_write_cfgsync_from_template<E: CfgsyncEnv>(
     Ok(rendered)
 }
 
-fn build_overrides<E: CfgsyncEnv>(
+fn build_overrides<E: DeploymentAdapter>(
     topology: &E::Deployment,
     options: CfgsyncRenderOptions,
 ) -> CfgsyncConfigOverrides {

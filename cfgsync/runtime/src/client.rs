@@ -184,11 +184,9 @@ fn parse_registration_payload(raw: &str) -> Result<RegistrationPayload> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use cfgsync_core::{
-        CfgsyncServerState, NodeArtifactsBundle, NodeArtifactsBundleEntry, NodeArtifactsPayload,
-        StaticConfigSource, serve_cfgsync,
+        CfgsyncServerState, NodeArtifactsBundle, NodeArtifactsBundleEntry, StaticConfigSource,
+        serve_cfgsync,
     };
     use tempfile::tempdir;
 
@@ -208,7 +206,7 @@ mod tests {
             ],
         }]);
 
-        let repo = StaticConfigSource::from_bundle(bundle_to_payload_map(bundle));
+        let repo = StaticConfigSource::from_bundle(bundle);
         let state = CfgsyncServerState::new(repo);
         let port = allocate_test_port();
         let address = format!("http://127.0.0.1:{port}");
@@ -234,19 +232,6 @@ mod tests {
         assert_eq!(app_config, "app_key: app_value");
         assert_eq!(deployment, "mode: local");
     }
-
-    fn bundle_to_payload_map(bundle: NodeArtifactsBundle) -> HashMap<String, NodeArtifactsPayload> {
-        bundle
-            .nodes
-            .into_iter()
-            .map(|node| {
-                let NodeArtifactsBundleEntry { identifier, files } = node;
-
-                (identifier, NodeArtifactsPayload::from_files(files))
-            })
-            .collect()
-    }
-
     fn allocate_test_port() -> u16 {
         let listener =
             std::net::TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port for test");

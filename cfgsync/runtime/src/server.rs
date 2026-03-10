@@ -1,7 +1,7 @@
 use std::{fs, path::Path, sync::Arc};
 
 use anyhow::Context as _;
-use cfgsync_adapter::{NodeArtifacts, NodeArtifactsCatalog, RegistrationConfigProvider};
+use cfgsync_adapter::{MaterializingConfigSource, NodeArtifacts, NodeArtifactsCatalog};
 use cfgsync_core::{
     BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, serve_cfgsync,
 };
@@ -23,16 +23,6 @@ pub enum CfgsyncServingMode {
     #[default]
     Bundle,
     Registration,
-}
-
-#[derive(Debug, Deserialize)]
-struct RawCfgsyncServerConfig {
-    port: u16,
-    bundle_path: String,
-    #[serde(default)]
-    serving_mode: Option<CfgsyncServingMode>,
-    #[serde(default)]
-    registration_flow: Option<bool>,
 }
 
 #[derive(Debug, Error)]
@@ -61,20 +51,11 @@ impl CfgsyncServerConfig {
                 source,
             })?;
 
-        let raw: RawCfgsyncServerConfig =
-            serde_yaml::from_str(&config_content).map_err(|source| {
-                LoadCfgsyncServerConfigError::Parse {
-                    path: config_path,
-                    source,
-                }
-            })?;
-
-        Ok(Self {
-            port: raw.port,
-            bundle_path: raw.bundle_path,
-            serving_mode: raw
-                .serving_mode
-                .unwrap_or_else(|| mode_from_legacy_registration_flow(raw.registration_flow)),
+        serde_yaml::from_str(&config_content).map_err(|source| {
+            LoadCfgsyncServerConfigError::Parse {
+                path: config_path,
+                source,
+            }
         })
     }
 
@@ -97,14 +78,6 @@ impl CfgsyncServerConfig {
     }
 }
 
-fn mode_from_legacy_registration_flow(registration_flow: Option<bool>) -> CfgsyncServingMode {
-    if registration_flow.unwrap_or(false) {
-        CfgsyncServingMode::Registration
-    } else {
-        CfgsyncServingMode::Bundle
-    }
-}
-
 fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
     let provider = BundleConfigSource::from_yaml_file(bundle_path)
         .with_context(|| format!("loading cfgsync provider from {}", bundle_path.display()))?;
@@ -112,10 +85,10 @@ fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfig
     Ok(Arc::new(provider))
 }
 
-fn load_materializing_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
+fn load_registration_source(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
     let bundle = load_bundle_yaml(bundle_path)?;
     let catalog = build_node_catalog(bundle);
-    let provider = RegistrationConfigProvider::new(catalog);
+    let provider = MaterializingConfigSource::new(catalog);
 
     Ok(Arc::new(provider))
 }
@@ -154,7 +127,7 @@ fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::Path
 }
 
 /// Loads runtime config and starts cfgsync HTTP server process.
-pub async fn run_cfgsync_server(config_path: &Path) -> anyhow::Result<()> {
+pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()> {
     let config = CfgsyncServerConfig::load_from_file(config_path)?;
     let bundle_path = resolve_bundle_path(config_path, &config.bundle_path);
 
@@ -170,11 +143,8 @@ fn build_server_state(
 ) -> anyhow::Result<CfgsyncServerState> {
     let repo = match config.serving_mode {
         CfgsyncServingMode::Bundle => load_bundle_provider(bundle_path)?,
-        CfgsyncServingMode::Registration => load_materializing_provider(bundle_path)?,
+        CfgsyncServingMode::Registration => load_registration_source(bundle_path)?,
     };
 
     Ok(CfgsyncServerState::new(repo))
 }
-
-#[doc(hidden)]
-pub type CfgSyncServerConfig = CfgsyncServerConfig;

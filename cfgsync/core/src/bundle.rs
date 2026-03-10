@@ -24,9 +24,3 @@ pub struct NodeArtifactsBundleEntry {
     #[serde(default)]
     pub files: Vec<NodeArtifactFile>,
 }
-
-#[doc(hidden)]
-pub type CfgSyncBundle = NodeArtifactsBundle;
-
-#[doc(hidden)]
-pub type CfgSyncBundleNode = NodeArtifactsBundleEntry;
