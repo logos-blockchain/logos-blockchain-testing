@@ -6,12 +6,23 @@ use crate::NodeArtifactFile;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeArtifactsBundle {
     pub nodes: Vec<NodeArtifactsBundleEntry>,
+    #[serde(default)]
+    pub shared_files: Vec<NodeArtifactFile>,
 }
 
 impl NodeArtifactsBundle {
     #[must_use]
     pub fn new(nodes: Vec<NodeArtifactsBundleEntry>) -> Self {
-        Self { nodes }
+        Self {
+            nodes,
+            shared_files: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_shared_files(mut self, shared_files: Vec<NodeArtifactFile>) -> Self {
+        self.shared_files = shared_files;
+        self
     }
 }
 

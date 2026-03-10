@@ -2,7 +2,7 @@ use std::{fs, path::Path, sync::Arc};
 
 use anyhow::Context as _;
 use cfgsync_adapter::{
-    CachedSnapshotMaterializer, MaterializingConfigSource, NodeArtifacts, NodeArtifactsCatalog,
+    ArtifactSet, CachedSnapshotMaterializer, MaterializedArtifacts,
     RegistrationSnapshotMaterializer, SnapshotConfigSource,
 };
 use cfgsync_core::{
@@ -91,8 +91,8 @@ fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfig
 
 fn load_registration_source(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
     let bundle = load_bundle_yaml(bundle_path)?;
-    let catalog = build_node_catalog(bundle);
-    let provider = MaterializingConfigSource::new(catalog);
+    let materialized = build_materialized_artifacts(bundle);
+    let provider = SnapshotConfigSource::new(materialized);
 
     Ok(Arc::new(provider))
 }
@@ -105,17 +105,20 @@ fn load_bundle_yaml(bundle_path: &Path) -> anyhow::Result<NodeArtifactsBundle> {
         .with_context(|| format!("parsing cfgsync bundle from {}", bundle_path.display()))
 }
 
-fn build_node_catalog(bundle: NodeArtifactsBundle) -> NodeArtifactsCatalog {
+fn build_materialized_artifacts(bundle: NodeArtifactsBundle) -> MaterializedArtifacts {
     let nodes = bundle
         .nodes
         .into_iter()
-        .map(|node| NodeArtifacts {
+        .map(|node| cfgsync_adapter::NodeArtifacts {
             identifier: node.identifier,
             files: node.files,
         })
         .collect();
 
-    NodeArtifactsCatalog::new(nodes)
+    MaterializedArtifacts::new(
+        cfgsync_adapter::NodeArtifactsCatalog::new(nodes),
+        ArtifactSet::new(bundle.shared_files),
+    )
 }
 
 fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::PathBuf {

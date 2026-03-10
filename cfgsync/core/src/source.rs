@@ -75,13 +75,18 @@ pub enum BundleLoadError {
 
 #[must_use]
 pub fn bundle_to_payload_map(bundle: NodeArtifactsBundle) -> HashMap<String, NodeArtifactsPayload> {
+    let shared_files = bundle.shared_files;
+
     bundle
         .nodes
         .into_iter()
         .map(|node| {
             let NodeArtifactsBundleEntry { identifier, files } = node;
 
-            (identifier, NodeArtifactsPayload::from_files(files))
+            let mut payload_files = files;
+            payload_files.extend(shared_files.clone());
+
+            (identifier, NodeArtifactsPayload::from_files(payload_files))
         })
         .collect()
 }

@@ -33,6 +33,43 @@ impl ArtifactSet {
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
     }
+
+    #[must_use]
+    pub fn into_files(self) -> Vec<ArtifactFile> {
+        self.files
+    }
+}
+
+/// Resolved artifact payload for one node, including any shared files that
+/// should be delivered alongside the node-local files.
+#[derive(Debug, Clone, Default)]
+pub struct ResolvedNodeArtifacts {
+    node: ArtifactSet,
+    shared: ArtifactSet,
+}
+
+impl ResolvedNodeArtifacts {
+    #[must_use]
+    pub fn new(node: ArtifactSet, shared: ArtifactSet) -> Self {
+        Self { node, shared }
+    }
+
+    #[must_use]
+    pub fn node(&self) -> &ArtifactSet {
+        &self.node
+    }
+
+    #[must_use]
+    pub fn shared(&self) -> &ArtifactSet {
+        &self.shared
+    }
+
+    #[must_use]
+    pub fn files(&self) -> Vec<ArtifactFile> {
+        let mut files = self.node.files().to_vec();
+        files.extend_from_slice(self.shared.files());
+        files
+    }
 }
 
 /// Artifact payloads indexed by stable node identifier.
@@ -70,5 +107,41 @@ impl NodeArtifactsCatalog {
     #[must_use]
     pub fn into_nodes(self) -> Vec<NodeArtifacts> {
         self.nodes.into_values().collect()
+    }
+}
+
+/// Materialized cfgsync output for a whole registration set.
+#[derive(Debug, Clone, Default)]
+pub struct MaterializedArtifacts {
+    nodes: NodeArtifactsCatalog,
+    shared: ArtifactSet,
+}
+
+impl MaterializedArtifacts {
+    #[must_use]
+    pub fn new(nodes: NodeArtifactsCatalog, shared: ArtifactSet) -> Self {
+        Self { nodes, shared }
+    }
+
+    #[must_use]
+    pub fn from_catalog(nodes: NodeArtifactsCatalog) -> Self {
+        Self::new(nodes, ArtifactSet::default())
+    }
+
+    #[must_use]
+    pub fn nodes(&self) -> &NodeArtifactsCatalog {
+        &self.nodes
+    }
+
+    #[must_use]
+    pub fn shared(&self) -> &ArtifactSet {
+        &self.shared
+    }
+
+    #[must_use]
+    pub fn resolve(&self, identifier: &str) -> Option<ResolvedNodeArtifacts> {
+        self.nodes.resolve(identifier).map(|node| {
+            ResolvedNodeArtifacts::new(ArtifactSet::new(node.files.clone()), self.shared.clone())
+        })
     }
 }

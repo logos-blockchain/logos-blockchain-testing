@@ -3,7 +3,7 @@ use std::{error::Error, sync::Mutex};
 use cfgsync_core::NodeRegistration;
 use serde_json::to_string;
 
-use crate::{ArtifactSet, NodeArtifactsCatalog, RegistrationSnapshot};
+use crate::{MaterializedArtifacts, RegistrationSnapshot, ResolvedNodeArtifacts};
 
 /// Type-erased cfgsync adapter error used to preserve source context.
 pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
@@ -14,7 +14,7 @@ pub trait NodeArtifactsMaterializer: Send + Sync {
         &self,
         registration: &NodeRegistration,
         registrations: &RegistrationSnapshot,
-    ) -> Result<Option<ArtifactSet>, DynCfgsyncError>;
+    ) -> Result<Option<ResolvedNodeArtifacts>, DynCfgsyncError>;
 }
 
 /// Adapter contract for materializing a whole registration snapshot into
@@ -23,7 +23,22 @@ pub trait RegistrationSnapshotMaterializer: Send + Sync {
     fn materialize_snapshot(
         &self,
         registrations: &RegistrationSnapshot,
-    ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError>;
+    ) -> Result<MaterializationResult, DynCfgsyncError>;
+}
+
+/// Registration-driven materialization status.
+#[derive(Debug, Clone, Default)]
+pub enum MaterializationResult {
+    #[default]
+    NotReady,
+    Ready(MaterializedArtifacts),
+}
+
+impl MaterializationResult {
+    #[must_use]
+    pub fn ready(nodes: MaterializedArtifacts) -> Self {
+        Self::Ready(nodes)
+    }
 }
 
 /// Snapshot materializer wrapper that caches the last materialized result.
@@ -34,7 +49,7 @@ pub struct CachedSnapshotMaterializer<M> {
 
 struct CachedSnapshot {
     key: String,
-    catalog: Option<NodeArtifactsCatalog>,
+    result: MaterializationResult,
 }
 
 impl<M> CachedSnapshotMaterializer<M> {
@@ -58,7 +73,7 @@ where
     fn materialize_snapshot(
         &self,
         registrations: &RegistrationSnapshot,
-    ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
+    ) -> Result<MaterializationResult, DynCfgsyncError> {
         let key = Self::snapshot_key(registrations)?;
 
         {
@@ -70,11 +85,11 @@ where
             if let Some(cached) = &*cache
                 && cached.key == key
             {
-                return Ok(cached.catalog.clone());
+                return Ok(cached.result.clone());
             }
         }
 
-        let catalog = self.inner.materialize_snapshot(registrations)?;
+        let result = self.inner.materialize_snapshot(registrations)?;
         let mut cache = self
             .cache
             .lock()
@@ -82,9 +97,9 @@ where
 
         *cache = Some(CachedSnapshot {
             key,
-            catalog: catalog.clone(),
+            result: result.clone(),
         });
 
-        Ok(catalog)
+        Ok(result)
     }
 }

@@ -6,8 +6,9 @@ use cfgsync_core::{
 };
 
 use crate::{
-    ArtifactSet, DynCfgsyncError, NodeArtifactsCatalog, NodeArtifactsMaterializer,
-    RegistrationSnapshot, RegistrationSnapshotMaterializer,
+    ArtifactSet, DynCfgsyncError, MaterializationResult, MaterializedArtifacts,
+    NodeArtifactsCatalog, NodeArtifactsMaterializer, RegistrationSnapshot,
+    RegistrationSnapshotMaterializer, ResolvedNodeArtifacts,
 };
 
 impl NodeArtifactsMaterializer for NodeArtifactsCatalog {
@@ -15,10 +16,13 @@ impl NodeArtifactsMaterializer for NodeArtifactsCatalog {
         &self,
         registration: &NodeRegistration,
         _registrations: &RegistrationSnapshot,
-    ) -> Result<Option<ArtifactSet>, DynCfgsyncError> {
-        Ok(self
-            .resolve(&registration.identifier)
-            .map(build_artifact_set_from_catalog_entry))
+    ) -> Result<Option<ResolvedNodeArtifacts>, DynCfgsyncError> {
+        Ok(self.resolve(&registration.identifier).map(|artifacts| {
+            ResolvedNodeArtifacts::new(
+                build_artifact_set_from_catalog_entry(artifacts),
+                ArtifactSet::default(),
+            )
+        }))
     }
 }
 
@@ -26,8 +30,29 @@ impl RegistrationSnapshotMaterializer for NodeArtifactsCatalog {
     fn materialize_snapshot(
         &self,
         _registrations: &RegistrationSnapshot,
-    ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
-        Ok(Some(self.clone()))
+    ) -> Result<MaterializationResult, DynCfgsyncError> {
+        Ok(MaterializationResult::ready(
+            MaterializedArtifacts::from_catalog(self.clone()),
+        ))
+    }
+}
+
+impl NodeArtifactsMaterializer for MaterializedArtifacts {
+    fn materialize(
+        &self,
+        registration: &NodeRegistration,
+        _registrations: &RegistrationSnapshot,
+    ) -> Result<Option<ResolvedNodeArtifacts>, DynCfgsyncError> {
+        Ok(self.resolve(&registration.identifier))
+    }
+}
+
+impl RegistrationSnapshotMaterializer for MaterializedArtifacts {
+    fn materialize_snapshot(
+        &self,
+        _registrations: &RegistrationSnapshot,
+    ) -> Result<MaterializationResult, DynCfgsyncError> {
+        Ok(MaterializationResult::ready(self.clone()))
     }
 }
 
@@ -91,9 +116,9 @@ where
         let registrations = self.registration_snapshot();
 
         match self.materializer.materialize(&registration, &registrations) {
-            Ok(Some(artifacts)) => ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(
-                artifacts.files().to_vec(),
-            )),
+            Ok(Some(artifacts)) => {
+                ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(artifacts.files()))
+            }
             Ok(None) => ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                 &registration.identifier,
             )),
@@ -164,9 +189,9 @@ where
         };
 
         let registrations = self.registration_snapshot();
-        let catalog = match self.materializer.materialize_snapshot(&registrations) {
-            Ok(Some(catalog)) => catalog,
-            Ok(None) => {
+        let materialized = match self.materializer.materialize_snapshot(&registrations) {
+            Ok(MaterializationResult::Ready(materialized)) => materialized,
+            Ok(MaterializationResult::NotReady) => {
                 return ConfigResolveResponse::Error(CfgsyncErrorResponse::not_ready(
                     &registration.identifier,
                 ));
@@ -178,10 +203,10 @@ where
             }
         };
 
-        match catalog.resolve(&registration.identifier) {
-            Some(config) => ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(
-                config.files.clone(),
-            )),
+        match materialized.resolve(&registration.identifier) {
+            Some(config) => {
+                ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(config.files()))
+            }
             None => ConfigResolveResponse::Error(CfgsyncErrorResponse::missing_config(
                 &registration.identifier,
             )),
@@ -204,8 +229,9 @@ mod tests {
 
     use super::{MaterializingConfigSource, SnapshotConfigSource};
     use crate::{
-        CachedSnapshotMaterializer, DynCfgsyncError, NodeArtifacts, NodeArtifactsCatalog,
-        NodeArtifactsMaterializer, RegistrationSnapshot, RegistrationSnapshotMaterializer,
+        ArtifactSet, CachedSnapshotMaterializer, DynCfgsyncError, MaterializationResult,
+        MaterializedArtifacts, NodeArtifacts, NodeArtifactsCatalog, NodeArtifactsMaterializer,
+        RegistrationSnapshot, RegistrationSnapshotMaterializer, ResolvedNodeArtifacts,
     };
 
     #[test]
@@ -265,7 +291,7 @@ mod tests {
             &self,
             registration: &NodeRegistration,
             registrations: &RegistrationSnapshot,
-        ) -> Result<Option<crate::ArtifactSet>, DynCfgsyncError> {
+        ) -> Result<Option<ResolvedNodeArtifacts>, DynCfgsyncError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
 
             if registrations.len() < 2 {
@@ -278,7 +304,10 @@ mod tests {
                 ArtifactFile::new("/peers.txt", peer_count.to_string()),
             ];
 
-            Ok(Some(crate::ArtifactSet::new(files)))
+            Ok(Some(ResolvedNodeArtifacts::new(
+                crate::ArtifactSet::new(files),
+                ArtifactSet::default(),
+            )))
         }
     }
 
@@ -318,22 +347,29 @@ mod tests {
         fn materialize_snapshot(
             &self,
             registrations: &RegistrationSnapshot,
-        ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
+        ) -> Result<MaterializationResult, DynCfgsyncError> {
             if registrations.len() < 2 {
-                return Ok(None);
+                return Ok(MaterializationResult::NotReady);
             }
 
-            Ok(Some(NodeArtifactsCatalog::new(
-                registrations
-                    .iter()
-                    .map(|registration| NodeArtifacts {
-                        identifier: registration.identifier.clone(),
-                        files: vec![ArtifactFile::new(
-                            "/config.yaml",
-                            format!("peer_count: {}", registrations.len()),
-                        )],
-                    })
-                    .collect(),
+            let nodes = registrations
+                .iter()
+                .map(|registration| NodeArtifacts {
+                    identifier: registration.identifier.clone(),
+                    files: vec![ArtifactFile::new(
+                        "/config.yaml",
+                        format!("peer_count: {}", registrations.len()),
+                    )],
+                })
+                .collect();
+            let shared = ArtifactSet::new(vec![ArtifactFile::new(
+                "/shared.txt",
+                format!("shared_count: {}", registrations.len()),
+            )]);
+
+            Ok(MaterializationResult::ready(MaterializedArtifacts::new(
+                NodeArtifactsCatalog::new(nodes),
+                shared,
             )))
         }
     }
@@ -358,6 +394,7 @@ mod tests {
         match source.resolve(&node_a) {
             ConfigResolveResponse::Config(payload) => {
                 assert_eq!(payload.files()[0].content, "peer_count: 2");
+                assert_eq!(payload.files()[1].content, "shared_count: 2");
             }
             ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
@@ -371,18 +408,20 @@ mod tests {
         fn materialize_snapshot(
             &self,
             registrations: &RegistrationSnapshot,
-        ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
+        ) -> Result<MaterializationResult, DynCfgsyncError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
 
-            Ok(Some(NodeArtifactsCatalog::new(
-                registrations
-                    .iter()
-                    .map(|registration| NodeArtifacts {
-                        identifier: registration.identifier.clone(),
-                        files: vec![ArtifactFile::new("/config.yaml", "cached: true")],
-                    })
-                    .collect(),
-            )))
+            Ok(MaterializationResult::ready(
+                MaterializedArtifacts::from_catalog(NodeArtifactsCatalog::new(
+                    registrations
+                        .iter()
+                        .map(|registration| NodeArtifacts {
+                            identifier: registration.identifier.clone(),
+                            files: vec![ArtifactFile::new("/config.yaml", "cached: true")],
+                        })
+                        .collect(),
+                )),
+            ))
         }
     }
 
