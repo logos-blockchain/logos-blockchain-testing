@@ -39,7 +39,7 @@ async fn node_config(
     State(state): State<Arc<CfgSyncState>>,
     Json(payload): Json<NodeRegistration>,
 ) -> impl IntoResponse {
-    let response = resolve_node_config_response(&state, &payload.identifier);
+    let response = resolve_node_config_response(&state, &payload);
 
     match response {
         RepoResponse::Config(payload_data) => (StatusCode::OK, Json(payload_data)).into_response(),
@@ -65,8 +65,11 @@ async fn register_node(
     }
 }
 
-fn resolve_node_config_response(state: &CfgSyncState, identifier: &str) -> RepoResponse {
-    state.repo.resolve(identifier)
+fn resolve_node_config_response(
+    state: &CfgSyncState,
+    registration: &NodeRegistration,
+) -> RepoResponse {
+    state.repo.resolve(registration)
 }
 
 fn error_status(code: &CfgSyncErrorCode) -> StatusCode {
@@ -129,11 +132,66 @@ mod tests {
             }
         }
 
-        fn resolve(&self, identifier: &str) -> RepoResponse {
-            self.data.get(identifier).cloned().map_or_else(
-                || RepoResponse::Error(CfgSyncErrorResponse::missing_config(identifier)),
-                RepoResponse::Config,
-            )
+        fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+            self.data
+                .get(&registration.identifier)
+                .cloned()
+                .map_or_else(
+                    || {
+                        RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+                            &registration.identifier,
+                        ))
+                    },
+                    RepoResponse::Config,
+                )
+        }
+    }
+
+    struct RegistrationAwareProvider {
+        data: HashMap<String, CfgSyncPayload>,
+        registrations: std::sync::Mutex<HashMap<String, NodeRegistration>>,
+    }
+
+    impl ConfigProvider for RegistrationAwareProvider {
+        fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+            if !self.data.contains_key(&registration.identifier) {
+                return RegistrationResponse::Error(CfgSyncErrorResponse::missing_config(
+                    &registration.identifier,
+                ));
+            }
+
+            let mut registrations = self
+                .registrations
+                .lock()
+                .expect("test registration store should not be poisoned");
+            registrations.insert(registration.identifier.clone(), registration);
+
+            RegistrationResponse::Registered
+        }
+
+        fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+            let registrations = self
+                .registrations
+                .lock()
+                .expect("test registration store should not be poisoned");
+
+            if !registrations.contains_key(&registration.identifier) {
+                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                    &registration.identifier,
+                ));
+            }
+
+            self.data
+                .get(&registration.identifier)
+                .cloned()
+                .map_or_else(
+                    || {
+                        RepoResponse::Error(CfgSyncErrorResponse::missing_config(
+                            &registration.identifier,
+                        ))
+                    },
+                    RepoResponse::Config,
+                )
         }
     }
 
@@ -149,7 +207,10 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("node-a".to_owned(), sample_payload());
 
-        let provider = crate::repo::ConfigRepo::from_bundle(data);
+        let provider = Arc::new(RegistrationAwareProvider {
+            data,
+            registrations: std::sync::Mutex::new(HashMap::new()),
+        });
         let state = Arc::new(CfgSyncState::new(provider));
         let payload = NodeRegistration {
             ip: "127.0.0.1".parse().expect("valid ip"),
@@ -197,7 +258,10 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("node-a".to_owned(), sample_payload());
 
-        let provider = crate::repo::ConfigRepo::from_bundle(data);
+        let provider = Arc::new(RegistrationAwareProvider {
+            data,
+            registrations: std::sync::Mutex::new(HashMap::new()),
+        });
         let state = Arc::new(CfgSyncState::new(provider));
         let payload = NodeRegistration {
             ip: "127.0.0.1".parse().expect("valid ip"),

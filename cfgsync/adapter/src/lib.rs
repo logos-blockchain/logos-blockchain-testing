@@ -1,5 +1,10 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, sync::Mutex};
 
+use cfgsync_artifacts::ArtifactFile;
+use cfgsync_core::{
+    CfgSyncErrorResponse, CfgSyncPayload, ConfigProvider, NodeRegistration, RegistrationResponse,
+    RepoResponse,
+};
 use thiserror::Error;
 
 /// Type-erased cfgsync adapter error used to preserve source context.
@@ -12,6 +17,29 @@ pub struct CfgsyncNodeConfig {
     pub identifier: String,
     /// Serialized config payload for the node.
     pub config_yaml: String,
+}
+
+/// Node artifacts produced by a cfgsync materializer.
+#[derive(Debug, Clone, Default)]
+pub struct CfgsyncNodeArtifacts {
+    files: Vec<ArtifactFile>,
+}
+
+impl CfgsyncNodeArtifacts {
+    #[must_use]
+    pub fn new(files: Vec<ArtifactFile>) -> Self {
+        Self { files }
+    }
+
+    #[must_use]
+    pub fn files(&self) -> &[ArtifactFile] {
+        &self.files
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
 }
 
 /// Precomputed node configs indexed by stable identifier.
@@ -49,6 +77,91 @@ impl CfgsyncNodeCatalog {
     #[must_use]
     pub fn into_configs(self) -> Vec<CfgsyncNodeConfig> {
         self.nodes.into_values().collect()
+    }
+}
+
+/// Adapter-side node config materialization contract used by cfgsync server.
+pub trait CfgsyncMaterializer: Send + Sync {
+    fn materialize(
+        &self,
+        registration: &NodeRegistration,
+    ) -> Result<Option<CfgsyncNodeArtifacts>, DynCfgsyncError>;
+}
+
+impl CfgsyncMaterializer for CfgsyncNodeCatalog {
+    fn materialize(
+        &self,
+        registration: &NodeRegistration,
+    ) -> Result<Option<CfgsyncNodeArtifacts>, DynCfgsyncError> {
+        let artifacts = self
+            .resolve(&registration.identifier)
+            .map(build_node_artifacts_from_config);
+
+        Ok(artifacts)
+    }
+}
+
+/// Registration-aware provider backed by an adapter materializer.
+pub struct MaterializingConfigProvider<M> {
+    materializer: M,
+    registrations: Mutex<HashMap<String, NodeRegistration>>,
+}
+
+impl<M> MaterializingConfigProvider<M> {
+    #[must_use]
+    pub fn new(materializer: M) -> Self {
+        Self {
+            materializer,
+            registrations: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn registration_for(&self, identifier: &str) -> Option<NodeRegistration> {
+        let registrations = self
+            .registrations
+            .lock()
+            .expect("cfgsync registration store should not be poisoned");
+
+        registrations.get(identifier).cloned()
+    }
+}
+
+impl<M> ConfigProvider for MaterializingConfigProvider<M>
+where
+    M: CfgsyncMaterializer,
+{
+    fn register(&self, registration: NodeRegistration) -> RegistrationResponse {
+        let mut registrations = self
+            .registrations
+            .lock()
+            .expect("cfgsync registration store should not be poisoned");
+        registrations.insert(registration.identifier.clone(), registration);
+
+        RegistrationResponse::Registered
+    }
+
+    fn resolve(&self, registration: &NodeRegistration) -> RepoResponse {
+        let registration = match self.registration_for(&registration.identifier) {
+            Some(registration) => registration,
+            None => {
+                return RepoResponse::Error(CfgSyncErrorResponse::not_ready(
+                    &registration.identifier,
+                ));
+            }
+        };
+
+        match self.materializer.materialize(&registration) {
+            Ok(Some(artifacts)) => {
+                RepoResponse::Config(CfgSyncPayload::from_files(artifacts.files().to_vec()))
+            }
+            Ok(None) => {
+                RepoResponse::Error(CfgSyncErrorResponse::not_ready(&registration.identifier))
+            }
+            Err(error) => RepoResponse::Error(CfgSyncErrorResponse::internal(format!(
+                "failed to materialize config for host {}: {error}",
+                registration.identifier
+            ))),
+        }
     }
 }
 
@@ -164,9 +277,15 @@ fn build_rewritten_node_config<E: CfgsyncEnv>(
     Ok(node_config)
 }
 
+fn build_node_artifacts_from_config(config: &CfgsyncNodeConfig) -> CfgsyncNodeArtifacts {
+    CfgsyncNodeArtifacts::new(vec![ArtifactFile::new("/config.yaml", &config.config_yaml)])
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CfgsyncNodeCatalog, CfgsyncNodeConfig};
+    use cfgsync_core::{CfgSyncErrorCode, ConfigProvider, NodeRegistration, RepoResponse};
+
+    use super::{CfgsyncNodeCatalog, CfgsyncNodeConfig, MaterializingConfigProvider};
 
     #[test]
     fn catalog_resolves_identifier() {
@@ -178,5 +297,43 @@ mod tests {
         let node = catalog.resolve("node-1").expect("resolve node config");
 
         assert_eq!(node.config_yaml, "key: value");
+    }
+
+    #[test]
+    fn materializing_provider_resolves_registered_node() {
+        let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
+            identifier: "node-1".to_owned(),
+            config_yaml: "key: value".to_owned(),
+        }]);
+        let provider = MaterializingConfigProvider::new(catalog);
+        let registration = NodeRegistration {
+            identifier: "node-1".to_owned(),
+            ip: "127.0.0.1".parse().expect("parse ip"),
+        };
+
+        let _ = provider.register(registration.clone());
+
+        match provider.resolve(&registration) {
+            RepoResponse::Config(payload) => assert_eq!(payload.files()[0].path, "/config.yaml"),
+            RepoResponse::Error(error) => panic!("expected config, got {error}"),
+        }
+    }
+
+    #[test]
+    fn materializing_provider_reports_not_ready_before_registration() {
+        let catalog = CfgsyncNodeCatalog::new(vec![CfgsyncNodeConfig {
+            identifier: "node-1".to_owned(),
+            config_yaml: "key: value".to_owned(),
+        }]);
+        let provider = MaterializingConfigProvider::new(catalog);
+        let registration = NodeRegistration {
+            identifier: "node-1".to_owned(),
+            ip: "127.0.0.1".parse().expect("parse ip"),
+        };
+
+        match provider.resolve(&registration) {
+            RepoResponse::Config(_) => panic!("expected not-ready error"),
+            RepoResponse::Error(error) => assert!(matches!(error.code, CfgSyncErrorCode::NotReady)),
+        }
     }
 }
