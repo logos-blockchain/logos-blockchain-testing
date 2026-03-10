@@ -7,9 +7,8 @@ use std::{
 use anyhow::{Context as _, Result, bail};
 use cfgsync_core::{
     CFGSYNC_SCHEMA_VERSION, CfgSyncClient, CfgSyncFile, CfgSyncPayload, NodeRegistration,
-    RegistrationMetadata,
+    RegistrationPayload,
 };
-use serde_json::Value;
 use thiserror::Error;
 use tokio::time::{Duration, sleep};
 use tracing::info;
@@ -21,8 +20,6 @@ const FETCH_RETRY_DELAY: Duration = Duration::from_millis(250);
 enum ClientEnvError {
     #[error("CFG_HOST_IP `{value}` is not a valid IPv4 address")]
     InvalidIp { value: String },
-    #[error("CFG_REGISTRATION_METADATA_JSON must be a JSON object")]
-    InvalidRegistrationMetadataShape,
 }
 
 async fn fetch_with_retry(payload: &NodeRegistration, server_addr: &str) -> Result<CfgSyncPayload> {
@@ -149,10 +146,10 @@ pub async fn run_cfgsync_client_from_env(default_port: u16) -> Result<()> {
     let ip = parse_ip_env(&env::var("CFG_HOST_IP").unwrap_or_else(|_| "127.0.0.1".to_owned()))?;
     let identifier =
         env::var("CFG_HOST_IDENTIFIER").unwrap_or_else(|_| "unidentified-node".to_owned());
-    let metadata = parse_registration_metadata_env()?;
+    let metadata = parse_registration_payload_env()?;
 
     pull_config_files(
-        NodeRegistration::new(identifier, ip).with_metadata(metadata),
+        NodeRegistration::new(identifier, ip).with_payload(metadata),
         &server_addr,
     )
     .await
@@ -167,22 +164,16 @@ fn parse_ip_env(ip_str: &str) -> Result<Ipv4Addr> {
         .map_err(Into::into)
 }
 
-fn parse_registration_metadata_env() -> Result<RegistrationMetadata> {
+fn parse_registration_payload_env() -> Result<RegistrationPayload> {
     let Ok(raw) = env::var("CFG_REGISTRATION_METADATA_JSON") else {
-        return Ok(RegistrationMetadata::default());
+        return Ok(RegistrationPayload::default());
     };
 
-    parse_registration_metadata(&raw)
+    parse_registration_payload(&raw)
 }
 
-fn parse_registration_metadata(raw: &str) -> Result<RegistrationMetadata> {
-    let value: Value =
-        serde_json::from_str(raw).context("parsing CFG_REGISTRATION_METADATA_JSON")?;
-    let Some(metadata) = value.as_object() else {
-        return Err(ClientEnvError::InvalidRegistrationMetadataShape.into());
-    };
-
-    Ok(RegistrationMetadata::from(metadata.clone()))
+fn parse_registration_payload(raw: &str) -> Result<RegistrationPayload> {
+    RegistrationPayload::from_json_str(raw).context("parsing CFG_REGISTRATION_METADATA_JSON")
 }
 
 #[cfg(test)]
@@ -256,28 +247,37 @@ mod tests {
     }
 
     #[test]
-    fn parses_registration_metadata_object() {
-        let metadata = parse_registration_metadata(r#"{"network_port":3000,"service":"blend"}"#)
+    fn parses_registration_payload_object() {
+        #[derive(Debug, serde::Deserialize, PartialEq, Eq)]
+        struct ExamplePayload {
+            network_port: u16,
+            service: String,
+        }
+
+        let metadata = parse_registration_payload(r#"{"network_port":3000,"service":"blend"}"#)
             .expect("parse metadata");
+        let payload: ExamplePayload = metadata
+            .deserialize()
+            .expect("deserialize payload")
+            .expect("payload value");
 
         assert_eq!(
-            metadata.get("network_port"),
-            Some(&Value::Number(3000_u16.into()))
-        );
-        assert_eq!(
-            metadata.get("service"),
-            Some(&Value::String("blend".to_owned()))
+            payload,
+            ExamplePayload {
+                network_port: 3000,
+                service: "blend".to_owned(),
+            }
         );
     }
 
     #[test]
-    fn rejects_non_object_registration_metadata() {
-        let error = parse_registration_metadata(r#"[1,2,3]"#).expect_err("reject metadata array");
+    fn parses_registration_payload_array() {
+        let metadata = parse_registration_payload(r#"[1,2,3]"#).expect("parse metadata array");
+        let payload: Vec<u8> = metadata
+            .deserialize()
+            .expect("deserialize payload")
+            .expect("payload value");
 
-        assert!(
-            error
-                .to_string()
-                .contains("CFG_REGISTRATION_METADATA_JSON must be a JSON object")
-        );
+        assert_eq!(payload, vec![1, 2, 3]);
     }
 }
