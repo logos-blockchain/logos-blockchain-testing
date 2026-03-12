@@ -16,7 +16,10 @@ pub struct MaterializedArtifacts {
 impl MaterializedArtifacts {
     /// Creates materialized artifacts from node-local artifact sets.
     #[must_use]
-    pub fn from_nodes(nodes: impl IntoIterator<Item = (String, ArtifactSet)>) -> Self {
+    pub fn from_nodes<I>(nodes: I) -> Self
+    where
+        I: IntoIterator<Item = (String, ArtifactSet)>,
+    {
         Self {
             nodes: nodes.into_iter().collect(),
             shared: ArtifactSet::default(),

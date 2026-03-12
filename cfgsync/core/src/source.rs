@@ -187,7 +187,10 @@ mod tests {
     };
 
     fn sample_payload() -> NodeArtifactsPayload {
-        NodeArtifactsPayload::from_files(vec![NodeArtifactFile::new("/config.yaml", "key: value")])
+        NodeArtifactsPayload::from_files(vec![NodeArtifactFile::new(
+            "/config.yaml".to_string(),
+            "key: value".to_string(),
+        )])
     }
 
     #[test]
@@ -197,7 +200,7 @@ mod tests {
         let repo = StaticConfigSource { configs };
 
         match repo.resolve(&NodeRegistration::new(
-            "node-1",
+            "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )) {
             ConfigResolveResponse::Config(payload) => {
@@ -216,7 +219,7 @@ mod tests {
         };
 
         match repo.resolve(&NodeRegistration::new(
-            "unknown-node",
+            "unknown-node".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )) {
             ConfigResolveResponse::Config(_) => panic!("expected missing-config error"),
@@ -245,12 +248,12 @@ nodes:
             BundleConfigSource::from_yaml_file(bundle_file.path()).expect("load file provider");
 
         let _ = provider.register(NodeRegistration::new(
-            "node-1",
+            "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         ));
 
         match provider.resolve(&NodeRegistration::new(
-            "node-1",
+            "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )) {
             ConfigResolveResponse::Config(payload) => assert_eq!(payload.files.len(), 1),
@@ -265,7 +268,7 @@ nodes:
         let repo = StaticConfigSource { configs };
 
         match repo.resolve(&NodeRegistration::new(
-            "node-1",
+            "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )) {
             ConfigResolveResponse::Config(_) => {}

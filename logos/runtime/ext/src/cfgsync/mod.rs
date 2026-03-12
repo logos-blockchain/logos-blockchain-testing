@@ -85,7 +85,7 @@ fn config_file_content(artifacts: &cfgsync_artifacts::ArtifactSet) -> Option<Str
 }
 
 fn build_artifact_file(path: &str, content: String) -> ArtifactFile {
-    ArtifactFile::new(path, content)
+    ArtifactFile::new(path.to_string(), content.to_string())
 }
 
 fn extract_yaml_key(content: &str, key: &str) -> Result<String> {

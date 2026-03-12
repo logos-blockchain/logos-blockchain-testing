@@ -23,7 +23,7 @@ impl RegistrationSnapshotMaterializer for ThresholdMaterializer {
             (
                 registration.identifier.clone(),
                 ArtifactSet::new(vec![ArtifactFile::new(
-                    "/config.yaml",
+                    "/config.yaml".to_string(),
                     format!("id: {}\ncluster_ready: true\n", registration.identifier),
                 )]),
             )
@@ -43,8 +43,8 @@ async fn main() -> anyhow::Result<()> {
     sleep(Duration::from_millis(100)).await;
 
     let waiting_dir = tempdir()?;
-    let waiting_outputs = OutputMap::under(waiting_dir.path());
-    let waiting_node = NodeRegistration::new("node-1", "127.0.0.1".parse()?);
+    let waiting_outputs = OutputMap::under(waiting_dir.path().to_path_buf());
+    let waiting_node = NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse()?);
     let waiting_client = Client::new("http://127.0.0.1:4402");
 
     let waiting_task = tokio::spawn(async move {
@@ -58,8 +58,8 @@ async fn main() -> anyhow::Result<()> {
     sleep(Duration::from_millis(400)).await;
 
     let second_dir = tempdir()?;
-    let second_outputs = OutputMap::under(second_dir.path());
-    let second_node = NodeRegistration::new("node-2", "127.0.0.2".parse()?);
+    let second_outputs = OutputMap::under(second_dir.path().to_path_buf());
+    let second_node = NodeRegistration::new("node-2".to_string(), "127.0.0.2".parse()?);
 
     Client::new("http://127.0.0.1:4402")
         .fetch_and_write(&second_node, &second_outputs)

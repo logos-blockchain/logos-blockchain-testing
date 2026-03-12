@@ -213,7 +213,10 @@ mod tests {
     fn sample_payload() -> NodeArtifactsPayload {
         NodeArtifactsPayload {
             schema_version: CFGSYNC_SCHEMA_VERSION,
-            files: vec![NodeArtifactFile::new("/app-config.yaml", "app: test")],
+            files: vec![NodeArtifactFile::new(
+                "/app-config.yaml".to_string(),
+                "app: test".to_string(),
+            )],
         }
     }
 
@@ -227,7 +230,8 @@ mod tests {
             registrations: std::sync::Mutex::new(HashMap::new()),
         });
         let state = Arc::new(CfgsyncServerState::new(provider));
-        let payload = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("valid ip"));
+        let payload =
+            NodeRegistration::new("node-a".to_string(), "127.0.0.1".parse().expect("valid ip"));
 
         let _ = register_node(State(state.clone()), Json(payload.clone()))
             .await
@@ -246,7 +250,10 @@ mod tests {
             data: HashMap::new(),
         });
         let state = Arc::new(CfgsyncServerState::new(provider));
-        let payload = NodeRegistration::new("missing-node", "127.0.0.1".parse().expect("valid ip"));
+        let payload = NodeRegistration::new(
+            "missing-node".to_string(),
+            "127.0.0.1".parse().expect("valid ip"),
+        );
 
         let response = node_config(State(state), Json(payload))
             .await
@@ -272,7 +279,8 @@ mod tests {
             registrations: std::sync::Mutex::new(HashMap::new()),
         });
         let state = Arc::new(CfgsyncServerState::new(provider));
-        let payload = NodeRegistration::new("node-a", "127.0.0.1".parse().expect("valid ip"));
+        let payload =
+            NodeRegistration::new("node-a".to_string(), "127.0.0.1".parse().expect("valid ip"));
 
         let response = node_config(State(state), Json(payload))
             .await

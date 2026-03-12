@@ -185,7 +185,7 @@ struct MyNodeMetadata {
     api_port: u16,
 }
 
-let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().unwrap())
+let registration = NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().unwrap())
     .with_metadata(&MyNodeMetadata {
         network_port: 3000,
         api_port: 18080,

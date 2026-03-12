@@ -11,16 +11,22 @@ async fn main() -> anyhow::Result<()> {
     let artifacts = MaterializedArtifacts::from_nodes([
         (
             "node-1".to_owned(),
-            ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", "id: node-1\n")]),
+            ArtifactSet::new(vec![ArtifactFile::new(
+                "/config.yaml".to_string(),
+                "id: node-1\n".to_string(),
+            )]),
         ),
         (
             "node-2".to_owned(),
-            ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", "id: node-2\n")]),
+            ArtifactSet::new(vec![ArtifactFile::new(
+                "/config.yaml".to_string(),
+                "id: node-2\n".to_string(),
+            )]),
         ),
     ])
     .with_shared(ArtifactSet::new(vec![ArtifactFile::new(
-        "/shared/cluster.yaml",
-        "cluster: demo\n",
+        "/shared/cluster.yaml".to_string(),
+        "cluster: demo\n".to_string(),
     )]));
 
     let server = tokio::spawn(async move { serve(port, artifacts).await });
@@ -33,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
         node_1_dir.path().join("config.yaml"),
         node_1_dir.path().join("shared"),
     );
-    let node_1 = NodeRegistration::new("node-1", "127.0.0.1".parse()?);
+    let node_1 = NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse()?);
 
     Client::new("http://127.0.0.1:4401")
         .fetch_and_write(&node_1, &node_1_outputs)
@@ -53,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
         node_2_dir.path().join("config.yaml"),
         node_2_dir.path().join("shared"),
     );
-    let node_2 = NodeRegistration::new("node-2", "127.0.0.2".parse()?);
+    let node_2 = NodeRegistration::new("node-2".to_string(), "127.0.0.2".parse()?);
 
     Client::new("http://127.0.0.1:4401")
         .fetch_and_write(&node_2, &node_2_outputs)

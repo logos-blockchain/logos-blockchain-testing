@@ -39,8 +39,8 @@ pub struct Client {
 impl Client {
     /// Creates a cfgsync client pointed at the given server base URL.
     #[must_use]
-    pub fn new(base_url: impl Into<String>) -> Self {
-        let mut base_url = base_url.into();
+    pub fn new(base_url: String) -> Self {
+        let mut base_url = base_url;
         while base_url.ends_with('/') {
             base_url.pop();
         }

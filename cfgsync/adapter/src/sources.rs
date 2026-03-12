@@ -122,11 +122,15 @@ mod tests {
     fn registration_source_resolves_identifier() {
         let artifacts = MaterializedArtifacts::from_nodes([(
             "node-1".to_owned(),
-            ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", "a: 1")]),
+            ArtifactSet::new(vec![ArtifactFile::new(
+                "/config.yaml".to_string(),
+                "a: 1".to_string(),
+            )]),
         )]);
         let source = RegistrationConfigSource::new(artifacts);
 
-        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
+        let registration =
+            NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().expect("parse ip"));
         let _ = source.register(registration.clone());
 
         match source.resolve(&registration) {
@@ -139,11 +143,15 @@ mod tests {
     fn registration_source_reports_not_ready_before_registration() {
         let artifacts = MaterializedArtifacts::from_nodes([(
             "node-1".to_owned(),
-            ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", "a: 1")]),
+            ArtifactSet::new(vec![ArtifactFile::new(
+                "/config.yaml".to_string(),
+                "a: 1".to_string(),
+            )]),
         )]);
         let source = RegistrationConfigSource::new(artifacts);
 
-        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
+        let registration =
+            NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().expect("parse ip"));
 
         match source.resolve(&registration) {
             ConfigResolveResponse::Config(_) => panic!("expected not-ready"),
@@ -168,7 +176,7 @@ mod tests {
                 (
                     registration.identifier.clone(),
                     ArtifactSet::new(vec![ArtifactFile::new(
-                        "/config.yaml",
+                        "/config.yaml".to_string(),
                         format!("id: {}", registration.identifier),
                     )]),
                 )
@@ -176,7 +184,7 @@ mod tests {
 
             Ok(MaterializationResult::ready(
                 MaterializedArtifacts::from_nodes(nodes).with_shared(ArtifactSet::new(vec![
-                    ArtifactFile::new("/shared.yaml", "cluster: ready"),
+                    ArtifactFile::new("/shared.yaml".to_string(), "cluster: ready".to_string()),
                 ])),
             ))
         }
@@ -185,8 +193,10 @@ mod tests {
     #[test]
     fn registration_source_materializes_from_registration_snapshot() {
         let source = RegistrationConfigSource::new(ThresholdSnapshotMaterializer);
-        let node_1 = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
-        let node_2 = NodeRegistration::new("node-2", "127.0.0.2".parse().expect("parse ip"));
+        let node_1 =
+            NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().expect("parse ip"));
+        let node_2 =
+            NodeRegistration::new("node-2".to_string(), "127.0.0.2".parse().expect("parse ip"));
 
         let _ = source.register(node_1.clone());
         match source.resolve(&node_1) {
@@ -224,7 +234,7 @@ mod tests {
                     (
                         registration.identifier.clone(),
                         ArtifactSet::new(vec![ArtifactFile::new(
-                            "/config.yaml",
+                            "/config.yaml".to_string(),
                             format!("id: {}", registration.identifier),
                         )]),
                     )
@@ -240,7 +250,8 @@ mod tests {
                 calls: AtomicUsize::new(0),
             },
         ));
-        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"));
+        let registration =
+            NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().expect("parse ip"));
 
         let _ = source.register(registration.clone());
         let _ = source.resolve(&registration);

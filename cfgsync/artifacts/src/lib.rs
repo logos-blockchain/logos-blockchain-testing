@@ -12,11 +12,8 @@ pub struct ArtifactFile {
 
 impl ArtifactFile {
     #[must_use]
-    pub fn new(path: impl Into<String>, content: impl Into<String>) -> Self {
-        Self {
-            path: path.into(),
-            content: content.into(),
-        }
+    pub fn new(path: String, content: String) -> Self {
+        Self { path, content }
     }
 }
 

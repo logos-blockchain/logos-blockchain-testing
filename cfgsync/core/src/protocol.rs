@@ -122,9 +122,9 @@ pub struct NodeRegistration {
 impl NodeRegistration {
     /// Creates a registration with the generic node identity fields only.
     #[must_use]
-    pub fn new(identifier: impl Into<String>, ip: Ipv4Addr) -> Self {
+    pub fn new(identifier: String, ip: Ipv4Addr) -> Self {
         Self {
-            identifier: identifier.into(),
+            identifier,
             ip,
             metadata: RegistrationPayload::default(),
         }
@@ -212,10 +212,10 @@ impl CfgsyncErrorResponse {
 
     /// Builds an internal cfgsync error.
     #[must_use]
-    pub fn internal(message: impl Into<String>) -> Self {
+    pub fn internal(message: String) -> Self {
         Self {
             code: CfgsyncErrorCode::Internal,
-            message: message.into(),
+            message,
         }
     }
 }
@@ -251,12 +251,13 @@ mod tests {
 
     #[test]
     fn registration_payload_round_trips_typed_value() {
-        let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip"))
-            .with_metadata(&ExampleRegistration {
-                network_port: 3000,
-                service: "blend".to_owned(),
-            })
-            .expect("serialize registration metadata");
+        let registration =
+            NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().expect("parse ip"))
+                .with_metadata(&ExampleRegistration {
+                    network_port: 3000,
+                    service: "blend".to_owned(),
+                })
+                .expect("serialize registration metadata");
 
         let encoded = serde_json::to_value(&registration).expect("serialize registration");
         let metadata = encoded.get("metadata").expect("registration metadata");

@@ -39,12 +39,8 @@ impl OutputMap {
 
     /// Routes one artifact path from the payload to a local output path.
     #[must_use]
-    pub fn route(
-        mut self,
-        artifact_path: impl Into<String>,
-        output_path: impl Into<PathBuf>,
-    ) -> Self {
-        self.routes.insert(artifact_path.into(), output_path.into());
+    pub fn route(mut self, artifact_path: String, output_path: PathBuf) -> Self {
+        self.routes.insert(artifact_path, output_path);
         self
     }
 
@@ -54,26 +50,20 @@ impl OutputMap {
     /// `shared/deployment-settings.yaml` is written to
     /// `<root>/shared/deployment-settings.yaml`.
     #[must_use]
-    pub fn under(root: impl Into<PathBuf>) -> Self {
+    pub fn under(root: PathBuf) -> Self {
         Self {
             routes: HashMap::new(),
-            fallback: Some(FallbackRoute::Under(root.into())),
+            fallback: Some(FallbackRoute::Under(root)),
         }
     }
 
     /// Writes the node config to `config_path` and all other files under
     /// `shared_dir`, preserving their relative artifact paths.
     #[must_use]
-    pub fn config_and_shared(
-        config_path: impl Into<PathBuf>,
-        shared_dir: impl Into<PathBuf>,
-    ) -> Self {
-        let config_path = config_path.into();
-        let shared_dir = shared_dir.into();
-
+    pub fn config_and_shared(config_path: PathBuf, shared_dir: PathBuf) -> Self {
         Self::default()
-            .route("/config.yaml", config_path.clone())
-            .route("config.yaml", config_path)
+            .route("/config.yaml".to_string(), config_path.clone())
+            .route("config.yaml".to_string(), config_path)
             .with_fallback(FallbackRoute::Shared { dir: shared_dir })
     }
 
@@ -119,7 +109,7 @@ impl Client {
     #[must_use]
     pub fn new(server_addr: &str) -> Self {
         Self {
-            inner: ProtocolClient::new(server_addr),
+            inner: ProtocolClient::new(server_addr.to_string()),
         }
     }
 
@@ -306,16 +296,20 @@ fn build_output_map() -> OutputMap {
     let mut outputs = OutputMap::default();
 
     if let Ok(path) = env::var("CFG_FILE_PATH") {
+        let path = PathBuf::from(path);
+
         outputs = outputs
-            .route("/config.yaml", path.clone())
-            .route("config.yaml", path);
+            .route("/config.yaml".to_string(), path.clone())
+            .route("config.yaml".to_string(), path);
     }
 
     if let Ok(path) = env::var("CFG_DEPLOYMENT_PATH") {
+        let path = PathBuf::from(path);
+
         outputs = outputs
-            .route("/deployment.yaml", path.clone())
-            .route("deployment-settings.yaml", path.clone())
-            .route("/deployment-settings.yaml", path);
+            .route("/deployment.yaml".to_string(), path.clone())
+            .route("deployment-settings.yaml".to_string(), path.clone())
+            .route("/deployment-settings.yaml".to_string(), path);
     }
 
     outputs
@@ -339,8 +333,14 @@ mod tests {
         let bundle = NodeArtifactsBundle::new(vec![NodeArtifactsBundleEntry {
             identifier: "node-1".to_owned(),
             files: vec![
-                NodeArtifactFile::new(app_config_path.to_string_lossy(), "app_key: app_value"),
-                NodeArtifactFile::new(deployment_path.to_string_lossy(), "mode: local"),
+                NodeArtifactFile::new(
+                    app_config_path.to_string_lossy().into_owned(),
+                    "app_key: app_value".to_string(),
+                ),
+                NodeArtifactFile::new(
+                    deployment_path.to_string_lossy().into_owned(),
+                    "mode: local".to_string(),
+                ),
             ],
         }]);
 
@@ -356,7 +356,10 @@ mod tests {
 
         Client::new(&address)
             .fetch_and_write(
-                &NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip")),
+                &NodeRegistration::new(
+                    "node-1".to_string(),
+                    "127.0.0.1".parse().expect("parse ip"),
+                ),
                 &OutputMap::default(),
             )
             .await

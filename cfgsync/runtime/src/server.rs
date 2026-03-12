@@ -76,24 +76,20 @@ impl ServerConfig {
     }
 
     #[must_use]
-    pub fn for_static(port: u16, artifacts_path: impl Into<String>) -> Self {
+    pub fn for_static(port: u16, artifacts_path: String) -> Self {
         Self {
             port,
-            source: ServerSource::Static {
-                artifacts_path: artifacts_path.into(),
-            },
+            source: ServerSource::Static { artifacts_path },
         }
     }
 
     /// Builds a config that serves precomputed artifacts through the
     /// registration flow.
     #[must_use]
-    pub fn for_registration(port: u16, artifacts_path: impl Into<String>) -> Self {
+    pub fn for_registration(port: u16, artifacts_path: String) -> Self {
         Self {
             port,
-            source: ServerSource::Registration {
-                artifacts_path: artifacts_path.into(),
-            },
+            source: ServerSource::Registration { artifacts_path },
         }
     }
 }

@@ -208,13 +208,16 @@ mod tests {
             let nodes = registrations.iter().map(|registration| {
                 (
                     registration.identifier.clone(),
-                    ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", "ready: true")]),
+                    ArtifactSet::new(vec![ArtifactFile::new(
+                        "/config.yaml".to_string(),
+                        "ready: true".to_string(),
+                    )]),
                 )
             });
 
             Ok(MaterializationResult::ready(
                 MaterializedArtifacts::from_nodes(nodes).with_shared(ArtifactSet::new(vec![
-                    ArtifactFile::new("/shared.yaml", "cluster: ready"),
+                    ArtifactFile::new("/shared.yaml".to_string(), "cluster: ready".to_string()),
                 ])),
             ))
         }
@@ -235,7 +238,7 @@ mod tests {
     fn cached_snapshot_materializer_reuses_previous_result() {
         let materializer = CachedSnapshotMaterializer::new(CountingMaterializer);
         let snapshot = RegistrationSnapshot::new(vec![cfgsync_core::NodeRegistration::new(
-            "node-1",
+            "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )]);
 
@@ -260,7 +263,7 @@ mod tests {
             },
         );
         let snapshot = RegistrationSnapshot::new(vec![cfgsync_core::NodeRegistration::new(
-            "node-1",
+            "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )]);
 

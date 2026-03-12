@@ -79,7 +79,10 @@ pub fn build_static_artifacts<E: StaticArtifactRenderer>(
 
         output.insert(
             E::node_identifier(index, node),
-            ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", &config_yaml)]),
+            ArtifactSet::new(vec![ArtifactFile::new(
+                "/config.yaml".to_string(),
+                config_yaml.clone(),
+            )]),
         );
     }
 

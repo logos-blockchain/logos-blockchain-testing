@@ -23,7 +23,7 @@ impl RegistrationSnapshotMaterializer for ExampleMaterializer {
             (
                 registration.identifier.clone(),
                 ArtifactSet::new(vec![ArtifactFile::new(
-                    "/config.yaml",
+                    "/config.yaml".to_string(),
                     format!("id: {}\n", registration.identifier),
                 )]),
             )
@@ -44,8 +44,8 @@ async fn main() -> anyhow::Result<()> {
     sleep(Duration::from_millis(100)).await;
 
     let tempdir = tempdir()?;
-    let outputs = OutputMap::under(tempdir.path());
-    let registration = NodeRegistration::new("node-1", "127.0.0.1".parse()?);
+    let outputs = OutputMap::under(tempdir.path().to_path_buf());
+    let registration = NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse()?);
 
     Client::new("http://127.0.0.1:4400")
         .fetch_and_write(&registration, &outputs)
