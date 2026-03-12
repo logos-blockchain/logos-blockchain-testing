@@ -218,48 +218,6 @@ where
     serve_router(port, router).await
 }
 
-#[doc(hidden)]
-#[allow(dead_code)]
-pub fn build_snapshot_cfgsync_router<M>(materializer: M) -> Router
-where
-    M: RegistrationSnapshotMaterializer + 'static,
-{
-    build_cfgsync_router(materializer)
-}
-
-#[doc(hidden)]
-#[allow(dead_code)]
-pub fn build_persisted_snapshot_cfgsync_router<M, S>(materializer: M, sink: S) -> Router
-where
-    M: RegistrationSnapshotMaterializer + 'static,
-    S: MaterializedArtifactsSink + 'static,
-{
-    build_persisted_cfgsync_router(materializer, sink)
-}
-
-#[doc(hidden)]
-#[allow(dead_code)]
-pub async fn serve_snapshot_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
-where
-    M: RegistrationSnapshotMaterializer + 'static,
-{
-    serve_cfgsync(port, materializer).await
-}
-
-#[doc(hidden)]
-#[allow(dead_code)]
-pub async fn serve_persisted_snapshot_cfgsync<M, S>(
-    port: u16,
-    materializer: M,
-    sink: S,
-) -> Result<(), RunCfgsyncError>
-where
-    M: RegistrationSnapshotMaterializer + 'static,
-    S: MaterializedArtifactsSink + 'static,
-{
-    serve_persisted_cfgsync(port, materializer, sink).await
-}
-
 async fn serve_router(port: u16, router: Router) -> Result<(), RunCfgsyncError> {
     let bind_addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&bind_addr)
