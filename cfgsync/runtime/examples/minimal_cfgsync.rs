@@ -3,7 +3,10 @@ use cfgsync_adapter::{
     RegistrationSnapshotMaterializer,
 };
 use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
-use cfgsync_runtime::serve_cfgsync;
+use cfgsync_core::NodeRegistration;
+use cfgsync_runtime::{ArtifactOutputMap, fetch_and_write_artifacts, serve_cfgsync};
+use tempfile::tempdir;
+use tokio::time::{Duration, sleep};
 
 struct ExampleMaterializer;
 
@@ -34,6 +37,21 @@ impl RegistrationSnapshotMaterializer for ExampleMaterializer {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    serve_cfgsync(4400, ExampleMaterializer).await?;
+    let port = 4400;
+    let server = tokio::spawn(async move { serve_cfgsync(port, ExampleMaterializer).await });
+
+    // Give the server a moment to bind before the client registers.
+    sleep(Duration::from_millis(100)).await;
+
+    let tempdir = tempdir()?;
+    let config_path = tempdir.path().join("config.yaml");
+    let outputs = ArtifactOutputMap::new().route("/config.yaml", &config_path);
+    let registration = NodeRegistration::new("node-1", "127.0.0.1".parse()?);
+
+    fetch_and_write_artifacts(&registration, "http://127.0.0.1:4400", &outputs).await?;
+
+    println!("{}", std::fs::read_to_string(&config_path)?);
+
+    server.abort();
     Ok(())
 }
