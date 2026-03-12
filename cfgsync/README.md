@@ -2,33 +2,46 @@
 
 `cfgsync` is a small library stack for node registration and config artifact delivery.
 
-It is designed for distributed test and bootstrap flows where nodes need to:
+It is meant for distributed bootstrap flows where nodes:
 - register themselves with a config service
-- wait until config is ready
-- fetch one artifact payload containing the files they need
+- wait until artifacts are ready
+- fetch one payload containing the files they need
 - write those files locally and continue startup
 
-The important boundary is:
+The design boundary is simple:
+
 - `cfgsync` owns transport, registration storage, polling, and artifact serving
 - the application adapter owns readiness policy and artifact generation
 
-That keeps `cfgsync` generic while still supporting app-specific bootstrap logic.
+That keeps the library reusable without forcing application-specific bootstrap logic into core crates.
 
-## Crates
+## The model
+
+There are two ways to use `cfgsync`.
+
+The simpler path is static bundle serving. In that mode, all artifacts are known ahead of time and the server just serves a precomputed bundle.
+
+The more general path is registration-backed serving. In that mode, nodes register first, the server builds a stable registration snapshot, and the application materializer decides when artifacts are ready and what should be served.
+
+Both paths use the same client protocol and the same artifact payload shape. The difference is only where artifacts come from.
+
+## Crate roles
 
 ### `cfgsync-artifacts`
-Data types for delivered files.
 
-Primary types:
+This crate defines the file-level data model:
+
 - `ArtifactFile`
 - `ArtifactSet`
 
-Use this crate when you only need to talk about files and file collections.
+If you only need to talk about files and file groups, this is the crate you use.
 
 ### `cfgsync-core`
-Protocol and server/client building blocks.
 
-Primary types:
+This crate defines the protocol and the low-level server/client pieces.
+
+Important types:
+
 - `NodeRegistration`
 - `RegistrationPayload`
 - `NodeArtifactsPayload`
@@ -37,93 +50,101 @@ Primary types:
 - `StaticConfigSource`
 - `BundleConfigSource`
 - `CfgsyncServerState`
-- `build_cfgsync_router(...)`
-- `serve_cfgsync(...)`
 
-This crate defines the generic HTTP contract:
+It also defines the generic HTTP contract:
+
 - `POST /register`
 - `POST /node`
 
-Typical flow:
-1. client registers a node
-2. client requests its artifacts
-3. server returns either:
-   - `Ready` payload
-   - `NotReady`
-   - `Missing`
+The normal flow is:
+
+1. a node registers
+2. the node asks for its artifacts
+3. the server responds with either a payload, `NotReady`, or `Missing`
 
 ### `cfgsync-adapter`
-Adapter-facing materialization layer.
 
-Primary types:
-- `MaterializedArtifacts`
+This crate is the application-facing integration layer.
+
+The core concepts are:
+
 - `RegistrationSnapshot`
 - `RegistrationSnapshotMaterializer`
+- `MaterializedArtifacts`
+- `MaterializationResult`
+
+The main question for an adapter is:
+
+“Given the current registration snapshot, are artifacts ready yet, and if so, what should be served?”
+
+The crate also includes a few reusable wrappers:
+
 - `CachedSnapshotMaterializer`
+- `PersistingSnapshotMaterializer`
 - `RegistrationConfigSource`
-- `DeploymentAdapter`
 
-This crate is where app-specific bootstrap logic plugs in.
-
-The main pattern is snapshot materialization:
-- `RegistrationSnapshotMaterializer`
-
-Use it when readiness depends on the full registered set.
+`DeploymentAdapter` is still available as a helper for static deployment-driven rendering, but it is a secondary API. The main cfgsync model is registration-backed materialization.
 
 ### `cfgsync-runtime`
-Small runtime helpers and binaries.
 
-Primary exports:
-- `ArtifactOutputMap`
-- `register_and_fetch_artifacts(...)`
-- `fetch_and_write_artifacts(...)`
-- `run_cfgsync_client_from_env()`
-- `CfgsyncServerConfig`
-- `CfgsyncServingMode`
-- `serve_cfgsync_from_config(...)`
-- `serve_snapshot_cfgsync(...)`
+This crate provides operational helpers and binaries.
 
-This crate is for operational wiring, not for app-specific logic.
+It includes:
 
-## Design
+- client-side fetch/write helpers
+- server config loading
+- direct server entrypoints for materializers
 
-There are two serving models.
+Use this crate when you want to run cfgsync rather than define its protocol or adapter contracts.
 
-### 1. Static bundle serving
-Config is precomputed up front.
+## Artifact model
 
-Use:
-- `NodeArtifactsBundle`
-- `BundleConfigSource`
-- `CfgsyncServingMode::Bundle`
+`cfgsync` serves one node request at a time, but the adapter usually thinks in snapshots.
 
-This is the simplest path when the full artifact set is already known.
+The adapter produces `MaterializedArtifacts`, which contain:
 
-### 2. Registration-backed serving
-Config is produced from node registrations.
+- node-local artifacts keyed by node identifier
+- shared artifacts delivered alongside every node
 
-Use:
-- `RegistrationSnapshotMaterializer`
-- `CachedSnapshotMaterializer`
-- `RegistrationConfigSource`
-- `serve_snapshot_cfgsync(...)`
+When one node requests config, cfgsync resolves that node’s local files, merges in the shared files, and returns a single payload.
 
-This is the right model when config readiness depends on the current registered set.
+This is why applications do not need separate “node config” and “shared config” endpoints unless they want legacy compatibility.
 
-## Public API shape
+## Registration-backed flow
 
-### Register a node
+This is the main integration path.
 
-Nodes register with:
-- stable identifier
-- IPv4 address
+The node sends a `NodeRegistration` containing:
+
+- a stable identifier
+- an IP address
 - optional typed application metadata
 
-Application metadata is carried as an opaque serialized payload:
-- generic in `cfgsync`
-- interpreted only by the adapter
+That metadata is opaque to cfgsync itself. It is only interpreted by the application adapter.
 
-Example:
+The server stores registrations and builds a `RegistrationSnapshot`. The application implements `RegistrationSnapshotMaterializer` and decides:
+
+- whether the current snapshot is ready
+- which node-local artifacts should be produced
+- which shared artifacts should accompany them
+
+If the materializer returns `NotReady`, cfgsync responds accordingly and the client can retry later. If it returns `Ready`, cfgsync serves the resolved artifact payload.
+
+## Static bundle flow
+
+Static bundle mode still exists because it is useful when artifacts are already known.
+
+That is appropriate for:
+
+- fully precomputed topologies
+- deterministic fixtures
+- test setups where no runtime coordination is needed
+
+In that mode, cfgsync serves from `NodeArtifactsBundle` through `BundleConfigSource`.
+
+Bundle mode is useful, but it is not the defining idea of the library anymore. The primary model is registration-backed materialization.
+
+## Example: typed registration metadata
 
 ```rust
 use cfgsync_core::NodeRegistration;
@@ -141,7 +162,7 @@ let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().unwrap())
     })?;
 ```
 
-### Materialize from the registration snapshot
+## Example: snapshot materializer
 
 ```rust
 use cfgsync_adapter::{
@@ -161,15 +182,15 @@ impl RegistrationSnapshotMaterializer for MyMaterializer {
             return Ok(MaterializationResult::NotReady);
         }
 
-        let nodes = registrations
-            .iter()
-            .map(|registration| (
+        let nodes = registrations.iter().map(|registration| {
+            (
                 registration.identifier.clone(),
                 ArtifactSet::new(vec![ArtifactFile::new(
                     "/config.yaml",
                     format!("id: {}\n", registration.identifier),
                 )]),
-            ));
+            )
+        });
 
         Ok(MaterializationResult::ready(
             MaterializedArtifacts::from_nodes(nodes),
@@ -178,7 +199,7 @@ impl RegistrationSnapshotMaterializer for MyMaterializer {
 }
 ```
 
-### Serve registration-backed cfgsync
+## Example: serving cfgsync
 
 ```rust
 use cfgsync_runtime::serve_snapshot_cfgsync;
@@ -189,20 +210,7 @@ serve_snapshot_cfgsync(4400, MyMaterializer).await?;
 # }
 ```
 
-### Fetch from a client
-
-```rust
-use cfgsync_core::CfgsyncClient;
-
-# async fn run(registration: cfgsync_core::NodeRegistration) -> anyhow::Result<()> {
-let client = CfgsyncClient::new("http://127.0.0.1:4400");
-client.register_node(&registration).await?;
-let payload = client.fetch_node_config(&registration).await?;
-# Ok(())
-# }
-```
-
-### Fetch and write artifacts with runtime helpers
+## Example: fetching artifacts
 
 ```rust
 use cfgsync_runtime::{ArtifactOutputMap, fetch_and_write_artifacts};
@@ -219,70 +227,45 @@ fetch_and_write_artifacts(&registration, "http://127.0.0.1:4400", &outputs).awai
 
 ## What belongs in the adapter
 
-Put these in your app adapter:
+Keep these in your application adapter:
+
 - registration payload type
 - readiness rule
 - conversion from registration snapshot to artifacts
-- shared file generation if your app needs shared files
+- shared artifact generation if your app needs it
 
-Examples:
-- wait for `n` initial nodes
-- derive peer lists from registrations
-- build node-local config files
-- include shared deployment/config files in every node payload
+Typical examples are:
 
-## What does **not** belong in `cfgsync-core`
+- waiting for `n` initial nodes
+- deriving peer lists from registrations
+- building node-local config files
+- generating one shared deployment file for all nodes
 
-Do not put these into generic cfgsync:
-- app-specific topology rules
-- domain-specific genesis/deployment generation
-- app-specific command/state-machine logic
-- service-specific semantics for what a node means
+## What does not belong in cfgsync core
+
+Do not push these into generic cfgsync:
+
+- topology semantics specific to one application
+- genesis or deployment generation specific to one protocol
+- application-specific command/state-machine logic
+- domain-specific ideas of what a node means
 
 Those belong in the adapter or the consuming application.
 
-## Recommended integration model
+## Recommended integration path
 
-If you are integrating a new app, start here:
+If you are integrating a new app, the shortest sensible path is:
 
 1. define a typed registration payload
 2. implement `RegistrationSnapshotMaterializer`
-3. return one artifact payload per node
-4. include shared files inside that payload if your app needs them
-5. serve with `serve_snapshot_cfgsync(...)`
-6. use `CfgsyncClient` on the node side
-7. use runtime helpers if you want generic client-side file writing instead of custom dispatch code
+3. return node-local and optional shared artifacts
+4. serve them with `serve_snapshot_cfgsync(...)`
+5. use `CfgsyncClient` or the runtime helpers on the node side
 
-This model keeps the generic library small and keeps application semantics where they belong.
+That gives you the main library value without forcing extra application logic into cfgsync itself.
 
 ## Compatibility
 
-The primary surface is the one reexported from crate roots.
+The primary supported surface is what is reexported from the crate roots.
 
-There are hidden compatibility aliases in some crates to keep older internal consumers building, but they are not the recommended API for new integrations.
-
-## Runtime config files
-
-`serve_cfgsync_from_config(...)` is for runtime-config-driven serving.
-
-Today it supports:
-- static bundle serving
-- registration serving from a prebuilt artifact catalog
-
-If your app has a real registration-backed materializer, prefer the direct runtime API:
-- `serve_snapshot_cfgsync(...)`
-
-That keeps application behavior in adapter code instead of trying to encode it into YAML.
-
-## Current status
-
-`cfgsync` is suitable for:
-- internal reuse across multiple apps
-- registration-backed bootstrap flows
-- static precomputed artifact serving
-
-It is not intended to be:
-- a generic orchestration framework
-- a topology engine
-- a secret-management system
-- an app-specific bootstrap policy layer
+Some older names and compatibility paths still exist internally, but they are not the intended public API.
