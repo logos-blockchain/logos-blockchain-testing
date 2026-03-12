@@ -8,6 +8,7 @@ version     = { workspace = true }
 [dependencies]
 # Workspace crates
 cfgsync-adapter                  = { workspace = true }
+cfgsync-artifacts                = { workspace = true }
 cfgsync-core                     = { workspace = true }
 lb-framework                     = { workspace = true }
 testing-framework-core           = { workspace = true }

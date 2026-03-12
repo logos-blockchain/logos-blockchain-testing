@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
+use serde::{Deserialize, Serialize};
 
 /// Fully materialized cfgsync artifacts for a registration set.
 ///
 /// `nodes` holds the node-local files keyed by stable node identifier.
 /// `shared` holds files that should be delivered alongside every node.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MaterializedArtifacts {
     nodes: HashMap<String, ArtifactSet>,
     shared: ArtifactSet,

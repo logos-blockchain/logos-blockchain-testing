@@ -6,9 +6,8 @@ use cfgsync_adapter::{
     CachedSnapshotMaterializer, MaterializedArtifacts, MaterializedArtifactsSink,
     PersistingSnapshotMaterializer, RegistrationConfigSource, RegistrationSnapshotMaterializer,
 };
-use cfgsync_artifacts::ArtifactSet;
 use cfgsync_core::{
-    BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, RunCfgsyncError,
+    BundleConfigSource, CfgsyncServerState, NodeConfigSource, RunCfgsyncError,
     build_cfgsync_router, serve_cfgsync,
 };
 use serde::{Deserialize, de::Error as _};
@@ -27,7 +26,7 @@ pub struct CfgsyncServerConfig {
 ///
 /// This type is intentionally runtime-oriented:
 /// - `Bundle` serves a static precomputed bundle directly
-/// - `RegistrationBundle` serves a precomputed bundle through the registration
+/// - `Registration` serves precomputed artifacts through the registration
 ///   protocol, which is useful when the consumer wants clients to register
 ///   before receiving already-materialized artifacts
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -35,8 +34,12 @@ pub struct CfgsyncServerConfig {
 pub enum CfgsyncServerSource {
     /// Serve a static precomputed artifact bundle directly.
     Bundle { bundle_path: String },
-    /// Require node registration before serving artifacts from a static bundle.
-    RegistrationBundle { bundle_path: String },
+    /// Require node registration before serving precomputed artifacts.
+    #[serde(alias = "registration_bundle")]
+    Registration {
+        #[serde(alias = "bundle_path")]
+        artifacts_path: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -107,11 +110,11 @@ impl CfgsyncServerConfig {
     /// Builds a config that serves a static bundle behind the registration
     /// flow.
     #[must_use]
-    pub fn for_registration_bundle(port: u16, bundle_path: impl Into<String>) -> Self {
+    pub fn for_registration(port: u16, artifacts_path: impl Into<String>) -> Self {
         Self {
             port,
-            source: CfgsyncServerSource::RegistrationBundle {
-                bundle_path: bundle_path.into(),
+            source: CfgsyncServerSource::Registration {
+                artifacts_path: artifacts_path.into(),
             },
         }
     }
@@ -120,7 +123,9 @@ impl CfgsyncServerConfig {
         let source = match (raw.source, raw.bundle_path, raw.serving_mode) {
             (Some(source), _, _) => source,
             (None, Some(bundle_path), Some(LegacyServingMode::Registration)) => {
-                CfgsyncServerSource::RegistrationBundle { bundle_path }
+                CfgsyncServerSource::Registration {
+                    artifacts_path: bundle_path,
+                }
             }
             (None, Some(bundle_path), None | Some(LegacyServingMode::Bundle)) => {
                 CfgsyncServerSource::Bundle { bundle_path }
@@ -146,29 +151,29 @@ fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfig
     Ok(Arc::new(provider))
 }
 
-fn load_registration_source(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
-    let bundle = load_bundle_yaml(bundle_path)?;
-    let materialized = build_materialized_artifacts(bundle);
+fn load_registration_source(artifacts_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
+    let materialized = load_materialized_artifacts_yaml(artifacts_path)?;
     let provider = RegistrationConfigSource::new(materialized);
 
     Ok(Arc::new(provider))
 }
 
-fn load_bundle_yaml(bundle_path: &Path) -> anyhow::Result<NodeArtifactsBundle> {
-    let raw = fs::read_to_string(bundle_path)
-        .with_context(|| format!("reading cfgsync bundle from {}", bundle_path.display()))?;
+fn load_materialized_artifacts_yaml(
+    artifacts_path: &Path,
+) -> anyhow::Result<MaterializedArtifacts> {
+    let raw = fs::read_to_string(artifacts_path).with_context(|| {
+        format!(
+            "reading cfgsync materialized artifacts from {}",
+            artifacts_path.display()
+        )
+    })?;
 
-    serde_yaml::from_str(&raw)
-        .with_context(|| format!("parsing cfgsync bundle from {}", bundle_path.display()))
-}
-
-fn build_materialized_artifacts(bundle: NodeArtifactsBundle) -> MaterializedArtifacts {
-    let nodes = bundle
-        .nodes
-        .into_iter()
-        .map(|node| (node.identifier, ArtifactSet::new(node.files)));
-
-    MaterializedArtifacts::from_nodes(nodes).with_shared(ArtifactSet::new(bundle.shared_files))
+    serde_yaml::from_str(&raw).with_context(|| {
+        format!(
+            "parsing cfgsync materialized artifacts from {}",
+            artifacts_path.display()
+        )
+    })
 }
 
 fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::PathBuf {
@@ -278,7 +283,7 @@ fn build_server_state(
 ) -> anyhow::Result<CfgsyncServerState> {
     let repo = match &config.source {
         CfgsyncServerSource::Bundle { .. } => load_bundle_provider(source_path)?,
-        CfgsyncServerSource::RegistrationBundle { .. } => load_registration_source(source_path)?,
+        CfgsyncServerSource::Registration { .. } => load_registration_source(source_path)?,
     };
 
     Ok(CfgsyncServerState::new(repo))
@@ -286,9 +291,11 @@ fn build_server_state(
 
 fn resolve_source_path(config_path: &Path, source: &CfgsyncServerSource) -> std::path::PathBuf {
     match source {
-        CfgsyncServerSource::Bundle { bundle_path }
-        | CfgsyncServerSource::RegistrationBundle { bundle_path } => {
+        CfgsyncServerSource::Bundle { bundle_path } => {
             resolve_bundle_path(config_path, bundle_path)
+        }
+        CfgsyncServerSource::Registration { artifacts_path } => {
+            resolve_bundle_path(config_path, artifacts_path)
         }
     }
 }

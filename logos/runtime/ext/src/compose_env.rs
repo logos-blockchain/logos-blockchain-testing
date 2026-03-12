@@ -127,7 +127,7 @@ impl ComposeDeployEnv for LbcExtEnv {
             options,
             CfgsyncOutputPaths {
                 config_path: path,
-                bundle_path: &bundle_path,
+                artifacts_path: &bundle_path,
             },
         )?;
         Ok(())
@@ -190,7 +190,7 @@ fn cfgsync_bundle_path(config_path: &Path) -> PathBuf {
     config_path
         .parent()
         .unwrap_or(config_path)
-        .join("cfgsync.bundle.yaml")
+        .join("cfgsync.artifacts.yaml")
 }
 
 fn topology_hostnames(topology: &DeploymentPlan) -> Vec<String> {
@@ -207,7 +207,7 @@ fn cfgsync_render_options(
 ) -> CfgsyncRenderOptions {
     CfgsyncRenderOptions {
         port: Some(port),
-        bundle_path: None,
+        artifacts_path: None,
         min_timeout_secs: None,
         metrics_otlp_ingest_url: metrics_otlp_ingest_url.cloned(),
     }

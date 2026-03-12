@@ -16,7 +16,7 @@ pub use protocol::{
 };
 pub use render::{
     CfgsyncConfigOverrides, CfgsyncOutputPaths, RenderedCfgsync, apply_cfgsync_overrides,
-    apply_timeout_floor, ensure_bundle_path, load_cfgsync_template_yaml,
+    apply_timeout_floor, ensure_artifacts_path, load_cfgsync_template_yaml,
     render_cfgsync_yaml_from_template, write_rendered_cfgsync,
 };
 pub use server::{CfgsyncServerState, RunCfgsyncError, build_cfgsync_router, serve_cfgsync};

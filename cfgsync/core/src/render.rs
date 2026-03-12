@@ -9,8 +9,8 @@ use thiserror::Error;
 pub struct RenderedCfgsync {
     /// Serialized cfgsync server config YAML.
     pub config_yaml: String,
-    /// Serialized node bundle YAML.
-    pub bundle_yaml: String,
+    /// Serialized precomputed artifact YAML used by cfgsync runtime.
+    pub artifacts_yaml: String,
 }
 
 /// Output paths used when materializing rendered cfgsync files.
@@ -18,21 +18,22 @@ pub struct RenderedCfgsync {
 pub struct CfgsyncOutputPaths<'a> {
     /// Output path for the rendered server config YAML.
     pub config_path: &'a Path,
-    /// Output path for the rendered static bundle YAML.
-    pub bundle_path: &'a Path,
+    /// Output path for the rendered precomputed artifacts YAML.
+    pub artifacts_path: &'a Path,
 }
 
-/// Ensures bundle path override exists, defaulting to output bundle file name.
-pub fn ensure_bundle_path(bundle_path: &mut Option<String>, output_bundle_path: &Path) {
-    if bundle_path.is_some() {
+/// Ensures artifacts path override exists, defaulting to the output artifacts
+/// file name.
+pub fn ensure_artifacts_path(artifacts_path: &mut Option<String>, output_artifacts_path: &Path) {
+    if artifacts_path.is_some() {
         return;
     }
 
-    *bundle_path = Some(
-        output_bundle_path
+    *artifacts_path = Some(
+        output_artifacts_path
             .file_name()
             .and_then(|name| name.to_str())
-            .unwrap_or("cfgsync.bundle.yaml")
+            .unwrap_or("cfgsync.artifacts.yaml")
             .to_string(),
     );
 }
@@ -50,7 +51,7 @@ pub fn write_rendered_cfgsync(
     output: CfgsyncOutputPaths<'_>,
 ) -> Result<()> {
     fs::write(output.config_path, &rendered.config_yaml)?;
-    fs::write(output.bundle_path, &rendered.bundle_yaml)?;
+    fs::write(output.artifacts_path, &rendered.artifacts_yaml)?;
     Ok(())
 }
 
