@@ -8,20 +8,31 @@ use crate::MaterializedArtifacts;
 /// Adapter contract for converting an application deployment model into
 /// node-specific serialized config payloads.
 pub trait DeploymentAdapter {
+    /// Application-specific deployment model that cfgsync renders from.
     type Deployment;
+    /// One node entry inside the deployment model.
     type Node;
+    /// In-memory node config type produced before serialization.
     type NodeConfig;
+    /// Adapter-specific failure type raised while building or rewriting
+    /// configs.
     type Error: Error + Send + Sync + 'static;
 
+    /// Returns the ordered node list that cfgsync should materialize.
     fn nodes(deployment: &Self::Deployment) -> &[Self::Node];
 
+    /// Returns the stable identifier cfgsync should use for this node.
     fn node_identifier(index: usize, node: &Self::Node) -> String;
 
+    /// Builds the initial in-memory config for one node before hostname
+    /// rewriting is applied.
     fn build_node_config(
         deployment: &Self::Deployment,
         node: &Self::Node,
     ) -> Result<Self::NodeConfig, Self::Error>;
 
+    /// Rewrites any inter-node references so the config can be served through
+    /// cfgsync using the provided hostnames.
     fn rewrite_for_hostnames(
         deployment: &Self::Deployment,
         node_index: usize,
@@ -29,6 +40,8 @@ pub trait DeploymentAdapter {
         config: &mut Self::NodeConfig,
     ) -> Result<(), Self::Error>;
 
+    /// Serializes the final node config into the file content cfgsync should
+    /// deliver.
     fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error>;
 }
 
