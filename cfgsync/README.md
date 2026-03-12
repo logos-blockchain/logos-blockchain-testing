@@ -145,21 +145,19 @@ Those belong in the adapter or in the consuming application.
 
 ## Start here
 
-If you want the shortest path into the library, start with the end-to-end
-runtime example:
+Start with the examples in `cfgsync/runtime/examples/`.
 
-- `cfgsync/runtime/examples/minimal_cfgsync.rs`
+- `minimal_cfgsync.rs` shows the smallest complete flow: serve cfgsync, register
+  one node, fetch artifacts, and write them locally.
+- `precomputed_registration_cfgsync.rs` shows how precomputed artifacts still
+  use the same registration flow, including a later node that joins after the
+  server is already running.
+- `wait_for_registrations_cfgsync.rs` shows the normal `NotReady` path: one node
+  waits until the materializer sees enough registrations, then both nodes
+  receive config.
 
-It shows the full loop:
-
-- define a snapshot materializer
-- serve cfgsync
-- register a node
-- fetch artifacts
-- write them locally
-
-After that, the only concepts you usually need to learn are the ones in the
-next section.
+Those three examples cover the full public model. The rest of this README just
+names the pieces and explains where application-specific logic belongs.
 
 ## Minimal integration path
 
@@ -169,11 +167,12 @@ For a new application, the shortest sensible path is:
 2. implement `RegistrationSnapshotMaterializer`
 3. return node-local and optional shared artifacts
 4. serve them with `serve(...)`
-5. use `CfgsyncClient` or the runtime helpers on the node side
+5. use `Client` on the node side
 
-That gives you the main value of the library without forcing extra application logic into cfgsync itself.
+That gives you the main value of the library without pushing application logic
+into cfgsync itself.
 
-## Code sketch
+## API sketch
 
 Typed registration payload:
 

@@ -44,15 +44,17 @@ async fn main() -> anyhow::Result<()> {
     sleep(Duration::from_millis(100)).await;
 
     let tempdir = tempdir()?;
-    let config_path = tempdir.path().join("config.yaml");
-    let outputs = OutputMap::new().route("/config.yaml", &config_path);
+    let outputs = OutputMap::under(tempdir.path());
     let registration = NodeRegistration::new("node-1", "127.0.0.1".parse()?);
 
     Client::new("http://127.0.0.1:4400")
         .fetch_and_write(&registration, &outputs)
         .await?;
 
-    println!("{}", std::fs::read_to_string(&config_path)?);
+    println!(
+        "{}",
+        std::fs::read_to_string(tempdir.path().join("config.yaml"))?
+    );
 
     server.abort();
     Ok(())
