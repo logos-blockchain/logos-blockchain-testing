@@ -24,11 +24,13 @@ pub struct ArtifactOutputMap {
 }
 
 impl ArtifactOutputMap {
+    /// Creates an empty artifact output map.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Routes one artifact path from the payload to a local output path.
     #[must_use]
     pub fn route(
         mut self,

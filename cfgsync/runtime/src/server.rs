@@ -16,6 +16,7 @@ use thiserror::Error;
 /// Runtime cfgsync server config loaded from YAML.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CfgsyncServerConfig {
+    /// HTTP port to bind the cfgsync server on.
     pub port: u16,
     /// Source used by the runtime-managed cfgsync server.
     pub source: CfgsyncServerSource,
@@ -31,7 +32,9 @@ pub struct CfgsyncServerConfig {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CfgsyncServerSource {
+    /// Serve a static precomputed artifact bundle directly.
     Bundle { bundle_path: String },
+    /// Require node registration before serving artifacts from a static bundle.
     RegistrationBundle { bundle_path: String },
 }
 
@@ -100,6 +103,8 @@ impl CfgsyncServerConfig {
         }
     }
 
+    /// Builds a config that serves a static bundle behind the registration
+    /// flow.
     #[must_use]
     pub fn for_registration_bundle(port: u16, bundle_path: impl Into<String>) -> Self {
         Self {

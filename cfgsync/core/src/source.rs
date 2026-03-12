@@ -9,8 +9,10 @@ use crate::{
 
 /// Source of cfgsync node payloads.
 pub trait NodeConfigSource: Send + Sync {
+    /// Records a node registration before config resolution.
     fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse;
 
+    /// Resolves the current artifact payload for a previously registered node.
     fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse;
 }
 
@@ -20,11 +22,13 @@ pub struct StaticConfigSource {
 }
 
 impl StaticConfigSource {
+    /// Builds an in-memory source from fully formed payloads.
     #[must_use]
     pub fn from_payloads(configs: HashMap<String, NodeArtifactsPayload>) -> Arc<Self> {
         Arc::new(Self { configs })
     }
 
+    /// Builds an in-memory source from a static bundle document.
     #[must_use]
     pub fn from_bundle(bundle: NodeArtifactsBundle) -> Arc<Self> {
         Self::from_payloads(bundle_to_payload_map(bundle))
@@ -73,6 +77,7 @@ pub enum BundleLoadError {
     },
 }
 
+/// Converts a static bundle into the node payload map used by static sources.
 #[must_use]
 pub fn bundle_to_payload_map(bundle: NodeArtifactsBundle) -> HashMap<String, NodeArtifactsPayload> {
     let shared_files = bundle.shared_files;
@@ -91,6 +96,7 @@ pub fn bundle_to_payload_map(bundle: NodeArtifactsBundle) -> HashMap<String, Nod
         .collect()
 }
 
+/// Loads a cfgsync bundle YAML file from disk.
 pub fn load_bundle(path: &Path) -> Result<NodeArtifactsBundle, BundleLoadError> {
     let path_string = path.display().to_string();
     let raw = fs::read_to_string(path).map_err(|source| BundleLoadError::ReadBundle {

@@ -18,10 +18,14 @@ pub enum ClientError {
     Decode(serde_json::Error),
 }
 
+/// Result of probing cfgsync for a node's current artifact availability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigFetchStatus {
+    /// The node payload is ready and can be fetched successfully.
     Ready,
+    /// The node has registered but artifacts are not ready yet.
     NotReady,
+    /// The server does not know how to materialize artifacts for this node.
     Missing,
 }
 
@@ -33,6 +37,7 @@ pub struct CfgsyncClient {
 }
 
 impl CfgsyncClient {
+    /// Creates a cfgsync client pointed at the given server base URL.
     #[must_use]
     pub fn new(base_url: impl Into<String>) -> Self {
         let mut base_url = base_url.into();
@@ -45,6 +50,7 @@ impl CfgsyncClient {
         }
     }
 
+    /// Returns the normalized cfgsync server base URL used for requests.
     #[must_use]
     pub fn base_url(&self) -> &str {
         &self.base_url
@@ -63,6 +69,8 @@ impl CfgsyncClient {
         self.post_json("/node", payload).await
     }
 
+    /// Probes whether artifacts for a node are ready, missing, or still
+    /// pending.
     pub async fn fetch_node_config_status(
         &self,
         payload: &NodeRegistration,

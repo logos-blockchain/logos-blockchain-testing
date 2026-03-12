@@ -110,8 +110,11 @@ impl<'de> Deserialize<'de> for RegistrationPayload {
 /// Node metadata recorded before config materialization.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NodeRegistration {
+    /// Stable node identifier used for registration and artifact lookup.
     pub identifier: String,
+    /// IPv4 address advertised as part of registration.
     pub ip: Ipv4Addr,
+    /// Adapter-owned payload interpreted only by the app materializer.
     #[serde(default, skip_serializing_if = "RegistrationPayload::is_empty")]
     pub metadata: RegistrationPayload,
 }
@@ -170,8 +173,11 @@ impl NodeArtifactsPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CfgsyncErrorCode {
+    /// No artifact payload is available for the requested node.
     MissingConfig,
+    /// The node is registered but artifacts are not ready yet.
     NotReady,
+    /// An unexpected server-side failure occurred.
     Internal,
 }
 
@@ -179,7 +185,9 @@ pub enum CfgsyncErrorCode {
 #[derive(Debug, Clone, Serialize, Deserialize, Error)]
 #[error("{code:?}: {message}")]
 pub struct CfgsyncErrorResponse {
+    /// Machine-readable failure category.
     pub code: CfgsyncErrorCode,
+    /// Human-readable error details.
     pub message: String,
 }
 
@@ -214,13 +222,17 @@ impl CfgsyncErrorResponse {
 
 /// Resolution outcome for a requested node identifier.
 pub enum ConfigResolveResponse {
+    /// Artifacts are ready for the requested node.
     Config(NodeArtifactsPayload),
+    /// Artifacts could not be resolved for the requested node.
     Error(CfgsyncErrorResponse),
 }
 
 /// Outcome for a node registration request.
 pub enum RegisterNodeResponse {
+    /// Registration was accepted.
     Registered,
+    /// Registration failed.
     Error(CfgsyncErrorResponse),
 }
 

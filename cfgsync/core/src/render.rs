@@ -16,7 +16,9 @@ pub struct RenderedCfgsync {
 /// Output paths used when materializing rendered cfgsync files.
 #[derive(Debug, Clone, Copy)]
 pub struct CfgsyncOutputPaths<'a> {
+    /// Output path for the rendered server config YAML.
     pub config_path: &'a Path,
+    /// Output path for the rendered static bundle YAML.
     pub bundle_path: &'a Path,
 }
 
@@ -55,10 +57,15 @@ pub fn write_rendered_cfgsync(
 /// Optional overrides applied to a cfgsync template document.
 #[derive(Debug, Clone, Default)]
 pub struct CfgsyncConfigOverrides {
+    /// Override for the HTTP listen port.
     pub port: Option<u16>,
+    /// Override for the expected initial host count.
     pub n_hosts: Option<usize>,
+    /// Minimum timeout to enforce on the rendered template.
     pub timeout_floor_secs: Option<u64>,
+    /// Override for the bundle path written into cfgsync config.
     pub bundle_path: Option<String>,
+    /// Optional OTLP metrics endpoint injected into tracing settings.
     pub metrics_otlp_ingest_url: Option<String>,
 }
 

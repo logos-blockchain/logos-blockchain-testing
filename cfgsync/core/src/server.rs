@@ -14,6 +14,7 @@ pub struct CfgsyncServerState {
 }
 
 impl CfgsyncServerState {
+    /// Wraps a node config source for use by cfgsync HTTP handlers.
     #[must_use]
     pub fn new(repo: Arc<dyn NodeConfigSource>) -> Self {
         Self { repo }
@@ -83,6 +84,8 @@ fn error_status(code: &CfgsyncErrorCode) -> StatusCode {
     }
 }
 
+/// Builds the primary cfgsync router with registration and node artifact
+/// routes.
 pub fn build_cfgsync_router(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
@@ -91,6 +94,7 @@ pub fn build_cfgsync_router(state: CfgsyncServerState) -> Router {
 }
 
 #[doc(hidden)]
+/// Builds the legacy cfgsync router that still serves `/init-with-node`.
 pub fn build_legacy_cfgsync_router(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
