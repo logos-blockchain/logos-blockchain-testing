@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cfgsync_adapter::{DeploymentAdapter, build_materialized_artifacts};
+use cfgsync_adapter::static_deployment::{DeploymentAdapter, build_materialized_artifacts};
 pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
 use cfgsync_core::{
     NodeArtifactsBundle, NodeArtifactsBundleEntry,

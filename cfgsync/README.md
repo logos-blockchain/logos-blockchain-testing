@@ -34,7 +34,7 @@ This crate is the application-facing integration layer. The main concepts are `R
 
 The adapter answers one question: given the current registration snapshot, are artifacts ready yet, and if so, what should be served?
 
-The crate also includes reusable wrappers such as `CachedSnapshotMaterializer`, `PersistingSnapshotMaterializer`, and `RegistrationConfigSource`. `DeploymentAdapter` still exists as a helper for static deployment-driven rendering, but it is a secondary API. The main cfgsync model is registration-backed materialization.
+The crate also includes reusable wrappers such as `CachedSnapshotMaterializer`, `PersistingSnapshotMaterializer`, and `RegistrationConfigSource`. Static deployment-driven rendering still exists, but it lives under `cfgsync_adapter::static_deployment` as a secondary helper path. The main cfgsync model is registration-backed materialization.
 
 ### `cfgsync-runtime`
 
@@ -64,7 +64,7 @@ Static bundle mode still exists because it is useful when artifacts are already 
 
 That is appropriate for fully precomputed topologies, deterministic fixtures, and test setups where no runtime coordination is needed. In that mode, cfgsync serves from `NodeArtifactsBundle` through `BundleConfigSource`.
 
-Bundle mode is useful, but it is not the defining idea of the library anymore. The primary model is registration-backed materialization.
+Bundle mode is useful, but it is not the defining idea of the library anymore. The primary model is registration-backed materialization, and the static helpers are intentionally kept off the main adapter surface.
 
 ## Example: typed registration metadata
 
