@@ -64,8 +64,8 @@ pub struct CfgsyncConfigOverrides {
     pub n_hosts: Option<usize>,
     /// Minimum timeout to enforce on the rendered template.
     pub timeout_floor_secs: Option<u64>,
-    /// Override for the bundle path written into cfgsync config.
-    pub bundle_path: Option<String>,
+    /// Override for the precomputed artifacts path written into cfgsync config.
+    pub artifacts_path: Option<String>,
     /// Optional OTLP metrics endpoint injected into tracing settings.
     pub metrics_otlp_ingest_url: Option<String>,
 }
@@ -113,10 +113,10 @@ pub fn apply_cfgsync_overrides(
         );
     }
 
-    if let Some(bundle_path) = &overrides.bundle_path {
+    if let Some(artifacts_path) = &overrides.artifacts_path {
         root.insert(
-            Value::String("bundle_path".to_string()),
-            Value::String(bundle_path.clone()),
+            Value::String("artifacts_path".to_string()),
+            Value::String(artifacts_path.clone()),
         );
     }
 

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use cfgsync_adapter::static_deployment::{DeploymentAdapter, build_materialized_artifacts};
 use cfgsync_artifacts::ArtifactFile;
 pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
 use cfgsync_core::render::{
@@ -8,6 +7,7 @@ use cfgsync_core::render::{
 };
 use reqwest::Url;
 use serde_yaml::{Mapping, Value};
+use testing_framework_core::cfgsync::{StaticArtifactRenderer, build_static_artifacts};
 use thiserror::Error;
 
 pub(crate) struct CfgsyncRenderOptions {
@@ -25,7 +25,7 @@ enum BundleRenderError {
     MissingYamlKey { key: String },
 }
 
-pub(crate) fn render_cfgsync_from_template<E: DeploymentAdapter>(
+pub(crate) fn render_cfgsync_from_template<E: StaticArtifactRenderer>(
     topology: &E::Deployment,
     hostnames: &[String],
     options: CfgsyncRenderOptions,
@@ -33,7 +33,7 @@ pub(crate) fn render_cfgsync_from_template<E: DeploymentAdapter>(
     let cfg = build_cfgsync_server_config();
     let overrides = build_overrides::<E>(topology, options);
     let config_yaml = render_cfgsync_yaml_from_template(cfg, &overrides)?;
-    let mut materialized = build_materialized_artifacts::<E>(topology, hostnames)?;
+    let mut materialized = build_static_artifacts::<E>(topology, hostnames)?;
     append_deployment_files(&mut materialized)?;
     let artifacts_yaml = serde_yaml::to_string(&materialized)?;
 
@@ -122,7 +122,7 @@ fn build_cfgsync_server_config() -> Value {
     Value::Mapping(root)
 }
 
-pub(crate) fn render_and_write_cfgsync_from_template<E: DeploymentAdapter>(
+pub(crate) fn render_and_write_cfgsync_from_template<E: StaticArtifactRenderer>(
     topology: &E::Deployment,
     hostnames: &[String],
     mut options: CfgsyncRenderOptions,
@@ -136,7 +136,7 @@ pub(crate) fn render_and_write_cfgsync_from_template<E: DeploymentAdapter>(
     Ok(rendered)
 }
 
-fn build_overrides<E: DeploymentAdapter>(
+fn build_overrides<E: StaticArtifactRenderer>(
     topology: &E::Deployment,
     options: CfgsyncRenderOptions,
 ) -> CfgsyncConfigOverrides {
@@ -151,7 +151,7 @@ fn build_overrides<E: DeploymentAdapter>(
         port,
         n_hosts: Some(E::nodes(topology).len()),
         timeout_floor_secs: min_timeout_secs,
-        bundle_path: artifacts_path,
+        artifacts_path,
         metrics_otlp_ingest_url: metrics_otlp_ingest_url.map(|url| url.to_string()),
     }
 }

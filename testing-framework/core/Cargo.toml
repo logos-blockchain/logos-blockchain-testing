@@ -18,6 +18,7 @@ default = []
 [dependencies]
 async-trait           = "0.1"
 cfgsync-adapter       = { workspace = true }
+cfgsync-artifacts     = { workspace = true }
 futures               = { default-features = false, features = ["std"], version = "0.3" }
 parking_lot           = { workspace = true }
 prometheus-http-query = "0.8"

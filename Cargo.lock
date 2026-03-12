@@ -924,7 +924,6 @@ dependencies = [
  "cfgsync-core",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -958,6 +957,7 @@ dependencies = [
  "anyhow",
  "axum",
  "cfgsync-adapter",
+ "cfgsync-artifacts",
  "cfgsync-core",
  "clap",
  "serde",
@@ -6557,6 +6557,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "cfgsync-adapter",
+ "cfgsync-artifacts",
  "futures",
  "parking_lot",
  "prometheus-http-query",

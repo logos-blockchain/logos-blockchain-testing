@@ -182,11 +182,11 @@ pub fn prepare_assets(
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
     let tempdir = create_assets_tempdir()?;
 
-    let (cfgsync_file, cfgsync_yaml, bundle_yaml) =
+    let (cfgsync_file, cfgsync_yaml, artifacts_yaml) =
         render_and_write_cfgsync(topology, metrics_otlp_ingest_url, &tempdir)?;
     let scripts = validate_scripts(&root)?;
     let chart_path = helm_chart_path()?;
-    let values_file = render_and_write_values(topology, &tempdir, &cfgsync_yaml, &bundle_yaml)?;
+    let values_file = render_and_write_values(topology, &tempdir, &cfgsync_yaml, &artifacts_yaml)?;
     let image = testnet_image();
 
     log_assets_prepare_done(&cfgsync_file, &values_file, &chart_path, &image);
@@ -569,7 +569,7 @@ struct KzgValues {
 struct CfgsyncValues {
     port: u16,
     config: String,
-    bundle: String,
+    artifacts: String,
 }
 
 #[derive(Serialize)]
@@ -589,11 +589,11 @@ struct NodeValues {
     env: BTreeMap<String, String>,
 }
 
-fn build_values(topology: &DeploymentPlan, cfgsync_yaml: &str, bundle_yaml: &str) -> HelmValues {
+fn build_values(topology: &DeploymentPlan, cfgsync_yaml: &str, artifacts_yaml: &str) -> HelmValues {
     let cfgsync = CfgsyncValues {
         port: cfgsync_port(),
         config: cfgsync_yaml.to_string(),
-        bundle: bundle_yaml.to_string(),
+        artifacts: artifacts_yaml.to_string(),
     };
     let kzg = KzgValues::disabled();
     let image_pull_policy =

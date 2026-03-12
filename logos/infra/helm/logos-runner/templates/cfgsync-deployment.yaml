@@ -39,7 +39,7 @@ spec:
             items:
               - key: cfgsync.yaml
                 path: cfgsync.yaml
-              - key: cfgsync.bundle.yaml
-                path: cfgsync.bundle.yaml
+              - key: cfgsync.artifacts.yaml
+                path: cfgsync.artifacts.yaml
               - key: run_cfgsync.sh
                 path: scripts/run_cfgsync.sh

@@ -8,7 +8,7 @@ pub use client::{
     run_cfgsync_client_from_env,
 };
 pub use server::{
-    CfgsyncServerConfig, CfgsyncServerSource, LoadCfgsyncServerConfigError,
-    build_persisted_snapshot_cfgsync_router, build_snapshot_cfgsync_router,
-    serve_cfgsync_from_config, serve_persisted_snapshot_cfgsync, serve_snapshot_cfgsync,
+    CfgsyncServerConfig, CfgsyncServerSource, LoadCfgsyncServerConfigError, build_cfgsync_router,
+    build_persisted_cfgsync_router, serve_cfgsync, serve_cfgsync_from_config,
+    serve_persisted_cfgsync,
 };

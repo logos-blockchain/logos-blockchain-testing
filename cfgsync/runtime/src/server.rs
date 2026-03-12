@@ -8,13 +8,13 @@ use cfgsync_adapter::{
 };
 use cfgsync_core::{
     BundleConfigSource, CfgsyncServerState, NodeConfigSource, RunCfgsyncError,
-    build_cfgsync_router, serve_cfgsync,
+    serve_cfgsync as serve_cfgsync_state,
 };
-use serde::{Deserialize, de::Error as _};
+use serde::Deserialize;
 use thiserror::Error;
 
 /// Runtime cfgsync server config loaded from YAML.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct CfgsyncServerConfig {
     /// HTTP port to bind the cfgsync server on.
     pub port: u16,
@@ -35,26 +35,7 @@ pub enum CfgsyncServerSource {
     /// Serve a static precomputed artifact bundle directly.
     Bundle { bundle_path: String },
     /// Require node registration before serving precomputed artifacts.
-    #[serde(alias = "registration_bundle")]
-    Registration {
-        #[serde(alias = "bundle_path")]
-        artifacts_path: String,
-    },
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum LegacyServingMode {
-    Bundle,
-    Registration,
-}
-
-#[derive(Debug, Deserialize)]
-struct RawCfgsyncServerConfig {
-    port: u16,
-    source: Option<CfgsyncServerSource>,
-    bundle_path: Option<String>,
-    serving_mode: Option<LegacyServingMode>,
+    Registration { artifacts_path: String },
 }
 
 #[derive(Debug, Error)]
@@ -83,7 +64,7 @@ impl CfgsyncServerConfig {
                 source,
             })?;
 
-        let raw: RawCfgsyncServerConfig =
+        let config: CfgsyncServerConfig =
             serde_yaml::from_str(&config_content).map_err(|source| {
                 LoadCfgsyncServerConfigError::Parse {
                     path: config_path,
@@ -91,10 +72,7 @@ impl CfgsyncServerConfig {
                 }
             })?;
 
-        Self::from_raw(raw).map_err(|source| LoadCfgsyncServerConfigError::Parse {
-            path: path.display().to_string(),
-            source,
-        })
+        Ok(config)
     }
 
     #[must_use]
@@ -117,30 +95,6 @@ impl CfgsyncServerConfig {
                 artifacts_path: artifacts_path.into(),
             },
         }
-    }
-
-    fn from_raw(raw: RawCfgsyncServerConfig) -> Result<Self, serde_yaml::Error> {
-        let source = match (raw.source, raw.bundle_path, raw.serving_mode) {
-            (Some(source), _, _) => source,
-            (None, Some(bundle_path), Some(LegacyServingMode::Registration)) => {
-                CfgsyncServerSource::Registration {
-                    artifacts_path: bundle_path,
-                }
-            }
-            (None, Some(bundle_path), None | Some(LegacyServingMode::Bundle)) => {
-                CfgsyncServerSource::Bundle { bundle_path }
-            }
-            (None, None, _) => {
-                return Err(serde_yaml::Error::custom(
-                    "cfgsync server config requires source.kind or legacy bundle_path",
-                ));
-            }
-        };
-
-        Ok(Self {
-            port: raw.port,
-            source,
-        })
     }
 }
 
@@ -194,12 +148,12 @@ pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()>
     let bundle_path = resolve_source_path(config_path, &config.source);
 
     let state = build_server_state(&config, &bundle_path)?;
-    serve_cfgsync(config.port, state).await?;
+    serve_cfgsync_state(config.port, state).await?;
 
     Ok(())
 }
 
-/// Builds a registration-backed cfgsync router directly from a snapshot
+/// Builds the default registration-backed cfgsync router from a snapshot
 /// materializer.
 ///
 /// This is the main code-driven entrypoint for apps that want cfgsync to own:
@@ -208,12 +162,12 @@ pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()>
 /// - artifact serving
 ///
 /// while the app owns only snapshot materialization logic.
-pub fn build_snapshot_cfgsync_router<M>(materializer: M) -> Router
+pub fn build_cfgsync_router<M>(materializer: M) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
 {
     let provider = RegistrationConfigSource::new(CachedSnapshotMaterializer::new(materializer));
-    build_cfgsync_router(CfgsyncServerState::new(Arc::new(provider)))
+    cfgsync_core::build_cfgsync_router(CfgsyncServerState::new(Arc::new(provider)))
 }
 
 /// Builds a registration-backed cfgsync router with a persistence hook for
@@ -221,7 +175,7 @@ where
 ///
 /// Use this when the application wants cfgsync to persist or publish shared
 /// artifacts after a snapshot becomes ready.
-pub fn build_persisted_snapshot_cfgsync_router<M, S>(materializer: M, sink: S) -> Router
+pub fn build_persisted_cfgsync_router<M, S>(materializer: M, sink: S) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
     S: MaterializedArtifactsSink + 'static,
@@ -230,19 +184,19 @@ where
         PersistingSnapshotMaterializer::new(materializer, sink),
     ));
 
-    build_cfgsync_router(CfgsyncServerState::new(Arc::new(provider)))
+    cfgsync_core::build_cfgsync_router(CfgsyncServerState::new(Arc::new(provider)))
 }
 
-/// Runs a registration-backed cfgsync server directly from a snapshot
+/// Runs the default registration-backed cfgsync server directly from a snapshot
 /// materializer.
 ///
 /// This is the simplest runtime entrypoint when the application already has a
 /// materializer value and does not need to compose extra routes.
-pub async fn serve_snapshot_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
+pub async fn serve_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
 where
     M: RegistrationSnapshotMaterializer + 'static,
 {
-    let router = build_snapshot_cfgsync_router(materializer);
+    let router = build_cfgsync_router(materializer);
     serve_router(port, router).await
 }
 
@@ -250,7 +204,50 @@ where
 /// materialization results.
 ///
 /// This is the direct serving counterpart to
-/// [`build_persisted_snapshot_cfgsync_router`].
+/// [`build_persisted_cfgsync_router`].
+pub async fn serve_persisted_cfgsync<M, S>(
+    port: u16,
+    materializer: M,
+    sink: S,
+) -> Result<(), RunCfgsyncError>
+where
+    M: RegistrationSnapshotMaterializer + 'static,
+    S: MaterializedArtifactsSink + 'static,
+{
+    let router = build_persisted_cfgsync_router(materializer, sink);
+    serve_router(port, router).await
+}
+
+#[doc(hidden)]
+#[allow(dead_code)]
+pub fn build_snapshot_cfgsync_router<M>(materializer: M) -> Router
+where
+    M: RegistrationSnapshotMaterializer + 'static,
+{
+    build_cfgsync_router(materializer)
+}
+
+#[doc(hidden)]
+#[allow(dead_code)]
+pub fn build_persisted_snapshot_cfgsync_router<M, S>(materializer: M, sink: S) -> Router
+where
+    M: RegistrationSnapshotMaterializer + 'static,
+    S: MaterializedArtifactsSink + 'static,
+{
+    build_persisted_cfgsync_router(materializer, sink)
+}
+
+#[doc(hidden)]
+#[allow(dead_code)]
+pub async fn serve_snapshot_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
+where
+    M: RegistrationSnapshotMaterializer + 'static,
+{
+    serve_cfgsync(port, materializer).await
+}
+
+#[doc(hidden)]
+#[allow(dead_code)]
 pub async fn serve_persisted_snapshot_cfgsync<M, S>(
     port: u16,
     materializer: M,
@@ -260,8 +257,7 @@ where
     M: RegistrationSnapshotMaterializer + 'static,
     S: MaterializedArtifactsSink + 'static,
 {
-    let router = build_persisted_snapshot_cfgsync_router(materializer, sink);
-    serve_router(port, router).await
+    serve_persisted_cfgsync(port, materializer, sink).await
 }
 
 async fn serve_router(port: u16, router: Router) -> Result<(), RunCfgsyncError> {

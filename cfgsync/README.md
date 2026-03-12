@@ -8,13 +8,9 @@ The boundary is simple. `cfgsync` owns transport, registration storage, polling,
 
 ## The model
 
-There are two ways to use `cfgsync`.
+There is one main way to use `cfgsync`: nodes register, the server evaluates the current registration snapshot, and the application materializer decides whether artifacts are ready yet. Once ready, cfgsync serves a single payload containing both node-local and shared files.
 
-The simpler path is static bundle serving. In that mode, all artifacts are known ahead of time and the server just serves a precomputed bundle.
-
-The more general path is registration-backed serving. In that mode, nodes register first, the server builds a stable registration snapshot, and the application materializer decides when artifacts are ready and what should be served.
-
-Both paths use the same client protocol and the same artifact payload shape. The difference is only where artifacts come from.
+Precomputed artifacts still fit this model. They are just a special case where the materializer already knows the final outputs and uses registration only as an identity and readiness gate.
 
 ## Crate roles
 
@@ -34,11 +30,11 @@ This crate is the application-facing integration layer. The main concepts are `R
 
 The adapter answers one question: given the current registration snapshot, are artifacts ready yet, and if so, what should be served?
 
-The crate also includes reusable wrappers such as `CachedSnapshotMaterializer`, `PersistingSnapshotMaterializer`, and `RegistrationConfigSource`. Static deployment-driven rendering still exists, but it lives under `cfgsync_adapter::static_deployment` as a secondary helper path. The main cfgsync model is registration-backed materialization.
+The crate also includes reusable wrappers such as `CachedSnapshotMaterializer`, `PersistingSnapshotMaterializer`, and `RegistrationConfigSource`. Static deployment-driven rendering still exists for current testing-framework consumers, but it is intentionally a secondary helper path. The main cfgsync model is registration-backed materialization.
 
 ### `cfgsync-runtime`
 
-This crate provides operational helpers and binaries. It includes client-side fetch/write helpers, server config loading, and direct server entrypoints for materializers. Use this crate when you want to run cfgsync rather than define its protocol or adapter contracts.
+This crate provides the operational entrypoints. It includes client-side fetch/write helpers, server config loading, and the default `serve_cfgsync(...)` path for snapshot materializers. Use this crate when you want to run cfgsync rather than define its protocol or adapter contracts.
 
 ## Artifact model
 
@@ -58,13 +54,11 @@ The server stores registrations and builds a `RegistrationSnapshot`. The applica
 
 If the materializer returns `NotReady`, cfgsync responds accordingly and the client can retry later. If it returns `Ready`, cfgsync serves the resolved artifact payload.
 
-## Static bundle flow
+## Precomputed artifacts
 
-Static bundle mode still exists because it is useful when artifacts are already known.
+Some consumers know the full artifact set ahead of time. That case still fits the same registration-backed model: the server starts with precomputed `MaterializedArtifacts`, nodes register, and cfgsync serves the right payload once the registration is acceptable.
 
-That is appropriate for fully precomputed topologies, deterministic fixtures, and test setups where no runtime coordination is needed. In that mode, cfgsync serves from `NodeArtifactsBundle` through `BundleConfigSource`.
-
-Bundle mode is useful, but it is not the defining idea of the library anymore. The primary model is registration-backed materialization, and the static helpers are intentionally kept off the main adapter surface.
+The important point is that precomputed artifacts are not a separate public workflow anymore. They are one way to back the same registration/materialization protocol.
 
 ## Example: typed registration metadata
 
@@ -124,13 +118,15 @@ impl RegistrationSnapshotMaterializer for MyMaterializer {
 ## Example: serving cfgsync
 
 ```rust
-use cfgsync_runtime::serve_snapshot_cfgsync;
+use cfgsync_runtime::serve_cfgsync;
 
 # async fn run() -> anyhow::Result<()> {
-serve_snapshot_cfgsync(4400, MyMaterializer).await?;
+serve_cfgsync(4400, MyMaterializer).await?;
 # Ok(())
 # }
 ```
+
+A standalone version of this example lives in `cfgsync/runtime/examples/minimal_cfgsync.rs`.
 
 ## Example: fetching artifacts
 
@@ -157,7 +153,7 @@ Do not push application-specific topology semantics, genesis or deployment gener
 
 ## Recommended integration path
 
-If you are integrating a new app, the shortest sensible path is to define a typed registration payload, implement `RegistrationSnapshotMaterializer`, return node-local and optional shared artifacts, serve them with `serve_snapshot_cfgsync(...)`, and use `CfgsyncClient` or the runtime helpers on the node side. That gives you the main library value without forcing extra application logic into cfgsync itself.
+If you are integrating a new app, the shortest sensible path is to define a typed registration payload, implement `RegistrationSnapshotMaterializer`, return node-local and optional shared artifacts, serve them with `serve_cfgsync(...)`, and use `CfgsyncClient` or the runtime helpers on the node side. That gives you the main library value without forcing extra application logic into cfgsync itself.
 
 ## Compatibility
 
