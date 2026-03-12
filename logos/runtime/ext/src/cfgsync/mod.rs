@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cfgsync_adapter::{DeploymentAdapter, build_node_artifact_catalog};
+use cfgsync_adapter::{DeploymentAdapter, build_materialized_artifacts};
 pub(crate) use cfgsync_core::render::CfgsyncOutputPaths;
 use cfgsync_core::{
     NodeArtifactsBundle, NodeArtifactsBundleEntry,
@@ -49,39 +49,42 @@ fn build_cfgsync_bundle<E: DeploymentAdapter>(
     topology: &E::Deployment,
     hostnames: &[String],
 ) -> Result<NodeArtifactsBundle> {
-    let nodes = build_node_artifact_catalog::<E>(topology, hostnames)?.into_nodes();
-    let nodes = nodes
-        .into_iter()
-        .map(|node| NodeArtifactsBundleEntry {
-            identifier: node.identifier,
-            files: node.files,
+    let materialized = build_materialized_artifacts::<E>(topology, hostnames)?;
+    let nodes = materialized
+        .iter()
+        .map(|(identifier, artifacts)| NodeArtifactsBundleEntry {
+            identifier: identifier.to_owned(),
+            files: artifacts.files.clone(),
         })
         .collect();
 
-    Ok(NodeArtifactsBundle::new(nodes))
+    Ok(NodeArtifactsBundle::new(nodes).with_shared_files(materialized.shared().files.clone()))
 }
 
 fn append_deployment_files(bundle: &mut NodeArtifactsBundle) -> Result<()> {
-    for node in &mut bundle.nodes {
-        if has_file_path(node, "/deployment.yaml") {
-            continue;
-        }
-
-        let config_content =
-            config_file_content(node).ok_or_else(|| BundleRenderError::MissingConfigFile {
-                identifier: node.identifier.clone(),
-            })?;
-        let deployment_yaml = extract_yaml_key(&config_content, "deployment")?;
-
-        node.files
-            .push(build_bundle_file("/deployment.yaml", deployment_yaml));
+    if has_shared_file_path(bundle, "/deployment.yaml") {
+        return Ok(());
     }
+
+    let Some(node) = bundle.nodes.first() else {
+        return Ok(());
+    };
+
+    let config_content =
+        config_file_content(node).ok_or_else(|| BundleRenderError::MissingConfigFile {
+            identifier: node.identifier.clone(),
+        })?;
+    let deployment_yaml = extract_yaml_key(&config_content, "deployment")?;
+
+    bundle
+        .shared_files
+        .push(build_bundle_file("/deployment.yaml", deployment_yaml));
 
     Ok(())
 }
 
-fn has_file_path(node: &NodeArtifactsBundleEntry, path: &str) -> bool {
-    node.files.iter().any(|file| file.path == path)
+fn has_shared_file_path(bundle: &NodeArtifactsBundle, path: &str) -> bool {
+    bundle.shared_files.iter().any(|file| file.path == path)
 }
 
 fn config_file_content(node: &NodeArtifactsBundleEntry) -> Option<String> {

@@ -958,6 +958,7 @@ dependencies = [
  "anyhow",
  "axum",
  "cfgsync-adapter",
+ "cfgsync-artifacts",
  "cfgsync-core",
  "clap",
  "serde",

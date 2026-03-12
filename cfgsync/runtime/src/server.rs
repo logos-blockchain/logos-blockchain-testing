@@ -3,9 +3,10 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::Context as _;
 use axum::Router;
 use cfgsync_adapter::{
-    ArtifactSet, CachedSnapshotMaterializer, MaterializedArtifacts, MaterializedArtifactsSink,
-    PersistingSnapshotMaterializer, RegistrationSnapshotMaterializer, SnapshotConfigSource,
+    CachedSnapshotMaterializer, MaterializedArtifacts, MaterializedArtifactsSink,
+    PersistingSnapshotMaterializer, RegistrationConfigSource, RegistrationSnapshotMaterializer,
 };
+use cfgsync_artifacts::ArtifactSet;
 use cfgsync_core::{
     BundleConfigSource, CfgsyncServerState, NodeArtifactsBundle, NodeConfigSource, RunCfgsyncError,
     build_cfgsync_router, serve_cfgsync,
@@ -148,7 +149,7 @@ fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfig
 fn load_registration_source(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
     let bundle = load_bundle_yaml(bundle_path)?;
     let materialized = build_materialized_artifacts(bundle);
-    let provider = SnapshotConfigSource::new(materialized);
+    let provider = RegistrationConfigSource::new(materialized);
 
     Ok(Arc::new(provider))
 }
@@ -165,16 +166,9 @@ fn build_materialized_artifacts(bundle: NodeArtifactsBundle) -> MaterializedArti
     let nodes = bundle
         .nodes
         .into_iter()
-        .map(|node| cfgsync_adapter::NodeArtifacts {
-            identifier: node.identifier,
-            files: node.files,
-        })
-        .collect();
+        .map(|node| (node.identifier, ArtifactSet::new(node.files)));
 
-    MaterializedArtifacts::new(
-        cfgsync_adapter::NodeArtifactsCatalog::new(nodes),
-        ArtifactSet::new(bundle.shared_files),
-    )
+    MaterializedArtifacts::from_nodes(nodes).with_shared(ArtifactSet::new(bundle.shared_files))
 }
 
 fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::PathBuf {
@@ -213,7 +207,7 @@ pub fn build_snapshot_cfgsync_router<M>(materializer: M) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
 {
-    let provider = SnapshotConfigSource::new(CachedSnapshotMaterializer::new(materializer));
+    let provider = RegistrationConfigSource::new(CachedSnapshotMaterializer::new(materializer));
     build_cfgsync_router(CfgsyncServerState::new(Arc::new(provider)))
 }
 
@@ -227,7 +221,7 @@ where
     M: RegistrationSnapshotMaterializer + 'static,
     S: MaterializedArtifactsSink + 'static,
 {
-    let provider = SnapshotConfigSource::new(CachedSnapshotMaterializer::new(
+    let provider = RegistrationConfigSource::new(CachedSnapshotMaterializer::new(
         PersistingSnapshotMaterializer::new(materializer, sink),
     ));
 

@@ -56,25 +56,19 @@ Typical flow:
 Adapter-facing materialization layer.
 
 Primary types:
-- `NodeArtifacts`
-- `NodeArtifactsCatalog`
+- `MaterializedArtifacts`
 - `RegistrationSnapshot`
-- `NodeArtifactsMaterializer`
 - `RegistrationSnapshotMaterializer`
 - `CachedSnapshotMaterializer`
-- `MaterializingConfigSource`
-- `SnapshotConfigSource`
+- `RegistrationConfigSource`
 - `DeploymentAdapter`
 
 This crate is where app-specific bootstrap logic plugs in.
 
-Two useful patterns exist:
-- single-node materialization
-  - `NodeArtifactsMaterializer`
-- whole-snapshot materialization
-  - `RegistrationSnapshotMaterializer`
+The main pattern is snapshot materialization:
+- `RegistrationSnapshotMaterializer`
 
-Use snapshot materialization when readiness depends on the full registered set.
+Use it when readiness depends on the full registered set.
 
 ### `cfgsync-runtime`
 Small runtime helpers and binaries.
@@ -111,7 +105,7 @@ Config is produced from node registrations.
 Use:
 - `RegistrationSnapshotMaterializer`
 - `CachedSnapshotMaterializer`
-- `SnapshotConfigSource`
+- `RegistrationConfigSource`
 - `serve_snapshot_cfgsync(...)`
 
 This is the right model when config readiness depends on the current registered set.
@@ -151,10 +145,10 @@ let registration = NodeRegistration::new("node-1", "127.0.0.1".parse().unwrap())
 
 ```rust
 use cfgsync_adapter::{
-    DynCfgsyncError, NodeArtifacts, NodeArtifactsCatalog, RegistrationSnapshot,
+    DynCfgsyncError, MaterializationResult, MaterializedArtifacts, RegistrationSnapshot,
     RegistrationSnapshotMaterializer,
 };
-use cfgsync_artifacts::ArtifactFile;
+use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
 
 struct MyMaterializer;
 
@@ -162,23 +156,24 @@ impl RegistrationSnapshotMaterializer for MyMaterializer {
     fn materialize_snapshot(
         &self,
         registrations: &RegistrationSnapshot,
-    ) -> Result<Option<NodeArtifactsCatalog>, DynCfgsyncError> {
+    ) -> Result<MaterializationResult, DynCfgsyncError> {
         if registrations.len() < 2 {
-            return Ok(None);
+            return Ok(MaterializationResult::NotReady);
         }
 
         let nodes = registrations
             .iter()
-            .map(|registration| NodeArtifacts {
-                identifier: registration.identifier.clone(),
-                files: vec![ArtifactFile::new(
+            .map(|registration| (
+                registration.identifier.clone(),
+                ArtifactSet::new(vec![ArtifactFile::new(
                     "/config.yaml",
                     format!("id: {}\n", registration.identifier),
-                )],
-            })
-            .collect();
+                )]),
+            ));
 
-        Ok(Some(NodeArtifactsCatalog::new(nodes)))
+        Ok(MaterializationResult::ready(
+            MaterializedArtifacts::from_nodes(nodes),
+        ))
     }
 }
 ```

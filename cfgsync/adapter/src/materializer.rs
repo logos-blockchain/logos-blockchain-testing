@@ -1,32 +1,17 @@
 use std::{error::Error, sync::Mutex};
 
-use cfgsync_core::NodeRegistration;
 use serde_json::to_string;
 
-use crate::{MaterializedArtifacts, RegistrationSnapshot, ResolvedNodeArtifacts};
+use crate::{MaterializedArtifacts, RegistrationSnapshot};
 
 /// Type-erased cfgsync adapter error used to preserve source context.
 pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
 
-/// Adapter-side materialization contract for a single registered node.
-pub trait NodeArtifactsMaterializer: Send + Sync {
-    /// Resolves one node from the current registration set.
-    ///
-    /// Returning `Ok(None)` means the node is known but its artifacts are not
-    /// ready yet.
-    fn materialize(
-        &self,
-        registration: &NodeRegistration,
-        registrations: &RegistrationSnapshot,
-    ) -> Result<Option<ResolvedNodeArtifacts>, DynCfgsyncError>;
-}
-
 /// Adapter contract for materializing a whole registration snapshot into
-/// per-node cfgsync artifacts.
+/// cfgsync artifacts.
 pub trait RegistrationSnapshotMaterializer: Send + Sync {
     /// Materializes the current registration set.
     ///
-    /// This is the main registration-driven integration point for cfgsync.
     /// Implementations decide:
     /// - when the current snapshot is ready to serve
     /// - which per-node artifacts should be produced
@@ -54,8 +39,8 @@ pub enum MaterializationResult {
 impl MaterializationResult {
     /// Creates a ready materialization result.
     #[must_use]
-    pub fn ready(nodes: MaterializedArtifacts) -> Self {
-        Self::Ready(nodes)
+    pub fn ready(artifacts: MaterializedArtifacts) -> Self {
+        Self::Ready(artifacts)
     }
 
     /// Returns the ready artifacts when materialization succeeded.
@@ -200,14 +185,14 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
-    use cfgsync_artifacts::ArtifactFile;
+    use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
 
     use super::{
         CachedSnapshotMaterializer, DynCfgsyncError, MaterializationResult, MaterializedArtifacts,
         MaterializedArtifactsSink, PersistingSnapshotMaterializer,
         RegistrationSnapshotMaterializer,
     };
-    use crate::{ArtifactSet, NodeArtifacts, NodeArtifactsCatalog, RegistrationSnapshot};
+    use crate::RegistrationSnapshot;
 
     struct CountingMaterializer;
 
@@ -220,18 +205,18 @@ mod tests {
                 return Ok(MaterializationResult::NotReady);
             }
 
-            let nodes = registrations
-                .iter()
-                .map(|registration| NodeArtifacts {
-                    identifier: registration.identifier.clone(),
-                    files: vec![ArtifactFile::new("/config.yaml", "ready: true")],
-                })
-                .collect();
+            let nodes = registrations.iter().map(|registration| {
+                (
+                    registration.identifier.clone(),
+                    ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", "ready: true")]),
+                )
+            });
 
-            Ok(MaterializationResult::ready(MaterializedArtifacts::new(
-                NodeArtifactsCatalog::new(nodes),
-                ArtifactSet::new(vec![ArtifactFile::new("/shared.yaml", "cluster: ready")]),
-            )))
+            Ok(MaterializationResult::ready(
+                MaterializedArtifacts::from_nodes(nodes).with_shared(ArtifactSet::new(vec![
+                    ArtifactFile::new("/shared.yaml", "cluster: ready"),
+                ])),
+            ))
         }
     }
 
@@ -247,30 +232,44 @@ mod tests {
     }
 
     #[test]
-    fn persisting_snapshot_materializer_writes_ready_snapshots_once() {
-        let writes = Arc::new(AtomicUsize::new(0));
-        let materializer = CachedSnapshotMaterializer::new(PersistingSnapshotMaterializer::new(
-            CountingMaterializer,
-            CountingSink {
-                writes: Arc::clone(&writes),
-            },
-        ));
-
-        let empty = RegistrationSnapshot::default();
-        let ready = RegistrationSnapshot::new(vec![cfgsync_core::NodeRegistration::new(
-            "node-0",
+    fn cached_snapshot_materializer_reuses_previous_result() {
+        let materializer = CachedSnapshotMaterializer::new(CountingMaterializer);
+        let snapshot = RegistrationSnapshot::new(vec![cfgsync_core::NodeRegistration::new(
+            "node-1",
             "127.0.0.1".parse().expect("parse ip"),
         )]);
 
-        let _ = materializer
-            .materialize_snapshot(&empty)
-            .expect("not-ready snapshot");
-        let _ = materializer
-            .materialize_snapshot(&ready)
-            .expect("ready snapshot");
-        let _ = materializer
-            .materialize_snapshot(&ready)
-            .expect("cached ready snapshot");
+        let first = materializer
+            .materialize_snapshot(&snapshot)
+            .expect("first materialization");
+        let second = materializer
+            .materialize_snapshot(&snapshot)
+            .expect("second materialization");
+
+        assert!(matches!(first, MaterializationResult::Ready(_)));
+        assert!(matches!(second, MaterializationResult::Ready(_)));
+    }
+
+    #[test]
+    fn persisting_snapshot_materializer_writes_ready_snapshots_once() {
+        let writes = Arc::new(AtomicUsize::new(0));
+        let materializer = PersistingSnapshotMaterializer::new(
+            CountingMaterializer,
+            CountingSink {
+                writes: writes.clone(),
+            },
+        );
+        let snapshot = RegistrationSnapshot::new(vec![cfgsync_core::NodeRegistration::new(
+            "node-1",
+            "127.0.0.1".parse().expect("parse ip"),
+        )]);
+
+        materializer
+            .materialize_snapshot(&snapshot)
+            .expect("first materialization");
+        materializer
+            .materialize_snapshot(&snapshot)
+            .expect("second materialization");
 
         assert_eq!(writes.load(Ordering::SeqCst), 1);
     }

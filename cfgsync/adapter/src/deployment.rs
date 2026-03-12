@@ -1,9 +1,9 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
-use cfgsync_artifacts::ArtifactFile;
+use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
 use thiserror::Error;
 
-use crate::{NodeArtifacts, NodeArtifactsCatalog};
+use crate::MaterializedArtifacts;
 
 /// Adapter contract for converting an application deployment model into
 /// node-specific serialized config payloads.
@@ -53,32 +53,25 @@ where
     }
 }
 
-/// Builds cfgsync node configs for a deployment by:
+/// Builds materialized cfgsync artifacts for a deployment by:
 /// 1) validating hostname count,
 /// 2) building each node config,
 /// 3) rewriting host references,
 /// 4) serializing each node payload.
-pub fn build_cfgsync_node_configs<E: DeploymentAdapter>(
+pub fn build_materialized_artifacts<E: DeploymentAdapter>(
     deployment: &E::Deployment,
     hostnames: &[String],
-) -> Result<Vec<NodeArtifacts>, BuildCfgsyncNodesError> {
-    Ok(build_node_artifact_catalog::<E>(deployment, hostnames)?.into_nodes())
-}
-
-/// Builds cfgsync node configs and indexes them by stable identifier.
-pub fn build_node_artifact_catalog<E: DeploymentAdapter>(
-    deployment: &E::Deployment,
-    hostnames: &[String],
-) -> Result<NodeArtifactsCatalog, BuildCfgsyncNodesError> {
+) -> Result<MaterializedArtifacts, BuildCfgsyncNodesError> {
     let nodes = E::nodes(deployment);
     ensure_hostname_count(nodes.len(), hostnames.len())?;
 
-    let mut output = Vec::with_capacity(nodes.len());
+    let mut output = HashMap::with_capacity(nodes.len());
     for (index, node) in nodes.iter().enumerate() {
-        output.push(build_node_entry::<E>(deployment, node, index, hostnames)?);
+        let (identifier, artifacts) = build_node_entry::<E>(deployment, node, index, hostnames)?;
+        output.insert(identifier, artifacts);
     }
 
-    Ok(NodeArtifactsCatalog::new(output))
+    Ok(MaterializedArtifacts::from_nodes(output))
 }
 
 fn ensure_hostname_count(nodes: usize, hostnames: usize) -> Result<(), BuildCfgsyncNodesError> {
@@ -94,14 +87,14 @@ fn build_node_entry<E: DeploymentAdapter>(
     node: &E::Node,
     index: usize,
     hostnames: &[String],
-) -> Result<NodeArtifacts, BuildCfgsyncNodesError> {
+) -> Result<(String, ArtifactSet), BuildCfgsyncNodesError> {
     let node_config = build_rewritten_node_config::<E>(deployment, node, index, hostnames)?;
     let config_yaml = E::serialize_node_config(&node_config).map_err(adapter_error)?;
 
-    Ok(NodeArtifacts {
-        identifier: E::node_identifier(index, node),
-        files: vec![ArtifactFile::new("/config.yaml", &config_yaml)],
-    })
+    Ok((
+        E::node_identifier(index, node),
+        ArtifactSet::new(vec![ArtifactFile::new("/config.yaml", &config_yaml)]),
+    ))
 }
 
 fn build_rewritten_node_config<E: DeploymentAdapter>(
