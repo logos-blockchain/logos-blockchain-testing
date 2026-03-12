@@ -99,7 +99,7 @@ Use it when you want to run cfgsync rather than define its protocol:
 
 - client-side fetch/write helpers
 - server config loading
-- direct serving helpers such as `serve_cfgsync(...)`
+- direct serving helpers such as `serve(...)`
 
 This is the crate that should feel like the normal “start here” path for users integrating cfgsync into a real system.
 
@@ -150,7 +150,7 @@ For a new application, the shortest sensible path is:
 1. define a typed registration payload
 2. implement `RegistrationSnapshotMaterializer`
 3. return node-local and optional shared artifacts
-4. serve them with `serve_cfgsync(...)`
+4. serve them with `serve(...)`
 5. use `CfgsyncClient` or the runtime helpers on the node side
 
 That gives you the main value of the library without forcing extra application logic into cfgsync itself.
@@ -227,10 +227,10 @@ impl RegistrationSnapshotMaterializer for MyMaterializer {
 Serving:
 
 ```rust
-use cfgsync_runtime::serve_cfgsync;
+use cfgsync_runtime::serve;
 
 # async fn run() -> anyhow::Result<()> {
-serve_cfgsync(4400, MyMaterializer).await?;
+serve(4400, MyMaterializer).await?;
 # Ok(())
 # }
 ```
@@ -238,14 +238,14 @@ serve_cfgsync(4400, MyMaterializer).await?;
 Fetching and writing artifacts:
 
 ```rust
-use cfgsync_runtime::{ArtifactOutputMap, fetch_and_write_artifacts};
+use cfgsync_runtime::{OutputMap, fetch_and_write};
 
 # async fn run(registration: cfgsync_core::NodeRegistration) -> anyhow::Result<()> {
-let outputs = ArtifactOutputMap::new()
+let outputs = OutputMap::new()
     .route("/config.yaml", "/node-data/node-1/config.yaml")
     .route("deployment-settings.yaml", "/node-data/shared/deployment-settings.yaml");
 
-fetch_and_write_artifacts(&registration, "http://127.0.0.1:4400", &outputs).await?;
+fetch_and_write(&registration, "http://127.0.0.1:4400", &outputs).await?;
 # Ok(())
 # }
 ```

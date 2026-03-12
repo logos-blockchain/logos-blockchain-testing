@@ -15,11 +15,11 @@ use thiserror::Error;
 
 /// Runtime cfgsync server config loaded from YAML.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct CfgsyncServerConfig {
+pub struct ServerConfig {
     /// HTTP port to bind the cfgsync server on.
     pub port: u16,
     /// Source used by the runtime-managed cfgsync server.
-    pub source: CfgsyncServerSource,
+    pub source: ServerSource,
 }
 
 /// Runtime cfgsync source loaded from config.
@@ -31,7 +31,7 @@ pub struct CfgsyncServerConfig {
 ///   before receiving already-materialized artifacts
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum CfgsyncServerSource {
+pub enum ServerSource {
     /// Serve a static precomputed artifact bundle directly.
     Bundle { bundle_path: String },
     /// Require node registration before serving precomputed artifacts.
@@ -39,7 +39,7 @@ pub enum CfgsyncServerSource {
 }
 
 #[derive(Debug, Error)]
-pub enum LoadCfgsyncServerConfigError {
+pub enum LoadServerConfigError {
     #[error("failed to read cfgsync config file {path}: {source}")]
     Read {
         path: String,
@@ -54,23 +54,22 @@ pub enum LoadCfgsyncServerConfigError {
     },
 }
 
-impl CfgsyncServerConfig {
+impl ServerConfig {
     /// Loads cfgsync runtime server config from a YAML file.
-    pub fn load_from_file(path: &Path) -> Result<Self, LoadCfgsyncServerConfigError> {
+    pub fn load_from_file(path: &Path) -> Result<Self, LoadServerConfigError> {
         let config_path = path.display().to_string();
         let config_content =
-            fs::read_to_string(path).map_err(|source| LoadCfgsyncServerConfigError::Read {
+            fs::read_to_string(path).map_err(|source| LoadServerConfigError::Read {
                 path: config_path.clone(),
                 source,
             })?;
 
-        let config: CfgsyncServerConfig =
-            serde_yaml::from_str(&config_content).map_err(|source| {
-                LoadCfgsyncServerConfigError::Parse {
-                    path: config_path,
-                    source,
-                }
-            })?;
+        let config: ServerConfig = serde_yaml::from_str(&config_content).map_err(|source| {
+            LoadServerConfigError::Parse {
+                path: config_path,
+                source,
+            }
+        })?;
 
         Ok(config)
     }
@@ -79,7 +78,7 @@ impl CfgsyncServerConfig {
     pub fn for_bundle(port: u16, bundle_path: impl Into<String>) -> Self {
         Self {
             port,
-            source: CfgsyncServerSource::Bundle {
+            source: ServerSource::Bundle {
                 bundle_path: bundle_path.into(),
             },
         }
@@ -91,7 +90,7 @@ impl CfgsyncServerConfig {
     pub fn for_registration(port: u16, artifacts_path: impl Into<String>) -> Self {
         Self {
             port,
-            source: CfgsyncServerSource::Registration {
+            source: ServerSource::Registration {
                 artifacts_path: artifacts_path.into(),
             },
         }
@@ -143,8 +142,8 @@ fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::Path
 }
 
 /// Loads runtime config and starts cfgsync HTTP server process.
-pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()> {
-    let config = CfgsyncServerConfig::load_from_file(config_path)?;
+pub async fn serve_from_config(config_path: &Path) -> anyhow::Result<()> {
+    let config = ServerConfig::load_from_file(config_path)?;
     let bundle_path = resolve_source_path(config_path, &config.source);
 
     let state = build_server_state(&config, &bundle_path)?;
@@ -162,7 +161,7 @@ pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()>
 /// - artifact serving
 ///
 /// while the app owns only snapshot materialization logic.
-pub fn build_cfgsync_router<M>(materializer: M) -> Router
+pub fn build_router<M>(materializer: M) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
 {
@@ -175,7 +174,7 @@ where
 ///
 /// Use this when the application wants cfgsync to persist or publish shared
 /// artifacts after a snapshot becomes ready.
-pub fn build_persisted_cfgsync_router<M, S>(materializer: M, sink: S) -> Router
+pub fn build_persisted_router<M, S>(materializer: M, sink: S) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
     S: MaterializedArtifactsSink + 'static,
@@ -192,11 +191,11 @@ where
 ///
 /// This is the simplest runtime entrypoint when the application already has a
 /// materializer value and does not need to compose extra routes.
-pub async fn serve_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
+pub async fn serve<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
 where
     M: RegistrationSnapshotMaterializer + 'static,
 {
-    let router = build_cfgsync_router(materializer);
+    let router = build_router(materializer);
     serve_router(port, router).await
 }
 
@@ -204,8 +203,8 @@ where
 /// materialization results.
 ///
 /// This is the direct serving counterpart to
-/// [`build_persisted_cfgsync_router`].
-pub async fn serve_persisted_cfgsync<M, S>(
+/// [`build_persisted_router`].
+pub async fn serve_persisted<M, S>(
     port: u16,
     materializer: M,
     sink: S,
@@ -214,7 +213,7 @@ where
     M: RegistrationSnapshotMaterializer + 'static,
     S: MaterializedArtifactsSink + 'static,
 {
-    let router = build_persisted_cfgsync_router(materializer, sink);
+    let router = build_persisted_router(materializer, sink);
     serve_router(port, router).await
 }
 
@@ -232,23 +231,21 @@ async fn serve_router(port: u16, router: Router) -> Result<(), RunCfgsyncError> 
 }
 
 fn build_server_state(
-    config: &CfgsyncServerConfig,
+    config: &ServerConfig,
     source_path: &Path,
 ) -> anyhow::Result<CfgsyncServerState> {
     let repo = match &config.source {
-        CfgsyncServerSource::Bundle { .. } => load_bundle_provider(source_path)?,
-        CfgsyncServerSource::Registration { .. } => load_registration_source(source_path)?,
+        ServerSource::Bundle { .. } => load_bundle_provider(source_path)?,
+        ServerSource::Registration { .. } => load_registration_source(source_path)?,
     };
 
     Ok(CfgsyncServerState::new(repo))
 }
 
-fn resolve_source_path(config_path: &Path, source: &CfgsyncServerSource) -> std::path::PathBuf {
+fn resolve_source_path(config_path: &Path, source: &ServerSource) -> std::path::PathBuf {
     match source {
-        CfgsyncServerSource::Bundle { bundle_path } => {
-            resolve_bundle_path(config_path, bundle_path)
-        }
-        CfgsyncServerSource::Registration { artifacts_path } => {
+        ServerSource::Bundle { bundle_path } => resolve_bundle_path(config_path, bundle_path),
+        ServerSource::Registration { artifacts_path } => {
             resolve_bundle_path(config_path, artifacts_path)
         }
     }

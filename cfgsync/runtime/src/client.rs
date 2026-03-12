@@ -19,11 +19,11 @@ const FETCH_RETRY_DELAY: Duration = Duration::from_millis(250);
 
 /// Output routing for fetched artifact files.
 #[derive(Debug, Clone, Default)]
-pub struct ArtifactOutputMap {
+pub struct OutputMap {
     routes: HashMap<String, PathBuf>,
 }
 
-impl ArtifactOutputMap {
+impl OutputMap {
     /// Creates an empty artifact output map.
     #[must_use]
     pub fn new() -> Self {
@@ -49,101 +49,142 @@ impl ArtifactOutputMap {
     }
 }
 
+/// Runtime-oriented cfgsync client that handles registration, fetch, and local
+/// artifact materialization.
+#[derive(Debug, Clone)]
+pub struct Client {
+    inner: CfgsyncClient,
+}
+
+impl Client {
+    /// Creates a runtime client that talks to the cfgsync server at
+    /// `server_addr`.
+    #[must_use]
+    pub fn new(server_addr: &str) -> Self {
+        Self {
+            inner: CfgsyncClient::new(server_addr),
+        }
+    }
+
+    /// Registers a node and fetches its artifact payload from cfgsync.
+    pub async fn register_and_fetch(
+        &self,
+        registration: &NodeRegistration,
+    ) -> Result<NodeArtifactsPayload> {
+        self.register_node(registration).await?;
+
+        let payload = self
+            .fetch_with_retry(registration)
+            .await
+            .context("fetching node artifacts")?;
+        ensure_schema_version(&payload)?;
+
+        Ok(payload)
+    }
+
+    /// Registers a node, fetches its artifact payload, and writes the result
+    /// using the provided output routing policy.
+    pub async fn fetch_and_write(
+        &self,
+        registration: &NodeRegistration,
+        outputs: &OutputMap,
+    ) -> Result<()> {
+        let payload = self.register_and_fetch(registration).await?;
+        let files = collect_payload_files(&payload)?;
+
+        for file in files {
+            write_file(file, outputs)?;
+        }
+
+        info!(files = files.len(), "cfgsync files saved");
+
+        Ok(())
+    }
+
+    async fn fetch_with_retry(
+        &self,
+        registration: &NodeRegistration,
+    ) -> Result<NodeArtifactsPayload> {
+        for attempt in 1..=FETCH_ATTEMPTS {
+            match self.fetch_once(registration).await {
+                Ok(config) => return Ok(config),
+                Err(error) => {
+                    if attempt == FETCH_ATTEMPTS {
+                        return Err(error).with_context(|| {
+                            format!("fetching node artifacts after {attempt} attempts")
+                        });
+                    }
+
+                    sleep(FETCH_RETRY_DELAY).await;
+                }
+            }
+        }
+
+        unreachable!("cfgsync fetch loop always returns before exhausting attempts");
+    }
+
+    async fn fetch_once(&self, registration: &NodeRegistration) -> Result<NodeArtifactsPayload> {
+        self.inner
+            .fetch_node_config(registration)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn register_node(&self, registration: &NodeRegistration) -> Result<()> {
+        for attempt in 1..=FETCH_ATTEMPTS {
+            match self.inner.register_node(registration).await {
+                Ok(()) => {
+                    info!(identifier = %registration.identifier, "cfgsync node registered");
+                    return Ok(());
+                }
+                Err(error) => {
+                    if attempt == FETCH_ATTEMPTS {
+                        return Err(error).with_context(|| {
+                            format!("registering node with cfgsync after {attempt} attempts")
+                        });
+                    }
+
+                    sleep(FETCH_RETRY_DELAY).await;
+                }
+            }
+        }
+
+        unreachable!("cfgsync register loop always returns before exhausting attempts");
+    }
+}
+
 #[derive(Debug, Error)]
 enum ClientEnvError {
     #[error("CFG_HOST_IP `{value}` is not a valid IPv4 address")]
     InvalidIp { value: String },
 }
 
-async fn fetch_with_retry(
-    payload: &NodeRegistration,
-    server_addr: &str,
-) -> Result<NodeArtifactsPayload> {
-    let client = CfgsyncClient::new(server_addr);
-
-    for attempt in 1..=FETCH_ATTEMPTS {
-        match fetch_once(&client, payload).await {
-            Ok(config) => return Ok(config),
-            Err(error) => {
-                if attempt == FETCH_ATTEMPTS {
-                    return Err(error).with_context(|| {
-                        format!("fetching cfgsync payload after {attempt} attempts")
-                    });
-                }
-
-                sleep(FETCH_RETRY_DELAY).await;
-            }
-        }
-    }
-
-    unreachable!("cfgsync fetch loop always returns before exhausting attempts");
-}
-
-async fn fetch_once(
-    client: &CfgsyncClient,
-    payload: &NodeRegistration,
-) -> Result<NodeArtifactsPayload> {
-    let response = client.fetch_node_config(payload).await?;
-
-    Ok(response)
-}
-
-async fn register_node(payload: &NodeRegistration, server_addr: &str) -> Result<()> {
-    let client = CfgsyncClient::new(server_addr);
-
-    for attempt in 1..=FETCH_ATTEMPTS {
-        match client.register_node(payload).await {
-            Ok(()) => {
-                info!(identifier = %payload.identifier, "cfgsync node registered");
-                return Ok(());
-            }
-            Err(error) => {
-                if attempt == FETCH_ATTEMPTS {
-                    return Err(error).with_context(|| {
-                        format!("registering node with cfgsync after {attempt} attempts")
-                    });
-                }
-
-                sleep(FETCH_RETRY_DELAY).await;
-            }
-        }
-    }
-
-    unreachable!("cfgsync register loop always returns before exhausting attempts");
-}
-
 /// Registers a node and fetches its artifact payload from cfgsync.
-pub async fn register_and_fetch_artifacts(
+///
+/// Prefer [`Client::register_and_fetch`] when you already hold a runtime
+/// client value.
+pub async fn register_and_fetch(
     registration: &NodeRegistration,
     server_addr: &str,
 ) -> Result<NodeArtifactsPayload> {
-    register_node(registration, server_addr).await?;
-
-    let payload = fetch_with_retry(registration, server_addr)
+    Client::new(server_addr)
+        .register_and_fetch(registration)
         .await
-        .context("fetching cfgsync node config")?;
-    ensure_schema_version(&payload)?;
-
-    Ok(payload)
 }
 
 /// Registers a node, fetches its artifact payload, and writes the files using
 /// the provided output routing policy.
-pub async fn fetch_and_write_artifacts(
+///
+/// Prefer [`Client::fetch_and_write`] when you already hold a runtime client
+/// value.
+pub async fn fetch_and_write(
     registration: &NodeRegistration,
     server_addr: &str,
-    outputs: &ArtifactOutputMap,
+    outputs: &OutputMap,
 ) -> Result<()> {
-    let payload = register_and_fetch_artifacts(registration, server_addr).await?;
-    let files = collect_payload_files(&payload)?;
-
-    for file in files {
-        write_cfgsync_file(file, outputs)?;
-    }
-
-    info!(files = files.len(), "cfgsync files saved");
-
-    Ok(())
+    Client::new(server_addr)
+        .fetch_and_write(registration, outputs)
+        .await
 }
 
 fn ensure_schema_version(config: &NodeArtifactsPayload) -> Result<()> {
@@ -166,7 +207,7 @@ fn collect_payload_files(config: &NodeArtifactsPayload) -> Result<&[NodeArtifact
     Ok(config.files())
 }
 
-fn write_cfgsync_file(file: &NodeArtifactFile, outputs: &ArtifactOutputMap) -> Result<()> {
+fn write_file(file: &NodeArtifactFile, outputs: &OutputMap) -> Result<()> {
     let path = outputs.resolve_path(file);
 
     ensure_parent_dir(&path)?;
@@ -193,8 +234,8 @@ fn ensure_parent_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Resolves cfgsync client inputs from environment and materializes node files.
-pub async fn run_cfgsync_client_from_env(default_port: u16) -> Result<()> {
+/// Resolves runtime client inputs from environment and materializes node files.
+pub async fn run_client_from_env(default_port: u16) -> Result<()> {
     let server_addr =
         env::var("CFG_SERVER_ADDR").unwrap_or_else(|_| format!("http://127.0.0.1:{default_port}"));
     let ip = parse_ip_env(&env::var("CFG_HOST_IP").unwrap_or_else(|_| "127.0.0.1".to_owned()))?;
@@ -203,7 +244,7 @@ pub async fn run_cfgsync_client_from_env(default_port: u16) -> Result<()> {
     let metadata = parse_registration_payload_env()?;
     let outputs = build_output_map();
 
-    fetch_and_write_artifacts(
+    fetch_and_write(
         &NodeRegistration::new(identifier, ip).with_payload(metadata),
         &server_addr,
         &outputs,
@@ -232,8 +273,8 @@ fn parse_registration_payload(raw: &str) -> Result<RegistrationPayload> {
     RegistrationPayload::from_json_str(raw).context("parsing CFG_REGISTRATION_METADATA_JSON")
 }
 
-fn build_output_map() -> ArtifactOutputMap {
-    let mut outputs = ArtifactOutputMap::default();
+fn build_output_map() -> OutputMap {
+    let mut outputs = OutputMap::default();
 
     if let Ok(path) = env::var("CFG_FILE_PATH") {
         outputs = outputs
@@ -255,7 +296,6 @@ fn build_output_map() -> ArtifactOutputMap {
 mod tests {
     use cfgsync_core::{
         CfgsyncServerState, NodeArtifactsBundle, NodeArtifactsBundleEntry, StaticConfigSource,
-        serve_cfgsync,
     };
     use tempfile::tempdir;
 
@@ -280,15 +320,15 @@ mod tests {
         let port = allocate_test_port();
         let address = format!("http://127.0.0.1:{port}");
         let server = tokio::spawn(async move {
-            serve_cfgsync(port, state)
+            cfgsync_core::serve_cfgsync(port, state)
                 .await
                 .expect("run cfgsync server");
         });
 
-        fetch_and_write_artifacts(
+        fetch_and_write(
             &NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip")),
             &address,
-            &ArtifactOutputMap::default(),
+            &OutputMap::default(),
         )
         .await
         .expect("pull config files");

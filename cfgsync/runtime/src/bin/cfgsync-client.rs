@@ -1,6 +1,6 @@
 use std::{env, process};
 
-use cfgsync_runtime::run_cfgsync_client_from_env;
+use cfgsync_runtime::run_client_from_env;
 
 const CFGSYNC_PORT_ENV: &str = "LOGOS_BLOCKCHAIN_CFGSYNC_PORT";
 const DEFAULT_CFGSYNC_PORT: u16 = 4400;
@@ -14,7 +14,7 @@ fn cfgsync_port() -> u16 {
 
 #[tokio::main]
 async fn main() {
-    if let Err(err) = run_cfgsync_client_from_env(cfgsync_port()).await {
+    if let Err(err) = run_client_from_env(cfgsync_port()).await {
         eprintln!("Error: {err}");
         process::exit(1);
     }
