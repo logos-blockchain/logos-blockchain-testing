@@ -8,7 +8,7 @@ pub mod server;
 pub mod source;
 
 pub use bundle::{NodeArtifactsBundle, NodeArtifactsBundleEntry};
-pub use client::{CfgsyncClient, ClientError, ConfigFetchStatus};
+pub use client::{Client, ClientError, ConfigFetchStatus};
 pub use protocol::{
     CFGSYNC_SCHEMA_VERSION, CfgsyncErrorCode, CfgsyncErrorResponse, ConfigResolveResponse,
     NodeArtifactFile, NodeArtifactsPayload, NodeRegistration, RegisterNodeResponse,

@@ -31,12 +31,12 @@ pub enum ConfigFetchStatus {
 
 /// Reusable HTTP client for cfgsync server endpoints.
 #[derive(Clone, Debug)]
-pub struct CfgsyncClient {
+pub struct Client {
     base_url: String,
     http: reqwest::Client,
 }
 
-impl CfgsyncClient {
+impl Client {
     /// Creates a cfgsync client pointed at the given server base URL.
     #[must_use]
     pub fn new(base_url: impl Into<String>) -> Self {

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{Context as _, Result, bail};
 use cfgsync_core::{
-    CFGSYNC_SCHEMA_VERSION, CfgsyncClient, NodeArtifactFile, NodeArtifactsPayload,
+    CFGSYNC_SCHEMA_VERSION, Client as ProtocolClient, NodeArtifactFile, NodeArtifactsPayload,
     NodeRegistration, RegistrationPayload,
 };
 use thiserror::Error;
@@ -110,7 +110,7 @@ impl FallbackRoute {
 /// artifact materialization.
 #[derive(Debug, Clone)]
 pub struct Client {
-    inner: CfgsyncClient,
+    inner: ProtocolClient,
 }
 
 impl Client {
@@ -119,7 +119,7 @@ impl Client {
     #[must_use]
     pub fn new(server_addr: &str) -> Self {
         Self {
-            inner: CfgsyncClient::new(server_addr),
+            inner: ProtocolClient::new(server_addr),
         }
     }
 

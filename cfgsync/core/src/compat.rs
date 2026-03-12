@@ -2,7 +2,7 @@
 
 pub use crate::{
     bundle::{NodeArtifactsBundle as CfgSyncBundle, NodeArtifactsBundleEntry as CfgSyncBundleNode},
-    client::CfgsyncClient as CfgSyncClient,
+    client::Client as CfgSyncClient,
     protocol::{
         CfgsyncErrorCode as CfgSyncErrorCode, CfgsyncErrorResponse as CfgSyncErrorResponse,
         ConfigResolveResponse as RepoResponse, NodeArtifactFile as CfgSyncFile,

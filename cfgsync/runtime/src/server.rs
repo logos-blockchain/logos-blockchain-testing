@@ -25,15 +25,16 @@ pub struct ServerConfig {
 /// Runtime cfgsync source loaded from config.
 ///
 /// This type is intentionally runtime-oriented:
-/// - `Bundle` serves a static precomputed bundle directly
+/// - `Static` serves precomputed artifacts directly without registration
 /// - `Registration` serves precomputed artifacts through the registration
 ///   protocol, which is useful when the consumer wants clients to register
 ///   before receiving already-materialized artifacts
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ServerSource {
-    /// Serve a static precomputed artifact bundle directly.
-    Bundle { bundle_path: String },
+    /// Serve precomputed artifacts directly, without requiring registration.
+    #[serde(alias = "bundle")]
+    Static { artifacts_path: String },
     /// Require node registration before serving precomputed artifacts.
     Registration { artifacts_path: String },
 }
@@ -75,17 +76,17 @@ impl ServerConfig {
     }
 
     #[must_use]
-    pub fn for_bundle(port: u16, bundle_path: impl Into<String>) -> Self {
+    pub fn for_static(port: u16, artifacts_path: impl Into<String>) -> Self {
         Self {
             port,
-            source: ServerSource::Bundle {
-                bundle_path: bundle_path.into(),
+            source: ServerSource::Static {
+                artifacts_path: artifacts_path.into(),
             },
         }
     }
 
-    /// Builds a config that serves a static bundle behind the registration
-    /// flow.
+    /// Builds a config that serves precomputed artifacts through the
+    /// registration flow.
     #[must_use]
     pub fn for_registration(port: u16, artifacts_path: impl Into<String>) -> Self {
         Self {
@@ -97,9 +98,13 @@ impl ServerConfig {
     }
 }
 
-fn load_bundle_provider(bundle_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
-    let provider = BundleConfigSource::from_yaml_file(bundle_path)
-        .with_context(|| format!("loading cfgsync provider from {}", bundle_path.display()))?;
+fn load_static_source(artifacts_path: &Path) -> anyhow::Result<Arc<dyn NodeConfigSource>> {
+    let provider = BundleConfigSource::from_yaml_file(artifacts_path).with_context(|| {
+        format!(
+            "loading cfgsync static artifacts from {}",
+            artifacts_path.display()
+        )
+    })?;
 
     Ok(Arc::new(provider))
 }
@@ -129,8 +134,8 @@ fn load_materialized_artifacts_yaml(
     })
 }
 
-fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::PathBuf {
-    let path = Path::new(bundle_path);
+fn resolve_artifacts_path(config_path: &Path, artifacts_path: &str) -> std::path::PathBuf {
+    let path = Path::new(artifacts_path);
     if path.is_absolute() {
         return path.to_path_buf();
     }
@@ -144,9 +149,9 @@ fn resolve_bundle_path(config_path: &Path, bundle_path: &str) -> std::path::Path
 /// Loads runtime config and starts cfgsync HTTP server process.
 pub async fn serve_from_config(config_path: &Path) -> anyhow::Result<()> {
     let config = ServerConfig::load_from_file(config_path)?;
-    let bundle_path = resolve_source_path(config_path, &config.source);
+    let artifacts_path = resolve_source_path(config_path, &config.source);
 
-    let state = build_server_state(&config, &bundle_path)?;
+    let state = build_server_state(&config, &artifacts_path)?;
     serve_cfgsync_state(config.port, state).await?;
 
     Ok(())
@@ -235,7 +240,7 @@ fn build_server_state(
     source_path: &Path,
 ) -> anyhow::Result<CfgsyncServerState> {
     let repo = match &config.source {
-        ServerSource::Bundle { .. } => load_bundle_provider(source_path)?,
+        ServerSource::Static { .. } => load_static_source(source_path)?,
         ServerSource::Registration { .. } => load_registration_source(source_path)?,
     };
 
@@ -244,9 +249,11 @@ fn build_server_state(
 
 fn resolve_source_path(config_path: &Path, source: &ServerSource) -> std::path::PathBuf {
     match source {
-        ServerSource::Bundle { bundle_path } => resolve_bundle_path(config_path, bundle_path),
+        ServerSource::Static { artifacts_path } => {
+            resolve_artifacts_path(config_path, artifacts_path)
+        }
         ServerSource::Registration { artifacts_path } => {
-            resolve_bundle_path(config_path, artifacts_path)
+            resolve_artifacts_path(config_path, artifacts_path)
         }
     }
 }

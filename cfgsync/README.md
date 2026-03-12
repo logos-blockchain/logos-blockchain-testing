@@ -60,7 +60,7 @@ Important types here are:
 - `NodeRegistration`
 - `RegistrationPayload`
 - `NodeArtifactsPayload`
-- `CfgsyncClient`
+- `Client`
 - `NodeConfigSource`
 
 It also defines the HTTP contract:
