@@ -238,14 +238,16 @@ serve(4400, MyMaterializer).await?;
 Fetching and writing artifacts:
 
 ```rust
-use cfgsync_runtime::{OutputMap, fetch_and_write};
+use cfgsync_runtime::{Client, OutputMap};
 
 # async fn run(registration: cfgsync_core::NodeRegistration) -> anyhow::Result<()> {
 let outputs = OutputMap::new()
     .route("/config.yaml", "/node-data/node-1/config.yaml")
     .route("deployment-settings.yaml", "/node-data/shared/deployment-settings.yaml");
 
-fetch_and_write(&registration, "http://127.0.0.1:4400", &outputs).await?;
+Client::new("http://127.0.0.1:4400")
+    .fetch_and_write(&registration, &outputs)
+    .await?;
 # Ok(())
 # }
 ```

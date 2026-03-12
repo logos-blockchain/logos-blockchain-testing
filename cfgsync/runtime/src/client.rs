@@ -159,34 +159,6 @@ enum ClientEnvError {
     InvalidIp { value: String },
 }
 
-/// Registers a node and fetches its artifact payload from cfgsync.
-///
-/// Prefer [`Client::register_and_fetch`] when you already hold a runtime
-/// client value.
-pub async fn register_and_fetch(
-    registration: &NodeRegistration,
-    server_addr: &str,
-) -> Result<NodeArtifactsPayload> {
-    Client::new(server_addr)
-        .register_and_fetch(registration)
-        .await
-}
-
-/// Registers a node, fetches its artifact payload, and writes the files using
-/// the provided output routing policy.
-///
-/// Prefer [`Client::fetch_and_write`] when you already hold a runtime client
-/// value.
-pub async fn fetch_and_write(
-    registration: &NodeRegistration,
-    server_addr: &str,
-    outputs: &OutputMap,
-) -> Result<()> {
-    Client::new(server_addr)
-        .fetch_and_write(registration, outputs)
-        .await
-}
-
 fn ensure_schema_version(config: &NodeArtifactsPayload) -> Result<()> {
     if config.schema_version != CFGSYNC_SCHEMA_VERSION {
         bail!(
@@ -244,12 +216,12 @@ pub async fn run_client_from_env(default_port: u16) -> Result<()> {
     let metadata = parse_registration_payload_env()?;
     let outputs = build_output_map();
 
-    fetch_and_write(
-        &NodeRegistration::new(identifier, ip).with_payload(metadata),
-        &server_addr,
-        &outputs,
-    )
-    .await
+    Client::new(&server_addr)
+        .fetch_and_write(
+            &NodeRegistration::new(identifier, ip).with_payload(metadata),
+            &outputs,
+        )
+        .await
 }
 
 fn parse_ip_env(ip_str: &str) -> Result<Ipv4Addr> {
@@ -325,13 +297,13 @@ mod tests {
                 .expect("run cfgsync server");
         });
 
-        fetch_and_write(
-            &NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip")),
-            &address,
-            &OutputMap::default(),
-        )
-        .await
-        .expect("pull config files");
+        Client::new(&address)
+            .fetch_and_write(
+                &NodeRegistration::new("node-1", "127.0.0.1".parse().expect("parse ip")),
+                &OutputMap::default(),
+            )
+            .await
+            .expect("pull config files");
 
         server.abort();
         let _ = server.await;

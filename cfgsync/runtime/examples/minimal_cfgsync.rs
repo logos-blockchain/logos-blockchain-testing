@@ -4,7 +4,7 @@ use cfgsync_adapter::{
 };
 use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
 use cfgsync_core::NodeRegistration;
-use cfgsync_runtime::{OutputMap, fetch_and_write, serve};
+use cfgsync_runtime::{Client, OutputMap, serve};
 use tempfile::tempdir;
 use tokio::time::{Duration, sleep};
 
@@ -48,7 +48,9 @@ async fn main() -> anyhow::Result<()> {
     let outputs = OutputMap::new().route("/config.yaml", &config_path);
     let registration = NodeRegistration::new("node-1", "127.0.0.1".parse()?);
 
-    fetch_and_write(&registration, "http://127.0.0.1:4400", &outputs).await?;
+    Client::new("http://127.0.0.1:4400")
+        .fetch_and_write(&registration, &outputs)
+        .await?;
 
     println!("{}", std::fs::read_to_string(&config_path)?);
 
