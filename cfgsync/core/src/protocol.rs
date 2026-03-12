@@ -28,16 +28,19 @@ pub struct RegistrationPayload {
 }
 
 impl RegistrationPayload {
+    /// Creates an empty adapter-owned payload.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns `true` when no adapter-owned payload was attached.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.raw_json.is_none()
     }
 
+    /// Stores one typed adapter payload as opaque JSON.
     pub fn from_serializable<T>(value: &T) -> Result<Self, serde_json::Error>
     where
         T: Serialize,
@@ -47,6 +50,7 @@ impl RegistrationPayload {
         })
     }
 
+    /// Stores a raw JSON payload after validating that it parses.
     pub fn from_json_str(raw_json: &str) -> Result<Self, serde_json::Error> {
         let value: Value = serde_json::from_str(raw_json)?;
 
@@ -55,6 +59,7 @@ impl RegistrationPayload {
         })
     }
 
+    /// Deserializes the adapter-owned payload into the requested type.
     pub fn deserialize<T>(&self) -> Result<Option<T>, serde_json::Error>
     where
         T: DeserializeOwned,
@@ -65,6 +70,7 @@ impl RegistrationPayload {
             .transpose()
     }
 
+    /// Returns the validated JSON representation stored in this payload.
     #[must_use]
     pub fn raw_json(&self) -> Option<&str> {
         self.raw_json.as_deref()
@@ -111,6 +117,7 @@ pub struct NodeRegistration {
 }
 
 impl NodeRegistration {
+    /// Creates a registration with the generic node identity fields only.
     #[must_use]
     pub fn new(identifier: impl Into<String>, ip: Ipv4Addr) -> Self {
         Self {
@@ -120,6 +127,7 @@ impl NodeRegistration {
         }
     }
 
+    /// Attaches one typed adapter-owned payload to this registration.
     pub fn with_metadata<T>(mut self, metadata: &T) -> Result<Self, serde_json::Error>
     where
         T: Serialize,
@@ -128,6 +136,7 @@ impl NodeRegistration {
         Ok(self)
     }
 
+    /// Attaches a prebuilt registration payload to this registration.
     #[must_use]
     pub fn with_payload(mut self, payload: RegistrationPayload) -> Self {
         self.metadata = payload;
@@ -136,6 +145,7 @@ impl NodeRegistration {
 }
 
 impl NodeArtifactsPayload {
+    /// Creates a payload from the files that should be written for one node.
     #[must_use]
     pub fn from_files(files: Vec<NodeArtifactFile>) -> Self {
         Self {
@@ -144,11 +154,13 @@ impl NodeArtifactsPayload {
         }
     }
 
+    /// Returns the files carried by this payload.
     #[must_use]
     pub fn files(&self) -> &[NodeArtifactFile] {
         &self.files
     }
 
+    /// Returns `true` when the payload carries no files.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
@@ -172,6 +184,7 @@ pub struct CfgsyncErrorResponse {
 }
 
 impl CfgsyncErrorResponse {
+    /// Builds a missing-config error for one identifier.
     #[must_use]
     pub fn missing_config(identifier: &str) -> Self {
         Self {
@@ -180,6 +193,7 @@ impl CfgsyncErrorResponse {
         }
     }
 
+    /// Builds a not-ready error for one identifier.
     #[must_use]
     pub fn not_ready(identifier: &str) -> Self {
         Self {
@@ -188,6 +202,7 @@ impl CfgsyncErrorResponse {
         }
     }
 
+    /// Builds an internal cfgsync error.
     #[must_use]
     pub fn internal(message: impl Into<String>) -> Self {
         Self {

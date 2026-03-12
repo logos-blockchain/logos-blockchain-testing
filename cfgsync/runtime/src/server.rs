@@ -17,9 +17,17 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CfgsyncServerConfig {
     pub port: u16,
+    /// Source used by the runtime-managed cfgsync server.
     pub source: CfgsyncServerSource,
 }
 
+/// Runtime cfgsync source loaded from config.
+///
+/// This type is intentionally runtime-oriented:
+/// - `Bundle` serves a static precomputed bundle directly
+/// - `RegistrationBundle` serves a precomputed bundle through the registration
+///   protocol, which is useful when the consumer wants clients to register
+///   before receiving already-materialized artifacts
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CfgsyncServerSource {
@@ -189,6 +197,13 @@ pub async fn serve_cfgsync_from_config(config_path: &Path) -> anyhow::Result<()>
 
 /// Builds a registration-backed cfgsync router directly from a snapshot
 /// materializer.
+///
+/// This is the main code-driven entrypoint for apps that want cfgsync to own:
+/// - node registration
+/// - readiness polling
+/// - artifact serving
+///
+/// while the app owns only snapshot materialization logic.
 pub fn build_snapshot_cfgsync_router<M>(materializer: M) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
@@ -199,6 +214,9 @@ where
 
 /// Builds a registration-backed cfgsync router with a persistence hook for
 /// ready materialization results.
+///
+/// Use this when the application wants cfgsync to persist or publish shared
+/// artifacts after a snapshot becomes ready.
 pub fn build_persisted_snapshot_cfgsync_router<M, S>(materializer: M, sink: S) -> Router
 where
     M: RegistrationSnapshotMaterializer + 'static,
@@ -213,6 +231,9 @@ where
 
 /// Runs a registration-backed cfgsync server directly from a snapshot
 /// materializer.
+///
+/// This is the simplest runtime entrypoint when the application already has a
+/// materializer value and does not need to compose extra routes.
 pub async fn serve_snapshot_cfgsync<M>(port: u16, materializer: M) -> Result<(), RunCfgsyncError>
 where
     M: RegistrationSnapshotMaterializer + 'static,
@@ -223,6 +244,9 @@ where
 
 /// Runs a registration-backed cfgsync server with a persistence hook for ready
 /// materialization results.
+///
+/// This is the direct serving counterpart to
+/// [`build_persisted_snapshot_cfgsync_router`].
 pub async fn serve_persisted_snapshot_cfgsync<M, S>(
     port: u16,
     materializer: M,

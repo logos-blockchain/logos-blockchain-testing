@@ -10,6 +10,10 @@ pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
 
 /// Adapter-side materialization contract for a single registered node.
 pub trait NodeArtifactsMaterializer: Send + Sync {
+    /// Resolves one node from the current registration set.
+    ///
+    /// Returning `Ok(None)` means the node is known but its artifacts are not
+    /// ready yet.
     fn materialize(
         &self,
         registration: &NodeRegistration,
@@ -20,6 +24,13 @@ pub trait NodeArtifactsMaterializer: Send + Sync {
 /// Adapter contract for materializing a whole registration snapshot into
 /// per-node cfgsync artifacts.
 pub trait RegistrationSnapshotMaterializer: Send + Sync {
+    /// Materializes the current registration set.
+    ///
+    /// This is the main registration-driven integration point for cfgsync.
+    /// Implementations decide:
+    /// - when the current snapshot is ready to serve
+    /// - which per-node artifacts should be produced
+    /// - which shared artifacts should accompany every node
     fn materialize_snapshot(
         &self,
         registrations: &RegistrationSnapshot,
@@ -28,6 +39,7 @@ pub trait RegistrationSnapshotMaterializer: Send + Sync {
 
 /// Optional hook for persisting or publishing materialized cfgsync artifacts.
 pub trait MaterializedArtifactsSink: Send + Sync {
+    /// Persists or publishes a ready materialization result.
     fn persist(&self, artifacts: &MaterializedArtifacts) -> Result<(), DynCfgsyncError>;
 }
 
@@ -40,11 +52,13 @@ pub enum MaterializationResult {
 }
 
 impl MaterializationResult {
+    /// Creates a ready materialization result.
     #[must_use]
     pub fn ready(nodes: MaterializedArtifacts) -> Self {
         Self::Ready(nodes)
     }
 
+    /// Returns the ready artifacts when materialization succeeded.
     #[must_use]
     pub fn artifacts(&self) -> Option<&MaterializedArtifacts> {
         match self {
@@ -66,6 +80,8 @@ struct CachedSnapshot {
 }
 
 impl<M> CachedSnapshotMaterializer<M> {
+    /// Wraps a snapshot materializer with deterministic snapshot-result
+    /// caching.
     #[must_use]
     pub fn new(inner: M) -> Self {
         Self {
@@ -126,6 +142,8 @@ pub struct PersistingSnapshotMaterializer<M, S> {
 }
 
 impl<M, S> PersistingSnapshotMaterializer<M, S> {
+    /// Wraps a snapshot materializer with one-time persistence for each
+    /// distinct registration snapshot.
     #[must_use]
     pub fn new(inner: M, sink: S) -> Self {
         Self {
