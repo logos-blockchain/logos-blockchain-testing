@@ -143,6 +143,24 @@ What does not belong in cfgsync core is equally important. Generic cfgsync shoul
 
 Those belong in the adapter or in the consuming application.
 
+## Start here
+
+If you want the shortest path into the library, start with the end-to-end
+runtime example:
+
+- `cfgsync/runtime/examples/minimal_cfgsync.rs`
+
+It shows the full loop:
+
+- define a snapshot materializer
+- serve cfgsync
+- register a node
+- fetch artifacts
+- write them locally
+
+After that, the only concepts you usually need to learn are the ones in the
+next section.
+
 ## Minimal integration path
 
 For a new application, the shortest sensible path is:
@@ -154,18 +172,6 @@ For a new application, the shortest sensible path is:
 5. use `CfgsyncClient` or the runtime helpers on the node side
 
 That gives you the main value of the library without forcing extra application logic into cfgsync itself.
-
-## Minimal example
-
-A minimal standalone example lives in:
-
-- `cfgsync/runtime/examples/minimal_cfgsync.rs`
-
-It shows the smallest complete path:
-
-- registration snapshot materializer
-- cfgsync server
-- node artifact generation
 
 ## Code sketch
 
@@ -241,9 +247,10 @@ Fetching and writing artifacts:
 use cfgsync_runtime::{Client, OutputMap};
 
 # async fn run(registration: cfgsync_core::NodeRegistration) -> anyhow::Result<()> {
-let outputs = OutputMap::new()
-    .route("/config.yaml", "/node-data/node-1/config.yaml")
-    .route("deployment-settings.yaml", "/node-data/shared/deployment-settings.yaml");
+let outputs = OutputMap::config_and_shared(
+    "/node-data/node-1/config.yaml",
+    "/node-data/shared",
+);
 
 Client::new("http://127.0.0.1:4400")
     .fetch_and_write(&registration, &outputs)

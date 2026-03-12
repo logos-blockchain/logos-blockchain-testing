@@ -21,6 +21,13 @@ const FETCH_RETRY_DELAY: Duration = Duration::from_millis(250);
 #[derive(Debug, Clone, Default)]
 pub struct OutputMap {
     routes: HashMap<String, PathBuf>,
+    fallback: Option<FallbackRoute>,
+}
+
+#[derive(Debug, Clone)]
+enum FallbackRoute {
+    Under(PathBuf),
+    Shared { dir: PathBuf },
 }
 
 impl OutputMap {
@@ -41,11 +48,61 @@ impl OutputMap {
         self
     }
 
+    /// Writes payload files under `root`, preserving each artifact path.
+    ///
+    /// For example, `/config.yaml` is written to `<root>/config.yaml` and
+    /// `shared/deployment-settings.yaml` is written to
+    /// `<root>/shared/deployment-settings.yaml`.
+    #[must_use]
+    pub fn under(root: impl Into<PathBuf>) -> Self {
+        Self {
+            routes: HashMap::new(),
+            fallback: Some(FallbackRoute::Under(root.into())),
+        }
+    }
+
+    /// Writes the node config to `config_path` and all other files under
+    /// `shared_dir`, preserving their relative artifact paths.
+    #[must_use]
+    pub fn config_and_shared(
+        config_path: impl Into<PathBuf>,
+        shared_dir: impl Into<PathBuf>,
+    ) -> Self {
+        let config_path = config_path.into();
+        let shared_dir = shared_dir.into();
+
+        Self::default()
+            .route("/config.yaml", config_path.clone())
+            .route("config.yaml", config_path)
+            .with_fallback(FallbackRoute::Shared { dir: shared_dir })
+    }
+
     fn resolve_path(&self, file: &NodeArtifactFile) -> PathBuf {
         self.routes
             .get(&file.path)
             .cloned()
+            .or_else(|| {
+                self.fallback
+                    .as_ref()
+                    .map(|fallback| fallback.resolve(&file.path))
+            })
             .unwrap_or_else(|| PathBuf::from(&file.path))
+    }
+
+    fn with_fallback(mut self, fallback: FallbackRoute) -> Self {
+        self.fallback = Some(fallback);
+        self
+    }
+}
+
+impl FallbackRoute {
+    fn resolve(&self, artifact_path: &str) -> PathBuf {
+        let relative = artifact_path.trim_start_matches('/');
+
+        match self {
+            FallbackRoute::Under(root) => root.join(relative),
+            FallbackRoute::Shared { dir } => dir.join(relative),
+        }
     }
 }
 
