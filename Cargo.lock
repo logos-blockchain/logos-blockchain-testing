@@ -917,13 +917,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfgsync-adapter"
+version = "0.1.0"
+dependencies = [
+ "cfgsync-artifacts",
+ "cfgsync-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "cfgsync-artifacts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "cfgsync-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
+ "cfgsync-artifacts",
  "reqwest",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -933,12 +955,17 @@ name = "cfgsync-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
+ "cfgsync-adapter",
+ "cfgsync-artifacts",
  "cfgsync-core",
  "clap",
  "serde",
  "serde_yaml",
- "testing-framework-core",
+ "tempfile",
+ "thiserror 2.0.18",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1299,7 +1326,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.114",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2891,8 +2918,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cfgsync-adapter",
+ "cfgsync-artifacts",
  "cfgsync-core",
- "cfgsync-runtime",
  "kube",
  "logos-blockchain-http-api-common",
  "reqwest",
@@ -5499,9 +5527,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.13"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "bytes",
  "getrandom 0.3.4",
@@ -6528,6 +6556,8 @@ name = "testing-framework-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "cfgsync-adapter",
+ "cfgsync-artifacts",
  "futures",
  "parking_lot",
  "prometheus-http-query",

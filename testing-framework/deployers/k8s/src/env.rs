@@ -106,7 +106,8 @@ pub trait K8sDeployEnv: Application {
         format!("{release}-node-{index}")
     }
 
-    /// Label selector used to discover managed node services in attached mode.
+    /// Label selector used to discover managed node services in
+    /// existing-cluster mode.
     fn attach_node_service_selector(release: &str) -> String {
         format!("app.kubernetes.io/instance={release}")
     }

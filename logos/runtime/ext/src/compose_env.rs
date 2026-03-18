@@ -117,7 +117,7 @@ impl ComposeDeployEnv for LbcExtEnv {
             nodes = topology.nodes().len(),
             "updating cfgsync template"
         );
-        let bundle_path = cfgsync_bundle_path(path);
+        let artifacts_path = cfgsync_artifacts_path(path);
         let hostnames = topology_hostnames(topology);
         let options = cfgsync_render_options(port, metrics_otlp_ingest_url);
 
@@ -127,7 +127,7 @@ impl ComposeDeployEnv for LbcExtEnv {
             options,
             CfgsyncOutputPaths {
                 config_path: path,
-                bundle_path: &bundle_path,
+                artifacts_path: &artifacts_path,
             },
         )?;
         Ok(())
@@ -186,11 +186,11 @@ fn node_instance_name(index: usize) -> String {
     format!("node-{index}")
 }
 
-fn cfgsync_bundle_path(config_path: &Path) -> PathBuf {
+fn cfgsync_artifacts_path(config_path: &Path) -> PathBuf {
     config_path
         .parent()
         .unwrap_or(config_path)
-        .join("cfgsync.bundle.yaml")
+        .join("cfgsync.artifacts.yaml")
 }
 
 fn topology_hostnames(topology: &DeploymentPlan) -> Vec<String> {
@@ -207,7 +207,7 @@ fn cfgsync_render_options(
 ) -> CfgsyncRenderOptions {
     CfgsyncRenderOptions {
         port: Some(port),
-        bundle_path: None,
+        artifacts_path: None,
         min_timeout_secs: None,
         metrics_otlp_ingest_url: metrics_otlp_ingest_url.cloned(),
     }
@@ -254,7 +254,6 @@ fn build_compose_node_descriptor(
         base_volumes(),
         default_extra_hosts(),
         ports,
-        api_port,
         environment,
         platform,
     )

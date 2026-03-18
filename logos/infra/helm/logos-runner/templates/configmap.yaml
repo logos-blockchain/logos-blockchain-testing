@@ -11,9 +11,9 @@ data:
 {{- else }}
 {{ "" | indent 4 }}
 {{- end }}
-  cfgsync.bundle.yaml: |
-{{- if .Values.cfgsync.bundle }}
-{{ .Values.cfgsync.bundle | indent 4 }}
+  cfgsync.artifacts.yaml: |
+{{- if .Values.cfgsync.artifacts }}
+{{ .Values.cfgsync.artifacts | indent 4 }}
 {{- else }}
 {{ "" | indent 4 }}
 {{- end }}

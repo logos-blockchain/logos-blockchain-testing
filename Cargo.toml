@@ -1,5 +1,9 @@
 [workspace]
 members = [
+  "cfgsync/adapter",
+  "cfgsync/artifacts",
+  "cfgsync/core",
+  "cfgsync/runtime",
   "logos/examples",
   "logos/runtime/env",
   "logos/runtime/ext",
@@ -8,8 +12,6 @@ members = [
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
   "testing-framework/deployers/local",
-  "testing-framework/tools/cfgsync-core",
-  "testing-framework/tools/cfgsync-runtime",
 ]
 resolver = "2"
 
@@ -31,7 +33,9 @@ all = "allow"
 
 [workspace.dependencies]
 # Local testing framework crates
-cfgsync-core                     = { default-features = false, path = "testing-framework/tools/cfgsync-core" }
+cfgsync-adapter                  = { default-features = false, path = "cfgsync/adapter" }
+cfgsync-artifacts                = { default-features = false, path = "cfgsync/artifacts" }
+cfgsync-core                     = { default-features = false, path = "cfgsync/core" }
 lb-ext                           = { default-features = false, path = "logos/runtime/ext" }
 lb-framework                     = { default-features = false, package = "testing_framework", git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "5ebe88a6e89ec6d7dd89e123c46f6b26dd1e4667" }
 lb-workloads                     = { default-features = false, path = "logos/runtime/workloads" }
@@ -40,10 +44,11 @@ testing-framework-env            = { default-features = false, path = "logos/run
 testing-framework-runner-compose = { default-features = false, path = "testing-framework/deployers/compose" }
 testing-framework-runner-k8s     = { default-features = false, path = "testing-framework/deployers/k8s" }
 testing-framework-runner-local   = { default-features = false, path = "testing-framework/deployers/local" }
+testing-framework-workflows      = { default-features = false, package = "lb-workloads", path = "logos/runtime/workloads" }
 
 # Logos dependencies (from logos-blockchain master @ deccbb2d2)
 broadcast-service = { default-features = false, package = "logos-blockchain-chain-broadcast-service", git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "5ebe88a6e89ec6d7dd89e123c46f6b26dd1e4667" }
-cfgsync_runtime = { default-features = false, package = "cfgsync-runtime", path = "testing-framework/tools/cfgsync-runtime" }
+cfgsync_runtime = { default-features = false, package = "cfgsync-runtime", path = "cfgsync/runtime" }
 chain-leader = { default-features = false, features = [
   "pol-dev-mode",
 ], package = "logos-blockchain-chain-leader-service", git = "https://github.com/logos-blockchain/logos-blockchain.git", rev = "5ebe88a6e89ec6d7dd89e123c46f6b26dd1e4667" }

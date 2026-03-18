@@ -31,7 +31,7 @@ use crate::{
 
 const CFGSYNC_K8S_TIMEOUT_SECS: u64 = 300;
 const K8S_FULLNAME_OVERRIDE: &str = "logos-runner";
-const DEFAULT_K8S_TESTNET_IMAGE: &str = "logos-blockchain-testing:local";
+const DEFAULT_K8S_TESTNET_IMAGE: &str = "public.ecr.aws/r4s5t9y4/logos/logos-blockchain:test";
 
 /// Paths and image metadata required to deploy the Helm chart.
 pub struct K8sAssets {
@@ -182,11 +182,11 @@ pub fn prepare_assets(
     let root = workspace_root().map_err(|source| AssetsError::WorkspaceRoot { source })?;
     let tempdir = create_assets_tempdir()?;
 
-    let (cfgsync_file, cfgsync_yaml, bundle_yaml) =
+    let (cfgsync_file, cfgsync_yaml, artifacts_yaml) =
         render_and_write_cfgsync(topology, metrics_otlp_ingest_url, &tempdir)?;
     let scripts = validate_scripts(&root)?;
     let chart_path = helm_chart_path()?;
-    let values_file = render_and_write_values(topology, &tempdir, &cfgsync_yaml, &bundle_yaml)?;
+    let values_file = render_and_write_values(topology, &tempdir, &cfgsync_yaml, &artifacts_yaml)?;
     let image = testnet_image();
 
     log_assets_prepare_done(&cfgsync_file, &values_file, &chart_path, &image);
@@ -351,24 +351,24 @@ fn render_and_write_cfgsync(
     tempdir: &TempDir,
 ) -> Result<(PathBuf, String, String), AssetsError> {
     let cfgsync_file = tempdir.path().join("cfgsync.yaml");
-    let bundle_file = tempdir.path().join("cfgsync.bundle.yaml");
-    let (cfgsync_yaml, bundle_yaml) = render_cfgsync_config(
+    let artifacts_file = tempdir.path().join("cfgsync.artifacts.yaml");
+    let (cfgsync_yaml, artifacts_yaml) = render_cfgsync_config(
         topology,
         metrics_otlp_ingest_url,
         &cfgsync_file,
-        &bundle_file,
+        &artifacts_file,
     )?;
 
-    Ok((cfgsync_file, cfgsync_yaml, bundle_yaml))
+    Ok((cfgsync_file, cfgsync_yaml, artifacts_yaml))
 }
 
 fn render_and_write_values(
     topology: &DeploymentPlan,
     tempdir: &TempDir,
     cfgsync_yaml: &str,
-    bundle_yaml: &str,
+    artifacts_yaml: &str,
 ) -> Result<PathBuf, AssetsError> {
-    let values_yaml = render_values_yaml(topology, cfgsync_yaml, bundle_yaml)?;
+    let values_yaml = render_values_yaml(topology, cfgsync_yaml, artifacts_yaml)?;
     write_temp_file(tempdir.path(), "values.yaml", values_yaml)
 }
 
@@ -380,7 +380,7 @@ fn render_cfgsync_config(
     topology: &DeploymentPlan,
     metrics_otlp_ingest_url: Option<&Url>,
     cfgsync_file: &Path,
-    bundle_file: &Path,
+    artifacts_file: &Path,
 ) -> Result<(String, String), AssetsError> {
     let hostnames = k8s_node_hostnames(topology);
     let rendered = render_and_write_cfgsync_from_template::<lb_framework::LbcEnv>(
@@ -388,18 +388,18 @@ fn render_cfgsync_config(
         &hostnames,
         CfgsyncRenderOptions {
             port: Some(cfgsync_port()),
-            bundle_path: Some("cfgsync.bundle.yaml".to_string()),
+            artifacts_path: Some("cfgsync.artifacts.yaml".to_string()),
             min_timeout_secs: Some(CFGSYNC_K8S_TIMEOUT_SECS),
             metrics_otlp_ingest_url: metrics_otlp_ingest_url.cloned(),
         },
         CfgsyncOutputPaths {
             config_path: cfgsync_file,
-            bundle_path: bundle_file,
+            artifacts_path: artifacts_file,
         },
     )
     .map_err(|source| AssetsError::Cfgsync { source })?;
 
-    Ok((rendered.config_yaml, rendered.bundle_yaml))
+    Ok((rendered.config_yaml, rendered.artifacts_yaml))
 }
 
 fn k8s_node_hostnames(topology: &DeploymentPlan) -> Vec<String> {
@@ -459,9 +459,9 @@ fn helm_chart_path() -> Result<PathBuf, AssetsError> {
 fn render_values_yaml(
     topology: &DeploymentPlan,
     cfgsync_yaml: &str,
-    bundle_yaml: &str,
+    artifacts_yaml: &str,
 ) -> Result<String, AssetsError> {
-    let values = build_values(topology, cfgsync_yaml, bundle_yaml);
+    let values = build_values(topology, cfgsync_yaml, artifacts_yaml);
     serde_yaml::to_string(&values).map_err(|source| AssetsError::Values { source })
 }
 
@@ -569,7 +569,7 @@ struct KzgValues {
 struct CfgsyncValues {
     port: u16,
     config: String,
-    bundle: String,
+    artifacts: String,
 }
 
 #[derive(Serialize)]
@@ -589,11 +589,11 @@ struct NodeValues {
     env: BTreeMap<String, String>,
 }
 
-fn build_values(topology: &DeploymentPlan, cfgsync_yaml: &str, bundle_yaml: &str) -> HelmValues {
+fn build_values(topology: &DeploymentPlan, cfgsync_yaml: &str, artifacts_yaml: &str) -> HelmValues {
     let cfgsync = CfgsyncValues {
         port: cfgsync_port(),
         config: cfgsync_yaml.to_string(),
-        bundle: bundle_yaml.to_string(),
+        artifacts: artifacts_yaml.to_string(),
     };
     let kzg = KzgValues::disabled();
     let image_pull_policy =

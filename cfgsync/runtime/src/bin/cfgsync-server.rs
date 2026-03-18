@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use cfgsync_runtime::run_cfgsync_server;
+use cfgsync_runtime::serve_from_config;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(about = "CfgSync")]
+#[command(about = "Cfgsync server")]
 struct Args {
     config: PathBuf,
 }
@@ -12,5 +12,5 @@ struct Args {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    run_cfgsync_server(&args.config).await
+    serve_from_config(&args.config).await
 }
