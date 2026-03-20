@@ -10,6 +10,7 @@ use std::{
     time::Duration,
 };
 
+use fs_extra::dir::{CopyOptions, copy as copy_dir};
 use tempfile::TempDir;
 use testing_framework_core::{env::Application, process::RuntimeNode, scenario::DynError};
 use tokio::{
@@ -112,6 +113,11 @@ pub enum ProcessSpawnError {
         #[source]
         source: io::Error,
     },
+    #[error("failed to copy snapshot directory: {source}")]
+    Snapshot {
+        #[source]
+        source: io::Error,
+    },
     #[error("process wait failed: {source}")]
     Wait {
         #[source]
@@ -192,9 +198,14 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         endpoints_from_config: impl FnOnce(&Config) -> NodeEndpoints,
         keep_tempdir: bool,
         persist_dir: Option<&Path>,
+        snapshot_dir: Option<&Path>,
         client_from_endpoints: impl FnOnce(&NodeEndpoints) -> Client,
     ) -> Result<Self, ProcessSpawnError> {
         let tempdir = create_tempdir(persist_dir)?;
+        if let Some(snapshot_dir) = snapshot_dir {
+            copy_snapshot_dir(snapshot_dir, tempdir.path())
+                .map_err(|source| ProcessSpawnError::Snapshot { source })?;
+        }
 
         let launch = build_launch_spec(&config, tempdir.path(), label)
             .map_err(|source| ProcessSpawnError::Config { source })?;
@@ -326,6 +337,16 @@ fn write_launch_file(base: &Path, file: &LaunchFile) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, &file.contents)
+}
+
+fn copy_snapshot_dir(from: &Path, to: &Path) -> io::Result<()> {
+    let mut options = CopyOptions::new();
+    options.copy_inside = true;
+    options.overwrite = true;
+
+    copy_dir(from, to, &options)
+        .map(|_| ())
+        .map_err(io::Error::other)
 }
 
 fn default_api_socket() -> SocketAddr {

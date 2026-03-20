@@ -9,6 +9,7 @@ pub(crate) struct LocalNodeManagerState<E: LocalDeployerEnv> {
     pub(crate) clients_by_name: HashMap<String, E::NodeClient>,
     pub(crate) indices_by_name: HashMap<String, usize>,
     pub(crate) nodes: Vec<Node<E>>,
+    pub(crate) template_config: Option<E::NodeConfig>,
 }
 
 impl<E: LocalDeployerEnv> LocalNodeManagerState<E> {

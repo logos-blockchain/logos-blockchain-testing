@@ -19,11 +19,12 @@ mod state;
 use state::LocalNodeManagerState;
 
 #[derive(Clone)]
-struct NodeStartSnapshot {
+struct NodeStartSnapshot<Config> {
     peer_ports: Vec<u16>,
     peer_ports_by_name: HashMap<String, u16>,
     node_name: String,
     index: usize,
+    template_config: Option<Config>,
 }
 
 #[derive(Debug, Error)]
@@ -83,12 +84,14 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
         for (index, config_entry) in configs.into_iter().enumerate() {
             let persist_dir = E::initial_persist_dir(descriptors, &config_entry.name, index);
+            let snapshot_dir = E::initial_snapshot_dir(descriptors, &config_entry.name, index);
             spawned.push(
                 spawn_node_from_config::<E>(
                     config_entry.name,
                     config_entry.config,
                     keep_tempdir,
                     persist_dir.as_deref(),
+                    snapshot_dir.as_deref(),
                 )
                 .await?,
             );
@@ -113,6 +116,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             clients_by_name: HashMap::new(),
             indices_by_name: HashMap::new(),
             nodes: Vec::new(),
+            template_config: None,
         };
 
         Self {
@@ -146,6 +150,9 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
     pub fn stop_all(&self) {
         let mut state = self.lock_state();
+        for node in &mut state.nodes {
+            node.start_kill();
+        }
 
         state.nodes.clear();
         state.peer_ports.clone_from(&self.seed.peer_ports);
@@ -155,6 +162,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         state.clients_by_name.clear();
         state.indices_by_name.clear();
         state.node_count = self.seed.node_count;
+        state.template_config = None;
         self.node_clients.clear();
     }
 
@@ -228,12 +236,13 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     ) -> Result<StartedNode<E>, NodeManagerError> {
         let snapshot = self.start_snapshot(name)?;
 
-        let mut built = E::build_node_config(
+        let mut built = E::build_node_config_from_template(
             &self.descriptors,
             snapshot.index,
             &snapshot.peer_ports_by_name,
             &options,
             &snapshot.peer_ports,
+            snapshot.template_config.as_ref(),
         )
         .map_err(|source| NodeManagerError::Config { source })?;
 
@@ -250,6 +259,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 built.network_port,
                 built.config,
                 options.persist_dir.as_deref(),
+                options.snapshot_dir.as_deref(),
             )
             .await?;
 
@@ -290,12 +300,14 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         network_port: u16,
         config: <E as Application>::NodeConfig,
         persist_dir: Option<&std::path::Path>,
+        snapshot_dir: Option<&std::path::Path>,
     ) -> Result<E::NodeClient, NodeManagerError> {
         let node = spawn_node_from_config::<E>(
             node_name.to_string(),
             config,
             self.keep_tempdir,
             persist_dir,
+            snapshot_dir,
         )
         .await
         .map_err(|source| NodeManagerError::Spawn {
@@ -306,6 +318,9 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         self.node_clients.add_node(client.clone());
 
         let mut state = self.lock_state();
+        if state.template_config.is_none() && snapshot_dir.is_some() {
+            state.template_config = Some(node.config().clone());
+        }
 
         state.register_node(node_name, network_port, client.clone(), node);
 
@@ -322,7 +337,10 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         reinsert_node_at(&mut state, index, node);
     }
 
-    fn start_snapshot(&self, requested_name: &str) -> Result<NodeStartSnapshot, NodeManagerError> {
+    fn start_snapshot(
+        &self,
+        requested_name: &str,
+    ) -> Result<NodeStartSnapshot<E::NodeConfig>, NodeManagerError> {
         let state = self.lock_state();
         let index = state.node_count;
         let node_name = validate_new_node_name::<E>(state.node_count, &state, requested_name)?;
@@ -332,6 +350,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             peer_ports_by_name: state.peer_ports_by_name.clone(),
             node_name,
             index,
+            template_config: state.template_config.clone(),
         })
     }
 
@@ -349,6 +368,7 @@ fn clear_registered_nodes<E: LocalDeployerEnv>(state: &mut LocalNodeManagerState
     state.clients_by_name.clear();
     state.indices_by_name.clear();
     state.node_count = 0;
+    state.template_config = None;
 }
 
 fn validate_new_node_name<E: LocalDeployerEnv>(

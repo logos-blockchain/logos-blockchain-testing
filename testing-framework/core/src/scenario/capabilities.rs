@@ -42,6 +42,8 @@ pub struct StartNodeOptions<E: Application> {
         Option<Arc<dyn Fn(E::NodeConfig) -> Result<E::NodeConfig, DynError> + Send + Sync>>,
     /// Optional persistent working directory for this node process.
     pub persist_dir: Option<PathBuf>,
+    /// Optional directory whose contents should seed the node working dir.
+    pub snapshot_dir: Option<PathBuf>,
     _phantom: PhantomData<E>,
 }
 
@@ -52,6 +54,7 @@ impl<E: Application> fmt::Debug for StartNodeOptions<E> {
             .field("config_override", &self.config_override.is_some())
             .field("config_patch", &self.config_patch.is_some())
             .field("persist_dir", &self.persist_dir)
+            .field("snapshot_dir", &self.snapshot_dir)
             .finish()
     }
 }
@@ -63,6 +66,7 @@ impl<E: Application> Default for StartNodeOptions<E> {
             config_override: None,
             config_patch: None,
             persist_dir: None,
+            snapshot_dir: None,
             _phantom: PhantomData,
         }
     }
@@ -93,6 +97,12 @@ impl<E: Application> StartNodeOptions<E> {
     #[must_use]
     pub fn with_persist_dir(mut self, persist_dir: PathBuf) -> Self {
         self.persist_dir = Some(persist_dir);
+        self
+    }
+
+    #[must_use]
+    pub fn with_snapshot_dir(mut self, snapshot_dir: PathBuf) -> Self {
+        self.snapshot_dir = Some(snapshot_dir);
         self
     }
 }
