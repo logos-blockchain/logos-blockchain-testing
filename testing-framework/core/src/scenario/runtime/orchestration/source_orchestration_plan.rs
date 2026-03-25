@@ -1,6 +1,4 @@
-use std::fmt;
-
-use crate::scenario::{AttachSource, ExternalNodeSource, ScenarioSources, SourceReadinessPolicy};
+use crate::scenario::{ClusterMode, ExistingCluster, ExternalNodeSource, sources::ScenarioSources};
 
 /// Explicit descriptor for managed node sourcing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -15,13 +13,13 @@ pub enum ManagedSource {
 /// This is scaffolding-only and is intentionally not executed by deployers
 /// yet.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SourceOrchestrationMode {
+pub(crate) enum SourceOrchestrationMode {
     Managed {
         managed: ManagedSource,
         external: Vec<ExternalNodeSource>,
     },
     Attached {
-        attach: AttachSource,
+        attach: ExistingCluster,
         external: Vec<ExternalNodeSource>,
     },
     ExternalOnly {
@@ -34,41 +32,28 @@ pub enum SourceOrchestrationMode {
 /// This captures only mapping-time source intent and readiness policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceOrchestrationPlan {
-    pub mode: SourceOrchestrationMode,
-    pub readiness_policy: SourceReadinessPolicy,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SourceModeName {
-    Attached,
-}
-
-impl fmt::Display for SourceModeName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Attached => f.write_str("Attached"),
-        }
-    }
+    mode: SourceOrchestrationMode,
 }
 
 /// Validation failure while building orchestration plan from sources.
 #[derive(Debug, thiserror::Error)]
 pub enum SourceOrchestrationPlanError {
     #[error("source mode '{mode}' is not wired into deployers yet")]
-    SourceModeNotWiredYet { mode: SourceModeName },
+    SourceModeNotWiredYet { mode: &'static str },
 }
 
 impl SourceOrchestrationPlan {
-    pub fn try_from_sources(
+    pub(crate) fn try_from_sources(
         sources: &ScenarioSources,
-        readiness_policy: SourceReadinessPolicy,
     ) -> Result<Self, SourceOrchestrationPlanError> {
         let mode = mode_from_sources(sources);
 
-        Ok(Self {
-            mode,
-            readiness_policy,
-        })
+        Ok(Self { mode })
+    }
+
+    #[must_use]
+    pub(crate) fn mode(&self) -> &SourceOrchestrationMode {
+        &self.mode
     }
 
     #[must_use]
@@ -84,34 +69,104 @@ impl SourceOrchestrationPlan {
 #[cfg(test)]
 mod tests {
     use super::{SourceOrchestrationMode, SourceOrchestrationPlan};
-    use crate::scenario::{AttachSource, ScenarioSources, SourceReadinessPolicy};
+    use crate::scenario::{ExistingCluster, ExternalNodeSource, sources::ScenarioSources};
+
+    #[test]
+    fn managed_sources_are_planned() {
+        let plan = SourceOrchestrationPlan::try_from_sources(&ScenarioSources::default())
+            .expect("managed sources should build a source orchestration plan");
+
+        assert!(matches!(
+            plan.mode(),
+            SourceOrchestrationMode::Managed { .. }
+        ));
+        assert!(plan.external_sources().is_empty());
+    }
 
     #[test]
     fn attached_sources_are_planned() {
-        let sources = ScenarioSources::attached(AttachSource::compose(vec!["node-0".to_string()]));
-        let plan =
-            SourceOrchestrationPlan::try_from_sources(&sources, SourceReadinessPolicy::AllReady)
-                .expect("attached sources should build a source orchestration plan");
+        let sources =
+            ScenarioSources::default().with_attach(ExistingCluster::for_compose_services(
+                "test-project".to_string(),
+                vec!["node-0".to_string()],
+            ));
+        let plan = SourceOrchestrationPlan::try_from_sources(&sources)
+            .expect("attached sources should build a source orchestration plan");
 
         assert!(matches!(
-            plan.mode,
+            plan.mode(),
             SourceOrchestrationMode::Attached { .. }
         ));
+    }
+
+    #[test]
+    fn attached_sources_keep_external_nodes() {
+        let sources = ScenarioSources::default()
+            .with_attach(ExistingCluster::for_compose_project(
+                "test-project".to_string(),
+            ))
+            .with_external_node(ExternalNodeSource::new(
+                "external-0".to_owned(),
+                "http://127.0.0.1:1".to_owned(),
+            ));
+        let plan = SourceOrchestrationPlan::try_from_sources(&sources)
+            .expect("attached sources with external nodes should build");
+
+        assert!(matches!(
+            plan.mode(),
+            SourceOrchestrationMode::Attached { .. }
+        ));
+        assert_eq!(plan.external_sources().len(), 1);
+        assert_eq!(plan.external_sources()[0].label(), "external-0");
+    }
+
+    #[test]
+    fn external_only_sources_are_planned() {
+        let sources = ScenarioSources::default()
+            .with_external_node(ExternalNodeSource::new(
+                "external-0".to_owned(),
+                "http://127.0.0.1:1".to_owned(),
+            ))
+            .into_external_only();
+        let plan = SourceOrchestrationPlan::try_from_sources(&sources)
+            .expect("external-only sources should build a source orchestration plan");
+
+        assert!(matches!(
+            plan.mode(),
+            SourceOrchestrationMode::ExternalOnly { .. }
+        ));
+        assert_eq!(plan.external_sources().len(), 1);
+        assert_eq!(plan.external_sources()[0].label(), "external-0");
     }
 }
 
 fn mode_from_sources(sources: &ScenarioSources) -> SourceOrchestrationMode {
-    match sources {
-        ScenarioSources::Managed { external } => SourceOrchestrationMode::Managed {
-            managed: ManagedSource::DeployerManaged,
-            external: external.clone(),
+    match sources.cluster_mode() {
+        ClusterMode::Managed => match sources {
+            ScenarioSources::Managed { external } => SourceOrchestrationMode::Managed {
+                managed: ManagedSource::DeployerManaged,
+                external: external.clone(),
+            },
+            ScenarioSources::Attached { .. } | ScenarioSources::ExternalOnly { .. } => {
+                unreachable!("cluster mode and source storage must stay aligned")
+            }
         },
-        ScenarioSources::Attached { attach, external } => SourceOrchestrationMode::Attached {
-            attach: attach.clone(),
-            external: external.clone(),
+        ClusterMode::ExistingCluster => match sources {
+            ScenarioSources::Attached { attach, external } => SourceOrchestrationMode::Attached {
+                attach: attach.clone(),
+                external: external.clone(),
+            },
+            ScenarioSources::Managed { .. } | ScenarioSources::ExternalOnly { .. } => {
+                unreachable!("cluster mode and source storage must stay aligned")
+            }
         },
-        ScenarioSources::ExternalOnly { external } => SourceOrchestrationMode::ExternalOnly {
-            external: external.clone(),
+        ClusterMode::ExternalOnly => match sources {
+            ScenarioSources::ExternalOnly { external } => SourceOrchestrationMode::ExternalOnly {
+                external: external.clone(),
+            },
+            ScenarioSources::Managed { .. } | ScenarioSources::Attached { .. } => {
+                unreachable!("cluster mode and source storage must stay aligned")
+            }
         },
     }
 }

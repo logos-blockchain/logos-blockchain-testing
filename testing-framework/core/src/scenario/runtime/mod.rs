@@ -1,6 +1,6 @@
 pub mod context;
 mod deployer;
-pub mod inventory;
+mod inventory;
 pub mod metrics;
 mod node_clients;
 pub mod orchestration;
@@ -9,9 +9,8 @@ pub mod readiness;
 mod runner;
 
 use async_trait::async_trait;
-pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics};
+pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics, RuntimeAssembly};
 pub use deployer::{Deployer, ScenarioError};
-pub use inventory::{BorrowedNode, BorrowedOrigin, ManagedNode, NodeHandle, NodeInventory};
 pub use node_clients::NodeClients;
 #[doc(hidden)]
 pub use orchestration::{

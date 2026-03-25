@@ -7,7 +7,7 @@ use crate::SnippetResult;
 
 pub fn random_restart_plan() -> SnippetResult<Scenario<NodeControlCapability>> {
     ScenarioBuilder::topology_with(|t| t.network_star().nodes(2))
-        .enable_node_control()
+        .with_node_control()
         .with_workload(RandomRestartWorkload::new(
             Duration::from_secs(45),  // min delay
             Duration::from_secs(75),  // max delay

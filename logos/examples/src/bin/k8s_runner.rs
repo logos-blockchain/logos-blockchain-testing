@@ -37,7 +37,7 @@ async fn run_k8s_case(nodes: usize, run_duration: Duration) -> Result<()> {
         t.with_network_layout(Libp2pNetworkLayout::Star)
             .with_node_count(nodes)
     })
-    .enable_observability()
+    .with_observability()
     .with_run_duration(run_duration)
     .with_deployment_seed(seed)
     .initialize_wallet(

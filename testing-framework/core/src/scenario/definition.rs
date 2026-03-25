@@ -4,15 +4,16 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, AttachSource, DeploymentPolicy, DynError, ExternalNodeSource,
-    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability, ScenarioSources,
-    SourceReadinessPolicy,
+    Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError, ExistingCluster,
+    ExternalNodeSource, HttpReadinessRequirement, IntoExistingCluster, NodeControlCapability,
+    ObservabilityCapability, RequiresNodeControl,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
     runtime::{
         context::RunMetrics,
-        orchestration::{SourceModeName, SourceOrchestrationPlan, SourceOrchestrationPlanError},
+        orchestration::{SourceOrchestrationPlan, SourceOrchestrationPlanError},
     },
+    sources::ScenarioSources,
     workload::Workload,
 };
 use crate::topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, DynTopologyError};
@@ -44,7 +45,6 @@ pub struct Scenario<E: Application, Caps = ()> {
     expectation_cooldown: Duration,
     deployment_policy: DeploymentPolicy,
     sources: ScenarioSources,
-    source_readiness_policy: SourceReadinessPolicy,
     source_orchestration_plan: SourceOrchestrationPlan,
     capabilities: Caps,
 }
@@ -58,7 +58,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
         expectation_cooldown: Duration,
         deployment_policy: DeploymentPolicy,
         sources: ScenarioSources,
-        source_readiness_policy: SourceReadinessPolicy,
         source_orchestration_plan: SourceOrchestrationPlan,
         capabilities: Caps,
     ) -> Self {
@@ -70,7 +69,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
             expectation_cooldown,
             deployment_policy,
             sources,
-            source_readiness_policy,
             source_orchestration_plan,
             capabilities,
         }
@@ -117,17 +115,34 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
-    /// Selected source readiness policy.
-    ///
-    /// This is currently reserved for future mixed-source orchestration and
-    /// does not change runtime behavior yet.
-    pub const fn source_readiness_policy(&self) -> SourceReadinessPolicy {
-        self.source_readiness_policy
+    pub fn existing_cluster(&self) -> Option<&ExistingCluster> {
+        self.sources.existing_cluster()
     }
 
     #[must_use]
-    pub fn sources(&self) -> &ScenarioSources {
-        &self.sources
+    pub const fn cluster_mode(&self) -> ClusterMode {
+        self.sources.cluster_mode()
+    }
+
+    #[must_use]
+    pub const fn cluster_control_profile(&self) -> ClusterControlProfile {
+        self.sources.control_profile()
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn attached_source(&self) -> Option<&ExistingCluster> {
+        self.existing_cluster()
+    }
+
+    #[must_use]
+    pub fn external_nodes(&self) -> &[ExternalNodeSource] {
+        self.sources.external_nodes()
+    }
+
+    #[must_use]
+    pub fn has_external_nodes(&self) -> bool {
+        !self.sources.external_nodes().is_empty()
     }
 
     #[must_use]
@@ -151,7 +166,6 @@ pub struct Builder<E: Application, Caps = ()> {
     expectation_cooldown: Option<Duration>,
     deployment_policy: DeploymentPolicy,
     sources: ScenarioSources,
-    source_readiness_policy: SourceReadinessPolicy,
     capabilities: Caps,
 }
 
@@ -247,8 +261,24 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
-            pub fn with_attach_source(self, attach: AttachSource) -> Self {
-                self.map_core_builder(|builder| builder.with_attach_source(attach))
+            pub fn with_existing_cluster(self, cluster: ExistingCluster) -> Self {
+                self.map_core_builder(|builder| builder.with_existing_cluster(cluster))
+            }
+
+            #[must_use]
+            pub fn with_existing_cluster_from(
+                self,
+                cluster: impl IntoExistingCluster,
+            ) -> Result<Self, DynError> {
+                let cluster = cluster.into_existing_cluster()?;
+
+                Ok(self.with_existing_cluster(cluster))
+            }
+
+            #[must_use]
+            #[doc(hidden)]
+            pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
+                self.with_existing_cluster(attach)
             }
 
             #[must_use]
@@ -257,13 +287,24 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
-            pub fn with_source_readiness_policy(self, policy: SourceReadinessPolicy) -> Self {
-                self.map_core_builder(|builder| builder.with_source_readiness_policy(policy))
+            pub fn with_external_nodes(
+                self,
+                nodes: impl IntoIterator<Item = ExternalNodeSource>,
+            ) -> Self {
+                self.map_core_builder(|builder| builder.with_external_nodes(nodes))
             }
 
             #[must_use]
-            pub fn with_external_only_sources(self) -> Self {
-                self.map_core_builder(|builder| builder.with_external_only_sources())
+            pub fn with_external_only(self) -> Self {
+                self.map_core_builder(|builder| builder.with_external_only())
+            }
+
+            #[must_use]
+            pub fn with_external_only_nodes(
+                self,
+                nodes: impl IntoIterator<Item = ExternalNodeSource>,
+            ) -> Self {
+                self.map_core_builder(|builder| builder.with_external_only_nodes(nodes))
             }
 
             #[must_use]
@@ -350,7 +391,6 @@ impl<E: Application, Caps: Default> Builder<E, Caps> {
             expectation_cooldown: None,
             deployment_policy: DeploymentPolicy::default(),
             sources: ScenarioSources::default(),
-            source_readiness_policy: SourceReadinessPolicy::default(),
             capabilities: Caps::default(),
         }
     }
@@ -365,14 +405,20 @@ impl<E: Application> ScenarioBuilder<E> {
     }
 
     #[must_use]
-    pub fn enable_node_control(self) -> NodeControlScenarioBuilder<E> {
+    pub fn with_node_control(self) -> NodeControlScenarioBuilder<E> {
         NodeControlScenarioBuilder {
             inner: self.inner.with_capabilities(NodeControlCapability),
         }
     }
 
     #[must_use]
-    pub fn enable_observability(self) -> ObservabilityScenarioBuilder<E> {
+    #[doc(hidden)]
+    pub fn enable_node_control(self) -> NodeControlScenarioBuilder<E> {
+        self.with_node_control()
+    }
+
+    #[must_use]
+    pub fn with_observability(self) -> ObservabilityScenarioBuilder<E> {
         ObservabilityScenarioBuilder {
             inner: self
                 .inner
@@ -380,11 +426,17 @@ impl<E: Application> ScenarioBuilder<E> {
         }
     }
 
+    #[must_use]
+    #[doc(hidden)]
+    pub fn enable_observability(self) -> ObservabilityScenarioBuilder<E> {
+        self.with_observability()
+    }
+
     pub fn build(self) -> Result<Scenario<E>, ScenarioBuildError> {
         self.inner.build()
     }
 
-    pub(crate) fn with_observability(
+    pub(crate) fn with_observability_capability(
         self,
         observability: ObservabilityCapability,
     ) -> ObservabilityScenarioBuilder<E> {
@@ -453,7 +505,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
             expectation_cooldown,
             deployment_policy,
             sources,
-            source_readiness_policy,
             ..
         } = self;
 
@@ -466,7 +517,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
             expectation_cooldown,
             deployment_policy,
             sources,
-            source_readiness_policy,
             capabilities,
         }
     }
@@ -568,31 +618,63 @@ impl<E: Application, Caps> Builder<E, Caps> {
     }
 
     #[must_use]
-    pub fn with_attach_source(mut self, attach: AttachSource) -> Self {
-        self.sources.set_attach(attach);
+    pub fn with_existing_cluster(mut self, cluster: ExistingCluster) -> Self {
+        self.sources = self.sources.with_attach(cluster);
         self
+    }
+
+    #[must_use]
+    pub fn with_existing_cluster_from(
+        self,
+        cluster: impl IntoExistingCluster,
+    ) -> Result<Self, DynError> {
+        let cluster = cluster.into_existing_cluster()?;
+
+        Ok(self.with_existing_cluster(cluster))
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
+        self.with_existing_cluster(attach)
     }
 
     #[must_use]
     pub fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
-        self.sources.add_external_node(node);
+        self.sources = self.sources.with_external_node(node);
         self
     }
 
     #[must_use]
-    /// Configure source readiness policy metadata.
-    ///
-    /// This is currently reserved for future mixed-source orchestration and
-    /// does not change runtime behavior yet.
-    pub fn with_source_readiness_policy(mut self, policy: SourceReadinessPolicy) -> Self {
-        self.source_readiness_policy = policy;
+    pub fn with_external_nodes(
+        mut self,
+        nodes: impl IntoIterator<Item = ExternalNodeSource>,
+    ) -> Self {
+        for node in nodes {
+            self.sources = self.sources.with_external_node(node);
+        }
+
         self
     }
 
     #[must_use]
-    pub fn with_external_only_sources(mut self) -> Self {
-        self.sources.set_external_only();
+    pub fn with_external_only(mut self) -> Self {
+        self.sources = self.sources.into_external_only();
         self
+    }
+
+    #[must_use]
+    pub fn with_external_only_nodes(
+        self,
+        nodes: impl IntoIterator<Item = ExternalNodeSource>,
+    ) -> Self {
+        self.with_external_only().with_external_nodes(nodes)
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn with_external_only_sources(self) -> Self {
+        self.with_external_only()
     }
 
     fn add_workload(&mut self, workload: Box<dyn Workload<E>>) {
@@ -607,13 +689,18 @@ impl<E: Application, Caps> Builder<E, Caps> {
     #[must_use]
     /// Finalize the scenario, computing run metrics and initializing
     /// components.
-    pub fn build(self) -> Result<Scenario<E, Caps>, ScenarioBuildError> {
+    pub fn build(self) -> Result<Scenario<E, Caps>, ScenarioBuildError>
+    where
+        Caps: RequiresNodeControl,
+    {
         let mut parts = BuilderParts::from_builder(self);
         let descriptors = parts.resolve_deployment()?;
         let run_plan = parts.run_plan();
         let run_metrics = RunMetrics::new(run_plan.duration);
-        let source_orchestration_plan =
-            build_source_orchestration_plan(parts.sources(), parts.source_readiness_policy)?;
+
+        validate_source_contract::<Caps>(parts.sources())?;
+
+        let source_orchestration_plan = build_source_orchestration_plan(parts.sources())?;
 
         initialize_components(
             &descriptors,
@@ -640,7 +727,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
             run_plan.expectation_cooldown,
             parts.deployment_policy,
             parts.sources,
-            parts.source_readiness_policy,
             source_orchestration_plan,
             parts.capabilities,
         ))
@@ -661,7 +747,6 @@ struct BuilderParts<E: Application, Caps> {
     expectation_cooldown: Option<Duration>,
     deployment_policy: DeploymentPolicy,
     sources: ScenarioSources,
-    source_readiness_policy: SourceReadinessPolicy,
     capabilities: Caps,
 }
 
@@ -676,7 +761,6 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             expectation_cooldown,
             deployment_policy,
             sources,
-            source_readiness_policy,
             capabilities,
             ..
         } = builder;
@@ -690,7 +774,6 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             expectation_cooldown,
             deployment_policy,
             sources,
-            source_readiness_policy,
             capabilities,
         }
     }
@@ -715,37 +798,81 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
 
 fn build_source_orchestration_plan(
     sources: &ScenarioSources,
-    readiness_policy: SourceReadinessPolicy,
 ) -> Result<SourceOrchestrationPlan, ScenarioBuildError> {
-    SourceOrchestrationPlan::try_from_sources(sources, readiness_policy)
-        .map_err(source_plan_error_to_build_error)
+    SourceOrchestrationPlan::try_from_sources(sources).map_err(source_plan_error_to_build_error)
+}
+
+fn validate_source_contract<Caps>(sources: &ScenarioSources) -> Result<(), ScenarioBuildError>
+where
+    Caps: RequiresNodeControl,
+{
+    validate_external_only_sources(sources)?;
+
+    validate_node_control_profile::<Caps>(sources)?;
+
+    Ok(())
 }
 
 fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> ScenarioBuildError {
     match error {
         SourceOrchestrationPlanError::SourceModeNotWiredYet { mode } => {
-            ScenarioBuildError::SourceModeNotWiredYet {
-                mode: source_mode_name(mode),
-            }
+            ScenarioBuildError::SourceModeNotWiredYet { mode }
         }
     }
 }
 
-const fn source_mode_name(mode: SourceModeName) -> &'static str {
-    match mode {
-        SourceModeName::Attached => "Attached",
+fn validate_external_only_sources(sources: &ScenarioSources) -> Result<(), ScenarioBuildError> {
+    if matches!(sources.cluster_mode(), ClusterMode::ExternalOnly)
+        && sources.external_nodes().is_empty()
+    {
+        return Err(ScenarioBuildError::SourceConfiguration {
+            message: "external-only scenarios require at least one external node".to_owned(),
+        });
     }
+
+    Ok(())
+}
+
+fn validate_node_control_profile<Caps>(sources: &ScenarioSources) -> Result<(), ScenarioBuildError>
+where
+    Caps: RequiresNodeControl,
+{
+    let profile = sources.control_profile();
+
+    if Caps::REQUIRED && matches!(profile, ClusterControlProfile::ExternalUncontrolled) {
+        return Err(ScenarioBuildError::SourceConfiguration {
+            message: format!(
+                "node control is not available for cluster mode '{}' with control profile '{}'",
+                sources.cluster_mode().as_str(),
+                profile.as_str(),
+            ),
+        });
+    }
+
+    Ok(())
 }
 
 impl<E: Application> Builder<E, ()> {
     #[must_use]
-    pub fn enable_node_control(self) -> Builder<E, NodeControlCapability> {
+    pub fn with_node_control(self) -> Builder<E, NodeControlCapability> {
         self.with_capabilities(NodeControlCapability)
     }
 
     #[must_use]
-    pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
+    #[doc(hidden)]
+    pub fn enable_node_control(self) -> Builder<E, NodeControlCapability> {
+        self.with_node_control()
+    }
+
+    #[must_use]
+    pub fn with_observability(self) -> Builder<E, ObservabilityCapability> {
         self.with_capabilities(ObservabilityCapability::default())
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
+        self.with_observability()
     }
 }
 
@@ -820,4 +947,60 @@ fn expectation_cooldown_for(override_value: Option<Duration>) -> Duration {
 
 fn min_run_duration() -> Duration {
     Duration::from_secs(MIN_RUN_DURATION_SECS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ScenarioBuildError, validate_external_only_sources, validate_node_control_profile,
+    };
+    use crate::scenario::{
+        ExistingCluster, ExternalNodeSource, NodeControlCapability, sources::ScenarioSources,
+    };
+
+    #[test]
+    fn external_only_requires_external_nodes() {
+        let error =
+            validate_external_only_sources(&ScenarioSources::default().into_external_only())
+                .expect_err("external-only without nodes should fail");
+
+        assert!(matches!(
+            error,
+            ScenarioBuildError::SourceConfiguration { .. }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "invalid scenario source configuration: external-only scenarios require at least one external node"
+        );
+    }
+
+    #[test]
+    fn external_only_rejects_node_control_requirement() {
+        let sources = ScenarioSources::default()
+            .with_external_node(ExternalNodeSource::new(
+                "node-0".to_owned(),
+                "http://127.0.0.1:1".to_owned(),
+            ))
+            .into_external_only();
+        let error = validate_node_control_profile::<NodeControlCapability>(&sources)
+            .expect_err("external-only should reject node control");
+
+        assert!(matches!(
+            error,
+            ScenarioBuildError::SourceConfiguration { .. }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "invalid scenario source configuration: node control is not available for cluster mode 'external-only' with control profile 'external-uncontrolled'"
+        );
+    }
+
+    #[test]
+    fn existing_cluster_accepts_node_control_requirement() {
+        let sources = ScenarioSources::default()
+            .with_attach(ExistingCluster::for_compose_project("project".to_owned()));
+
+        validate_node_control_profile::<NodeControlCapability>(&sources)
+            .expect("existing cluster should be considered controllable");
+    }
 }

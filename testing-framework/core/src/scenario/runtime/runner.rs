@@ -34,9 +34,11 @@ impl<E: Application> Drop for Runner<E> {
 }
 
 impl<E: Application> Runner<E> {
-    /// Construct a runner from the run context and optional cleanup guard.
     #[must_use]
-    pub fn new(context: RunContext<E>, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
+    pub(crate) fn new(
+        context: RunContext<E>,
+        cleanup_guard: Option<Box<dyn CleanupGuard>>,
+    ) -> Self {
         Self {
             context: Arc::new(context),
             cleanup_guard,
@@ -45,8 +47,8 @@ impl<E: Application> Runner<E> {
 
     /// Access the underlying run context.
     #[must_use]
-    pub fn context(&self) -> Arc<RunContext<E>> {
-        Arc::clone(&self.context)
+    pub fn context(&self) -> &RunContext<E> {
+        self.context.as_ref()
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), DynError> {
@@ -71,7 +73,7 @@ impl<E: Application> Runner<E> {
     where
         Caps: Send + Sync,
     {
-        let context = self.context();
+        let context = Arc::clone(&self.context);
         let run_duration = scenario.duration();
         let workloads = scenario.workloads().to_vec();
         let expectation_count = scenario.expectations().len();
@@ -190,7 +192,7 @@ impl<E: Application> Runner<E> {
     }
 
     fn settle_wait_duration(context: &RunContext<E>) -> Option<Duration> {
-        let has_node_control = context.controls_nodes();
+        let has_node_control = context.node_control().is_some();
         let configured_wait = context.expectation_cooldown();
 
         if configured_wait.is_zero() && !has_node_control {
@@ -231,7 +233,7 @@ impl<E: Application> Runner<E> {
     fn cooldown_duration(context: &RunContext<E>) -> Option<Duration> {
         // Managed environments need a minimum cooldown so feed and expectations
         // observe stabilized state.
-        let needs_stabilization = context.controls_nodes();
+        let needs_stabilization = context.cluster_control_profile().framework_owns_lifecycle();
 
         let mut wait = context.expectation_cooldown();
 

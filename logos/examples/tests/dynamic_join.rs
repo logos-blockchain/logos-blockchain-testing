@@ -115,7 +115,7 @@ async fn dynamic_join_reaches_consensus_liveness() -> Result<()> {
         t.with_network_layout(Libp2pNetworkLayout::Star)
             .with_node_count(2)
     })
-    .enable_node_control()
+    .with_node_control()
     .with_workload(JoinNodeWorkload::new("joiner"))
     .with_expectation(lb_framework::workloads::ConsensusLiveness::<LbcEnv>::default())
     .with_run_duration(Duration::from_secs(60))
@@ -135,7 +135,7 @@ async fn dynamic_join_with_peers_reaches_consensus_liveness() -> Result<()> {
         t.with_network_layout(Libp2pNetworkLayout::Star)
             .with_node_count(2)
     })
-    .enable_node_control()
+    .with_node_control()
     .with_workload(JoinNodeWithPeersWorkload::new(
         "joiner",
         vec!["node-0".to_string()],

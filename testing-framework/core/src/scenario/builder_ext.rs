@@ -95,7 +95,7 @@ impl<E: Application> ObservabilityBuilderExt for ScenarioBuilder<E> {
     type Env = E;
 
     fn with_metrics_query_url(self, url: Url) -> ObservabilityScenarioBuilder<E> {
-        self.with_observability(single_url_observability(Some(url), None, None))
+        self.with_observability_capability(single_url_observability(Some(url), None, None))
     }
 
     fn with_metrics_query_url_str(self, url: &str) -> ObservabilityScenarioBuilder<E> {
@@ -112,7 +112,7 @@ impl<E: Application> ObservabilityBuilderExt for ScenarioBuilder<E> {
     }
 
     fn with_metrics_otlp_ingest_url(self, url: Url) -> ObservabilityScenarioBuilder<E> {
-        self.with_observability(single_url_observability(None, Some(url), None))
+        self.with_observability_capability(single_url_observability(None, Some(url), None))
     }
 
     fn with_metrics_otlp_ingest_url_str(self, url: &str) -> ObservabilityScenarioBuilder<E> {
@@ -129,7 +129,7 @@ impl<E: Application> ObservabilityBuilderExt for ScenarioBuilder<E> {
     }
 
     fn with_grafana_url(self, url: Url) -> ObservabilityScenarioBuilder<E> {
-        self.with_observability(single_url_observability(None, None, Some(url)))
+        self.with_observability_capability(single_url_observability(None, None, Some(url)))
     }
 
     fn with_grafana_url_str(self, url: &str) -> ObservabilityScenarioBuilder<E> {

@@ -20,10 +20,10 @@ async fn k8s_attach_mode_queries_node_api_opt_in() -> Result<()> {
             Err(error) => return Err(Error::new(error)),
         };
 
-    let attach_source = metadata.attach_source().map_err(|err| anyhow!("{err}"))?;
     let attached = ScenarioBuilder::deployment_with(|d| d.with_node_count(1))
         .with_run_duration(Duration::from_secs(5))
-        .with_attach_source(attach_source)
+        .with_existing_cluster_from(&metadata)
+        .map_err(|err| anyhow!("{err}"))?
         .build()?;
 
     let attached_deployer = LbcK8sDeployer::default();

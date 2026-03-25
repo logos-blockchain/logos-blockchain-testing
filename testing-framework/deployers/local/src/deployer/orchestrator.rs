@@ -10,10 +10,10 @@ use std::{
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, CleanupGuard, Deployer, DeploymentPolicy, DynError, FeedHandle, FeedRuntime,
-        HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, RunContext, Runner, Scenario, ScenarioError, SourceOrchestrationPlan,
-        build_source_orchestration_plan, spawn_feed,
+        Application, CleanupGuard, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy,
+        DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        NodeControlCapability, NodeControlHandle, RetryPolicy, Runner, RuntimeAssembly, Scenario,
+        ScenarioError, SourceOrchestrationPlan, build_source_orchestration_plan, spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -187,6 +187,8 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         &self,
         scenario: &Scenario<E, ()>,
     ) -> Result<Runner<E>, ProcessDeployerError> {
+        validate_supported_cluster_mode(scenario)?;
+
         // Source planning is currently resolved here before node spawn/runtime setup.
         let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
             ProcessDeployerError::SourceOrchestration {
@@ -211,6 +213,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
+            scenario.cluster_control_profile(),
             None,
         )
         .await?;
@@ -218,13 +221,15 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let cleanup_guard: Box<dyn CleanupGuard> =
             Box::new(LocalProcessGuard::<E>::new(nodes, runtime.feed_task));
 
-        Ok(Runner::new(runtime.context, Some(cleanup_guard)))
+        Ok(runtime.assembly.build_runner(Some(cleanup_guard)))
     }
 
     async fn deploy_with_node_control(
         &self,
         scenario: &Scenario<E, NodeControlCapability>,
     ) -> Result<Runner<E>, ProcessDeployerError> {
+        validate_supported_cluster_mode(scenario)?;
+
         // Source planning is currently resolved here before node spawn/runtime setup.
         let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
             ProcessDeployerError::SourceOrchestration {
@@ -248,14 +253,14 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
+            scenario.cluster_control_profile(),
             Some(node_control),
         )
         .await?;
 
-        Ok(Runner::new(
-            runtime.context,
-            Some(Box::new(runtime.feed_task)),
-        ))
+        Ok(runtime
+            .assembly
+            .build_runner(Some(Box::new(runtime.feed_task))))
     }
 
     fn node_control_from(
@@ -312,6 +317,22 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
     }
 }
 
+fn validate_supported_cluster_mode<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+) -> Result<(), ProcessDeployerError> {
+    ensure_local_cluster_mode(scenario.cluster_mode())
+}
+
+fn ensure_local_cluster_mode(mode: ClusterMode) -> Result<(), ProcessDeployerError> {
+    if matches!(mode, ClusterMode::ExistingCluster) {
+        return Err(ProcessDeployerError::SourceOrchestration {
+            source: DynError::from("local deployer does not support existing-cluster mode"),
+        });
+    }
+
+    Ok(())
+}
+
 fn merge_source_clients_for_local<E: LocalDeployerEnv>(
     source_plan: &SourceOrchestrationPlan,
     node_clients: NodeClients<E>,
@@ -337,6 +358,29 @@ fn build_retry_execution_config(
     };
 
     (retry_policy, execution)
+}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::ClusterMode;
+
+    use super::ensure_local_cluster_mode;
+
+    #[test]
+    fn local_cluster_validator_accepts_managed_mode() {
+        ensure_local_cluster_mode(ClusterMode::Managed).expect("managed mode should be accepted");
+    }
+
+    #[test]
+    fn local_cluster_validator_rejects_existing_cluster_mode() {
+        let error = ensure_local_cluster_mode(ClusterMode::ExistingCluster)
+            .expect_err("existing-cluster mode should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "source orchestration failed: local deployer does not support existing-cluster mode"
+        );
+    }
 }
 
 async fn run_retry_attempt<E: LocalDeployerEnv>(
@@ -475,7 +519,7 @@ fn log_local_deploy_start(node_count: usize, policy: DeploymentPolicy, has_node_
 }
 
 struct RuntimeContext<E: Application> {
-    context: RunContext<E>,
+    assembly: RuntimeAssembly<E>,
     feed_task: FeedHandle,
 }
 
@@ -484,6 +528,7 @@ async fn run_context_for<E: Application>(
     node_clients: NodeClients<E>,
     duration: Duration,
     expectation_cooldown: Duration,
+    cluster_control_profile: ClusterControlProfile,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<RuntimeContext<E>, ProcessDeployerError> {
     if node_clients.is_empty() {
@@ -491,15 +536,21 @@ async fn run_context_for<E: Application>(
     }
 
     let (feed, feed_task) = spawn_feed_with::<E>(&node_clients).await?;
-    let context = RunContext::new(
+    let mut assembly = RuntimeAssembly::new(
         descriptors,
         node_clients,
         duration,
         expectation_cooldown,
+        cluster_control_profile,
         Metrics::empty(),
         feed,
-        node_control,
     );
+    if let Some(node_control) = node_control {
+        assembly = assembly.with_node_control(node_control);
+    }
 
-    Ok(RuntimeContext { context, feed_task })
+    Ok(RuntimeContext {
+        assembly,
+        feed_task,
+    })
 }

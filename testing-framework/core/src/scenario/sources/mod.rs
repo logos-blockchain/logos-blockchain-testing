@@ -1,3 +1,7 @@
 mod model;
 
-pub use model::{AttachSource, ExternalNodeSource, ScenarioSources, SourceReadinessPolicy};
+pub(crate) use model::ScenarioSources;
+#[doc(hidden)]
+pub use model::{
+    ClusterControlProfile, ClusterMode, ExistingCluster, ExternalNodeSource, IntoExistingCluster,
+};

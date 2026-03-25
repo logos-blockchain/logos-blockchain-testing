@@ -41,7 +41,7 @@ async fn run_compose_case(nodes: usize, run_duration: Duration) -> Result<()> {
         t.with_network_layout(Libp2pNetworkLayout::Star)
             .with_node_count(nodes)
     })
-    .enable_node_control()
+    .with_node_control()
     .with_run_duration(run_duration)
     .with_deployment_seed(seed)
     .initialize_wallet(

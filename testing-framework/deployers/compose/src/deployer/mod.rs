@@ -9,8 +9,8 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    AttachSource, CleanupGuard, Deployer, DynError, FeedHandle, ObservabilityCapabilityProvider,
-    RequiresNodeControl, Runner, Scenario,
+    CleanupGuard, Deployer, DynError, ExistingCluster, FeedHandle, IntoExistingCluster,
+    ObservabilityCapabilityProvider, RequiresNodeControl, Runner, Scenario,
 };
 
 use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
@@ -36,6 +36,22 @@ enum ComposeMetadataError {
 }
 
 impl ComposeDeploymentMetadata {
+    #[must_use]
+    pub fn for_project(project_name: String) -> Self {
+        Self {
+            project_name: Some(project_name),
+        }
+    }
+
+    #[must_use]
+    pub fn from_existing_cluster(cluster: Option<&ExistingCluster>) -> Self {
+        Self {
+            project_name: cluster
+                .and_then(ExistingCluster::compose_project)
+                .map(ToOwned::to_owned),
+        }
+    }
+
     /// Returns project name when deployment is bound to a specific compose
     /// project.
     #[must_use]
@@ -43,26 +59,56 @@ impl ComposeDeploymentMetadata {
         self.project_name.as_deref()
     }
 
-    /// Builds an attach source for the same compose project using deployer
-    /// discovery to resolve services.
-    pub fn attach_source(&self) -> Result<AttachSource, DynError> {
+    /// Builds an existing-cluster descriptor for the same compose project
+    /// using deployer discovery to resolve services.
+    pub fn existing_cluster(&self) -> Result<ExistingCluster, DynError> {
         let project_name = self
             .project_name()
             .ok_or(ComposeMetadataError::MissingProjectName)?;
 
-        Ok(AttachSource::compose(Vec::new()).with_project(project_name.to_owned()))
+        Ok(ExistingCluster::for_compose_project(
+            project_name.to_owned(),
+        ))
     }
 
-    /// Builds an attach source for the same compose project.
+    /// Builds an existing-cluster descriptor for the same compose project.
+    pub fn existing_cluster_for_services(
+        &self,
+        services: Vec<String>,
+    ) -> Result<ExistingCluster, DynError> {
+        let project_name = self
+            .project_name()
+            .ok_or(ComposeMetadataError::MissingProjectName)?;
+
+        Ok(ExistingCluster::for_compose_services(
+            project_name.to_owned(),
+            services,
+        ))
+    }
+
+    #[doc(hidden)]
+    pub fn attach_source(&self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
+    }
+
+    #[doc(hidden)]
     pub fn attach_source_for_services(
         &self,
         services: Vec<String>,
-    ) -> Result<AttachSource, DynError> {
-        let project_name = self
-            .project_name()
-            .ok_or(ComposeMetadataError::MissingProjectName)?;
+    ) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster_for_services(services)
+    }
+}
 
-        Ok(AttachSource::compose(services).with_project(project_name.to_owned()))
+impl IntoExistingCluster for ComposeDeploymentMetadata {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
+    }
+}
+
+impl IntoExistingCluster for &ComposeDeploymentMetadata {
+    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
+        self.existing_cluster()
     }
 }
 

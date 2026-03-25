@@ -12,7 +12,7 @@ use tracing_subscriber::fmt::try_init;
 async fn local_restart_node() -> Result<()> {
     let _ = try_init();
     let mut scenario = ScenarioBuilder::deployment_with(|t| t.with_node_count(1))
-        .enable_node_control()
+        .with_node_control()
         .with_run_duration(Duration::from_secs(1))
         .build()?;
 

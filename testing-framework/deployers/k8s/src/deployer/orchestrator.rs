@@ -5,11 +5,11 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, ApplicationExternalProvider, AttachSource, CleanupGuard, ClusterWaitHandle,
-        Deployer, DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics,
-        MetricsError, NodeClients, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, RunContext, Runner, Scenario, ScenarioSources,
-        SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+        Application, ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
+        ClusterWaitHandle, Deployer, DynError, ExistingCluster, FeedHandle, FeedRuntime,
+        HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
+        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
         build_source_orchestration_plan, orchestrate_sources_with_providers,
     },
     topology::DeploymentDescriptor,
@@ -171,6 +171,9 @@ where
     E: K8sDeployEnv,
     Caps: ObservabilityCapabilityProvider + Send + Sync,
 {
+    validate_supported_cluster_mode(scenario)
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+
     // Source planning is currently resolved here before deployer-specific setup.
     let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
         K8sRunnerError::SourceOrchestration {
@@ -180,9 +183,10 @@ where
 
     let observability = resolve_observability_inputs(scenario.capabilities())?;
 
-    if scenario.sources().is_attached() {
-        let runner = deploy_attached_only::<E, Caps>(scenario, source_plan, observability).await?;
-        return Ok((runner, attached_metadata(scenario)));
+    if matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
+        let runner =
+            deploy_existing_cluster::<E, Caps>(scenario, source_plan, observability).await?;
+        return Ok((runner, existing_cluster_metadata(scenario)));
     }
 
     let deployment = build_k8s_deployment::<E, Caps>(deployer, scenario, &observability).await?;
@@ -205,15 +209,15 @@ where
     runtime.node_clients = resolve_node_clients(&source_plan, source_providers).await?;
     ensure_non_empty_node_clients(&runtime.node_clients)?;
 
-    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait);
-
     log_configured_observability(&observability);
-    maybe_print_endpoints::<E>(&observability, &parts.node_clients);
+    maybe_print_endpoints::<E>(&observability, &runtime.node_clients);
+
+    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait);
     let runner = finalize_runner::<E>(&mut cluster, parts)?;
     Ok((runner, metadata))
 }
 
-async fn deploy_attached_only<E, Caps>(
+async fn deploy_existing_cluster<E, Caps>(
     scenario: &Scenario<E, Caps>,
     source_plan: SourceOrchestrationPlan,
     observability: ObservabilityInputs,
@@ -231,42 +235,26 @@ where
     let telemetry = observability.telemetry_handle()?;
     let (feed, feed_task) = spawn_block_feed_with::<E>(&node_clients).await?;
     let cluster_wait = attached_cluster_wait::<E, Caps>(scenario, client)?;
-    let context = RunContext::new(
+    let context = RuntimeAssembly::new(
         scenario.deployment().clone(),
         node_clients,
         scenario.duration(),
         scenario.expectation_cooldown(),
+        scenario.cluster_control_profile(),
         telemetry,
         feed,
-        None,
     )
     .with_cluster_wait(cluster_wait);
 
-    Ok(Runner::new(context, Some(Box::new(feed_task))))
+    Ok(context.build_runner(Some(Box::new(feed_task))))
 }
 
-fn attached_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
+fn existing_cluster_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
 where
     E: K8sDeployEnv,
     Caps: Send + Sync,
 {
-    match scenario.sources() {
-        ScenarioSources::Attached {
-            attach:
-                AttachSource::K8s {
-                    namespace,
-                    label_selector,
-                },
-            ..
-        } => K8sDeploymentMetadata {
-            namespace: namespace.clone(),
-            label_selector: Some(label_selector.clone()),
-        },
-        _ => K8sDeploymentMetadata {
-            namespace: None,
-            label_selector: None,
-        },
-    }
+    K8sDeploymentMetadata::from_existing_cluster(scenario.existing_cluster())
 }
 
 fn attached_cluster_wait<E, Caps>(
@@ -277,16 +265,63 @@ where
     E: K8sDeployEnv,
     Caps: Send + Sync,
 {
-    let ScenarioSources::Attached { attach, .. } = scenario.sources() else {
-        return Err(K8sRunnerError::InternalInvariant {
-            message: "k8s attached cluster wait requested outside attached source mode".to_owned(),
-        });
-    };
+    let attach = scenario
+        .existing_cluster()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "k8s cluster wait requested outside existing-cluster mode".to_owned(),
+        })?;
+    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, attach)
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
-    Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
-        client,
-        attach.clone(),
-    )))
+    Ok(Arc::new(cluster_wait))
+}
+
+fn validate_supported_cluster_mode<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+) -> Result<(), DynError> {
+    if !matches!(scenario.cluster_mode(), ClusterMode::ExistingCluster) {
+        return Ok(());
+    }
+
+    let cluster = scenario
+        .existing_cluster()
+        .ok_or_else(|| DynError::from("existing-cluster mode requires an existing cluster"))?;
+
+    ensure_k8s_existing_cluster(cluster)
+}
+
+fn ensure_k8s_existing_cluster(cluster: &ExistingCluster) -> Result<(), DynError> {
+    if cluster.k8s_label_selector().is_some() {
+        return Ok(());
+    }
+
+    Err("k8s deployer requires a k8s existing-cluster descriptor".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::ExistingCluster;
+
+    use super::ensure_k8s_existing_cluster;
+
+    #[test]
+    fn k8s_cluster_validator_accepts_k8s_descriptor() {
+        ensure_k8s_existing_cluster(&ExistingCluster::for_k8s_selector("app=node".to_owned()))
+            .expect("k8s descriptor should be accepted");
+    }
+
+    #[test]
+    fn k8s_cluster_validator_rejects_compose_descriptor() {
+        let error = ensure_k8s_existing_cluster(&ExistingCluster::for_compose_project(
+            "project".to_owned(),
+        ))
+        .expect_err("compose descriptor should be rejected");
+
+        assert_eq!(
+            error.to_string(),
+            "k8s deployer requires a k8s existing-cluster descriptor"
+        );
+    }
 }
 
 fn managed_cluster_wait<E: K8sDeployEnv>(
@@ -295,13 +330,12 @@ fn managed_cluster_wait<E: K8sDeployEnv>(
 ) -> Result<Arc<dyn ClusterWaitHandle<E>>, K8sRunnerError> {
     let client = client_from_cluster(cluster)?;
     let attach_source = metadata
-        .attach_source()
+        .existing_cluster()
+        .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
+    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, &attach_source)
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
-    Ok(Arc::new(K8sAttachedClusterWait::<E>::new(
-        client,
-        attach_source,
-    )))
+    Ok(Arc::new(cluster_wait))
 }
 
 fn client_from_cluster(cluster: &Option<ClusterEnvironment>) -> Result<Client, K8sRunnerError> {
@@ -517,15 +551,19 @@ fn build_runner_parts<E: K8sDeployEnv, Caps>(
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> K8sRunnerParts<E> {
     K8sRunnerParts {
-        descriptors: scenario.deployment().clone(),
-        node_clients: runtime.node_clients,
-        duration: scenario.duration(),
-        expectation_cooldown: scenario.expectation_cooldown(),
-        telemetry: runtime.telemetry,
-        feed: runtime.feed,
+        assembly: build_k8s_runtime_assembly(
+            scenario.deployment().clone(),
+            runtime.node_clients,
+            scenario.duration(),
+            scenario.expectation_cooldown(),
+            scenario.cluster_control_profile(),
+            runtime.telemetry,
+            runtime.feed,
+            cluster_wait,
+        ),
         feed_task: runtime.feed_task,
         node_count,
-        cluster_wait,
+        duration_secs: scenario.duration().as_secs(),
     }
 }
 
@@ -613,15 +651,10 @@ fn maybe_print_endpoints<E: K8sDeployEnv>(
 }
 
 struct K8sRunnerParts<E: K8sDeployEnv> {
-    descriptors: E::Deployment,
-    node_clients: NodeClients<E>,
-    duration: Duration,
-    expectation_cooldown: Duration,
-    telemetry: Metrics,
-    feed: Feed<E>,
+    assembly: RuntimeAssembly<E>,
     feed_task: FeedHandle,
     node_count: usize,
-    cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
+    duration_secs: u64,
 }
 
 fn finalize_runner<E: K8sDeployEnv>(
@@ -632,36 +665,21 @@ fn finalize_runner<E: K8sDeployEnv>(
     let (cleanup, port_forwards) = environment.into_cleanup()?;
 
     let K8sRunnerParts {
-        descriptors,
-        node_clients,
-        duration,
-        expectation_cooldown,
-        telemetry,
-        feed,
+        assembly,
         feed_task,
         node_count,
-        cluster_wait,
+        duration_secs,
     } = parts;
-    let duration_secs = duration.as_secs();
 
     let cleanup_guard: Box<dyn CleanupGuard> =
         Box::new(K8sCleanupGuard::new(cleanup, feed_task, port_forwards));
-    let context = build_k8s_run_context(
-        descriptors,
-        node_clients,
-        duration,
-        expectation_cooldown,
-        telemetry,
-        feed,
-        cluster_wait,
-    );
 
     info!(
         nodes = node_count,
         duration_secs, "k8s deployment ready; handing control to scenario runner"
     );
 
-    Ok(Runner::new(context, Some(cleanup_guard)))
+    Ok(assembly.build_runner(Some(cleanup_guard)))
 }
 
 fn take_ready_cluster(
@@ -674,23 +692,24 @@ fn take_ready_cluster(
         })
 }
 
-fn build_k8s_run_context<E: K8sDeployEnv>(
+fn build_k8s_runtime_assembly<E: K8sDeployEnv>(
     descriptors: E::Deployment,
     node_clients: NodeClients<E>,
     duration: Duration,
     expectation_cooldown: Duration,
+    cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
     feed: Feed<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
-) -> RunContext<E> {
-    RunContext::new(
+) -> RuntimeAssembly<E> {
+    RuntimeAssembly::new(
         descriptors,
         node_clients,
         duration,
         expectation_cooldown,
+        cluster_control_profile,
         telemetry,
         feed,
-        None,
     )
     .with_cluster_wait(cluster_wait)
 }

@@ -5,7 +5,7 @@ use std::{
 
 use testing_framework_core::{
     adjust_timeout,
-    scenario::{Application, DynError, NodeControlHandle},
+    scenario::{Application, DynError, ExistingCluster, NodeControlHandle},
 };
 use tokio::{process::Command, time::timeout};
 use tracing::info;
@@ -155,9 +155,25 @@ impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
     }
 }
 
-/// Node control handle for compose attached mode.
+/// Node control handle for compose existing-cluster mode.
 pub struct ComposeAttachedNodeControl {
     pub(crate) project_name: String,
+}
+
+impl ComposeAttachedNodeControl {
+    pub fn try_from_existing_cluster(source: &ExistingCluster) -> Result<Self, DynError> {
+        let Some(project_name) = source
+            .compose_project()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Err("attached compose node control requires explicit project name".into());
+        };
+
+        Ok(Self {
+            project_name: project_name.to_owned(),
+        })
+    }
 }
 
 #[async_trait::async_trait]
