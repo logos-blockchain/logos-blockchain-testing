@@ -247,9 +247,9 @@ impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
 }
 
 fn k8s_wait_request(source: &ExistingCluster) -> Result<K8sAttachRequest<'_>, DynError> {
-    let label_selector = source
-        .k8s_label_selector()
-        .ok_or_else(|| DynError::from("k8s cluster wait requires a k8s attach source"))?;
+    let label_selector = source.k8s_label_selector().ok_or_else(|| {
+        DynError::from("k8s cluster wait requires a k8s existing-cluster descriptor")
+    })?;
 
     if label_selector.trim().is_empty() {
         return Err(K8sAttachDiscoveryError::EmptyLabelSelector.into());

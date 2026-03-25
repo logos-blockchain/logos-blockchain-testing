@@ -4,8 +4,9 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
-    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
+    Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError, ExistingCluster,
+    ExternalNodeSource, HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
+    RequiresNodeControl,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
     runtime::{
@@ -119,8 +120,13 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
-    pub const fn uses_existing_cluster(&self) -> bool {
-        self.sources.uses_existing_cluster()
+    pub const fn cluster_mode(&self) -> ClusterMode {
+        self.sources.cluster_mode()
+    }
+
+    #[must_use]
+    pub const fn cluster_control_profile(&self) -> ClusterControlProfile {
+        self.sources.control_profile()
     }
 
     #[must_use]
@@ -132,16 +138,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     #[must_use]
     pub fn external_nodes(&self) -> &[ExternalNodeSource] {
         self.sources.external_nodes()
-    }
-
-    #[must_use]
-    pub const fn is_managed(&self) -> bool {
-        self.sources.is_managed()
-    }
-
-    #[must_use]
-    pub const fn is_external_only(&self) -> bool {
-        self.sources.is_external_only()
     }
 
     #[must_use]
@@ -619,11 +615,17 @@ impl<E: Application, Caps> Builder<E, Caps> {
     #[must_use]
     /// Finalize the scenario, computing run metrics and initializing
     /// components.
-    pub fn build(self) -> Result<Scenario<E, Caps>, ScenarioBuildError> {
+    pub fn build(self) -> Result<Scenario<E, Caps>, ScenarioBuildError>
+    where
+        Caps: RequiresNodeControl,
+    {
         let mut parts = BuilderParts::from_builder(self);
         let descriptors = parts.resolve_deployment()?;
         let run_plan = parts.run_plan();
         let run_metrics = RunMetrics::new(run_plan.duration);
+
+        validate_source_contract::<Caps>(parts.sources())?;
+
         let source_orchestration_plan = build_source_orchestration_plan(parts.sources())?;
 
         initialize_components(
@@ -726,12 +728,54 @@ fn build_source_orchestration_plan(
     SourceOrchestrationPlan::try_from_sources(sources).map_err(source_plan_error_to_build_error)
 }
 
+fn validate_source_contract<Caps>(sources: &ScenarioSources) -> Result<(), ScenarioBuildError>
+where
+    Caps: RequiresNodeControl,
+{
+    validate_external_only_sources(sources)?;
+
+    validate_node_control_profile::<Caps>(sources)?;
+
+    Ok(())
+}
+
 fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> ScenarioBuildError {
     match error {
         SourceOrchestrationPlanError::SourceModeNotWiredYet { mode } => {
             ScenarioBuildError::SourceModeNotWiredYet { mode }
         }
     }
+}
+
+fn validate_external_only_sources(sources: &ScenarioSources) -> Result<(), ScenarioBuildError> {
+    if matches!(sources.cluster_mode(), ClusterMode::ExternalOnly)
+        && sources.external_nodes().is_empty()
+    {
+        return Err(ScenarioBuildError::SourceConfiguration {
+            message: "external-only scenarios require at least one external node".to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_node_control_profile<Caps>(sources: &ScenarioSources) -> Result<(), ScenarioBuildError>
+where
+    Caps: RequiresNodeControl,
+{
+    let profile = sources.control_profile();
+
+    if Caps::REQUIRED && matches!(profile, ClusterControlProfile::ExternalUncontrolled) {
+        return Err(ScenarioBuildError::SourceConfiguration {
+            message: format!(
+                "node control is not available for cluster mode '{}' with control profile '{}'",
+                sources.cluster_mode().as_str(),
+                profile.as_str(),
+            ),
+        });
+    }
+
+    Ok(())
 }
 
 impl<E: Application> Builder<E, ()> {
@@ -817,4 +861,60 @@ fn expectation_cooldown_for(override_value: Option<Duration>) -> Duration {
 
 fn min_run_duration() -> Duration {
     Duration::from_secs(MIN_RUN_DURATION_SECS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ScenarioBuildError, validate_external_only_sources, validate_node_control_profile,
+    };
+    use crate::scenario::{
+        ExistingCluster, ExternalNodeSource, NodeControlCapability, sources::ScenarioSources,
+    };
+
+    #[test]
+    fn external_only_requires_external_nodes() {
+        let error =
+            validate_external_only_sources(&ScenarioSources::default().into_external_only())
+                .expect_err("external-only without nodes should fail");
+
+        assert!(matches!(
+            error,
+            ScenarioBuildError::SourceConfiguration { .. }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "invalid scenario source configuration: external-only scenarios require at least one external node"
+        );
+    }
+
+    #[test]
+    fn external_only_rejects_node_control_requirement() {
+        let sources = ScenarioSources::default()
+            .with_external_node(ExternalNodeSource::new(
+                "node-0".to_owned(),
+                "http://127.0.0.1:1".to_owned(),
+            ))
+            .into_external_only();
+        let error = validate_node_control_profile::<NodeControlCapability>(&sources)
+            .expect_err("external-only should reject node control");
+
+        assert!(matches!(
+            error,
+            ScenarioBuildError::SourceConfiguration { .. }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "invalid scenario source configuration: node control is not available for cluster mode 'external-only' with control profile 'external-uncontrolled'"
+        );
+    }
+
+    #[test]
+    fn existing_cluster_accepts_node_control_requirement() {
+        let sources = ScenarioSources::default()
+            .with_attach(ExistingCluster::for_compose_project("project".to_owned()));
+
+        validate_node_control_profile::<NodeControlCapability>(&sources)
+            .expect("existing cluster should be considered controllable");
+    }
 }

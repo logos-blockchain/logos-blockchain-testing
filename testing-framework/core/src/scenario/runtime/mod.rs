@@ -9,7 +9,7 @@ pub mod readiness;
 mod runner;
 
 use async_trait::async_trait;
-pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics};
+pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics, RuntimeAssembly};
 pub use deployer::{Deployer, ScenarioError};
 pub use node_clients::NodeClients;
 #[doc(hidden)]
