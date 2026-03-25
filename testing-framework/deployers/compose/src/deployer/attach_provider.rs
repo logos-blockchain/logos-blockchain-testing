@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    AttachProvider, AttachProviderError, AttachSource, AttachedNode, ClusterWaitHandle, DynError,
-    ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
+    AttachProvider, AttachProviderError, AttachedNode, ClusterWaitHandle, DynError,
+    ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, wait_http_readiness,
 };
 use url::Url;
 
@@ -22,7 +22,7 @@ pub(super) struct ComposeAttachProvider<E: ComposeDeployEnv> {
 
 pub(super) struct ComposeAttachedClusterWait<E: ComposeDeployEnv> {
     host: String,
-    source: AttachSource,
+    source: ExistingCluster,
     _env: PhantomData<E>,
 }
 
@@ -42,12 +42,14 @@ impl<E: ComposeDeployEnv> ComposeAttachProvider<E> {
 }
 
 impl<E: ComposeDeployEnv> ComposeAttachedClusterWait<E> {
-    pub(super) fn new(host: String, source: AttachSource) -> Self {
-        Self {
+    pub(super) fn try_new(host: String, source: &ExistingCluster) -> Result<Self, DynError> {
+        let _ = compose_wait_request(source)?;
+
+        Ok(Self {
             host,
-            source,
+            source: source.clone(),
             _env: PhantomData,
-        }
+        })
     }
 }
 
@@ -60,7 +62,7 @@ struct ComposeAttachRequest<'a> {
 impl<E: ComposeDeployEnv> AttachProvider<E> for ComposeAttachProvider<E> {
     async fn discover(
         &self,
-        source: &AttachSource,
+        source: &ExistingCluster,
     ) -> Result<Vec<AttachedNode<E>>, AttachProviderError> {
         let request = compose_attach_request(source)?;
         let services = resolve_services(request.project, request.services)
@@ -85,16 +87,17 @@ fn to_discovery_error(source: DynError) -> AttachProviderError {
 }
 
 fn compose_attach_request(
-    source: &AttachSource,
+    source: &ExistingCluster,
 ) -> Result<ComposeAttachRequest<'_>, AttachProviderError> {
-    let AttachSource::Compose { project, services } = source else {
-        return Err(AttachProviderError::UnsupportedSource {
-            attach_source: source.clone(),
-        });
-    };
+    let services =
+        source
+            .compose_services()
+            .ok_or_else(|| AttachProviderError::UnsupportedSource {
+                attach_source: source.clone(),
+            })?;
 
-    let project = project
-        .as_deref()
+    let project = source
+        .compose_project()
         .ok_or_else(|| AttachProviderError::Discovery {
             source: ComposeAttachDiscoveryError::MissingProjectName.into(),
         })?;
@@ -172,14 +175,13 @@ impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeAttachedClusterWait<E>
     }
 }
 
-fn compose_wait_request(source: &AttachSource) -> Result<ComposeAttachRequest<'_>, DynError> {
-    let AttachSource::Compose { project, services } = source else {
-        return Err("compose cluster wait requires a compose attach source".into());
-    };
-
-    let project = project
-        .as_deref()
-        .ok_or(ComposeAttachDiscoveryError::MissingProjectName)?;
+fn compose_wait_request(source: &ExistingCluster) -> Result<ComposeAttachRequest<'_>, DynError> {
+    let project = source
+        .compose_project()
+        .ok_or_else(|| DynError::from("compose cluster wait requires a compose attach source"))?;
+    let services = source
+        .compose_services()
+        .ok_or_else(|| DynError::from("compose cluster wait requires a compose attach source"))?;
 
     Ok(ComposeAttachRequest { project, services })
 }

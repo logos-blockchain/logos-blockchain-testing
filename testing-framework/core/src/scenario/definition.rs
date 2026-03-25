@@ -4,14 +4,15 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use super::{
-    Application, AttachSource, DeploymentPolicy, DynError, ExternalNodeSource,
-    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability, ScenarioSources,
+    Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
+    HttpReadinessRequirement, NodeControlCapability, ObservabilityCapability,
     builder_ops::CoreBuilderAccess,
     expectation::Expectation,
     runtime::{
         context::RunMetrics,
         orchestration::{SourceOrchestrationPlan, SourceOrchestrationPlanError},
     },
+    sources::ScenarioSources,
     workload::Workload,
 };
 use crate::topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, DynTopologyError};
@@ -113,8 +114,39 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     }
 
     #[must_use]
-    pub fn sources(&self) -> &ScenarioSources {
-        &self.sources
+    pub fn existing_cluster(&self) -> Option<&ExistingCluster> {
+        self.sources.existing_cluster()
+    }
+
+    #[must_use]
+    pub const fn uses_existing_cluster(&self) -> bool {
+        self.sources.uses_existing_cluster()
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn attached_source(&self) -> Option<&ExistingCluster> {
+        self.existing_cluster()
+    }
+
+    #[must_use]
+    pub fn external_nodes(&self) -> &[ExternalNodeSource] {
+        self.sources.external_nodes()
+    }
+
+    #[must_use]
+    pub const fn is_managed(&self) -> bool {
+        self.sources.is_managed()
+    }
+
+    #[must_use]
+    pub const fn is_external_only(&self) -> bool {
+        self.sources.is_external_only()
+    }
+
+    #[must_use]
+    pub fn has_external_nodes(&self) -> bool {
+        !self.sources.external_nodes().is_empty()
     }
 
     #[must_use]
@@ -233,8 +265,14 @@ macro_rules! impl_common_builder_methods {
             }
 
             #[must_use]
-            pub fn with_attach_source(self, attach: AttachSource) -> Self {
-                self.map_core_builder(|builder| builder.with_attach_source(attach))
+            pub fn with_existing_cluster(self, cluster: ExistingCluster) -> Self {
+                self.map_core_builder(|builder| builder.with_existing_cluster(cluster))
+            }
+
+            #[must_use]
+            #[doc(hidden)]
+            pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
+                self.with_existing_cluster(attach)
             }
 
             #[must_use]
@@ -546,9 +584,15 @@ impl<E: Application, Caps> Builder<E, Caps> {
     }
 
     #[must_use]
-    pub fn with_attach_source(mut self, attach: AttachSource) -> Self {
-        self.sources = self.sources.with_attach(attach);
+    pub fn with_existing_cluster(mut self, cluster: ExistingCluster) -> Self {
+        self.sources = self.sources.with_attach(cluster);
         self
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
+        self.with_existing_cluster(attach)
     }
 
     #[must_use]

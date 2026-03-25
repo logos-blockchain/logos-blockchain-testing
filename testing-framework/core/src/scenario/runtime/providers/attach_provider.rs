@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::scenario::{Application, AttachSource, DynError};
+use crate::scenario::{Application, DynError, ExistingCluster};
 
 /// Attached node discovered from an existing external cluster source.
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ pub struct AttachedNode<E: Application> {
 #[derive(Debug, thiserror::Error)]
 pub enum AttachProviderError {
     #[error("attach source is not supported by this provider: {attach_source:?}")]
-    UnsupportedSource { attach_source: AttachSource },
+    UnsupportedSource { attach_source: ExistingCluster },
     #[error("attach discovery failed: {source}")]
     Discovery {
         #[source]
@@ -32,7 +32,7 @@ pub trait AttachProvider<E: Application>: Send + Sync {
     /// Discovers node clients for the requested attach source.
     async fn discover(
         &self,
-        source: &AttachSource,
+        source: &ExistingCluster,
     ) -> Result<Vec<AttachedNode<E>>, AttachProviderError>;
 }
 
@@ -44,7 +44,7 @@ pub struct NoopAttachProvider;
 impl<E: Application> AttachProvider<E> for NoopAttachProvider {
     async fn discover(
         &self,
-        source: &AttachSource,
+        source: &ExistingCluster,
     ) -> Result<Vec<AttachedNode<E>>, AttachProviderError> {
         Err(AttachProviderError::UnsupportedSource {
             attach_source: source.clone(),
