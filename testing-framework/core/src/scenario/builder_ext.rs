@@ -1,6 +1,8 @@
 use reqwest::Url;
 
-use super::{Application, ObservabilityCapability, ObservabilityScenarioBuilder, ScenarioBuilder};
+use super::{
+    Application, ObservabilityCapability, ScenarioBuilder, internal::ObservabilityScenarioBuilder,
+};
 
 const METRICS_QUERY_URL_FIELD: &str = "metrics_query_url";
 const METRICS_OTLP_INGEST_URL_FIELD: &str = "metrics_otlp_ingest_url";

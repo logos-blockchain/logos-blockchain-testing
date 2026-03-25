@@ -9,8 +9,9 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    CleanupGuard, Deployer, DynError, ExistingCluster, FeedHandle, IntoExistingCluster,
-    ObservabilityCapabilityProvider, RequiresNodeControl, Runner, Scenario,
+    Deployer, DynError, ExistingCluster, IntoExistingCluster, ObservabilityCapabilityProvider,
+    RequiresNodeControl, Runner, Scenario,
+    internal::{CleanupGuard, FeedHandle},
 };
 
 use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};

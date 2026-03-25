@@ -1,184 +1,48 @@
 use std::{sync::Arc, time::Duration};
 
-use thiserror::Error;
-use tracing::{debug, info};
+use tracing::info;
 
 use super::{
-    Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError, ExistingCluster,
-    ExternalNodeSource, HttpReadinessRequirement, IntoExistingCluster, NodeControlCapability,
-    ObservabilityCapability, RequiresNodeControl,
-    builder_ops::CoreBuilderAccess,
-    expectation::Expectation,
-    runtime::{
-        context::RunMetrics,
-        orchestration::{SourceOrchestrationPlan, SourceOrchestrationPlanError},
+    model::{Scenario, ScenarioBuildError},
+    validation::{
+        build_source_orchestration_plan, enforce_min_duration, expectation_cooldown_for,
+        initialize_components, validate_source_contract,
     },
-    sources::ScenarioSources,
-    workload::Workload,
 };
-use crate::topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, DynTopologyError};
-
-const MIN_EXPECTATION_FALLBACK_SECS: u64 = 10;
-const MIN_RUN_DURATION_SECS: u64 = 10;
-
-#[derive(Debug, Error)]
-pub enum ScenarioBuildError {
-    #[error("topology build failed: {0}")]
-    Topology(#[source] DynTopologyError),
-    #[error("workload '{name}' failed to initialize")]
-    WorkloadInit { name: String, source: DynError },
-    #[error("expectation '{name}' failed to initialize")]
-    ExpectationInit { name: String, source: DynError },
-    #[error("invalid scenario source configuration: {message}")]
-    SourceConfiguration { message: String },
-    #[error("scenario source mode '{mode}' is not wired into deployers yet")]
-    SourceModeNotWiredYet { mode: &'static str },
-}
-
-/// Immutable scenario definition used by the runner, workloads, and
-/// expectations.
-pub struct Scenario<E: Application, Caps = ()> {
-    deployment: E::Deployment,
-    workloads: Vec<Arc<dyn Workload<E>>>,
-    expectations: Vec<Box<dyn Expectation<E>>>,
-    duration: Duration,
-    expectation_cooldown: Duration,
-    deployment_policy: DeploymentPolicy,
-    sources: ScenarioSources,
-    source_orchestration_plan: SourceOrchestrationPlan,
-    capabilities: Caps,
-}
-
-impl<E: Application, Caps> Scenario<E, Caps> {
-    fn new(
-        deployment: E::Deployment,
-        workloads: Vec<Arc<dyn Workload<E>>>,
-        expectations: Vec<Box<dyn Expectation<E>>>,
-        duration: Duration,
-        expectation_cooldown: Duration,
-        deployment_policy: DeploymentPolicy,
-        sources: ScenarioSources,
-        source_orchestration_plan: SourceOrchestrationPlan,
-        capabilities: Caps,
-    ) -> Self {
-        Self {
-            deployment,
-            workloads,
-            expectations,
-            duration,
-            expectation_cooldown,
-            deployment_policy,
-            sources,
-            source_orchestration_plan,
-            capabilities,
-        }
-    }
-
-    #[must_use]
-    pub fn deployment(&self) -> &E::Deployment {
-        &self.deployment
-    }
-
-    #[must_use]
-    pub fn workloads(&self) -> &[Arc<dyn Workload<E>>] {
-        &self.workloads
-    }
-
-    #[must_use]
-    pub fn expectations(&self) -> &[Box<dyn Expectation<E>>] {
-        &self.expectations
-    }
-
-    #[must_use]
-    pub fn expectations_mut(&mut self) -> &mut [Box<dyn Expectation<E>>] {
-        &mut self.expectations
-    }
-
-    #[must_use]
-    pub const fn duration(&self) -> Duration {
-        self.duration
-    }
-
-    #[must_use]
-    pub const fn expectation_cooldown(&self) -> Duration {
-        self.expectation_cooldown
-    }
-
-    #[must_use]
-    pub const fn http_readiness_requirement(&self) -> HttpReadinessRequirement {
-        self.deployment_policy.readiness_requirement
-    }
-
-    #[must_use]
-    pub const fn deployment_policy(&self) -> DeploymentPolicy {
-        self.deployment_policy
-    }
-
-    #[must_use]
-    pub fn existing_cluster(&self) -> Option<&ExistingCluster> {
-        self.sources.existing_cluster()
-    }
-
-    #[must_use]
-    pub const fn cluster_mode(&self) -> ClusterMode {
-        self.sources.cluster_mode()
-    }
-
-    #[must_use]
-    pub const fn cluster_control_profile(&self) -> ClusterControlProfile {
-        self.sources.control_profile()
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn attached_source(&self) -> Option<&ExistingCluster> {
-        self.existing_cluster()
-    }
-
-    #[must_use]
-    pub fn external_nodes(&self) -> &[ExternalNodeSource] {
-        self.sources.external_nodes()
-    }
-
-    #[must_use]
-    pub fn has_external_nodes(&self) -> bool {
-        !self.sources.external_nodes().is_empty()
-    }
-
-    #[must_use]
-    pub const fn source_orchestration_plan(&self) -> &SourceOrchestrationPlan {
-        &self.source_orchestration_plan
-    }
-
-    #[must_use]
-    pub const fn capabilities(&self) -> &Caps {
-        &self.capabilities
-    }
-}
+use crate::{
+    scenario::{
+        Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
+        HttpReadinessRequirement, IntoExistingCluster, NodeControlCapability,
+        ObservabilityCapability, RequiresNodeControl, builder_ops::CoreBuilderAccess,
+        expectation::Expectation, runtime::context::RunMetrics, sources::ScenarioSources,
+        workload::Workload,
+    },
+    topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed},
+};
 
 /// Scenario builder entry point.
 pub struct Builder<E: Application, Caps = ()> {
-    deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
-    topology_seed: Option<DeploymentSeed>,
-    workloads: Vec<Box<dyn Workload<E>>>,
-    expectations: Vec<Box<dyn Expectation<E>>>,
-    duration: Duration,
-    expectation_cooldown: Option<Duration>,
-    deployment_policy: DeploymentPolicy,
-    sources: ScenarioSources,
-    capabilities: Caps,
+    pub(super) deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
+    pub(super) topology_seed: Option<DeploymentSeed>,
+    pub(super) workloads: Vec<Box<dyn Workload<E>>>,
+    pub(super) expectations: Vec<Box<dyn Expectation<E>>>,
+    pub(super) duration: Duration,
+    pub(super) expectation_cooldown: Option<Duration>,
+    pub(super) deployment_policy: DeploymentPolicy,
+    pub(super) sources: ScenarioSources,
+    pub(super) capabilities: Caps,
 }
 
 pub struct ScenarioBuilder<E: Application> {
-    inner: Builder<E, ()>,
+    pub(super) inner: Builder<E, ()>,
 }
 
 pub struct NodeControlScenarioBuilder<E: Application> {
-    inner: Builder<E, NodeControlCapability>,
+    pub(super) inner: Builder<E, NodeControlCapability>,
 }
 
 pub struct ObservabilityScenarioBuilder<E: Application> {
-    inner: Builder<E, ObservabilityCapability>,
+    pub(super) inner: Builder<E, ObservabilityCapability>,
 }
 
 macro_rules! impl_common_builder_methods {
@@ -432,10 +296,6 @@ impl<E: Application> ScenarioBuilder<E> {
         self.with_observability()
     }
 
-    pub fn build(self) -> Result<Scenario<E>, ScenarioBuildError> {
-        self.inner.build()
-    }
-
     pub(crate) fn with_observability_capability(
         self,
         observability: ObservabilityCapability,
@@ -447,26 +307,14 @@ impl<E: Application> ScenarioBuilder<E> {
 }
 
 impl_common_builder_methods!(ScenarioBuilder);
-
-impl<E: Application> NodeControlScenarioBuilder<E> {
-    pub fn build(self) -> Result<Scenario<E, NodeControlCapability>, ScenarioBuildError> {
-        self.inner.build()
-    }
-}
-
 impl_common_builder_methods!(NodeControlScenarioBuilder);
+impl_common_builder_methods!(ObservabilityScenarioBuilder);
 
 impl<E: Application> ObservabilityScenarioBuilder<E> {
-    pub fn build(self) -> Result<Scenario<E, ObservabilityCapability>, ScenarioBuildError> {
-        self.inner.build()
-    }
-
     pub(crate) fn capabilities_mut(&mut self) -> &mut ObservabilityCapability {
         self.inner.capabilities_mut()
     }
 }
-
-impl_common_builder_methods!(ObservabilityScenarioBuilder);
 
 impl<E: Application, Caps> Builder<E, Caps> {
     #[must_use]
@@ -519,36 +367,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
             sources,
             capabilities,
         }
-    }
-
-    #[must_use]
-    pub const fn capabilities(&self) -> &Caps {
-        &self.capabilities
-    }
-
-    #[must_use]
-    pub const fn capabilities_mut(&mut self) -> &mut Caps {
-        &mut self.capabilities
-    }
-
-    #[must_use]
-    pub const fn run_duration(&self) -> Duration {
-        self.duration
-    }
-
-    #[must_use]
-    pub const fn expectation_cooldown_override(&self) -> Option<Duration> {
-        self.expectation_cooldown
-    }
-
-    #[must_use]
-    pub const fn http_readiness_requirement(&self) -> HttpReadinessRequirement {
-        self.deployment_policy.readiness_requirement
-    }
-
-    #[must_use]
-    pub const fn deployment_policy(&self) -> DeploymentPolicy {
-        self.deployment_policy
     }
 
     #[must_use]
@@ -796,62 +614,6 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
     }
 }
 
-fn build_source_orchestration_plan(
-    sources: &ScenarioSources,
-) -> Result<SourceOrchestrationPlan, ScenarioBuildError> {
-    SourceOrchestrationPlan::try_from_sources(sources).map_err(source_plan_error_to_build_error)
-}
-
-fn validate_source_contract<Caps>(sources: &ScenarioSources) -> Result<(), ScenarioBuildError>
-where
-    Caps: RequiresNodeControl,
-{
-    validate_external_only_sources(sources)?;
-
-    validate_node_control_profile::<Caps>(sources)?;
-
-    Ok(())
-}
-
-fn source_plan_error_to_build_error(error: SourceOrchestrationPlanError) -> ScenarioBuildError {
-    match error {
-        SourceOrchestrationPlanError::SourceModeNotWiredYet { mode } => {
-            ScenarioBuildError::SourceModeNotWiredYet { mode }
-        }
-    }
-}
-
-fn validate_external_only_sources(sources: &ScenarioSources) -> Result<(), ScenarioBuildError> {
-    if matches!(sources.cluster_mode(), ClusterMode::ExternalOnly)
-        && sources.external_nodes().is_empty()
-    {
-        return Err(ScenarioBuildError::SourceConfiguration {
-            message: "external-only scenarios require at least one external node".to_owned(),
-        });
-    }
-
-    Ok(())
-}
-
-fn validate_node_control_profile<Caps>(sources: &ScenarioSources) -> Result<(), ScenarioBuildError>
-where
-    Caps: RequiresNodeControl,
-{
-    let profile = sources.control_profile();
-
-    if Caps::REQUIRED && matches!(profile, ClusterControlProfile::ExternalUncontrolled) {
-        return Err(ScenarioBuildError::SourceConfiguration {
-            message: format!(
-                "node control is not available for cluster mode '{}' with control profile '{}'",
-                sources.cluster_mode().as_str(),
-                profile.as_str(),
-            ),
-        });
-    }
-
-    Ok(())
-}
-
 impl<E: Application> Builder<E, ()> {
     #[must_use]
     pub fn with_node_control(self) -> Builder<E, NodeControlCapability> {
@@ -873,134 +635,5 @@ impl<E: Application> Builder<E, ()> {
     #[doc(hidden)]
     pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
         self.with_observability()
-    }
-}
-
-fn initialize_components<E: Application>(
-    descriptors: &E::Deployment,
-    run_metrics: &RunMetrics,
-    workloads: &mut [Box<dyn Workload<E>>],
-    expectations: &mut [Box<dyn Expectation<E>>],
-) -> Result<(), ScenarioBuildError> {
-    initialize_workloads(descriptors, run_metrics, workloads)?;
-
-    initialize_expectations(descriptors, run_metrics, expectations)?;
-
-    Ok(())
-}
-
-fn initialize_workloads<E: Application>(
-    descriptors: &E::Deployment,
-    run_metrics: &RunMetrics,
-    workloads: &mut [Box<dyn Workload<E>>],
-) -> Result<(), ScenarioBuildError> {
-    for workload in workloads {
-        debug!(workload = workload.name(), "initializing workload");
-        let name = workload.name().to_owned();
-
-        workload
-            .init(descriptors, run_metrics)
-            .map_err(|source| workload_init_error(name, source))?;
-    }
-
-    Ok(())
-}
-
-fn initialize_expectations<E: Application>(
-    descriptors: &E::Deployment,
-    run_metrics: &RunMetrics,
-    expectations: &mut [Box<dyn Expectation<E>>],
-) -> Result<(), ScenarioBuildError> {
-    for expectation in expectations {
-        debug!(expectation = expectation.name(), "initializing expectation");
-        let name = expectation.name().to_owned();
-
-        expectation
-            .init(descriptors, run_metrics)
-            .map_err(|source| expectation_init_error(name, source))?;
-    }
-
-    Ok(())
-}
-
-fn workload_init_error(name: String, source: DynError) -> ScenarioBuildError {
-    ScenarioBuildError::WorkloadInit { name, source }
-}
-
-fn expectation_init_error(name: String, source: DynError) -> ScenarioBuildError {
-    ScenarioBuildError::ExpectationInit { name, source }
-}
-
-fn enforce_min_duration(requested: Duration) -> Duration {
-    let min_duration = min_run_duration();
-
-    requested.max(min_duration)
-}
-
-fn default_expectation_cooldown() -> Duration {
-    Duration::from_secs(MIN_EXPECTATION_FALLBACK_SECS)
-}
-
-fn expectation_cooldown_for(override_value: Option<Duration>) -> Duration {
-    override_value.unwrap_or_else(default_expectation_cooldown)
-}
-
-fn min_run_duration() -> Duration {
-    Duration::from_secs(MIN_RUN_DURATION_SECS)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        ScenarioBuildError, validate_external_only_sources, validate_node_control_profile,
-    };
-    use crate::scenario::{
-        ExistingCluster, ExternalNodeSource, NodeControlCapability, sources::ScenarioSources,
-    };
-
-    #[test]
-    fn external_only_requires_external_nodes() {
-        let error =
-            validate_external_only_sources(&ScenarioSources::default().into_external_only())
-                .expect_err("external-only without nodes should fail");
-
-        assert!(matches!(
-            error,
-            ScenarioBuildError::SourceConfiguration { .. }
-        ));
-        assert_eq!(
-            error.to_string(),
-            "invalid scenario source configuration: external-only scenarios require at least one external node"
-        );
-    }
-
-    #[test]
-    fn external_only_rejects_node_control_requirement() {
-        let sources = ScenarioSources::default()
-            .with_external_node(ExternalNodeSource::new(
-                "node-0".to_owned(),
-                "http://127.0.0.1:1".to_owned(),
-            ))
-            .into_external_only();
-        let error = validate_node_control_profile::<NodeControlCapability>(&sources)
-            .expect_err("external-only should reject node control");
-
-        assert!(matches!(
-            error,
-            ScenarioBuildError::SourceConfiguration { .. }
-        ));
-        assert_eq!(
-            error.to_string(),
-            "invalid scenario source configuration: node control is not available for cluster mode 'external-only' with control profile 'external-uncontrolled'"
-        );
-    }
-
-    #[test]
-    fn existing_cluster_accepts_node_control_requirement() {
-        let sources = ScenarioSources::default()
-            .with_attach(ExistingCluster::for_compose_project("project".to_owned()));
-
-        validate_node_control_profile::<NodeControlCapability>(&sources)
-            .expect("existing cluster should be considered controllable");
     }
 }

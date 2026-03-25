@@ -5,7 +5,9 @@ use rand::{Rng as _, seq::SliceRandom as _, thread_rng};
 use tokio::time::{Instant, sleep};
 
 use crate::{
-    scenario::{Application, CoreBuilder, DynError, NodeControlCapability, RunContext, Workload},
+    scenario::{
+        Application, DynError, NodeControlCapability, RunContext, Workload, internal::CoreBuilder,
+    },
     topology::DeploymentDescriptor,
 };
 

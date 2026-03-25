@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use testing_framework_core::scenario::{
-    Application, FeedHandle, FeedRuntime, NodeClients, spawn_feed,
+    Application, FeedRuntime, NodeClients, internal::FeedHandle, spawn_feed,
 };
 use tokio::time::sleep;
 use tracing::{debug, info, warn};

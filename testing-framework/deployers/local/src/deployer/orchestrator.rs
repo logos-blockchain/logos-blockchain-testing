@@ -10,10 +10,14 @@ use std::{
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, CleanupGuard, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy,
-        DynError, FeedHandle, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
-        NodeControlCapability, NodeControlHandle, RetryPolicy, Runner, RuntimeAssembly, Scenario,
-        ScenarioError, SourceOrchestrationPlan, build_source_orchestration_plan, spawn_feed,
+        Application, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy, DynError,
+        FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability,
+        NodeControlHandle, RetryPolicy, Runner, Scenario, ScenarioError,
+        internal::{
+            CleanupGuard, FeedHandle, RuntimeAssembly, SourceOrchestrationPlan,
+            build_source_orchestration_plan,
+        },
+        spawn_feed,
     },
     topology::DeploymentDescriptor,
 };

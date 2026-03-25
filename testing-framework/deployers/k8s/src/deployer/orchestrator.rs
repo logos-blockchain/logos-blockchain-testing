@@ -5,12 +5,15 @@ use kube::Client;
 use reqwest::Url;
 use testing_framework_core::{
     scenario::{
-        Application, ApplicationExternalProvider, CleanupGuard, ClusterControlProfile, ClusterMode,
-        ClusterWaitHandle, Deployer, DynError, ExistingCluster, FeedHandle, FeedRuntime,
-        HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
+        Application, ClusterControlProfile, ClusterMode, ClusterWaitHandle, Deployer, DynError,
+        ExistingCluster, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
         ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
-        RuntimeAssembly, Scenario, SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-        build_source_orchestration_plan, orchestrate_sources_with_providers,
+        Scenario,
+        internal::{
+            ApplicationExternalProvider, CleanupGuard, FeedHandle, RuntimeAssembly,
+            SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
+            build_source_orchestration_plan, orchestrate_sources_with_providers,
+        },
     },
     topology::DeploymentDescriptor,
 };
