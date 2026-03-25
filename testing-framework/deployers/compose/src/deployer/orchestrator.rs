@@ -321,7 +321,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     fn managed_cluster_wait(&self, project_name: String) -> Arc<dyn ClusterWaitHandle<E>> {
         Arc::new(ComposeAttachedClusterWait::<E>::new(
             compose_runner_host(),
-            AttachSource::compose(Vec::new()).with_project(project_name),
+            AttachSource::compose_in_project(Vec::new(), project_name),
         ))
     }
 

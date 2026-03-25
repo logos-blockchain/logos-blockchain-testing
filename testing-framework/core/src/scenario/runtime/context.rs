@@ -1,10 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use super::{metrics::Metrics, node_clients::ClusterClient};
-use crate::scenario::{
-    Application, BorrowedNode, ClusterWaitHandle, DynError, ManagedNode, NodeClients,
-    NodeControlHandle,
-};
+use crate::scenario::{Application, ClusterWaitHandle, DynError, NodeClients, NodeControlHandle};
 
 #[derive(Debug, thiserror::Error)]
 enum RunContextCapabilityError {
@@ -27,6 +24,7 @@ pub struct RunContext<E: Application> {
 impl<E: Application> RunContext<E> {
     /// Builds a run context from prepared deployment/runtime artifacts.
     #[must_use]
+    #[doc(hidden)]
     pub fn new(
         descriptors: E::Deployment,
         node_clients: NodeClients<E>,
@@ -51,6 +49,7 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
+    #[doc(hidden)]
     pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
         self.cluster_wait = Some(cluster_wait);
         self
@@ -69,26 +68,6 @@ impl<E: Application> RunContext<E> {
     #[must_use]
     pub fn random_node_client(&self) -> Option<E::NodeClient> {
         self.node_clients.random_client()
-    }
-
-    #[must_use]
-    pub fn managed_nodes(&self) -> Vec<ManagedNode<E>> {
-        self.node_clients.managed_nodes()
-    }
-
-    #[must_use]
-    pub fn borrowed_nodes(&self) -> Vec<BorrowedNode<E>> {
-        self.node_clients.borrowed_nodes()
-    }
-
-    #[must_use]
-    pub fn find_managed_node(&self, identity: &str) -> Option<ManagedNode<E>> {
-        self.node_clients.find_managed(identity)
-    }
-
-    #[must_use]
-    pub fn find_borrowed_node(&self, identity: &str) -> Option<BorrowedNode<E>> {
-        self.node_clients.find_borrowed(identity)
     }
 
     #[must_use]
@@ -122,21 +101,11 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    pub fn cluster_wait(&self) -> Option<Arc<dyn ClusterWaitHandle<E>>> {
-        self.cluster_wait.clone()
-    }
-
-    #[must_use]
     pub const fn controls_nodes(&self) -> bool {
         self.node_control.is_some()
     }
 
-    #[must_use]
-    pub const fn can_wait_network_ready(&self) -> bool {
-        self.cluster_wait.is_some()
-    }
-
-    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
+    pub(crate) async fn wait_network_ready(&self) -> Result<(), DynError> {
         self.require_cluster_wait()?.wait_network_ready().await
     }
 
@@ -146,7 +115,9 @@ impl<E: Application> RunContext<E> {
     }
 
     fn require_cluster_wait(&self) -> Result<Arc<dyn ClusterWaitHandle<E>>, DynError> {
-        self.cluster_wait()
+        self.cluster_wait
+            .as_ref()
+            .map(Arc::clone)
             .ok_or_else(|| RunContextCapabilityError::MissingClusterWait.into())
     }
 }
@@ -168,6 +139,7 @@ impl<E: Application> Drop for RunHandle<E> {
 impl<E: Application> RunHandle<E> {
     #[must_use]
     /// Build a handle from owned context and optional cleanup guard.
+    #[doc(hidden)]
     pub fn new(context: RunContext<E>, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
         Self {
             run_context: Arc::new(context),
@@ -191,10 +163,6 @@ impl<E: Application> RunHandle<E> {
     /// Access the shared run context.
     pub fn context(&self) -> &RunContext<E> {
         &self.run_context
-    }
-
-    pub async fn wait_network_ready(&self) -> Result<(), DynError> {
-        self.run_context.wait_network_ready().await
     }
 }
 

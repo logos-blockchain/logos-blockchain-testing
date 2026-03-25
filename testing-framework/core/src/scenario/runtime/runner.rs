@@ -36,6 +36,7 @@ impl<E: Application> Drop for Runner<E> {
 impl<E: Application> Runner<E> {
     /// Construct a runner from the run context and optional cleanup guard.
     #[must_use]
+    #[doc(hidden)]
     pub fn new(context: RunContext<E>, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
         Self {
             context: Arc::new(context),
@@ -45,8 +46,8 @@ impl<E: Application> Runner<E> {
 
     /// Access the underlying run context.
     #[must_use]
-    pub fn context(&self) -> Arc<RunContext<E>> {
-        Arc::clone(&self.context)
+    pub fn context(&self) -> &RunContext<E> {
+        self.context.as_ref()
     }
 
     pub async fn wait_network_ready(&self) -> Result<(), DynError> {
@@ -71,7 +72,7 @@ impl<E: Application> Runner<E> {
     where
         Caps: Send + Sync,
     {
-        let context = self.context();
+        let context = Arc::clone(&self.context);
         let run_duration = scenario.duration();
         let workloads = scenario.workloads().to_vec();
         let expectation_count = scenario.expectations().len();

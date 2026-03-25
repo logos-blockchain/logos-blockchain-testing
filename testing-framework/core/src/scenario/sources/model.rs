@@ -21,13 +21,10 @@ impl AttachSource {
     }
 
     #[must_use]
-    pub fn with_namespace(self, namespace: String) -> Self {
-        match self {
-            Self::K8s { label_selector, .. } => Self::K8s {
-                namespace: Some(namespace),
-                label_selector,
-            },
-            other => other,
+    pub fn k8s_in_namespace(label_selector: String, namespace: String) -> Self {
+        Self::K8s {
+            namespace: Some(namespace),
+            label_selector,
         }
     }
 
@@ -40,13 +37,10 @@ impl AttachSource {
     }
 
     #[must_use]
-    pub fn with_project(self, project: String) -> Self {
-        match self {
-            Self::Compose { services, .. } => Self::Compose {
-                project: Some(project),
-                services,
-            },
-            other => other,
+    pub fn compose_in_project(services: Vec<String>, project: String) -> Self {
+        Self::Compose {
+            project: Some(project),
+            services,
         }
     }
 }
@@ -55,8 +49,8 @@ impl AttachSource {
 /// inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExternalNodeSource {
-    pub label: String,
-    pub endpoint: String,
+    label: String,
+    endpoint: String,
 }
 
 impl ExternalNodeSource {
@@ -64,19 +58,16 @@ impl ExternalNodeSource {
     pub fn new(label: String, endpoint: String) -> Self {
         Self { label, endpoint }
     }
-}
 
-/// Planned readiness strategy for mixed managed/attached/external sources.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
-pub enum SourceReadinessPolicy {
-    /// Phase 1 default: require every known node to pass readiness checks.
-    #[default]
-    AllReady,
-    /// Optional relaxed policy for large/partial environments.
-    Quorum,
-    /// Future policy for per-source constraints (for example managed minimum
-    /// plus overall quorum).
-    SourceAware,
+    #[must_use]
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    #[must_use]
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
 }
 
 /// Source model that makes invalid managed+attached combinations
@@ -124,22 +115,29 @@ impl ScenarioSources {
         Self::ExternalOnly { external }
     }
 
-    pub fn add_external_node(&mut self, node: ExternalNodeSource) {
-        match self {
+    #[must_use]
+    pub fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
+        match &mut self {
             Self::Managed { external }
             | Self::Attached { external, .. }
             | Self::ExternalOnly { external } => external.push(node),
         }
+
+        self
     }
 
-    pub fn set_attach(&mut self, attach: AttachSource) {
+    #[must_use]
+    pub fn with_attach(self, attach: AttachSource) -> Self {
         let external = self.external_nodes().to_vec();
-        *self = Self::Attached { attach, external };
+
+        Self::Attached { attach, external }
     }
 
-    pub fn set_external_only(&mut self) {
+    #[must_use]
+    pub fn into_external_only(self) -> Self {
         let external = self.external_nodes().to_vec();
-        *self = Self::ExternalOnly { external };
+
+        Self::ExternalOnly { external }
     }
 
     #[must_use]

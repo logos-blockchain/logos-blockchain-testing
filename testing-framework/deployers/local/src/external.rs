@@ -35,8 +35,8 @@ pub fn build_external_client<E: LocalDeployerEnv>(
 }
 
 fn resolve_api_socket(source: &ExternalNodeSource) -> Result<std::net::SocketAddr, DynError> {
-    let source_label = source.label.clone();
-    let endpoint = source.endpoint.trim();
+    let source_label = source.label().to_string();
+    let endpoint = source.endpoint().trim();
     if endpoint.is_empty() {
         return Err(ExternalClientBuildError::EmptyEndpoint {
             label: source_label,

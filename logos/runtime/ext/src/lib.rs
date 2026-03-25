@@ -44,7 +44,7 @@ impl Application for LbcExtEnv {
     type FeedRuntime = <LbcEnv as Application>::FeedRuntime;
 
     fn external_node_client(source: &ExternalNodeSource) -> Result<Self::NodeClient, DynError> {
-        let base_url = Url::parse(&source.endpoint)?;
+        let base_url = Url::parse(source.endpoint())?;
         Ok(NodeHttpClient::from_urls(base_url, None))
     }
 
