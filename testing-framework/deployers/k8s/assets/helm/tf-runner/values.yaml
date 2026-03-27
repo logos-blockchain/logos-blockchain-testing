@@ -1,0 +1,33 @@
+nodeImage: ""
+nodeImagePullPolicy: IfNotPresent
+fullnameOverride: ""
+assetMountPath: /etc/testing-framework
+
+bootstrap:
+  enabled: false
+  image: ""
+  imagePullPolicy: IfNotPresent
+  serviceName: bootstrap
+  port: 4400
+  env: {}
+  writableMountPath: ""
+  files:
+    primaryConfig: ""
+    artifactsConfig: ""
+    primaryConfigPath: bootstrap/primary.yaml
+    artifactsConfigPath: bootstrap/artifacts.yaml
+    extraFiles: []
+  scripts:
+    start: ""
+    startPath: scripts/bootstrap-start.sh
+
+runner:
+  files:
+    commonStart: ""
+    nodeStart: ""
+    commonStartPath: scripts/runner-common-start.sh
+    nodeStartPath: scripts/runner-node-start.sh
+
+nodes:
+  count: 1
+  entries: []

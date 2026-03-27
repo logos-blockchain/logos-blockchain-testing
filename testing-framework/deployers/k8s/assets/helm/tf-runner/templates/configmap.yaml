@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tf-runner.fullname" . }}-assets
+  labels:
+    {{- include "tf-runner.labels" . | nindent 4 }}
+data:
+  bootstrap.primary.yaml: |
+{{- if .Values.bootstrap.files.primaryConfig }}
+{{ .Values.bootstrap.files.primaryConfig | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  bootstrap.artifacts.yaml: |
+{{- if .Values.bootstrap.files.artifactsConfig }}
+{{ .Values.bootstrap.files.artifactsConfig | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+{{- range $file := .Values.bootstrap.files.extraFiles }}
+  {{ $file.key }}: |
+{{- if $file.content }}
+{{ $file.content | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+{{- end }}
+  bootstrap-start.sh: |
+{{- if .Values.bootstrap.scripts.start }}
+{{ .Values.bootstrap.scripts.start | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  runner-common-start.sh: |
+{{- if .Values.runner.files.commonStart }}
+{{ .Values.runner.files.commonStart | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}
+  runner-node-start.sh: |
+{{- if .Values.runner.files.nodeStart }}
+{{ .Values.runner.files.nodeStart | indent 4 }}
+{{- else }}
+{{ "" | indent 4 }}
+{{- end }}

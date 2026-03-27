@@ -24,7 +24,7 @@ use crate::{
         K8sDeploymentMetadata,
         attach_provider::{K8sAttachProvider, K8sAttachedClusterWait},
     },
-    env::K8sDeployEnv,
+    env::{HelmReleaseAssets, K8sDeployEnv},
     infrastructure::cluster::{
         ClusterEnvironment, ClusterEnvironmentError, NodeClientError, PortSpecs,
         RemoteReadinessError, build_node_clients, collect_port_specs, ensure_cluster_readiness,
@@ -72,6 +72,7 @@ impl<E: K8sDeployEnv> K8sDeployer<E> {
         scenario: &Scenario<E, Caps>,
     ) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
     where
+        E::Assets: HelmReleaseAssets,
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
         deploy_with_observability(self, scenario).await
@@ -130,6 +131,7 @@ pub enum K8sRunnerError {
 impl<E, Caps> Deployer<E, Caps> for K8sDeployer<E>
 where
     E: K8sDeployEnv,
+    E::Assets: HelmReleaseAssets,
     Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
 {
     type Error = K8sRunnerError;
@@ -172,6 +174,7 @@ async fn deploy_with_observability<E, Caps>(
 ) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
 where
     E: K8sDeployEnv,
+    E::Assets: HelmReleaseAssets,
     Caps: ObservabilityCapabilityProvider + Send + Sync,
 {
     validate_supported_cluster_mode(scenario)
@@ -394,6 +397,7 @@ async fn build_k8s_deployment<E, Caps>(
 ) -> Result<BuiltK8sDeployment, K8sRunnerError>
 where
     E: K8sDeployEnv,
+    E::Assets: HelmReleaseAssets,
     Caps: ObservabilityCapabilityProvider,
 {
     let descriptors = scenario.deployment();
@@ -435,7 +439,10 @@ async fn setup_cluster<E: K8sDeployEnv>(
     readiness_checks: bool,
     readiness_requirement: HttpReadinessRequirement,
     observability: &ObservabilityInputs,
-) -> Result<ClusterEnvironment, K8sRunnerError> {
+) -> Result<ClusterEnvironment, K8sRunnerError>
+where
+    E::Assets: HelmReleaseAssets,
+{
     let (setup, cleanup) = prepare_cluster_setup::<E>(client, descriptors, observability).await?;
     let mut cleanup_guard = Some(cleanup);
 
@@ -468,7 +475,10 @@ async fn prepare_cluster_setup<E: K8sDeployEnv>(
     client: &Client,
     descriptors: &E::Deployment,
     observability: &ObservabilityInputs,
-) -> Result<(ClusterSetup, RunnerCleanup), K8sRunnerError> {
+) -> Result<(ClusterSetup, RunnerCleanup), K8sRunnerError>
+where
+    E::Assets: HelmReleaseAssets,
+{
     let assets = E::prepare_assets(descriptors, observability.metrics_otlp_ingest_url.as_ref())
         .map_err(|source| K8sRunnerError::Assets { source })?;
     let nodes = descriptors.node_count();

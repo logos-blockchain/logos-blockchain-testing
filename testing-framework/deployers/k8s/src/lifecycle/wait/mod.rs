@@ -20,14 +20,14 @@ pub use orchestrator::wait_for_cluster_ready;
 #[derive(Clone, Copy, Debug)]
 pub struct NodeConfigPorts {
     pub api: u16,
-    pub testing: u16,
+    pub auxiliary: u16,
 }
 
 /// Host-facing NodePorts for a node.
 #[derive(Clone, Copy, Debug)]
 pub struct NodePortAllocation {
     pub api: u16,
-    pub testing: u16,
+    pub auxiliary: u16,
 }
 
 /// Host/port pair reachable from the machine running the runner.

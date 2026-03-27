@@ -28,7 +28,7 @@ use super::{
 };
 use crate::{
     docker::control::{ComposeAttachedNodeControl, ComposeNodeControl},
-    env::ComposeDeployEnv,
+    env::{ComposeCfgsyncEnv, ComposeDeployEnv},
     errors::ComposeRunnerError,
     infrastructure::{
         environment::StackEnvironment,
@@ -39,11 +39,17 @@ use crate::{
 
 const PRINT_ENDPOINTS_ENV: &str = "TESTNET_PRINT_ENDPOINTS";
 
-pub struct DeploymentOrchestrator<E: ComposeDeployEnv> {
+pub struct DeploymentOrchestrator<E>
+where
+    E: ComposeCfgsyncEnv,
+{
     deployer: ComposeDeployer<E>,
 }
 
-impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
+impl<E> DeploymentOrchestrator<E>
+where
+    E: ComposeCfgsyncEnv,
+{
     pub const fn new(deployer: ComposeDeployer<E>) -> Self {
         Self { deployer }
     }
@@ -330,7 +336,7 @@ impl<E: ComposeDeployEnv> DeploymentOrchestrator<E> {
     fn log_deploy_start<Caps>(
         &self,
         scenario: &Scenario<E, Caps>,
-        descriptors: &E::Deployment,
+        descriptors: &<E as Application>::Deployment,
         deployment_policy: DeploymentPolicy,
         observability: &ObservabilityInputs,
     ) {
@@ -648,15 +654,21 @@ fn profiling_url(host: &str, api_port: u16) -> String {
     format!("http://{host}:{api_port}/debug/pprof/profile?seconds=15&format=proto")
 }
 
-struct PreparedDeployment<E: ComposeDeployEnv> {
+struct PreparedDeployment<E>
+where
+    E: ComposeCfgsyncEnv,
+{
     environment: StackEnvironment,
-    descriptors: E::Deployment,
+    descriptors: <E as Application>::Deployment,
 }
 
-async fn prepare_deployment<E: ComposeDeployEnv>(
+async fn prepare_deployment<E>(
     setup: DeploymentSetup<'_, E>,
     observability: &ObservabilityInputs,
-) -> Result<PreparedDeployment<E>, ComposeRunnerError> {
+) -> Result<PreparedDeployment<E>, ComposeRunnerError>
+where
+    E: ComposeCfgsyncEnv,
+{
     let DeploymentContext {
         environment,
         descriptors,

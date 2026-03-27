@@ -14,12 +14,12 @@ common::repo_root() {
   local dir
   dir="$(cd "$(dirname "${caller_source}")" && pwd)"
   while true; do
-    if [ -f "${dir}/versions.env" ]; then
+    if [ -f "${dir}/Cargo.toml" ] && grep -q '^\[workspace\]' "${dir}/Cargo.toml" 2>/dev/null; then
       echo "${dir}"
       return 0
     fi
     if [ "${dir}" = "/" ]; then
-      common::die "Could not locate repo root (versions.env) from ${caller_source}"
+      common::die "Could not locate repo root (workspace Cargo.toml) from ${caller_source}"
     fi
     dir="$(cd "${dir}/.." && pwd)"
   done

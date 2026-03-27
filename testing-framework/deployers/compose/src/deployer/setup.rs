@@ -1,26 +1,38 @@
-use testing_framework_core::{scenario::ObservabilityInputs, topology::DeploymentDescriptor};
+use testing_framework_core::{
+    scenario::{Application, ObservabilityInputs},
+    topology::DeploymentDescriptor,
+};
 use tracing::info;
 
 use crate::{
     docker::ensure_docker_available,
-    env::ComposeDeployEnv,
+    env::ComposeCfgsyncEnv,
     errors::ComposeRunnerError,
     infrastructure::environment::{
         StackEnvironment, ensure_supported_topology, prepare_environment,
     },
 };
 
-pub struct DeploymentSetup<'a, E: ComposeDeployEnv> {
-    descriptors: &'a E::Deployment,
+pub struct DeploymentSetup<'a, E>
+where
+    E: ComposeCfgsyncEnv,
+{
+    descriptors: &'a <E as Application>::Deployment,
 }
 
-pub struct DeploymentContext<'a, E: ComposeDeployEnv> {
-    pub descriptors: &'a E::Deployment,
+pub struct DeploymentContext<'a, E>
+where
+    E: ComposeCfgsyncEnv,
+{
+    pub descriptors: &'a <E as Application>::Deployment,
     pub environment: StackEnvironment,
 }
 
-impl<'a, E: ComposeDeployEnv> DeploymentSetup<'a, E> {
-    pub fn new(descriptors: &'a E::Deployment) -> Self {
+impl<'a, E> DeploymentSetup<'a, E>
+where
+    E: ComposeCfgsyncEnv,
+{
+    pub fn new(descriptors: &'a <E as Application>::Deployment) -> Self {
         Self { descriptors }
     }
 

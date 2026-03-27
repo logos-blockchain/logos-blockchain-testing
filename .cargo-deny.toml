@@ -7,16 +7,10 @@ no-default-features = true
 
 [advisories]
 ignore = [
-  # Keep local ignores in sync with nomos-node if needed. Unused entries removed.
-  "RUSTSEC-2024-0370", # proc-macro-error unmaintained; upstream dependency
   "RUSTSEC-2024-0384", # instant unmaintained; upstream dependency
   "RUSTSEC-2024-0388", # derivative unmaintained; no safe upgrade available upstream
-  "RUSTSEC-2024-0436", # paste unmaintained; upstream dependency
   "RUSTSEC-2025-0012", # backoff unmaintained; upstream workspace still relies on it
-  "RUSTSEC-2025-0055", # tracing-subscriber ansi escape issue; upstream dependency
   "RUSTSEC-2025-0134", # rustls-pemfile unmaintained; transitive via rustls stack
-  "RUSTSEC-2025-0141", # bincode unmaintained; no safe upgrade available
-  "RUSTSEC-2026-0002", # lru IterMut soundness issue; pending upstream upgrade
 ]
 yanked = "deny"
 
@@ -31,13 +25,9 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "BSL-1.0",
-  "CC0-1.0",
-  "CDLA-Permissive-2.0",
   "ISC",
   "MIT",
-  "MPL-2.0",
   "Unicode-3.0",
-  "Zlib",
 ]
 private = { ignore = false }
 unused-allowed-license = "deny"
@@ -53,10 +43,6 @@ license-files = [{ hash = 0xcb90f5db, path = "LICENSE" }]
 name          = "jsonpath-rust"
 
 [sources]
-allow-git = [
-  "https://github.com/EspressoSystems/jellyfish.git",
-  "https://github.com/logos-blockchain/logos-blockchain.git",
-  "https://github.com/logos-co/Overwatch",
-]
-unknown-git = "deny"
+allow-git        = []
+unknown-git      = "deny"
 unknown-registry = "deny"

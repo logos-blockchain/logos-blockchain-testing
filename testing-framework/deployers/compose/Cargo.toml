@@ -29,7 +29,4 @@ url                    = { version = "2" }
 uuid                   = { features = ["v4"], version = "1" }
 
 [dev-dependencies]
-groth16                       = { workspace = true }
-key-management-system-service = { workspace = true }
-serde_json                    = { workspace = true }
-zksign                        = { workspace = true }
+serde_json = { workspace = true }

@@ -9,6 +9,8 @@ pub struct NodeDescriptor {
     volumes: Vec<String>,
     extra_hosts: Vec<String>,
     ports: Vec<String>,
+    #[serde(skip)]
+    container_ports: Vec<u16>,
     environment: Vec<EnvEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
@@ -49,6 +51,7 @@ impl NodeDescriptor {
         volumes: Vec<String>,
         extra_hosts: Vec<String>,
         ports: Vec<String>,
+        container_ports: Vec<u16>,
         environment: Vec<EnvEntry>,
         platform: Option<String>,
     ) -> Self {
@@ -59,13 +62,59 @@ impl NodeDescriptor {
             volumes,
             extra_hosts,
             ports,
+            container_ports,
             environment,
             platform,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_loopback_ports(
+        name: impl Into<String>,
+        image: impl Into<String>,
+        entrypoint: impl Into<String>,
+        volumes: Vec<String>,
+        extra_hosts: Vec<String>,
+        container_ports: Vec<u16>,
+        environment: Vec<EnvEntry>,
+        platform: Option<String>,
+    ) -> Self {
+        Self::new(
+            name,
+            image,
+            entrypoint,
+            volumes,
+            extra_hosts,
+            container_ports
+                .iter()
+                .copied()
+                .map(Self::loopback_port_binding)
+                .collect(),
+            container_ports,
+            environment,
+            platform,
+        )
+    }
+
+    #[must_use]
+    pub fn loopback_port_binding(port: u16) -> String {
+        format!("127.0.0.1::{port}")
+    }
+
     pub fn ports(&self) -> &[String] {
         &self.ports
+    }
+
+    pub fn container_ports(&self) -> &[u16] {
+        &self.container_ports
+    }
+
+    pub fn image(&self) -> &str {
+        &self.image
+    }
+
+    pub fn platform(&self) -> Option<&str> {
+        self.platform.as_deref()
     }
 
     #[cfg(test)]

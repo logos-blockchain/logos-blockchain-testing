@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tf-runner
+description: Generic Helm chart for testing-framework Kubernetes node runners
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

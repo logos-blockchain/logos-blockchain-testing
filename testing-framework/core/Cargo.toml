@@ -16,14 +16,18 @@ workspace = true
 default = []
 
 [dependencies]
+anyhow                = "1"
 async-trait           = "0.1"
 cfgsync-adapter       = { workspace = true }
 cfgsync-artifacts     = { workspace = true }
+cfgsync-core          = { workspace = true }
 futures               = { default-features = false, features = ["std"], version = "0.3" }
 parking_lot           = { workspace = true }
 prometheus-http-query = "0.8"
 rand                  = { workspace = true }
 reqwest               = { features = ["json"], workspace = true }
+serde                 = { workspace = true }
+serde_yaml            = { workspace = true }
 thiserror             = { workspace = true }
 tokio                 = { features = ["macros", "process", "rt-multi-thread", "time"], workspace = true }
 tracing               = { workspace = true }

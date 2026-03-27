@@ -221,14 +221,6 @@ fn api_port_candidates(ports: Vec<(String, u16)>) -> Vec<u16> {
         return explicit_api;
     }
 
-    let non_testing: Vec<u16> = ports
-        .iter()
-        .filter_map(|(name, port)| (!name.contains("testing")).then_some(*port))
-        .collect();
-    if !non_testing.is_empty() {
-        return non_testing;
-    }
-
     ports.into_iter().map(|(_, port)| port).collect()
 }
 

@@ -4,7 +4,6 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      # Exposes OTLP HTTP ingest at /api/v1/otlp/v1/metrics
       - --enable-feature=otlp-write-receiver
       - --web.enable-lifecycle
       - --web.enable-admin-api
@@ -18,21 +17,12 @@ services:
     image: grafana/grafana:11.4.0
     depends_on:
       - prometheus
-    env_file:
-      - ../../../logos/infra/assets/stack/monitoring/grafana/plugins.env
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ../../../logos/infra/assets/stack/monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
-      - ../../../logos/infra/assets/stack/monitoring/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
-      - ../../../logos/infra/assets/stack/monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
-      - ../../../logos/infra/assets/stack/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
 
 volumes:
   prometheus-data: {}
-  grafana-data: {}
