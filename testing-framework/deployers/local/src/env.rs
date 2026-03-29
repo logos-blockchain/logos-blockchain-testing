@@ -35,11 +35,30 @@ where
         peer_ports: &[u16],
     ) -> Result<BuiltNodeConfig<<Self as Application>::NodeConfig>, DynError>;
 
+    fn build_node_config_from_template(
+        topology: &Self::Deployment,
+        index: usize,
+        peer_ports_by_name: &HashMap<String, u16>,
+        options: &StartNodeOptions<Self>,
+        peer_ports: &[u16],
+        _template_config: Option<&<Self as Application>::NodeConfig>,
+    ) -> Result<BuiltNodeConfig<<Self as Application>::NodeConfig>, DynError> {
+        Self::build_node_config(topology, index, peer_ports_by_name, options, peer_ports)
+    }
+
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError>;
 
     fn initial_persist_dir(
+        _topology: &Self::Deployment,
+        _node_name: &str,
+        _index: usize,
+    ) -> Option<PathBuf> {
+        None
+    }
+
+    fn initial_snapshot_dir(
         _topology: &Self::Deployment,
         _node_name: &str,
         _index: usize,
@@ -90,6 +109,7 @@ pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
     config: <E as Application>::NodeConfig,
     keep_tempdir: bool,
     persist_dir: Option<&std::path::Path>,
+    snapshot_dir: Option<&std::path::Path>,
 ) -> Result<Node<E>, ProcessSpawnError> {
     ProcessNode::spawn(
         &label,
@@ -98,6 +118,7 @@ pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
         E::node_endpoints,
         keep_tempdir,
         persist_dir,
+        snapshot_dir,
         E::node_client,
     )
     .await

@@ -89,6 +89,25 @@ impl LocalDeployerEnv for LbcExtEnv {
         )
     }
 
+    fn build_node_config_from_template(
+        topology: &Self::Deployment,
+        index: usize,
+        peer_ports_by_name: &HashMap<String, u16>,
+        options: &StartNodeOptions<Self>,
+        peer_ports: &[u16],
+        template_config: Option<&<Self as Application>::NodeConfig>,
+    ) -> Result<BuiltNodeConfig<<Self as Application>::NodeConfig>, DynError> {
+        let mapped_options = map_start_options(options)?;
+        <LbcEnv as LocalDeployerEnv>::build_node_config_from_template(
+            topology,
+            index,
+            peer_ports_by_name,
+            &mapped_options,
+            peer_ports,
+            template_config,
+        )
+    }
+
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError> {
@@ -101,6 +120,14 @@ impl LocalDeployerEnv for LbcExtEnv {
         index: usize,
     ) -> Option<PathBuf> {
         <LbcEnv as LocalDeployerEnv>::initial_persist_dir(topology, node_name, index)
+    }
+
+    fn initial_snapshot_dir(
+        topology: &Self::Deployment,
+        node_name: &str,
+        index: usize,
+    ) -> Option<PathBuf> {
+        <LbcEnv as LocalDeployerEnv>::initial_snapshot_dir(topology, node_name, index)
     }
 
     fn build_launch_spec(
@@ -135,6 +162,7 @@ fn map_start_options(
     mapped.peers = options.peers.clone();
     mapped.config_override = options.config_override.clone();
     mapped.persist_dir = options.persist_dir.clone();
+    mapped.snapshot_dir = options.snapshot_dir.clone();
 
     Ok(mapped)
 }
