@@ -154,22 +154,32 @@ where
         hostnames: &[String],
         options: &StartNodeOptions<Self>,
     ) -> Result<Option<ArtifactSet>, Self::Error> {
-        match &options.peers {
-            PeerSelection::DefaultLayout => Ok(None),
+        let mut config = match &options.peers {
+            PeerSelection::DefaultLayout => {
+                if options.config_override.is_none() && options.config_patch.is_none() {
+                    return Ok(None);
+                }
+                build_static_cluster_node_config::<T>(deployment, node_index, Some(hostnames))?
+            }
             PeerSelection::None => {
-                let config =
-                    build_cluster_node_config_for_indices::<T>(node_index, hostnames, &[])?;
-                let yaml = T::serialize_cluster_node_config(&config)?;
-                Ok(Some(single_config_artifact(yaml)))
+                build_cluster_node_config_for_indices::<T>(node_index, hostnames, &[])?
             }
             PeerSelection::Named(names) => {
                 let indices = resolve_named_peer_indices::<T>(deployment, node_index, names)?;
-                let config =
-                    build_cluster_node_config_for_indices::<T>(node_index, hostnames, &indices)?;
-                let yaml = T::serialize_cluster_node_config(&config)?;
-                Ok(Some(single_config_artifact(yaml)))
+                build_cluster_node_config_for_indices::<T>(node_index, hostnames, &indices)?
             }
+        };
+
+        if let Some(override_config) = options.config_override.clone() {
+            config = override_config;
         }
+
+        if let Some(config_patch) = &options.config_patch {
+            config = config_patch(config).map_err(|source| io::Error::other(source.to_string()))?
+        }
+
+        let yaml = T::serialize_cluster_node_config(&config)?;
+        Ok(Some(single_config_artifact(yaml)))
     }
 }
 
@@ -369,5 +379,41 @@ mod tests {
                 .expect("expected override");
 
         assert_eq!(artifacts.files[0].content, "node=node-1.svc:9000;peers=");
+    }
+
+    #[test]
+    fn cluster_app_builds_default_layout_patch_override_artifacts() {
+        let deployment = crate::topology::ClusterTopology::new(2);
+        let hostnames = vec!["node-0.svc".to_owned(), "node-1.svc".to_owned()];
+        let options = StartNodeOptions::<DummyClusterApp>::default().create_patch(|mut config| {
+            config.push_str(";patched=true");
+            Ok(config)
+        });
+
+        let artifacts =
+            DummyClusterApp::build_node_artifacts_for_options(&deployment, 1, &hostnames, &options)
+                .expect("override artifacts")
+                .expect("expected override");
+
+        assert_eq!(
+            artifacts.files[0].content,
+            "node=node-1.svc:9000;peers=node-0.svc:9000;patched=true"
+        );
+    }
+
+    #[test]
+    fn cluster_app_prefers_config_override_for_override_artifacts() {
+        let deployment = crate::topology::ClusterTopology::new(2);
+        let hostnames = vec!["node-0.svc".to_owned(), "node-1.svc".to_owned()];
+        let options = StartNodeOptions::<DummyClusterApp>::default()
+            .with_peers(PeerSelection::Named(vec!["node-0".to_owned()]))
+            .with_config_override("override-config".to_owned());
+
+        let artifacts =
+            DummyClusterApp::build_node_artifacts_for_options(&deployment, 1, &hostnames, &options)
+                .expect("override artifacts")
+                .expect("expected override");
+
+        assert_eq!(artifacts.files[0].content, "override-config");
     }
 }

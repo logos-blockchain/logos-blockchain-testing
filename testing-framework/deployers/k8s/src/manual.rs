@@ -405,7 +405,7 @@ where
         options: &StartNodeOptions<E>,
     ) -> Result<(), ManualClusterError> {
         let Some((service, port)) = E::cfgsync_service(&self.release) else {
-            return ensure_default_peer_selection(options);
+            return ensure_default_cfgsync_options(options);
         };
 
         let hostnames = E::cfgsync_hostnames(&self.release, self.node_count);
@@ -417,7 +417,7 @@ where
                 })?;
 
         let Some(artifacts) = artifacts else {
-            return ensure_default_peer_selection(options);
+            return ensure_default_cfgsync_options(options);
         };
 
         let forward = port_forward_service(&self.namespace, &service, port)?;
@@ -614,11 +614,6 @@ async fn wait_for_replicas(
 fn validate_start_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
-    if options.config_override.is_some() || options.config_patch.is_some() {
-        return Err(ManualClusterError::UnsupportedStartOptions {
-            message: "config overrides/patches are not supported".to_owned(),
-        });
-    }
     if options.persist_dir.is_some() || options.snapshot_dir.is_some() {
         return Err(ManualClusterError::UnsupportedStartOptions {
             message: "persist/snapshot directories are not supported".to_owned(),
@@ -627,18 +622,19 @@ fn validate_start_options<E: K8sDeployEnv>(
     Ok(())
 }
 
-fn ensure_default_peer_selection<E: K8sDeployEnv>(
+fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
-    if matches!(
+    let default_peers = matches!(
         options.peers,
         testing_framework_core::scenario::PeerSelection::DefaultLayout
-    ) {
+    );
+    if default_peers && options.config_override.is_none() && options.config_patch.is_none() {
         return Ok(());
     }
 
     Err(ManualClusterError::UnsupportedStartOptions {
-        message: "custom peer selection is not supported".to_owned(),
+        message: "cfgsync override support is not configured for these start options".to_owned(),
     })
 }
 
@@ -758,16 +754,28 @@ mod tests {
             _hostnames: &[String],
             options: &StartNodeOptions<Self>,
         ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, Self::Error> {
-            let peers = match &options.peers {
-                PeerSelection::DefaultLayout => return Ok(None),
-                PeerSelection::None => "none".to_owned(),
-                PeerSelection::Named(names) => names.join(","),
+            let mut config = match &options.peers {
+                PeerSelection::DefaultLayout => {
+                    if options.config_override.is_none() && options.config_patch.is_none() {
+                        return Ok(None);
+                    }
+                    format!("node={node_index};peers=default")
+                }
+                PeerSelection::None => format!("node={node_index};peers=none"),
+                PeerSelection::Named(names) => {
+                    format!("node={node_index};peers={}", names.join(","))
+                }
             };
+            if let Some(override_config) = options.config_override.clone() {
+                config = override_config;
+            }
+            if let Some(config_patch) = &options.config_patch {
+                config = config_patch(config).map_err(|source| {
+                    std::io::Error::other(format!("failed to patch dummy config: {source}"))
+                })?;
+            }
             Ok(Some(cfgsync_artifacts::ArtifactSet::new(vec![
-                cfgsync_artifacts::ArtifactFile::new(
-                    "/config.yaml".to_string(),
-                    format!("node={node_index};peers={peers}"),
-                ),
+                cfgsync_artifacts::ArtifactFile::new("/config.yaml".to_string(), config),
             ])))
         }
     }
@@ -780,21 +788,46 @@ mod tests {
     }
 
     #[test]
-    fn validate_start_options_rejects_non_peer_overrides() {
+    fn validate_start_options_accepts_config_overrides() {
+        let override_config =
+            StartNodeOptions::<DummyEnv>::default().with_config_override("override".to_owned());
+        let patched = StartNodeOptions::<DummyEnv>::default().create_patch(|mut config| {
+            config.push_str(";patched");
+            Ok(config)
+        });
+
+        assert!(validate_start_options(&override_config).is_ok());
+        assert!(validate_start_options(&patched).is_ok());
+    }
+
+    #[test]
+    fn validate_start_options_rejects_persist_and_snapshot_dirs() {
         let persist = StartNodeOptions::<DummyEnv>::default()
             .with_persist_dir(std::path::PathBuf::from("/tmp/demo"));
+        let snapshot = StartNodeOptions::<DummyEnv>::default()
+            .with_snapshot_dir(std::path::PathBuf::from("/tmp/snapshot"));
         assert!(matches!(
             validate_start_options(&persist),
+            Err(ManualClusterError::UnsupportedStartOptions { .. })
+        ));
+        assert!(matches!(
+            validate_start_options(&snapshot),
             Err(ManualClusterError::UnsupportedStartOptions { .. })
         ));
     }
 
     #[test]
-    fn ensure_default_peer_selection_rejects_named_peers() {
+    fn ensure_default_cfgsync_options_rejects_non_default_overrides() {
         let peers = StartNodeOptions::<DummyEnv>::default()
             .with_peers(PeerSelection::Named(vec!["node-0".to_owned()]));
+        let override_config =
+            StartNodeOptions::<DummyEnv>::default().with_config_override("override".to_owned());
         assert!(matches!(
-            ensure_default_peer_selection(&peers),
+            ensure_default_cfgsync_options(&peers),
+            Err(ManualClusterError::UnsupportedStartOptions { .. })
+        ));
+        assert!(matches!(
+            ensure_default_cfgsync_options(&override_config),
             Err(ManualClusterError::UnsupportedStartOptions { .. })
         ));
     }
@@ -816,5 +849,24 @@ mod tests {
 
         assert_eq!(artifacts.files.len(), 1);
         assert_eq!(artifacts.files[0].content, "node=1;peers=node-0");
+    }
+
+    #[test]
+    fn dummy_env_builds_cfgsync_override_artifacts_for_config_override() {
+        let topology = testing_framework_core::topology::ClusterTopology::new(2);
+        let options =
+            StartNodeOptions::<DummyEnv>::default().with_config_override("override".to_owned());
+
+        let artifacts = DummyEnv::build_cfgsync_override_artifacts(
+            &topology,
+            1,
+            &["node-0".to_owned(), "node-1".to_owned()],
+            &options,
+        )
+        .expect("build override")
+        .expect("expected override");
+
+        assert_eq!(artifacts.files.len(), 1);
+        assert_eq!(artifacts.files[0].content, "override");
     }
 }
