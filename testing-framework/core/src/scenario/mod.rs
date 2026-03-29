@@ -33,7 +33,7 @@ pub use control::{ClusterWaitHandle, NodeControlHandle};
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
-pub use noop::ScenarioApplication;
+pub use noop::{DefaultFeed, DefaultFeedRuntime, default_feed_result};
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
     Deployer, Feed, FeedRuntime, HttpReadinessRequirement, NodeClients, ReadinessError, RunContext,

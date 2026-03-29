@@ -1,7 +1,6 @@
 use std::{collections::HashMap, error::Error};
 
-use super::ScenarioApplication;
-use crate::{cfgsync::StaticNodeConfigProvider, topology::DeploymentDescriptor};
+use crate::{cfgsync::StaticNodeConfigProvider, env::Application, topology::DeploymentDescriptor};
 
 #[derive(Clone, Debug)]
 pub struct ClusterPeerView {
@@ -94,7 +93,7 @@ impl ClusterNodeView {
     }
 }
 
-pub trait ClusterNodeConfigApplication: ScenarioApplication {
+pub trait ClusterNodeConfigApplication: Application {
     type ConfigError: Error + Send + Sync + 'static;
 
     fn static_network_port() -> u16;

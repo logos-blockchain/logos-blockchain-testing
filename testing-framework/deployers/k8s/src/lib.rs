@@ -3,6 +3,7 @@ mod env;
 mod host;
 mod infrastructure;
 mod lifecycle;
+mod manual;
 mod workspace;
 pub mod wait {
     pub use crate::lifecycle::wait::*;
@@ -27,6 +28,7 @@ pub use infrastructure::{
     runtime_spec::{NodeRuntimeSpec, RuntimeSpecError, SharedServiceFileSpec, SharedServiceSpec},
 };
 pub use lifecycle::cleanup::RunnerCleanup;
+pub use manual::{ManualCluster, ManualClusterError};
 pub use workspace::{
     RequiredPathError, bundled_runner_chart_path, create_temp_workspace, require_existing_paths,
     resolve_optional_relative_dir, resolve_workspace_root, write_temp_file,

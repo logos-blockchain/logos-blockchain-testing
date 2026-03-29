@@ -19,6 +19,7 @@ k8s-openapi            = { features = ["latest"], version = "0.20" }
 kube                   = { default-features = false, features = ["client", "runtime", "rustls-tls"], version = "0.87" }
 reqwest                = { features = ["json"], workspace = true }
 serde                  = { workspace = true }
+serde_json             = { workspace = true }
 serde_yaml             = { workspace = true }
 tempfile               = { workspace = true }
 testing-framework-core = { path = "../../core" }

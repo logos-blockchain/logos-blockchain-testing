@@ -3,11 +3,11 @@ use std::{env, sync::LazyLock, time::Duration};
 use kube::Error as KubeError;
 use thiserror::Error;
 
-mod deployment;
+pub(crate) mod deployment;
 mod forwarding;
 mod http_probe;
 mod orchestrator;
-mod ports;
+pub(crate) mod ports;
 
 pub use forwarding::PortForwardHandle;
 const DEFAULT_HTTP_POLL_INTERVAL: Duration = Duration::from_secs(1);

@@ -40,9 +40,6 @@ pub trait StaticArtifactRenderer {
 }
 
 #[doc(hidden)]
-pub use StaticArtifactRenderer as CfgsyncEnv;
-
-#[doc(hidden)]
 pub trait StaticNodeConfigProvider: Application {
     type Error: Error + Send + Sync + 'static;
 
