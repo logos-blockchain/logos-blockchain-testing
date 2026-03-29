@@ -1,0 +1,61 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tf-runner.fullname" . }}-{{ .Values.bootstrap.serviceName }}
+  labels:
+    {{- include "tf-runner.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tf-runner.selectorLabels" . | nindent 6 }}
+      testing-framework/component: bootstrap
+  template:
+    metadata:
+      labels:
+        {{- include "tf-runner.selectorLabels" . | nindent 8 }}
+        testing-framework/component: bootstrap
+    spec:
+      containers:
+        - name: bootstrap
+          image: {{ .Values.bootstrap.image }}
+          imagePullPolicy: {{ .Values.bootstrap.imagePullPolicy }}
+          command: ["/bin/sh", "{{ .Values.assetMountPath }}/{{ .Values.bootstrap.scripts.startPath }}"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.bootstrap.port }}
+          env:
+            {{- range $key, $value := .Values.bootstrap.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          volumeMounts:
+            - name: assets
+              mountPath: {{ .Values.assetMountPath }}
+              readOnly: true
+            {{- if .Values.bootstrap.writableMountPath }}
+            - name: bootstrap-storage
+              mountPath: {{ .Values.bootstrap.writableMountPath }}
+            {{- end }}
+      volumes:
+        - name: assets
+          configMap:
+            name: {{ include "tf-runner.fullname" . }}-assets
+            defaultMode: 0755
+            items:
+              - key: bootstrap.primary.yaml
+                path: {{ .Values.bootstrap.files.primaryConfigPath }}
+              - key: bootstrap.artifacts.yaml
+                path: {{ .Values.bootstrap.files.artifactsConfigPath }}
+              {{- range $file := .Values.bootstrap.files.extraFiles }}
+              - key: {{ $file.key }}
+                path: {{ $file.path }}
+              {{- end }}
+              - key: bootstrap-start.sh
+                path: {{ .Values.bootstrap.scripts.startPath }}
+        {{- if .Values.bootstrap.writableMountPath }}
+        - name: bootstrap-storage
+          emptyDir: {}
+        {{- end }}
+{{- end }}

@@ -1,9 +1,0 @@
-# syntax=docker/dockerfile:1
-
-ARG BASE_IMAGE=logos-blockchain-testing:base
-
-FROM ${BASE_IMAGE}
-
-LABEL description="Logos runtime image for compose/k8s testing"
-
-ENTRYPOINT ["/usr/bin/logos-blockchain-node"]

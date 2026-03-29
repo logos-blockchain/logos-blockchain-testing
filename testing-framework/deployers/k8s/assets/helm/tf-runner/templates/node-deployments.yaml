@@ -1,0 +1,69 @@
+{{- $root := . -}}
+{{- $nodes := default (list) .Values.nodes.entries }}
+{{- range $i, $node := $nodes }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tf-runner.fullname" $root }}-node-{{ $i }}
+  labels:
+    {{- include "tf-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tf-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tf-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 8 }}
+    spec:
+      containers:
+        - name: node
+          image: {{ $root.Values.nodeImage }}
+          imagePullPolicy: {{ $root.Values.nodeImagePullPolicy }}
+          command: ["/bin/sh", "{{ $root.Values.assetMountPath }}/{{ $root.Values.runner.files.nodeStartPath }}"]
+          ports:
+            {{- range $port := $node.ports }}
+            - name: {{ $port.name }}
+              containerPort: {{ $port.containerPort }}
+              {{- if $port.protocol }}
+              protocol: {{ $port.protocol }}
+              {{- end }}
+            {{- end }}
+          env:
+            {{- if $root.Values.bootstrap.enabled }}
+            - name: CFG_SERVER_ADDR
+              value: http://{{ include "tf-runner.fullname" $root }}-{{ $root.Values.bootstrap.serviceName }}:{{ $root.Values.bootstrap.port }}
+            {{- end }}
+            {{- range $key, $value := $node.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          volumeMounts:
+            - name: assets
+              mountPath: {{ $root.Values.assetMountPath }}
+              readOnly: true
+      volumes:
+        - name: assets
+          configMap:
+            name: {{ include "tf-runner.fullname" $root }}-assets
+            defaultMode: 0755
+            items:
+              {{- if $root.Values.bootstrap.enabled }}
+              - key: bootstrap.primary.yaml
+                path: {{ $root.Values.bootstrap.files.primaryConfigPath }}
+              - key: bootstrap.artifacts.yaml
+                path: {{ $root.Values.bootstrap.files.artifactsConfigPath }}
+              {{- range $file := $root.Values.bootstrap.files.extraFiles }}
+              - key: {{ $file.key }}
+                path: {{ $file.path }}
+              {{- end }}
+              - key: bootstrap-start.sh
+                path: {{ $root.Values.bootstrap.scripts.startPath }}
+              {{- end }}
+              - key: runner-common-start.sh
+                path: {{ $root.Values.runner.files.commonStartPath }}
+              - key: runner-node-start.sh
+                path: {{ $root.Values.runner.files.nodeStartPath }}
+{{- end }}

@@ -12,19 +12,11 @@ usage() {
   cat <<'USAGE'
 Usage:
   scripts/observability/deploy.sh --target compose --action up|down|logs|env
-  scripts/observability/deploy.sh --target k8s --action install|uninstall|dashboards|env
+  scripts/observability/deploy.sh --target k8s --action install|uninstall|env
 
 Short flags:
   -t, --target   compose|k8s
   -a, --action   (see above)
-
-Examples:
-  scripts/observability/deploy.sh -t compose -a up
-  eval "$(scripts/observability/deploy.sh -t compose -a env)"
-
-  scripts/observability/deploy.sh -t k8s -a install
-  scripts/observability/deploy.sh -t k8s -a dashboards
-  scripts/observability/deploy.sh -t k8s -a env
 USAGE
 }
 
@@ -63,7 +55,7 @@ case "${target}" in
     ;;
   k8s)
     case "${action}" in
-      install|uninstall|dashboards|env) ;;
+      install|uninstall|env) ;;
       *) die_usage "Invalid k8s action: ${action}" ;;
     esac
     ;;
@@ -73,4 +65,3 @@ case "${target}" in
 esac
 
 exec "${ROOT}/scripts/setup/setup-observability.sh" "${target}" "${action}"
-

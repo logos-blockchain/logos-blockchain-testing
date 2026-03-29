@@ -27,7 +27,7 @@ pub struct ClusterEnvironment {
     cleanup: Option<RunnerCleanup>,
     node_host: String,
     node_api_ports: Vec<u16>,
-    node_testing_ports: Vec<u16>,
+    node_auxiliary_ports: Vec<u16>,
     port_forwards: Vec<PortForwardHandle>,
 }
 
@@ -47,7 +47,7 @@ impl ClusterEnvironment {
         port_forwards: Vec<PortForwardHandle>,
     ) -> Self {
         let node_api_ports = ports.nodes.iter().map(|ports| ports.api).collect();
-        let node_testing_ports = ports.nodes.iter().map(|ports| ports.testing).collect();
+        let node_auxiliary_ports = ports.nodes.iter().map(|ports| ports.auxiliary).collect();
 
         Self {
             client,
@@ -56,7 +56,7 @@ impl ClusterEnvironment {
             cleanup: Some(cleanup),
             node_host: ports.node_host.clone(),
             node_api_ports,
-            node_testing_ports,
+            node_auxiliary_ports,
             port_forwards,
         }
     }
@@ -99,7 +99,7 @@ impl ClusterEnvironment {
     }
 
     pub fn node_ports(&self) -> (&[u16], &[u16]) {
-        (&self.node_api_ports, &self.node_testing_ports)
+        (&self.node_api_ports, &self.node_auxiliary_ports)
     }
 }
 
@@ -142,7 +142,7 @@ pub fn build_node_clients<E: K8sDeployEnv>(
     let nodes = E::build_node_clients(
         &cluster.node_host,
         &cluster.node_api_ports,
-        &cluster.node_testing_ports,
+        &cluster.node_auxiliary_ports,
     )
     .map_err(|source| NodeClientError::Build { source })?;
 
@@ -157,7 +157,7 @@ pub async fn ensure_cluster_readiness<E: K8sDeployEnv>(
     requirement: HttpReadinessRequirement,
 ) -> Result<(), RemoteReadinessError> {
     info!("waiting for remote readiness (API + membership)");
-    let (node_api, _node_testing) = cluster.node_ports();
+    let (node_api, _node_auxiliary) = cluster.node_ports();
 
     let node_urls = readiness_urls(node_api, E::node_role(), &cluster.node_host)?;
 

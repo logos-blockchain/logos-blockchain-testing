@@ -1,5 +1,5 @@
 use std::{
-    process,
+    env, process,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -11,7 +11,36 @@ use testing_framework_core::scenario::{
     wait_http_readiness,
 };
 
-use crate::{infrastructure::cluster::PortSpecs, lifecycle::cleanup::RunnerCleanup};
+use crate::{
+    HelmReleaseBundle,
+    infrastructure::{cluster::PortSpecs, helm::install_release},
+    lifecycle::cleanup::RunnerCleanup,
+};
+
+pub trait HelmReleaseAssets {
+    fn release_bundle(&self) -> HelmReleaseBundle;
+}
+
+pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(
+    client: &Client,
+    assets: &A,
+    namespace: &str,
+    release: &str,
+) -> Result<RunnerCleanup, DynError> {
+    let spec = assets
+        .release_bundle()
+        .install_spec(release.to_owned(), namespace.to_owned());
+
+    install_release(&spec).await?;
+
+    let preserve = env::var("K8S_RUNNER_PRESERVE").is_ok();
+    Ok(RunnerCleanup::new(
+        client.clone(),
+        namespace.to_owned(),
+        release.to_owned(),
+        preserve,
+    ))
+}
 
 #[async_trait]
 pub trait K8sDeployEnv: Application {
@@ -20,7 +49,7 @@ pub trait K8sDeployEnv: Application {
     /// Collect container port specs from the topology.
     fn collect_port_specs(topology: &Self::Deployment) -> PortSpecs;
 
-    /// Build deploy-time assets (charts, cfgsync config, scripts).
+    /// Build deploy-time assets (charts, config payloads, scripts).
     fn prepare_assets(
         topology: &Self::Deployment,
         metrics_otlp_ingest_url: Option<&Url>,
@@ -33,7 +62,13 @@ pub trait K8sDeployEnv: Application {
         namespace: &str,
         release: &str,
         nodes: usize,
-    ) -> Result<RunnerCleanup, DynError>;
+    ) -> Result<RunnerCleanup, DynError>
+    where
+        Self::Assets: HelmReleaseAssets,
+    {
+        let _ = nodes;
+        install_helm_release_with_cleanup(client, assets, namespace, release).await
+    }
 
     /// Provide a namespace/release identifier pair.
     fn cluster_identifiers() -> (String, String) {
@@ -49,20 +84,20 @@ pub trait K8sDeployEnv: Application {
     fn node_client_from_ports(
         host: &str,
         api_port: u16,
-        testing_port: u16,
+        auxiliary_port: u16,
     ) -> Result<Self::NodeClient, DynError>;
 
     /// Build node clients from forwarded ports.
     fn build_node_clients(
         host: &str,
         node_api_ports: &[u16],
-        node_testing_ports: &[u16],
+        node_auxiliary_ports: &[u16],
     ) -> Result<Vec<Self::NodeClient>, DynError> {
         node_api_ports
             .iter()
-            .zip(node_testing_ports.iter())
-            .map(|(&api_port, &testing_port)| {
-                Self::node_client_from_ports(host, api_port, testing_port)
+            .zip(node_auxiliary_ports.iter())
+            .map(|(&api_port, &auxiliary_port)| {
+                Self::node_client_from_ports(host, api_port, auxiliary_port)
             })
             .collect()
     }

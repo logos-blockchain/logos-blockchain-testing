@@ -41,12 +41,12 @@ pub async fn discover_node_ports(
     config_ports: NodeConfigPorts,
 ) -> Result<NodePortAllocation, ClusterWaitError> {
     let api_port = find_node_port(client, namespace, service_name, config_ports.api).await?;
-    let testing_port =
-        find_node_port(client, namespace, service_name, config_ports.testing).await?;
+    let auxiliary_port =
+        find_node_port(client, namespace, service_name, config_ports.auxiliary).await?;
 
     Ok(NodePortAllocation {
         api: api_port,
-        testing: testing_port,
+        auxiliary: auxiliary_port,
     })
 }
 

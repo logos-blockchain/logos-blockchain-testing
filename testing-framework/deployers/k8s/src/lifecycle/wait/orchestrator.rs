@@ -133,12 +133,12 @@ async fn spawn_port_forwards<E: K8sDeployEnv>(
         for (index, ports) in node_ports.iter().enumerate() {
             let service = E::node_service_name(&release, index);
             let api_forward = port_forward_service(&namespace, &service, ports.api)?;
-            let testing_forward = port_forward_service(&namespace, &service, ports.testing)?;
+            let auxiliary_forward = port_forward_service(&namespace, &service, ports.auxiliary)?;
             register_forward_pair(
                 &mut allocations,
                 &mut forwards,
                 api_forward,
-                testing_forward,
+                auxiliary_forward,
             );
         }
 
@@ -171,12 +171,12 @@ fn register_forward_pair(
     allocations: &mut Vec<NodePortAllocation>,
     forwards: &mut Vec<PortForwardHandle>,
     api_forward: PortForwardSpawn,
-    testing_forward: PortForwardSpawn,
+    auxiliary_forward: PortForwardSpawn,
 ) {
     allocations.push(NodePortAllocation {
         api: api_forward.local_port,
-        testing: testing_forward.local_port,
+        auxiliary: auxiliary_forward.local_port,
     });
     forwards.push(api_forward.handle);
-    forwards.push(testing_forward.handle);
+    forwards.push(auxiliary_forward.handle);
 }

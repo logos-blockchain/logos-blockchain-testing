@@ -31,10 +31,6 @@ checks::load_env() {
   ROOT_DIR="$(common::repo_root)"
   export ROOT_DIR
 
-  if [ -f "${ROOT_DIR}/versions.env" ]; then
-    # shellcheck disable=SC1091
-    . "${ROOT_DIR}/versions.env"
-  fi
   if [ -f "${ROOT_DIR}/paths.env" ]; then
     # shellcheck disable=SC1091
     . "${ROOT_DIR}/paths.env"
@@ -44,17 +40,6 @@ checks::load_env() {
 checks::print_workspace() {
   checks::section "Workspace"
   checks::say "root: ${ROOT_DIR}"
-  if [ -f "${ROOT_DIR}/versions.env" ]; then
-    checks::ok "versions.env present"
-    checks::say "VERSION=${VERSION:-<unset>}"
-    checks::say "LOGOS_BLOCKCHAIN_NODE_REV=${LOGOS_BLOCKCHAIN_NODE_REV:-<unset>}"
-    if [ -n "${LOGOS_BLOCKCHAIN_NODE_PATH:-}" ]; then
-      checks::say "LOGOS_BLOCKCHAIN_NODE_PATH=${LOGOS_BLOCKCHAIN_NODE_PATH}"
-    fi
-  else
-    checks::warn "versions.env missing (scripts depend on it)"
-  fi
-
   if [ -f "${ROOT_DIR}/paths.env" ]; then
     checks::ok "paths.env present"
   fi
@@ -140,7 +125,7 @@ checks::print_docker() {
   if docker image inspect "${image}" >/dev/null 2>&1; then
     checks::ok "testnet image present locally"
   else
-    checks::warn "testnet image not present locally (compose/k8s runs will rebuild or fail if LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1)"
+    checks::warn "testnet image not present locally (compose/k8s runs will fail until you provide a reachable image)"
   fi
 }
 
@@ -248,7 +233,6 @@ checks::print_docker_desktop_kubernetes_health() {
 checks::print_debug_flags() {
   checks::section "Runner Debug Flags (optional)"
   checks::say "SLOW_TEST_ENV=${SLOW_TEST_ENV:-<unset>}  (if true: doubles readiness timeouts)"
-  checks::say "LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=${LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD:-<unset>}  (compose/k8s)"
   checks::say "COMPOSE_RUNNER_PRESERVE=${COMPOSE_RUNNER_PRESERVE:-<unset>}  (compose)"
   checks::say "K8S_RUNNER_PRESERVE=${K8S_RUNNER_PRESERVE:-<unset>}  (k8s)"
   checks::say "K8S_RUNNER_DEBUG=${K8S_RUNNER_DEBUG:-<unset>}  (k8s helm debug)"
@@ -274,7 +258,7 @@ checks::main() {
   checks::print_debug_flags
 
   checks::section "Done"
-  checks::say "If something looks off, start with: scripts/run/run-examples.sh <mode> -t 60 -n 1"
+  checks::say "If something looks off, start with: cargo check -p testing-framework-runner-compose -p testing-framework-runner-k8s -p testing-framework-runner-local"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

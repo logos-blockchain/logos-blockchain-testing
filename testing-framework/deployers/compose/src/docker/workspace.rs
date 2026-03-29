@@ -103,7 +103,12 @@ fn stack_assets_root(repo_root: &Path) -> PathBuf {
         return override_dir;
     }
 
-    repo_root.join(DEFAULT_ASSETS_STACK_DIR)
+    let default_stack = repo_root.join(DEFAULT_ASSETS_STACK_DIR);
+    if default_stack.exists() {
+        return default_stack;
+    }
+
+    current_dir_runtime_assets().unwrap_or(default_stack)
 }
 
 fn stack_scripts_root(repo_root: &Path, stack_source: &Path) -> PathBuf {
@@ -128,6 +133,14 @@ fn resolve_workspace_relative_path(repo_root: &Path, path: PathBuf) -> PathBuf {
     }
 
     repo_root.join(path)
+}
+
+fn current_dir_runtime_assets() -> Option<PathBuf> {
+    let candidate = env::current_dir()
+        .ok()?
+        .join("tests/testing_framework/assets/runtime");
+
+    candidate.exists().then_some(candidate)
 }
 
 fn copy_dir_recursive(source: &Path, target: &Path) -> Result<()> {

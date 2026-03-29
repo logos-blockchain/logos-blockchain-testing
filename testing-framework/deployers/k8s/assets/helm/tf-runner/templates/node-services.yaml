@@ -1,0 +1,24 @@
+{{- $root := . -}}
+{{- $nodes := default (list) .Values.nodes.entries }}
+{{- range $i, $node := $nodes }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tf-runner.fullname" $root }}-node-{{ $i }}
+  labels:
+    {{- include "tf-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    {{- include "tf-runner.nodeLabels" (dict "root" $root "index" $i) | nindent 4 }}
+  ports:
+    {{- range $port := $node.ports }}
+    - name: {{ $port.name }}
+      port: {{ $port.servicePort }}
+      targetPort: {{ $port.name }}
+      {{- if $port.protocol }}
+      protocol: {{ $port.protocol }}
+      {{- end }}
+    {{- end }}
+{{- end }}

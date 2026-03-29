@@ -102,11 +102,11 @@ pub(crate) async fn resolve_service_port_with(
     parse_port_from_output(service, container_port, &output)
 }
 
-pub(crate) fn node_identifier(index: usize) -> String {
+pub fn node_identifier(index: usize) -> String {
     format!("node-{index}")
 }
 
-pub(crate) fn compose_runner_host() -> String {
+pub fn compose_runner_host() -> String {
     let host = env::var("COMPOSE_RUNNER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     debug!(host, "compose runner host resolved for readiness URLs");
     host

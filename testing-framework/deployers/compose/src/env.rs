@@ -1,15 +1,24 @@
-use std::{env, path::Path};
+use std::{path::Path, time::Duration};
 
 use async_trait::async_trait;
 use reqwest::Url;
-use testing_framework_core::scenario::{
-    Application, DynError, HttpReadinessRequirement, NodeClients,
-    wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+use testing_framework_core::{
+    cfgsync::{
+        CfgsyncOutputPaths, MaterializedArtifacts, RegistrationServerRenderOptions,
+        StaticArtifactRenderer, render_and_write_registration_server,
+    },
+    scenario::{
+        Application, DynError, HttpReadinessRequirement, NodeClients,
+        wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+    },
 };
 
 use crate::{
     descriptor::{ComposeDescriptor, NodeDescriptor},
-    infrastructure::ports::{HostPortMapping, NodeContainerPorts, NodeHostPorts},
+    docker::config_server::DockerConfigServerSpec,
+    infrastructure::ports::{
+        HostPortMapping, NodeContainerPorts, NodeHostPorts, compose_runner_host,
+    },
 };
 
 /// Handle returned by a compose config server (cfgsync or equivalent).
@@ -24,14 +33,17 @@ pub trait ConfigServerHandle: Send + Sync {
 /// Compose-specific topology surface needed by the runner.
 #[async_trait]
 pub trait ComposeDeployEnv: Application {
-    type ConfigHandle: ConfigServerHandle;
-
     /// Produce the compose descriptor for the given topology.
-    fn compose_descriptor(topology: &Self::Deployment, cfgsync_port: u16) -> ComposeDescriptor;
+    fn compose_descriptor(
+        topology: &<Self as Application>::Deployment,
+        cfgsync_port: u16,
+    ) -> ComposeDescriptor;
 
     /// Container ports (API/testing) per node, used for docker-compose port
     /// discovery.
-    fn node_container_ports(topology: &Self::Deployment) -> Vec<NodeContainerPorts> {
+    fn node_container_ports(
+        topology: &<Self as Application>::Deployment,
+    ) -> Vec<NodeContainerPorts> {
         let descriptor = Self::compose_descriptor(topology, 0);
         descriptor
             .nodes()
@@ -41,20 +53,60 @@ pub trait ComposeDeployEnv: Application {
             .collect()
     }
 
-    /// Update the config server template based on topology.
-    fn update_cfgsync_config(
+    /// Hostnames used when rewriting node configs for cfgsync delivery.
+    fn cfgsync_hostnames(topology: &<Self as Application>::Deployment) -> Vec<String>;
+
+    /// App-specific cfgsync artifact enrichment.
+    fn enrich_cfgsync_artifacts(
+        _topology: &<Self as Application>::Deployment,
+        _artifacts: &mut MaterializedArtifacts,
+    ) -> Result<(), DynError> {
+        Ok(())
+    }
+
+    /// Render and write cfgsync runtime files for the current topology.
+    fn write_cfgsync_config(
         path: &Path,
-        topology: &Self::Deployment,
+        topology: &<Self as Application>::Deployment,
         port: u16,
         metrics_otlp_ingest_url: Option<&Url>,
-    ) -> Result<(), DynError>;
+    ) -> Result<(), DynError>
+    where
+        Self: Sized + StaticArtifactRenderer<Deployment = <Self as Application>::Deployment>,
+    {
+        let _ = metrics_otlp_ingest_url;
+        let options = RegistrationServerRenderOptions {
+            port: Some(port),
+            artifacts_path: None,
+        };
+        let artifacts_path = cfgsync_artifacts_path(path);
+        let output = CfgsyncOutputPaths {
+            config_path: path,
+            artifacts_path: &artifacts_path,
+        };
 
-    /// Start the config server and return its handle.
-    async fn start_cfgsync(
+        render_and_write_registration_server::<Self, _>(
+            topology,
+            &Self::cfgsync_hostnames(topology),
+            options,
+            output,
+            |artifacts| Self::enrich_cfgsync_artifacts(topology, artifacts),
+        )?;
+
+        Ok(())
+    }
+
+    /// Build the config server container specification.
+    fn cfgsync_container_spec(
         cfgsync_path: &Path,
         port: u16,
         network: &str,
-    ) -> Result<Self::ConfigHandle, DynError>;
+    ) -> Result<DockerConfigServerSpec, DynError>;
+
+    /// Timeout used when launching the config server container.
+    fn cfgsync_start_timeout() -> Duration {
+        Duration::from_secs(180)
+    }
 
     /// Build node clients from discovered host ports.
     fn node_client_from_ports(
@@ -64,7 +116,7 @@ pub trait ComposeDeployEnv: Application {
 
     /// Build node clients from discovered host ports.
     fn build_node_clients(
-        _topology: &Self::Deployment,
+        _topology: &<Self as Application>::Deployment,
         host_ports: &HostPortMapping,
         host: &str,
     ) -> Result<NodeClients<Self>, DynError>
@@ -79,17 +131,6 @@ pub trait ComposeDeployEnv: Application {
         Ok(NodeClients::new(clients))
     }
 
-    /// Return the compose image name and optional platform override.
-    ///
-    /// Defaults:
-    /// - image: `COMPOSE_RUNNER_IMAGE` or `logos-blockchain-testing:local`
-    /// - platform: `COMPOSE_RUNNER_PLATFORM` when set
-    fn compose_image() -> (String, Option<String>) {
-        let image = compose_image_from_env();
-        let platform = env::var("COMPOSE_RUNNER_PLATFORM").ok();
-        (image, platform)
-    }
-
     /// Path used by default readiness checks.
     fn readiness_path() -> &'static str {
         "/"
@@ -97,12 +138,12 @@ pub trait ComposeDeployEnv: Application {
 
     /// Host used by default remote readiness checks.
     fn compose_runner_host() -> String {
-        "127.0.0.1".to_string()
+        compose_runner_host()
     }
 
     /// Remote readiness probe for node APIs.
     async fn wait_remote_readiness(
-        _topology: &Self::Deployment,
+        _topology: &<Self as Application>::Deployment,
         mapping: &HostPortMapping,
         requirement: HttpReadinessRequirement,
     ) -> Result<(), DynError> {
@@ -129,20 +170,25 @@ pub trait ComposeDeployEnv: Application {
     }
 }
 
-fn parse_container_port(entry: &str) -> Option<u16> {
-    entry.rsplit(':').next()?.parse().ok()
+pub trait ComposeCfgsyncEnv:
+    ComposeDeployEnv + StaticArtifactRenderer<Deployment = <Self as Application>::Deployment>
+{
 }
 
-fn compose_image_from_env() -> String {
-    env::var("COMPOSE_RUNNER_IMAGE")
-        .unwrap_or_else(|_| String::from("logos-blockchain-testing:local"))
+impl<T> ComposeCfgsyncEnv for T where
+    T: ComposeDeployEnv + StaticArtifactRenderer<Deployment = <T as Application>::Deployment>
+{
+}
+
+fn cfgsync_artifacts_path(config_path: &Path) -> std::path::PathBuf {
+    config_path
+        .parent()
+        .unwrap_or(config_path)
+        .join("cfgsync.artifacts.yaml")
 }
 
 fn parse_node_container_ports(index: usize, node: &NodeDescriptor) -> Option<NodeContainerPorts> {
-    let mut ports = node
-        .ports()
-        .iter()
-        .filter_map(|entry| parse_container_port(entry));
+    let mut ports = node.container_ports().iter().copied();
     let api = ports.next()?;
     let testing = ports.next()?;
 

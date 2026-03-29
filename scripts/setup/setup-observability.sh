@@ -13,15 +13,15 @@ usage() {
   cat <<'USAGE'
 Usage:
   scripts/setup/setup-observability.sh compose up|down|logs|env
-  scripts/setup/setup-observability.sh k8s install|uninstall|dashboards|env
+  scripts/setup/setup-observability.sh k8s install|uninstall|env
 
 Compose:
-  - Runs Prometheus (+ OTLP receiver) and Grafana via docker compose.
+  - Runs Prometheus and Grafana via docker compose.
   - Prints LOGOS_BLOCKCHAIN_METRICS_* / LOGOS_BLOCKCHAIN_GRAFANA_URL exports to wire into runs.
 
 Kubernetes:
   - Installs prometheus-community/kube-prometheus-stack into namespace
-    "logos-observability" and optionally loads Logos Grafana dashboards.
+    "logos-observability".
   - Prints port-forward commands + LOGOS_BLOCKCHAIN_METRICS_* / LOGOS_BLOCKCHAIN_GRAFANA_URL exports.
 USAGE
 }
@@ -36,8 +36,10 @@ compose_file() {
 
 compose_run() {
   local file
+
   file="$(compose_file)"
   common::require_file "${file}"
+
   docker compose -f "${file}" "$@"
 }
 
@@ -58,6 +60,7 @@ k8s_install() {
   require_cmd helm
 
   local ns release values
+
   ns="$(k8s_namespace)"
   release="$(k8s_release)"
   values="$(k8s_values)"
@@ -69,6 +72,7 @@ k8s_install() {
   if ! helm repo list | grep -q '^prometheus-community[[:space:]]'; then
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
   fi
+
   helm repo update prometheus-community
 
   helm upgrade --install "${release}" prometheus-community/kube-prometheus-stack \
@@ -84,6 +88,7 @@ k8s_uninstall() {
   require_cmd helm
 
   local ns release
+
   ns="$(k8s_namespace)"
   release="$(k8s_release)"
 
@@ -91,28 +96,9 @@ k8s_uninstall() {
   kubectl delete ns "${ns}" --ignore-not-found
 }
 
-k8s_apply_dashboards() {
-  require_cmd kubectl
-
-  local ns dash_dir
-  ns="$(k8s_namespace)"
-  dash_dir="${ROOT}/logos/infra/assets/stack/monitoring/grafana/dashboards"
-
-  [ -d "${dash_dir}" ] || common::die "Missing dashboards directory: ${dash_dir}"
-
-  local file base name
-  for file in "${dash_dir}"/*.json; do
-    base="$(basename "${file}" .json)"
-    name="logos-dashboard-${base//[^a-zA-Z0-9-]/-}"
-    kubectl -n "${ns}" create configmap "${name}" \
-      --from-file="$(basename "${file}")=${file}" \
-      --dry-run=client -o yaml | kubectl apply -f -
-    kubectl -n "${ns}" label configmap "${name}" grafana_dashboard=1 --overwrite >/dev/null
-  done
-}
-
 k8s_env() {
   local ns release
+
   ns="$(k8s_namespace)"
   release="$(k8s_release)"
 
@@ -150,7 +136,6 @@ main() {
       case "${action}" in
         install) k8s_install ;;
         uninstall) k8s_uninstall ;;
-        dashboards) k8s_apply_dashboards ;;
         env) k8s_env ;;
         ""|help|-h|--help) usage ;;
         *) common::die "Unknown k8s action: ${action}" ;;
