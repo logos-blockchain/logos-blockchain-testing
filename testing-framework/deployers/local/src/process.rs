@@ -41,6 +41,14 @@ impl Default for NodeEndpoints {
 }
 
 impl NodeEndpoints {
+    #[must_use]
+    pub fn from_api_port(port: u16) -> Self {
+        Self {
+            api: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+            extra_ports: HashMap::new(),
+        }
+    }
+
     pub fn insert_port(&mut self, key: NodeEndpointPort, port: u16) {
         self.extra_ports.insert(key, port);
     }
@@ -351,6 +359,13 @@ fn copy_snapshot_dir(from: &Path, to: &Path) -> io::Result<()> {
 
 fn default_api_socket() -> SocketAddr {
     SocketAddr::from((Ipv4Addr::LOCALHOST, 0))
+}
+
+pub fn allocate_available_port() -> Result<u16, io::Error> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    drop(listener);
+    Ok(port)
 }
 
 fn create_tempdir(persist_dir: Option<&Path>) -> Result<TempDir, ProcessSpawnError> {

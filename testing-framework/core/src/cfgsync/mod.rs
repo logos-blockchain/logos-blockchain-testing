@@ -7,37 +7,99 @@ pub use cfgsync_core::render::{CfgsyncOutputPaths, RenderedCfgsync};
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::{scenario::Application, topology::DeploymentDescriptor};
+
 #[doc(hidden)]
 pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
 
 #[doc(hidden)]
 pub trait StaticArtifactRenderer {
     type Deployment;
-    type Node;
     type NodeConfig;
     type Error: Error + Send + Sync + 'static;
 
-    fn nodes(deployment: &Self::Deployment) -> &[Self::Node];
+    fn node_count(deployment: &Self::Deployment) -> usize;
 
-    fn node_identifier(index: usize, node: &Self::Node) -> String;
+    fn node_identifier(index: usize) -> String;
 
     fn build_node_config(
         deployment: &Self::Deployment,
-        node: &Self::Node,
+        node_index: usize,
     ) -> Result<Self::NodeConfig, Self::Error>;
 
     fn rewrite_for_hostnames(
-        deployment: &Self::Deployment,
-        node_index: usize,
-        hostnames: &[String],
-        config: &mut Self::NodeConfig,
-    ) -> Result<(), Self::Error>;
+        _deployment: &Self::Deployment,
+        _node_index: usize,
+        _hostnames: &[String],
+        _config: &mut Self::NodeConfig,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error>;
 }
 
 #[doc(hidden)]
 pub use StaticArtifactRenderer as CfgsyncEnv;
+
+#[doc(hidden)]
+pub trait StaticNodeConfigProvider: Application {
+    type Error: Error + Send + Sync + 'static;
+
+    fn build_node_config(
+        deployment: &Self::Deployment,
+        node_index: usize,
+    ) -> Result<Self::NodeConfig, Self::Error>;
+
+    fn rewrite_for_hostnames(
+        _deployment: &Self::Deployment,
+        _node_index: usize,
+        _hostnames: &[String],
+        _config: &mut Self::NodeConfig,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error>;
+}
+
+impl<T> StaticArtifactRenderer for T
+where
+    T: StaticNodeConfigProvider,
+    T::Deployment: DeploymentDescriptor,
+{
+    type Deployment = T::Deployment;
+    type NodeConfig = T::NodeConfig;
+    type Error = T::Error;
+
+    fn node_count(deployment: &Self::Deployment) -> usize {
+        deployment.node_count()
+    }
+
+    fn node_identifier(index: usize) -> String {
+        format!("node-{index}")
+    }
+
+    fn build_node_config(
+        deployment: &Self::Deployment,
+        node_index: usize,
+    ) -> Result<Self::NodeConfig, Self::Error> {
+        T::build_node_config(deployment, node_index)
+    }
+
+    fn rewrite_for_hostnames(
+        deployment: &Self::Deployment,
+        node_index: usize,
+        hostnames: &[String],
+        config: &mut Self::NodeConfig,
+    ) -> Result<(), Self::Error> {
+        T::rewrite_for_hostnames(deployment, node_index, hostnames, config)
+    }
+
+    fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error> {
+        T::serialize_node_config(config)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum BuildStaticArtifactsError {
@@ -63,25 +125,25 @@ pub fn build_static_artifacts<E: StaticArtifactRenderer>(
     deployment: &E::Deployment,
     hostnames: &[String],
 ) -> Result<cfgsync_adapter::MaterializedArtifacts, BuildStaticArtifactsError> {
-    let nodes = E::nodes(deployment);
+    let node_count = E::node_count(deployment);
 
-    if nodes.len() != hostnames.len() {
+    if node_count != hostnames.len() {
         return Err(BuildStaticArtifactsError::HostnameCountMismatch {
-            nodes: nodes.len(),
+            nodes: node_count,
             hostnames: hostnames.len(),
         });
     }
 
-    let mut output = std::collections::HashMap::with_capacity(nodes.len());
+    let mut output = std::collections::HashMap::with_capacity(node_count);
 
-    for (index, node) in nodes.iter().enumerate() {
-        let mut node_config = E::build_node_config(deployment, node).map_err(adapter_error)?;
+    for index in 0..node_count {
+        let mut node_config = E::build_node_config(deployment, index).map_err(adapter_error)?;
         E::rewrite_for_hostnames(deployment, index, hostnames, &mut node_config)
             .map_err(adapter_error)?;
         let config_yaml = E::serialize_node_config(&node_config).map_err(adapter_error)?;
 
         output.insert(
-            E::node_identifier(index, node),
+            E::node_identifier(index),
             ArtifactSet::new(vec![ArtifactFile::new(
                 "/config.yaml".to_string(),
                 config_yaml.clone(),

@@ -1,14 +1,17 @@
 use std::{
-    env, process,
+    env, fs,
+    path::PathBuf,
+    process,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
 use kube::Client;
 use reqwest::Url;
+use tempfile::TempDir;
 use testing_framework_core::scenario::{
-    Application, DynError, HttpReadinessRequirement, wait_for_http_ports_with_host_and_requirement,
-    wait_http_readiness,
+    Application, DynError, HttpReadinessRequirement, NodeAccess,
+    wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
 };
 
 use crate::{
@@ -19,6 +22,51 @@ use crate::{
 
 pub trait HelmReleaseAssets {
     fn release_bundle(&self) -> HelmReleaseBundle;
+}
+
+#[derive(Debug)]
+pub struct RenderedHelmChartAssets {
+    chart_path: PathBuf,
+    _tempdir: TempDir,
+}
+
+impl HelmReleaseAssets for RenderedHelmChartAssets {
+    fn release_bundle(&self) -> HelmReleaseBundle {
+        HelmReleaseBundle::new(self.chart_path.clone())
+    }
+}
+
+pub fn standard_port_specs(node_count: usize, api: u16, auxiliary: u16) -> PortSpecs {
+    PortSpecs {
+        nodes: (0..node_count)
+            .map(|_| crate::wait::NodeConfigPorts { api, auxiliary })
+            .collect(),
+    }
+}
+
+pub fn render_single_template_chart_assets(
+    chart_name: &str,
+    template_name: &str,
+    manifest: &str,
+) -> Result<RenderedHelmChartAssets, DynError> {
+    let tempdir = tempfile::tempdir()?;
+    let chart_path = tempdir.path().join("chart");
+    let templates_path = chart_path.join("templates");
+    fs::create_dir_all(&templates_path)?;
+    fs::write(chart_path.join("Chart.yaml"), render_chart_yaml(chart_name))?;
+    fs::write(templates_path.join(template_name), manifest)?;
+    Ok(RenderedHelmChartAssets {
+        chart_path,
+        _tempdir: tempdir,
+    })
+}
+
+pub fn discovered_node_access(host: &str, api_port: u16, auxiliary_port: u16) -> NodeAccess {
+    NodeAccess::new(host, api_port).with_testing_port(auxiliary_port)
+}
+
+fn render_chart_yaml(chart_name: &str) -> String {
+    format!("apiVersion: v2\nname: {chart_name}\nversion: 0.1.0\n")
 }
 
 pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(
@@ -85,7 +133,13 @@ pub trait K8sDeployEnv: Application {
         host: &str,
         api_port: u16,
         auxiliary_port: u16,
-    ) -> Result<Self::NodeClient, DynError>;
+    ) -> Result<Self::NodeClient, DynError> {
+        <Self as Application>::build_node_client(&discovered_node_access(
+            host,
+            api_port,
+            auxiliary_port,
+        ))
+    }
 
     /// Build node clients from forwarded ports.
     fn build_node_clients(
@@ -103,8 +157,8 @@ pub trait K8sDeployEnv: Application {
     }
 
     /// Path appended to readiness probe URLs.
-    fn readiness_path() -> &'static str {
-        "/"
+    fn node_readiness_path() -> &'static str {
+        <Self as Application>::node_readiness_path()
     }
 
     /// Wait for remote readiness using topology + URLs.
@@ -118,7 +172,7 @@ pub trait K8sDeployEnv: Application {
             .iter()
             .map(|url| {
                 let mut endpoint = url.clone();
-                endpoint.set_path(Self::readiness_path());
+                endpoint.set_path(<Self as K8sDeployEnv>::node_readiness_path());
                 endpoint
             })
             .collect();
@@ -162,7 +216,7 @@ pub trait K8sDeployEnv: Application {
         wait_for_http_ports_with_host_and_requirement(
             ports,
             host,
-            Self::readiness_path(),
+            <Self as K8sDeployEnv>::node_readiness_path(),
             requirement,
         )
         .await?;

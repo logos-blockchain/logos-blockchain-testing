@@ -9,7 +9,10 @@ pub mod wait {
 }
 
 pub use deployer::{K8sDeployer, K8sDeploymentMetadata, K8sRunnerError};
-pub use env::{HelmReleaseAssets, K8sDeployEnv, install_helm_release_with_cleanup};
+pub use env::{
+    HelmReleaseAssets, K8sDeployEnv, RenderedHelmChartAssets, discovered_node_access,
+    install_helm_release_with_cleanup, render_single_template_chart_assets, standard_port_specs,
+};
 pub use infrastructure::{
     chart_values::{
         BootstrapExtraFile, BootstrapFiles, BootstrapScripts, BootstrapValues, NodeGroup,

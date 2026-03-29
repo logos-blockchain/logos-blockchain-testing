@@ -5,12 +5,15 @@ use std::error::Error;
 mod builder_ext;
 mod builder_ops;
 mod capabilities;
+mod client;
 mod common_builder_ext;
+mod config;
 mod control;
 mod definition;
 mod deployment_policy;
 mod expectation;
 pub mod internal;
+mod noop;
 mod observability;
 mod runtime;
 mod sources;
@@ -23,11 +26,14 @@ pub use capabilities::{
     NodeControlCapability, ObservabilityCapability, PeerSelection, RequiresNodeControl,
     StartNodeOptions, StartedNode,
 };
+pub use client::NodeAccess;
 pub use common_builder_ext::CoreBuilderExt;
+pub use config::{ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView};
 pub use control::{ClusterWaitHandle, NodeControlHandle};
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
+pub use noop::ScenarioApplication;
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
     Deployer, Feed, FeedRuntime, HttpReadinessRequirement, NodeClients, ReadinessError, RunContext,

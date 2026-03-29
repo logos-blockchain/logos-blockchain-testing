@@ -19,8 +19,10 @@ pub type DynTopologyError = Box<dyn Error + Send + Sync + 'static>;
 
 pub mod generated;
 pub mod shape;
+pub mod simple;
 pub use generated::{DeploymentPlan, RuntimeTopology, SharedTopology};
 pub use shape::TopologyShapeBuilder;
+pub use simple::{ClusterTopology, NodeCountTopology};
 
 pub trait DeploymentDescriptor: Send + Sync {
     fn node_count(&self) -> usize;

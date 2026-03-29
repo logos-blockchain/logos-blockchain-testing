@@ -1,4 +1,8 @@
+use std::env;
+
 use serde::Serialize;
+
+use crate::infrastructure::ports::node_identifier;
 
 /// Describes a node container in the compose stack.
 #[derive(Clone, Debug, Serialize)]
@@ -125,5 +129,121 @@ impl NodeDescriptor {
     #[cfg(test)]
     pub fn environment(&self) -> &[EnvEntry] {
         &self.environment
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LoopbackNodeRuntimeSpec {
+    pub image: String,
+    pub entrypoint: String,
+    pub volumes: Vec<String>,
+    pub extra_hosts: Vec<String>,
+    pub container_ports: Vec<u16>,
+    pub environment: Vec<EnvEntry>,
+    pub platform: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct BinaryConfigNodeSpec {
+    pub image_env_var: String,
+    pub default_image: String,
+    pub platform_env_var: String,
+    pub binary_path: String,
+    pub config_container_path: String,
+    pub config_file_extension: String,
+    pub container_ports: Vec<u16>,
+    pub rust_log: String,
+}
+
+impl BinaryConfigNodeSpec {
+    #[must_use]
+    pub fn conventional(
+        binary_path: &str,
+        config_container_path: &str,
+        container_ports: Vec<u16>,
+    ) -> Self {
+        let binary_name = binary_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(binary_path)
+            .to_owned();
+        let app_name = binary_name
+            .strip_suffix("-node")
+            .unwrap_or(&binary_name)
+            .to_owned();
+        let env_prefix = app_name.replace('-', "_").to_ascii_uppercase();
+        let config_file_extension = config_container_path
+            .rsplit('.')
+            .next()
+            .filter(|ext| !ext.contains('/'))
+            .unwrap_or("yaml")
+            .to_owned();
+        let rust_target = binary_name.replace('-', "_");
+
+        Self {
+            image_env_var: format!("{env_prefix}_IMAGE"),
+            default_image: format!("{binary_name}:local"),
+            platform_env_var: format!("{env_prefix}_PLATFORM"),
+            binary_path: binary_path.to_owned(),
+            config_container_path: config_container_path.to_owned(),
+            config_file_extension,
+            container_ports,
+            rust_log: format!("{rust_target}=info"),
+        }
+    }
+}
+
+pub fn build_loopback_node_descriptors(
+    node_count: usize,
+    mut spec_for_index: impl FnMut(usize) -> LoopbackNodeRuntimeSpec,
+) -> Vec<NodeDescriptor> {
+    (0..node_count)
+        .map(|index| {
+            let spec = spec_for_index(index);
+            NodeDescriptor::with_loopback_ports(
+                node_identifier(index),
+                spec.image,
+                spec.entrypoint,
+                spec.volumes,
+                spec.extra_hosts,
+                spec.container_ports,
+                spec.environment,
+                spec.platform,
+            )
+        })
+        .collect()
+}
+
+pub fn build_binary_config_node_descriptors(
+    node_count: usize,
+    spec: &BinaryConfigNodeSpec,
+) -> Vec<NodeDescriptor> {
+    build_loopback_node_descriptors(node_count, |index| {
+        binary_config_node_runtime_spec(index, spec)
+    })
+}
+
+pub fn binary_config_node_runtime_spec(
+    index: usize,
+    spec: &BinaryConfigNodeSpec,
+) -> LoopbackNodeRuntimeSpec {
+    let image = env::var(&spec.image_env_var).unwrap_or_else(|_| spec.default_image.clone());
+    let platform = env::var(&spec.platform_env_var).ok();
+    let entrypoint = format!(
+        "/bin/sh -c '{} --config {}'",
+        spec.binary_path, spec.config_container_path
+    );
+
+    LoopbackNodeRuntimeSpec {
+        image,
+        entrypoint,
+        volumes: vec![format!(
+            "./stack/configs/node-{index}.{}:{}:ro",
+            spec.config_file_extension, spec.config_container_path
+        )],
+        extra_hosts: vec![],
+        container_ports: spec.container_ports.clone(),
+        environment: vec![EnvEntry::new("RUST_LOG", &spec.rust_log)],
+        platform,
     }
 }

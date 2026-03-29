@@ -263,7 +263,7 @@ fn collect_readiness_endpoints<E: K8sDeployEnv>(
     for service in services {
         let api_port = extract_api_node_port(service)?;
         let mut endpoint = Url::parse(&format!("http://{host}:{api_port}/"))?;
-        endpoint.set_path(E::readiness_path());
+        endpoint.set_path(<E as K8sDeployEnv>::node_readiness_path());
         endpoints.push(endpoint);
     }
 

@@ -7,7 +7,11 @@ pub mod infrastructure;
 pub mod lifecycle;
 
 pub use deployer::{ComposeDeployer, ComposeDeploymentMetadata};
-pub use descriptor::{ComposeDescriptor, EnvEntry, NodeDescriptor};
+pub use descriptor::{
+    BinaryConfigNodeSpec, ComposeDescriptor, EnvEntry, LoopbackNodeRuntimeSpec, NodeDescriptor,
+    binary_config_node_runtime_spec, build_binary_config_node_descriptors,
+    build_loopback_node_descriptors,
+};
 pub use docker::{
     commands::{ComposeCommandError, compose_down, compose_up, dump_compose_logs},
     config_server::{
@@ -16,7 +20,7 @@ pub use docker::{
     },
     platform::host_gateway_entry,
 };
-pub use env::{ComposeDeployEnv, ConfigServerHandle};
+pub use env::{ComposeDeployEnv, ConfigServerHandle, discovered_node_access};
 pub use errors::ComposeRunnerError;
 pub use infrastructure::{
     ports::{HostPortMapping, NodeHostPorts, compose_runner_host, node_identifier},

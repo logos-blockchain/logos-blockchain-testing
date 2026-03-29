@@ -198,7 +198,7 @@ async fn collect_readiness_endpoints<E: ComposeDeployEnv>(
         let container_id = discover_service_container_id(project, service).await?;
         let api_port = discover_api_port(&container_id).await?;
         let mut endpoint = build_service_endpoint(host, api_port)?;
-        endpoint.set_path(E::readiness_path());
+        endpoint.set_path(<E as ComposeDeployEnv>::node_readiness_path());
         endpoints.push(endpoint);
     }
 
