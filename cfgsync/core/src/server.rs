@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::{
     CfgsyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
-    RegisterNodeResponse,
+    RegisterNodeResponse, ReplaceNodeArtifactsRequest,
 };
 
 /// Runtime state shared across cfgsync HTTP handlers.
@@ -69,6 +69,19 @@ async fn register_node(
     }
 }
 
+async fn replace_node_artifacts(
+    State(state): State<Arc<CfgsyncServerState>>,
+    Json(payload): Json<ReplaceNodeArtifactsRequest>,
+) -> impl IntoResponse {
+    match state.repo.replace_node_artifacts(payload) {
+        Ok(()) => StatusCode::ACCEPTED.into_response(),
+        Err(error) => {
+            let status = error_status(&error.code);
+            (status, Json(error)).into_response()
+        }
+    }
+}
+
 fn resolve_node_config_response(
     state: &CfgsyncServerState,
     registration: &NodeRegistration,
@@ -90,6 +103,7 @@ pub fn build_cfgsync_router(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
         .route("/node", post(node_config))
+        .route("/node/replace", post(replace_node_artifacts))
         .with_state(Arc::new(state))
 }
 
@@ -99,6 +113,7 @@ pub fn build_legacy_cfgsync_router(state: CfgsyncServerState) -> Router {
     Router::new()
         .route("/register", post(register_node))
         .route("/node", post(node_config))
+        .route("/node/replace", post(replace_node_artifacts))
         .route("/init-with-node", post(node_config))
         .with_state(Arc::new(state))
 }
@@ -126,10 +141,13 @@ mod tests {
 
     use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-    use super::{CfgsyncServerState, NodeRegistration, node_config, register_node};
+    use super::{
+        CfgsyncServerState, NodeRegistration, node_config, register_node, replace_node_artifacts,
+    };
     use crate::{
         CFGSYNC_SCHEMA_VERSION, CfgsyncErrorCode, CfgsyncErrorResponse, ConfigResolveResponse,
         NodeArtifactFile, NodeArtifactsPayload, NodeConfigSource, RegisterNodeResponse,
+        ReplaceNodeArtifactsRequest,
     };
 
     struct StaticProvider {
@@ -159,6 +177,13 @@ mod tests {
                     },
                     ConfigResolveResponse::Config,
                 )
+        }
+
+        fn replace_node_artifacts(
+            &self,
+            _request: ReplaceNodeArtifactsRequest,
+        ) -> Result<(), CfgsyncErrorResponse> {
+            Ok(())
         }
     }
 
@@ -287,5 +312,28 @@ mod tests {
             .into_response();
 
         assert_eq!(response.status(), StatusCode::TOO_EARLY);
+    }
+
+    #[tokio::test]
+    async fn replace_node_artifacts_returns_accepted() {
+        let provider = Arc::new(StaticProvider {
+            data: HashMap::new(),
+        });
+        let state = Arc::new(CfgsyncServerState::new(provider));
+
+        let response = replace_node_artifacts(
+            State(state),
+            Json(ReplaceNodeArtifactsRequest {
+                identifier: "node-a".to_string(),
+                files: vec![NodeArtifactFile::new(
+                    "/config.yaml".to_string(),
+                    "a: 1".to_string(),
+                )],
+            }),
+        )
+        .await
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
     }
 }

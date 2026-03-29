@@ -6,6 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use cfgsync_artifacts::ArtifactSet;
 use kube::Client;
 use reqwest::Url;
 use tempfile::TempDir;
@@ -91,7 +92,7 @@ pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(
 }
 
 #[async_trait]
-pub trait K8sDeployEnv: Application {
+pub trait K8sDeployEnv: Application + Sized {
     type Assets: Send + Sync;
 
     /// Collect container port specs from the topology.
@@ -226,5 +227,35 @@ pub trait K8sDeployEnv: Application {
     /// Optional base URL for node client diagnostics.
     fn node_base_url(_client: &Self::NodeClient) -> Option<String> {
         None
+    }
+
+    /// Optional cfgsync/bootstrap service reachable from inside the cluster.
+    ///
+    /// Manual cluster uses this to update one node's served config before
+    /// start.
+    fn cfgsync_service(_release: &str) -> Option<(String, u16)> {
+        None
+    }
+
+    /// Hostnames that should be rendered into cfgsync-served node configs.
+    fn cfgsync_hostnames(release: &str, node_count: usize) -> Vec<String> {
+        (0..node_count)
+            .map(|index| Self::node_service_name(release, index))
+            .collect()
+    }
+
+    /// Optional node-local artifact override for manual cluster startup
+    /// options.
+    ///
+    /// Return `Some(..)` when options require a node-specific config
+    /// replacement before the node starts. Return `None` to keep the
+    /// original cfgsync artifact set.
+    fn build_cfgsync_override_artifacts(
+        _topology: &Self::Deployment,
+        _node_index: usize,
+        _hostnames: &[String],
+        _options: &testing_framework_core::scenario::StartNodeOptions<Self>,
+    ) -> Result<Option<ArtifactSet>, DynError> {
+        Ok(None)
     }
 }

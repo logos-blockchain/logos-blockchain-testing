@@ -2268,6 +2268,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cfgsync-artifacts",
+ "cfgsync-core",
  "k8s-openapi",
  "kube",
  "reqwest",

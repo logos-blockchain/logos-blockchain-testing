@@ -7,7 +7,10 @@ pub use cfgsync_core::render::{CfgsyncOutputPaths, RenderedCfgsync};
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{scenario::Application, topology::DeploymentDescriptor};
+use crate::{
+    scenario::{Application, StartNodeOptions},
+    topology::DeploymentDescriptor,
+};
 
 #[doc(hidden)]
 pub type DynCfgsyncError = Box<dyn Error + Send + Sync + 'static>;
@@ -40,7 +43,7 @@ pub trait StaticArtifactRenderer {
 }
 
 #[doc(hidden)]
-pub trait StaticNodeConfigProvider: Application {
+pub trait StaticNodeConfigProvider: Application + Sized {
     type Error: Error + Send + Sync + 'static;
 
     fn build_node_config(
@@ -58,6 +61,15 @@ pub trait StaticNodeConfigProvider: Application {
     }
 
     fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error>;
+
+    fn build_node_artifacts_for_options(
+        _deployment: &Self::Deployment,
+        _node_index: usize,
+        _hostnames: &[String],
+        _options: &StartNodeOptions<Self>,
+    ) -> Result<Option<ArtifactSet>, Self::Error> {
+        Ok(None)
+    }
 }
 
 impl<T> StaticArtifactRenderer for T
@@ -149,6 +161,16 @@ pub fn build_static_artifacts<E: StaticArtifactRenderer>(
     }
 
     Ok(cfgsync_adapter::MaterializedArtifacts::from_nodes(output))
+}
+
+pub fn build_node_artifact_override<E: StaticNodeConfigProvider>(
+    deployment: &E::Deployment,
+    node_index: usize,
+    hostnames: &[String],
+    options: &StartNodeOptions<E>,
+) -> Result<Option<ArtifactSet>, BuildStaticArtifactsError> {
+    E::build_node_artifacts_for_options(deployment, node_index, hostnames, options)
+        .map_err(adapter_error)
 }
 
 #[doc(hidden)]

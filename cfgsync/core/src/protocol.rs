@@ -21,6 +21,16 @@ pub struct NodeArtifactsPayload {
     pub files: Vec<NodeArtifactFile>,
 }
 
+/// Administrative request to replace the served files for one node.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReplaceNodeArtifactsRequest {
+    /// Stable node identifier whose files should be replaced.
+    pub identifier: String,
+    /// Files that should be served for the node on subsequent resolves.
+    #[serde(default)]
+    pub files: Vec<NodeArtifactFile>,
+}
+
 /// Adapter-owned registration payload stored alongside a generic node identity.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegistrationPayload {

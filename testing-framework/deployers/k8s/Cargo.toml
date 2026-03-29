@@ -15,6 +15,8 @@ workspace = true
 [dependencies]
 anyhow                 = "1"
 async-trait            = { workspace = true }
+cfgsync-artifacts      = { workspace = true }
+cfgsync-core           = { workspace = true }
 k8s-openapi            = { features = ["latest"], version = "0.20" }
 kube                   = { default-features = false, features = ["client", "runtime", "rustls-tls"], version = "0.87" }
 reqwest                = { features = ["json"], workspace = true }

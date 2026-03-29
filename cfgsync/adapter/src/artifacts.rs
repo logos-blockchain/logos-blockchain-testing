@@ -39,6 +39,11 @@ impl MaterializedArtifacts {
         self.nodes.get(identifier)
     }
 
+    /// Inserts or replaces the node-local artifact set for one identifier.
+    pub fn set_node(&mut self, identifier: impl Into<String>, artifacts: ArtifactSet) {
+        self.nodes.insert(identifier.into(), artifacts);
+    }
+
     /// Returns the shared artifact set.
     #[must_use]
     pub fn shared(&self) -> &ArtifactSet {

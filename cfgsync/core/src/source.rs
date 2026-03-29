@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{
     NodeArtifactsBundle, NodeArtifactsBundleEntry, NodeArtifactsPayload, NodeRegistration,
-    RegisterNodeResponse, protocol::ConfigResolveResponse,
+    RegisterNodeResponse, ReplaceNodeArtifactsRequest, protocol::ConfigResolveResponse,
 };
 
 /// Source of cfgsync node payloads.
@@ -14,18 +14,30 @@ pub trait NodeConfigSource: Send + Sync {
 
     /// Resolves the current artifact payload for a previously registered node.
     fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse;
+
+    /// Replaces the served files for one node identifier.
+    fn replace_node_artifacts(
+        &self,
+        _request: ReplaceNodeArtifactsRequest,
+    ) -> Result<(), crate::CfgsyncErrorResponse> {
+        Err(crate::CfgsyncErrorResponse::internal(
+            "node artifact replacement is not supported by this source".to_owned(),
+        ))
+    }
 }
 
 /// In-memory map-backed source used by cfgsync server state.
 pub struct StaticConfigSource {
-    configs: HashMap<String, NodeArtifactsPayload>,
+    configs: std::sync::Mutex<HashMap<String, NodeArtifactsPayload>>,
 }
 
 impl StaticConfigSource {
     /// Builds an in-memory source from fully formed payloads.
     #[must_use]
     pub fn from_payloads(configs: HashMap<String, NodeArtifactsPayload>) -> Arc<Self> {
-        Arc::new(Self { configs })
+        Arc::new(Self {
+            configs: std::sync::Mutex::new(configs),
+        })
     }
 
     /// Builds an in-memory source from a static bundle document.
@@ -37,7 +49,11 @@ impl StaticConfigSource {
 
 impl NodeConfigSource for StaticConfigSource {
     fn register(&self, registration: NodeRegistration) -> RegisterNodeResponse {
-        if self.configs.contains_key(&registration.identifier) {
+        let configs = self
+            .configs
+            .lock()
+            .expect("cfgsync static source should not be poisoned");
+        if configs.contains_key(&registration.identifier) {
             RegisterNodeResponse::Registered
         } else {
             RegisterNodeResponse::Error(crate::CfgsyncErrorResponse::missing_config(
@@ -47,17 +63,33 @@ impl NodeConfigSource for StaticConfigSource {
     }
 
     fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
-        self.configs
-            .get(&registration.identifier)
-            .cloned()
-            .map_or_else(
-                || {
-                    ConfigResolveResponse::Error(crate::CfgsyncErrorResponse::missing_config(
-                        &registration.identifier,
-                    ))
-                },
-                ConfigResolveResponse::Config,
-            )
+        let configs = self
+            .configs
+            .lock()
+            .expect("cfgsync static source should not be poisoned");
+        configs.get(&registration.identifier).cloned().map_or_else(
+            || {
+                ConfigResolveResponse::Error(crate::CfgsyncErrorResponse::missing_config(
+                    &registration.identifier,
+                ))
+            },
+            ConfigResolveResponse::Config,
+        )
+    }
+
+    fn replace_node_artifacts(
+        &self,
+        request: ReplaceNodeArtifactsRequest,
+    ) -> Result<(), crate::CfgsyncErrorResponse> {
+        let mut configs = self
+            .configs
+            .lock()
+            .expect("cfgsync static source should not be poisoned");
+        configs.insert(
+            request.identifier,
+            NodeArtifactsPayload::from_files(request.files),
+        );
+        Ok(())
     }
 }
 
@@ -152,7 +184,9 @@ impl BundleConfigSource {
             .collect();
 
         Ok(Self {
-            inner: StaticConfigSource { configs },
+            inner: StaticConfigSource {
+                configs: std::sync::Mutex::new(configs),
+            },
         })
     }
 }
@@ -164,6 +198,13 @@ impl NodeConfigSource for BundleConfigSource {
 
     fn resolve(&self, registration: &NodeRegistration) -> ConfigResolveResponse {
         self.inner.resolve(registration)
+    }
+
+    fn replace_node_artifacts(
+        &self,
+        request: ReplaceNodeArtifactsRequest,
+    ) -> Result<(), crate::CfgsyncErrorResponse> {
+        self.inner.replace_node_artifacts(request)
     }
 }
 
@@ -183,7 +224,7 @@ mod tests {
     use super::{BundleConfigSource, StaticConfigSource};
     use crate::{
         CFGSYNC_SCHEMA_VERSION, CfgsyncErrorCode, ConfigResolveResponse, NodeArtifactFile,
-        NodeArtifactsPayload, NodeConfigSource, NodeRegistration,
+        NodeArtifactsPayload, NodeConfigSource, NodeRegistration, ReplaceNodeArtifactsRequest,
     };
 
     fn sample_payload() -> NodeArtifactsPayload {
@@ -197,7 +238,9 @@ mod tests {
     fn resolves_existing_identifier() {
         let mut configs = HashMap::new();
         configs.insert("node-1".to_owned(), sample_payload());
-        let repo = StaticConfigSource { configs };
+        let repo = StaticConfigSource {
+            configs: std::sync::Mutex::new(configs),
+        };
 
         match repo.resolve(&NodeRegistration::new(
             "node-1".to_string(),
@@ -215,7 +258,7 @@ mod tests {
     #[test]
     fn reports_missing_identifier() {
         let repo = StaticConfigSource {
-            configs: HashMap::new(),
+            configs: std::sync::Mutex::new(HashMap::new()),
         };
 
         match repo.resolve(&NodeRegistration::new(
@@ -265,13 +308,44 @@ nodes:
     fn resolve_accepts_known_registration_without_gating() {
         let mut configs = HashMap::new();
         configs.insert("node-1".to_owned(), sample_payload());
-        let repo = StaticConfigSource { configs };
+        let repo = StaticConfigSource {
+            configs: std::sync::Mutex::new(configs),
+        };
 
         match repo.resolve(&NodeRegistration::new(
             "node-1".to_string(),
             "127.0.0.1".parse().expect("parse ip"),
         )) {
             ConfigResolveResponse::Config(_) => {}
+            ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
+        }
+    }
+
+    #[test]
+    fn static_source_replaces_node_artifacts() {
+        let mut configs = HashMap::new();
+        configs.insert("node-1".to_owned(), sample_payload());
+        let repo = StaticConfigSource {
+            configs: std::sync::Mutex::new(configs),
+        };
+
+        repo.replace_node_artifacts(ReplaceNodeArtifactsRequest {
+            identifier: "node-1".to_owned(),
+            files: vec![NodeArtifactFile::new(
+                "/config.yaml".to_string(),
+                "updated: true".to_string(),
+            )],
+        })
+        .expect("replace node artifacts");
+
+        match repo.resolve(&NodeRegistration::new(
+            "node-1".to_string(),
+            "127.0.0.1".parse().expect("parse ip"),
+        )) {
+            ConfigResolveResponse::Config(payload) => {
+                assert_eq!(payload.files.len(), 1);
+                assert_eq!(payload.files[0].content, "updated: true");
+            }
             ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
         }
     }

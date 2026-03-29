@@ -12,7 +12,7 @@ pub use client::{Client, ClientError, ConfigFetchStatus};
 pub use protocol::{
     CFGSYNC_SCHEMA_VERSION, CfgsyncErrorCode, CfgsyncErrorResponse, ConfigResolveResponse,
     NodeArtifactFile, NodeArtifactsPayload, NodeRegistration, RegisterNodeResponse,
-    RegistrationPayload,
+    RegistrationPayload, ReplaceNodeArtifactsRequest,
 };
 pub use render::{
     CfgsyncConfigOverrides, CfgsyncOutputPaths, RenderedCfgsync, apply_cfgsync_overrides,

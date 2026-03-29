@@ -1,7 +1,10 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{CfgsyncErrorCode, CfgsyncErrorResponse, NodeArtifactsPayload, NodeRegistration};
+use crate::{
+    CfgsyncErrorCode, CfgsyncErrorResponse, NodeArtifactFile, NodeArtifactsPayload,
+    NodeRegistration, ReplaceNodeArtifactsRequest,
+};
 
 /// cfgsync client-side request/response failures.
 #[derive(Debug, Error)]
@@ -92,6 +95,22 @@ impl Client {
             },
             Err(error) => Err(error),
         }
+    }
+
+    /// Replaces the served files for one node identifier.
+    pub async fn replace_node_artifacts(
+        &self,
+        identifier: impl Into<String>,
+        files: Vec<NodeArtifactFile>,
+    ) -> Result<(), ClientError> {
+        self.post_status_only(
+            "/node/replace",
+            &ReplaceNodeArtifactsRequest {
+                identifier: identifier.into(),
+                files,
+            },
+        )
+        .await
     }
 
     /// Posts JSON payload to a cfgsync endpoint and decodes cfgsync payload.

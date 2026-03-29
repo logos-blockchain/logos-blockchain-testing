@@ -1,8 +1,10 @@
 use std::{
     collections::HashSet,
+    net::Ipv4Addr,
     sync::{Arc, Mutex},
 };
 
+use cfgsync_core::Client as CfgsyncClient;
 use k8s_openapi::api::apps::v1::Deployment;
 use kube::{
     Api, Client,
@@ -27,7 +29,7 @@ use crate::{
         cleanup::RunnerCleanup,
         wait::{
             ClusterWaitError, NodeConfigPorts, deployment::wait_for_deployment_ready,
-            ports::discover_node_ports,
+            port_forward_service, ports::discover_node_ports,
         },
     },
 };
@@ -48,6 +50,12 @@ pub enum ManualClusterError {
     },
     #[error("failed to install k8s stack: {source}")]
     InstallStack {
+        #[source]
+        source: DynError,
+    },
+    #[error("failed to update cfgsync artifacts for '{name}': {source}")]
+    CfgsyncUpdate {
+        name: String,
         #[source]
         source: DynError,
     },
@@ -107,6 +115,7 @@ where
     client: Client,
     namespace: String,
     release: String,
+    topology: E::Deployment,
     node_count: usize,
     node_host: String,
     node_allocations: Vec<crate::wait::NodePortAllocation>,
@@ -154,6 +163,7 @@ where
             client,
             namespace,
             release,
+            topology,
             node_count: nodes,
             node_host: node_host(),
             node_allocations,
@@ -208,6 +218,7 @@ where
             }
         }
 
+        self.apply_cfgsync_override(index, &options).await?;
         scale_node::<E>(&self.client, &self.namespace, &self.release, index, 1).await?;
         self.wait_node_ready(name).await?;
         let client = self.build_client(index, name)?;
@@ -387,6 +398,45 @@ where
         }
         Ok(index)
     }
+
+    async fn apply_cfgsync_override(
+        &self,
+        index: usize,
+        options: &StartNodeOptions<E>,
+    ) -> Result<(), ManualClusterError> {
+        let Some((service, port)) = E::cfgsync_service(&self.release) else {
+            return ensure_default_peer_selection(options);
+        };
+
+        let hostnames = E::cfgsync_hostnames(&self.release, self.node_count);
+        let artifacts =
+            E::build_cfgsync_override_artifacts(&self.topology, index, &hostnames, options)
+                .map_err(|source| ManualClusterError::CfgsyncUpdate {
+                    name: canonical_node_name(index),
+                    source,
+                })?;
+
+        let Some(artifacts) = artifacts else {
+            return ensure_default_peer_selection(options);
+        };
+
+        let forward = port_forward_service(&self.namespace, &service, port)?;
+        let client = CfgsyncClient::new(format!(
+            "http://{}:{}",
+            Ipv4Addr::LOCALHOST,
+            forward.local_port
+        ));
+
+        client
+            .replace_node_artifacts(canonical_node_name(index), artifacts.files)
+            .await
+            .map_err(|source| ManualClusterError::CfgsyncUpdate {
+                name: canonical_node_name(index),
+                source: source.into(),
+            })?;
+
+        Ok(())
+    }
 }
 
 impl<E> Drop for ManualCluster<E>
@@ -564,14 +614,6 @@ async fn wait_for_replicas(
 fn validate_start_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
-    if !matches!(
-        options.peers,
-        testing_framework_core::scenario::PeerSelection::DefaultLayout
-    ) {
-        return Err(ManualClusterError::UnsupportedStartOptions {
-            message: "custom peer selection is not supported".to_owned(),
-        });
-    }
     if options.config_override.is_some() || options.config_patch.is_some() {
         return Err(ManualClusterError::UnsupportedStartOptions {
             message: "config overrides/patches are not supported".to_owned(),
@@ -583,6 +625,21 @@ fn validate_start_options<E: K8sDeployEnv>(
         });
     }
     Ok(())
+}
+
+fn ensure_default_peer_selection<E: K8sDeployEnv>(
+    options: &StartNodeOptions<E>,
+) -> Result<(), ManualClusterError> {
+    if matches!(
+        options.peers,
+        testing_framework_core::scenario::PeerSelection::DefaultLayout
+    ) {
+        return Ok(());
+    }
+
+    Err(ManualClusterError::UnsupportedStartOptions {
+        message: "custom peer selection is not supported".to_owned(),
+    })
 }
 
 fn parse_node_index(name: &str) -> Option<usize> {
@@ -611,9 +668,12 @@ fn block_on_best_effort(fut: impl std::future::Future<Output = Result<(), Manual
 
 #[cfg(test)]
 mod tests {
-    use testing_framework_core::scenario::{
-        Application, DefaultFeedRuntime, NodeAccess, NodeClients, PeerSelection,
-        default_feed_result,
+    use testing_framework_core::{
+        cfgsync::{StaticNodeConfigProvider, build_node_artifact_override},
+        scenario::{
+            Application, DefaultFeedRuntime, NodeAccess, NodeClients, PeerSelection,
+            default_feed_result,
+        },
     };
 
     use super::*;
@@ -628,7 +688,7 @@ mod tests {
     impl Application for DummyEnv {
         type Deployment = testing_framework_core::topology::ClusterTopology;
         type NodeClient = String;
-        type NodeConfig = ();
+        type NodeConfig = String;
         type FeedRuntime = DefaultFeedRuntime;
 
         fn build_node_client(access: &NodeAccess) -> Result<Self::NodeClient, DynError> {
@@ -662,6 +722,54 @@ mod tests {
         ) -> Result<Self::Assets, DynError> {
             render_single_template_chart_assets("dummy", "dummy.yaml", "")
         }
+
+        fn cfgsync_service(release: &str) -> Option<(String, u16)> {
+            Some((format!("{release}-cfgsync"), 4400))
+        }
+
+        fn build_cfgsync_override_artifacts(
+            topology: &Self::Deployment,
+            node_index: usize,
+            hostnames: &[String],
+            options: &StartNodeOptions<Self>,
+        ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, DynError> {
+            build_node_artifact_override::<Self>(topology, node_index, hostnames, options)
+                .map_err(Into::into)
+        }
+    }
+
+    impl StaticNodeConfigProvider for DummyEnv {
+        type Error = std::io::Error;
+
+        fn build_node_config(
+            _deployment: &Self::Deployment,
+            node_index: usize,
+        ) -> Result<Self::NodeConfig, Self::Error> {
+            Ok(format!("node={node_index};peers=default"))
+        }
+
+        fn serialize_node_config(config: &Self::NodeConfig) -> Result<String, Self::Error> {
+            Ok(config.clone())
+        }
+
+        fn build_node_artifacts_for_options(
+            _deployment: &Self::Deployment,
+            node_index: usize,
+            _hostnames: &[String],
+            options: &StartNodeOptions<Self>,
+        ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, Self::Error> {
+            let peers = match &options.peers {
+                PeerSelection::DefaultLayout => return Ok(None),
+                PeerSelection::None => "none".to_owned(),
+                PeerSelection::Named(names) => names.join(","),
+            };
+            Ok(Some(cfgsync_artifacts::ArtifactSet::new(vec![
+                cfgsync_artifacts::ArtifactFile::new(
+                    "/config.yaml".to_string(),
+                    format!("node={node_index};peers={peers}"),
+                ),
+            ])))
+        }
     }
 
     #[test]
@@ -672,18 +780,41 @@ mod tests {
     }
 
     #[test]
-    fn validate_start_options_rejects_non_default_inputs() {
-        let peers = StartNodeOptions::<DummyEnv>::default().with_peers(PeerSelection::None);
-        assert!(matches!(
-            validate_start_options(&peers),
-            Err(ManualClusterError::UnsupportedStartOptions { .. })
-        ));
-
+    fn validate_start_options_rejects_non_peer_overrides() {
         let persist = StartNodeOptions::<DummyEnv>::default()
             .with_persist_dir(std::path::PathBuf::from("/tmp/demo"));
         assert!(matches!(
             validate_start_options(&persist),
             Err(ManualClusterError::UnsupportedStartOptions { .. })
         ));
+    }
+
+    #[test]
+    fn ensure_default_peer_selection_rejects_named_peers() {
+        let peers = StartNodeOptions::<DummyEnv>::default()
+            .with_peers(PeerSelection::Named(vec!["node-0".to_owned()]));
+        assert!(matches!(
+            ensure_default_peer_selection(&peers),
+            Err(ManualClusterError::UnsupportedStartOptions { .. })
+        ));
+    }
+
+    #[test]
+    fn dummy_env_builds_cfgsync_override_artifacts() {
+        let topology = testing_framework_core::topology::ClusterTopology::new(2);
+        let options = StartNodeOptions::<DummyEnv>::default()
+            .with_peers(PeerSelection::Named(vec!["node-0".to_owned()]));
+
+        let artifacts = DummyEnv::build_cfgsync_override_artifacts(
+            &topology,
+            1,
+            &["node-0".to_owned(), "node-1".to_owned()],
+            &options,
+        )
+        .expect("build override")
+        .expect("expected override");
+
+        assert_eq!(artifacts.files.len(), 1);
+        assert_eq!(artifacts.files[0].content, "node=1;peers=node-0");
     }
 }

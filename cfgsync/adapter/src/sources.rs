@@ -1,8 +1,9 @@
 use std::{collections::HashMap, sync::Mutex};
 
+use cfgsync_artifacts::ArtifactSet;
 use cfgsync_core::{
     CfgsyncErrorResponse, ConfigResolveResponse, NodeArtifactsPayload, NodeConfigSource,
-    NodeRegistration, RegisterNodeResponse,
+    NodeRegistration, RegisterNodeResponse, ReplaceNodeArtifactsRequest,
 };
 
 use crate::{
@@ -23,6 +24,7 @@ impl RegistrationSnapshotMaterializer for MaterializedArtifacts {
 pub struct RegistrationConfigSource<M> {
     materializer: M,
     registrations: Mutex<HashMap<String, NodeRegistration>>,
+    node_overrides: Mutex<HashMap<String, ArtifactSet>>,
 }
 
 impl<M> RegistrationConfigSource<M> {
@@ -31,6 +33,7 @@ impl<M> RegistrationConfigSource<M> {
         Self {
             materializer,
             registrations: Mutex::new(HashMap::new()),
+            node_overrides: Mutex::new(HashMap::new()),
         }
     }
 
@@ -50,6 +53,14 @@ impl<M> RegistrationConfigSource<M> {
             .expect("cfgsync registration store should not be poisoned");
 
         RegistrationSnapshot::new(registrations.values().cloned().collect())
+    }
+
+    fn override_for(&self, identifier: &str) -> Option<ArtifactSet> {
+        let overrides = self
+            .node_overrides
+            .lock()
+            .expect("cfgsync override store should not be poisoned");
+        overrides.get(identifier).cloned()
     }
 }
 
@@ -92,6 +103,12 @@ where
             }
         };
 
+        if let Some(override_files) = self.override_for(&registration.identifier) {
+            let mut files = override_files.files;
+            files.extend(materialized.shared().files.iter().cloned());
+            return ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(files));
+        }
+
         match materialized.resolve(&registration.identifier) {
             Some(config) => {
                 ConfigResolveResponse::Config(NodeArtifactsPayload::from_files(config.files))
@@ -100,6 +117,18 @@ where
                 &registration.identifier,
             )),
         }
+    }
+
+    fn replace_node_artifacts(
+        &self,
+        request: ReplaceNodeArtifactsRequest,
+    ) -> Result<(), CfgsyncErrorResponse> {
+        let mut overrides = self
+            .node_overrides
+            .lock()
+            .expect("cfgsync override store should not be poisoned");
+        overrides.insert(request.identifier, ArtifactSet::new(request.files));
+        Ok(())
     }
 }
 
@@ -110,6 +139,7 @@ mod tests {
     use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
     use cfgsync_core::{
         CfgsyncErrorCode, ConfigResolveResponse, NodeConfigSource, NodeRegistration,
+        ReplaceNodeArtifactsRequest,
     };
 
     use super::RegistrationConfigSource;
@@ -256,5 +286,44 @@ mod tests {
         let _ = source.register(registration.clone());
         let _ = source.resolve(&registration);
         let _ = source.resolve(&registration);
+    }
+
+    #[test]
+    fn registration_source_replaces_node_local_files_while_preserving_shared() {
+        let source = RegistrationConfigSource::new(
+            MaterializedArtifacts::from_nodes([(
+                "node-1".to_owned(),
+                ArtifactSet::new(vec![ArtifactFile::new(
+                    "/config.yaml".to_string(),
+                    "old: 1".to_string(),
+                )]),
+            )])
+            .with_shared(ArtifactSet::new(vec![ArtifactFile::new(
+                "/shared.yaml".to_string(),
+                "shared: true".to_string(),
+            )])),
+        );
+
+        let registration =
+            NodeRegistration::new("node-1".to_string(), "127.0.0.1".parse().expect("parse ip"));
+        let _ = source.register(registration.clone());
+        source
+            .replace_node_artifacts(ReplaceNodeArtifactsRequest {
+                identifier: "node-1".to_owned(),
+                files: vec![ArtifactFile::new(
+                    "/config.yaml".to_string(),
+                    "new: 2".to_string(),
+                )],
+            })
+            .expect("replace node artifacts");
+
+        match source.resolve(&registration) {
+            ConfigResolveResponse::Config(payload) => {
+                assert_eq!(payload.files.len(), 2);
+                assert_eq!(payload.files[0].content, "new: 2");
+                assert_eq!(payload.files[1].path, "/shared.yaml");
+            }
+            ConfigResolveResponse::Error(error) => panic!("expected config, got {error}"),
+        }
     }
 }

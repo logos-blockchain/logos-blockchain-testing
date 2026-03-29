@@ -10,6 +10,7 @@ mod orchestrator;
 pub(crate) mod ports;
 
 pub use forwarding::PortForwardHandle;
+pub(crate) use forwarding::port_forward_service;
 const DEFAULT_HTTP_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const DEFAULT_NODE_HTTP_TIMEOUT: Duration = Duration::from_secs(240);
 const DEFAULT_NODE_HTTP_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
