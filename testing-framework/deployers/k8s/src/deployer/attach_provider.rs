@@ -164,6 +164,7 @@ fn filter_services_with_tcp_node_ports(services: ObjectList<Service>) -> ObjectL
             .filter(|service| !tcp_node_ports(service).is_empty())
             .collect(),
         metadata: services.metadata,
+        types: services.types,
     }
 }
 
