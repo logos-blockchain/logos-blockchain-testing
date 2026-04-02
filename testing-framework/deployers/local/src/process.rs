@@ -168,6 +168,10 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         &self.endpoints
     }
 
+    pub fn working_dir(&self) -> &Path {
+        self.tempdir.path()
+    }
+
     pub fn pid(&self) -> u32 {
         self.child.id().unwrap_or_default()
     }
@@ -251,6 +255,16 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
 
     pub async fn restart(&mut self) -> Result<(), ProcessSpawnError> {
         self.stop_child().await?;
+        self.child = self.spawn_child().await?;
+        Ok(())
+    }
+
+    pub async fn restart_with_launch(
+        &mut self,
+        launch: LaunchSpec,
+    ) -> Result<(), ProcessSpawnError> {
+        self.stop_child().await?;
+        self.launch = launch;
         self.child = self.spawn_child().await?;
         Ok(())
     }

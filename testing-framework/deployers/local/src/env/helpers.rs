@@ -343,6 +343,20 @@ pub fn yaml_config_launch_spec<T: Serialize>(
     rendered_config_launch_spec(config_yaml.into_bytes(), spec)
 }
 
+pub fn build_launch_spec_with_args<E>(
+    config: &<E as Application>::NodeConfig,
+    dir: &std::path::Path,
+    label: &str,
+    extra_args: &[String],
+) -> Result<LaunchSpec, DynError>
+where
+    E: crate::env::LocalDeployerEnv,
+{
+    let mut launch = E::build_launch_spec(config, dir, label)?;
+    launch.args.extend(extra_args.iter().cloned());
+    Ok(launch)
+}
+
 /// Uses an already rendered text config to build a launch spec for `spec`.
 pub fn text_config_launch_spec(
     rendered_config: impl Into<Vec<u8>>,

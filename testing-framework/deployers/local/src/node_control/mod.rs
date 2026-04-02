@@ -11,9 +11,9 @@ use thiserror::Error;
 
 use crate::{
     env::{
-        LocalDeployerEnv, Node, build_initial_node_configs, build_node_from_template,
-        initial_persist_dir, initial_snapshot_dir, node_peer_port, readiness_endpoint_path,
-        spawn_node_from_config,
+        LocalDeployerEnv, Node, build_initial_node_configs, build_launch_spec_with_args,
+        build_node_from_template, initial_persist_dir, initial_snapshot_dir, node_peer_port,
+        readiness_endpoint_path, spawn_node_from_config,
     },
     process::ProcessSpawnError,
 };
@@ -96,6 +96,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                     keep_tempdir,
                     persist_dir.as_deref(),
                     snapshot_dir.as_deref(),
+                    &[],
                 )
                 .await?,
             );
@@ -264,6 +265,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 built.config,
                 options.persist_dir.as_deref(),
                 options.snapshot_dir.as_deref(),
+                &[],
             )
             .await?;
 
@@ -274,9 +276,25 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     }
 
     pub async fn restart_node(&self, name: &str) -> Result<(), NodeManagerError> {
+        self.restart_node_with_args(name, Vec::new()).await
+    }
+
+    pub async fn restart_node_with_args(
+        &self,
+        name: &str,
+        args: Vec<String>,
+    ) -> Result<(), NodeManagerError> {
         let (index, mut node) = self.take_node(name)?;
 
-        if let Err(source) = node.restart().await {
+        let launch = build_launch_spec_with_args::<E>(
+            node.config(),
+            node.working_dir(),
+            name,
+            &args,
+        )
+        .map_err(|source| NodeManagerError::Config { source })?;
+
+        if let Err(source) = node.restart_with_launch(launch).await {
             self.put_node_back(index, node);
 
             return Err(NodeManagerError::Restart {
@@ -305,6 +323,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         config: <E as Application>::NodeConfig,
         persist_dir: Option<&std::path::Path>,
         snapshot_dir: Option<&std::path::Path>,
+        extra_args: &[String],
     ) -> Result<E::NodeClient, NodeManagerError> {
         let node = spawn_node_from_config::<E>(
             node_name.to_string(),
@@ -312,6 +331,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             self.keep_tempdir,
             persist_dir,
             snapshot_dir,
+            extra_args,
         )
         .await
         .map_err(|source| NodeManagerError::Spawn {
@@ -442,6 +462,12 @@ fn reinsert_node_at<E: LocalDeployerEnv>(
 impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.restart_node(name).await.map_err(|err| err.into())
+    }
+
+    async fn restart_node_with_args(&self, name: &str, args: Vec<String>) -> Result<(), DynError> {
+        self.restart_node_with_args(name, args)
+            .await
+            .map_err(|err| err.into())
     }
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
