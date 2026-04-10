@@ -24,6 +24,18 @@ pub use generated::{DeploymentPlan, RuntimeTopology, SharedTopology};
 pub use shape::TopologyShapeBuilder;
 pub use simple::{ClusterTopology, NodeCountTopology};
 
+#[derive(Clone)]
+pub struct FixedDeploymentProvider<D> {
+    deployment: D,
+}
+
+impl<D> FixedDeploymentProvider<D> {
+    #[must_use]
+    pub const fn new(deployment: D) -> Self {
+        Self { deployment }
+    }
+}
+
 pub trait DeploymentDescriptor: Send + Sync {
     fn node_count(&self) -> usize;
 }
@@ -33,4 +45,13 @@ where
     D: DeploymentDescriptor,
 {
     fn build(&self, seed: Option<&DeploymentSeed>) -> Result<D, DynTopologyError>;
+}
+
+impl<D> DeploymentProvider<D> for FixedDeploymentProvider<D>
+where
+    D: DeploymentDescriptor + Clone + Send + Sync + 'static,
+{
+    fn build(&self, _seed: Option<&DeploymentSeed>) -> Result<D, DynTopologyError> {
+        Ok(self.deployment.clone())
+    }
 }

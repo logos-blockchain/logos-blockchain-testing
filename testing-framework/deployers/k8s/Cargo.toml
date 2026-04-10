@@ -20,6 +20,7 @@ cfgsync-core           = { workspace = true }
 k8s-openapi            = { features = ["latest"], version = "0.27" }
 kube                   = { default-features = false, features = ["client", "runtime", "rustls-tls"], version = "3.1" }
 reqwest                = { features = ["json"], workspace = true }
+rustls                 = { default-features = false, features = ["ring"], version = "0.23" }
 serde                  = { workspace = true }
 serde_json             = { workspace = true }
 serde_yaml             = { workspace = true }

@@ -17,7 +17,7 @@ use crate::{
         expectation::Expectation, runtime::context::RunMetrics, sources::ScenarioSources,
         workload::Workload,
     },
-    topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed},
+    topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, FixedDeploymentProvider},
 };
 
 /// Scenario builder entry point.
@@ -266,6 +266,14 @@ impl<E: Application> ScenarioBuilder<E> {
         Self {
             inner: Builder::new(deployment_provider),
         }
+    }
+
+    #[must_use]
+    pub fn with_deployment(deployment: E::Deployment) -> Self
+    where
+        E::Deployment: Clone + Send + Sync + 'static,
+    {
+        Self::new(Box::new(FixedDeploymentProvider::new(deployment)))
     }
 
     #[must_use]

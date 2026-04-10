@@ -133,6 +133,7 @@ where
             return Err(ManualClusterError::UnsupportedTopology { nodes });
         }
 
+        crate::ensure_rustls_provider_installed();
         let client = Client::try_default()
             .await
             .map_err(|source| ManualClusterError::ClientInit { source })?;

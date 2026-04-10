@@ -526,6 +526,7 @@ fn resolve_observability_inputs(
 }
 
 async fn init_kube_client() -> Result<Client, K8sRunnerError> {
+    crate::ensure_rustls_provider_installed();
     Client::try_default()
         .await
         .map_err(|source| K8sRunnerError::ClientInit { source })

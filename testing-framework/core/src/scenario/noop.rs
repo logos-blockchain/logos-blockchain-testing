@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use super::{DynError, Feed, FeedRuntime};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DefaultFeed;
 
 impl Feed for DefaultFeed {
@@ -11,6 +11,7 @@ impl Feed for DefaultFeed {
     fn subscribe(&self) -> Self::Subscription {}
 }
 
+#[derive(Default)]
 pub struct DefaultFeedRuntime;
 
 #[async_trait]

@@ -5,14 +5,26 @@ mod infrastructure;
 mod lifecycle;
 mod manual;
 mod workspace;
+use std::sync::Once;
+
 pub mod wait {
     pub use crate::lifecycle::wait::*;
 }
 
+static RUSTLS_PROVIDER: Once = Once::new();
+
+pub(crate) fn ensure_rustls_provider_installed() {
+    RUSTLS_PROVIDER.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 pub use deployer::{K8sDeployer, K8sDeploymentMetadata, K8sRunnerError};
 pub use env::{
-    HelmReleaseAssets, K8sDeployEnv, RenderedHelmChartAssets, discovered_node_access,
-    install_helm_release_with_cleanup, render_single_template_chart_assets, standard_port_specs,
+    BinaryConfigK8sSpec, HelmReleaseAssets, K8sDeployEnv, RenderedHelmChartAssets,
+    discovered_node_access, install_helm_release_with_cleanup,
+    render_binary_config_node_chart_assets, render_binary_config_node_manifest,
+    render_single_template_chart_assets, standard_port_specs,
 };
 pub use infrastructure::{
     chart_values::{

@@ -29,7 +29,7 @@ use tokio::task::JoinHandle;
 use crate::{env::Application, scenario::DynError};
 
 /// Cloneable feed handle exposed to workloads and expectations.
-pub trait Feed: Clone + Send + Sync + 'static {
+pub trait Feed: Clone + Default + Send + Sync + 'static {
     type Subscription: Send + 'static;
 
     fn subscribe(&self) -> Self::Subscription;
@@ -37,7 +37,7 @@ pub trait Feed: Clone + Send + Sync + 'static {
 
 /// Background worker driving a cluster feed.
 #[async_trait]
-pub trait FeedRuntime: Send + 'static {
+pub trait FeedRuntime: Default + Send + 'static {
     type Feed: Feed;
 
     async fn run(self: Box<Self>);

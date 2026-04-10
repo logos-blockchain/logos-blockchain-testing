@@ -10,9 +10,13 @@ use cfgsync_artifacts::ArtifactSet;
 use kube::Client;
 use reqwest::Url;
 use tempfile::TempDir;
-use testing_framework_core::scenario::{
-    Application, DynError, HttpReadinessRequirement, NodeAccess,
-    wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+use testing_framework_core::{
+    cfgsync::StaticNodeConfigProvider,
+    scenario::{
+        Application, DynError, HttpReadinessRequirement, NodeAccess,
+        wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+    },
+    topology::DeploymentDescriptor,
 };
 
 use crate::{
@@ -31,6 +35,20 @@ pub struct RenderedHelmChartAssets {
     _tempdir: TempDir,
 }
 
+#[derive(Clone, Debug)]
+pub struct BinaryConfigK8sSpec {
+    pub chart_name: String,
+    pub node_name_prefix: String,
+    pub binary_path: String,
+    pub config_container_path: String,
+    pub container_http_port: u16,
+    pub service_testing_port: u16,
+    pub image_env_var: String,
+    pub fallback_image_env_var: String,
+    pub default_image: String,
+    pub image_pull_policy: String,
+}
+
 impl HelmReleaseAssets for RenderedHelmChartAssets {
     fn release_bundle(&self) -> HelmReleaseBundle {
         HelmReleaseBundle::new(self.chart_path.clone())
@@ -43,6 +61,127 @@ pub fn standard_port_specs(node_count: usize, api: u16, auxiliary: u16) -> PortS
             .map(|_| crate::wait::NodeConfigPorts { api, auxiliary })
             .collect(),
     }
+}
+
+impl BinaryConfigK8sSpec {
+    #[must_use]
+    pub fn conventional(
+        chart_name: &str,
+        node_name_prefix: &str,
+        binary_path: &str,
+        config_container_path: &str,
+        container_http_port: u16,
+        service_testing_port: u16,
+    ) -> Self {
+        let binary_name = binary_path
+            .rsplit('/')
+            .next()
+            .unwrap_or(binary_path)
+            .to_owned();
+        let env_prefix = binary_name
+            .strip_suffix("-node")
+            .unwrap_or(&binary_name)
+            .replace('-', "_")
+            .to_ascii_uppercase();
+
+        Self {
+            chart_name: chart_name.to_owned(),
+            node_name_prefix: node_name_prefix.to_owned(),
+            binary_path: binary_path.to_owned(),
+            config_container_path: config_container_path.to_owned(),
+            container_http_port,
+            service_testing_port,
+            image_env_var: format!("{env_prefix}_K8S_IMAGE"),
+            fallback_image_env_var: format!("{env_prefix}_IMAGE"),
+            default_image: format!("{binary_name}:local"),
+            image_pull_policy: "IfNotPresent".to_owned(),
+        }
+    }
+}
+
+pub fn render_binary_config_node_chart_assets<E>(
+    deployment: &E::Deployment,
+    spec: &BinaryConfigK8sSpec,
+) -> Result<RenderedHelmChartAssets, DynError>
+where
+    E: StaticNodeConfigProvider,
+    E::Deployment: DeploymentDescriptor,
+{
+    let manifest = render_binary_config_node_manifest::<E>(deployment, spec)?;
+    render_single_template_chart_assets(
+        &spec.chart_name,
+        &format!("{}.yaml", spec.chart_name),
+        &manifest,
+    )
+}
+
+pub fn render_binary_config_node_manifest<E>(
+    deployment: &E::Deployment,
+    spec: &BinaryConfigK8sSpec,
+) -> Result<String, DynError>
+where
+    E: StaticNodeConfigProvider,
+    E::Deployment: DeploymentDescriptor,
+{
+    let node_count = deployment.node_count();
+    let mut docs = Vec::with_capacity(node_count * 3);
+    let hostnames = (0..node_count)
+        .map(|index| format!("{}-{index}", spec.node_name_prefix))
+        .collect::<Vec<_>>();
+
+    for index in 0..node_count {
+        let name = &hostnames[index];
+        let mut config = E::build_node_config(deployment, index)?;
+        E::rewrite_for_hostnames(deployment, index, &hostnames, &mut config)?;
+        let config_yaml = E::serialize_node_config(&config)?;
+
+        docs.push(render_node_config_map(name, &config_yaml));
+        docs.push(render_node_deployment(name, spec));
+        docs.push(render_node_service(name, spec));
+    }
+
+    Ok(docs.join("\n---\n"))
+}
+
+fn render_node_config_map(name: &str, config_yaml: &str) -> String {
+    format!(
+        "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {name}-config\ndata:\n  config.yaml: |\n{}",
+        indent_yaml(config_yaml, 4)
+    )
+}
+
+fn render_node_deployment(name: &str, spec: &BinaryConfigK8sSpec) -> String {
+    format!(
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {name}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: {name}\n  template:\n    metadata:\n      labels:\n        app: {name}\n    spec:\n      containers:\n        - name: app\n          image: {}\n          imagePullPolicy: {}\n          args:\n            - --config\n            - {}\n          ports:\n            - containerPort: {}\n          volumeMounts:\n            - name: config\n              mountPath: {}\n              subPath: config.yaml\n      volumes:\n        - name: config\n          configMap:\n            name: {name}-config",
+        k8s_image(spec),
+        spec.image_pull_policy,
+        spec.config_container_path,
+        spec.container_http_port,
+        spec.config_container_path,
+    )
+}
+
+fn render_node_service(name: &str, spec: &BinaryConfigK8sSpec) -> String {
+    format!(
+        "apiVersion: v1\nkind: Service\nmetadata:\n  name: {name}\nspec:\n  selector:\n    app: {name}\n  type: NodePort\n  ports:\n    - name: api\n      port: {api_port}\n      targetPort: {api_port}\n      protocol: TCP\n    - name: testing\n      port: {testing_port}\n      targetPort: {api_port}\n      protocol: TCP",
+        api_port = spec.container_http_port,
+        testing_port = spec.service_testing_port
+    )
+}
+
+fn indent_yaml(value: &str, spaces: usize) -> String {
+    let padding = " ".repeat(spaces);
+    value
+        .lines()
+        .map(|line| format!("{padding}{line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn k8s_image(spec: &BinaryConfigK8sSpec) -> String {
+    env::var(&spec.image_env_var)
+        .or_else(|_| env::var(&spec.fallback_image_env_var))
+        .unwrap_or_else(|_| spec.default_image.clone())
 }
 
 pub fn render_single_template_chart_assets(

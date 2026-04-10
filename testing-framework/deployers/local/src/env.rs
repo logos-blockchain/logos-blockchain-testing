@@ -605,7 +605,7 @@ mod tests {
 
     static STABLE_CALLS: AtomicUsize = AtomicUsize::new(0);
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     struct DummyFeed;
 
     impl Feed for DummyFeed {
@@ -614,6 +614,7 @@ mod tests {
         fn subscribe(&self) -> Self::Subscription {}
     }
 
+    #[derive(Default)]
     struct DummyFeedRuntime;
 
     #[async_trait]
