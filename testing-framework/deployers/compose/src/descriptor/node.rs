@@ -9,7 +9,7 @@ use crate::infrastructure::ports::node_identifier;
 pub struct NodeDescriptor {
     name: String,
     image: String,
-    entrypoint: String,
+    entrypoint: Vec<String>,
     volumes: Vec<String>,
     extra_hosts: Vec<String>,
     ports: Vec<String>,
@@ -51,7 +51,7 @@ impl NodeDescriptor {
     pub fn new(
         name: impl Into<String>,
         image: impl Into<String>,
-        entrypoint: impl Into<String>,
+        entrypoint: Vec<String>,
         volumes: Vec<String>,
         extra_hosts: Vec<String>,
         ports: Vec<String>,
@@ -62,7 +62,7 @@ impl NodeDescriptor {
         Self {
             name: name.into(),
             image: image.into(),
-            entrypoint: entrypoint.into(),
+            entrypoint,
             volumes,
             extra_hosts,
             ports,
@@ -76,7 +76,7 @@ impl NodeDescriptor {
     pub fn with_loopback_ports(
         name: impl Into<String>,
         image: impl Into<String>,
-        entrypoint: impl Into<String>,
+        entrypoint: Vec<String>,
         volumes: Vec<String>,
         extra_hosts: Vec<String>,
         container_ports: Vec<u16>,
@@ -135,7 +135,7 @@ impl NodeDescriptor {
 #[derive(Clone, Debug)]
 pub struct LoopbackNodeRuntimeSpec {
     pub image: String,
-    pub entrypoint: String,
+    pub entrypoint: Vec<String>,
     pub volumes: Vec<String>,
     pub extra_hosts: Vec<String>,
     pub container_ports: Vec<u16>,
@@ -229,10 +229,11 @@ pub fn binary_config_node_runtime_spec(
 ) -> LoopbackNodeRuntimeSpec {
     let image = env::var(&spec.image_env_var).unwrap_or_else(|_| spec.default_image.clone());
     let platform = env::var(&spec.platform_env_var).ok();
-    let entrypoint = format!(
-        "/bin/sh -c '{} --config {}'",
-        spec.binary_path, spec.config_container_path
-    );
+    let entrypoint = vec![
+        spec.binary_path.clone(),
+        "--config".to_owned(),
+        spec.config_container_path.clone(),
+    ];
 
     LoopbackNodeRuntimeSpec {
         image,

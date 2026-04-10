@@ -20,7 +20,10 @@ pub use docker::{
     },
     platform::host_gateway_entry,
 };
-pub use env::{ComposeDeployEnv, ConfigServerHandle, discovered_node_access};
+pub use env::{
+    ComposeConfigServerMode, ComposeDeployEnv, ComposeReadinessProbe, ConfigServerHandle,
+    discovered_node_access,
+};
 pub use errors::ComposeRunnerError;
 pub use infrastructure::{
     ports::{HostPortMapping, NodeHostPorts, compose_runner_host, node_identifier},

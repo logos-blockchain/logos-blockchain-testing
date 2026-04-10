@@ -31,7 +31,7 @@ pub fn build_external_client<E: LocalDeployerEnv>(
     let api = resolve_api_socket(source)?;
     let mut endpoints = NodeEndpoints::default();
     endpoints.api = api;
-    Ok(E::node_client(&endpoints))
+    E::node_client(&endpoints)
 }
 
 fn resolve_api_socket(source: &ExternalNodeSource) -> Result<std::net::SocketAddr, DynError> {

@@ -10,11 +10,15 @@ use testing_framework_core::{
     },
     topology::DeploymentDescriptor,
 };
+use tokio::{
+    net::TcpStream,
+    time::{Instant, sleep},
+};
 
 use crate::{
     descriptor::{
         BinaryConfigNodeSpec, ComposeDescriptor, LoopbackNodeRuntimeSpec, NodeDescriptor,
-        binary_config_node_runtime_spec, build_loopback_node_descriptors,
+        binary_config_node_runtime_spec,
     },
     docker::config_server::DockerConfigServerSpec,
     infrastructure::ports::{
@@ -29,6 +33,12 @@ pub trait ConfigServerHandle: Send + Sync {
     fn container_name(&self) -> Option<&str> {
         None
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComposeConfigServerMode {
+    Disabled,
+    Docker,
 }
 
 /// Compose-specific topology surface needed by the runner.
@@ -70,27 +80,39 @@ pub trait ComposeDeployEnv: Application {
     fn compose_descriptor(
         topology: &<Self as Application>::Deployment,
         _cfgsync_port: u16,
-    ) -> ComposeDescriptor {
-        let nodes = build_loopback_node_descriptors(topology.node_count(), |index| {
-            Self::loopback_node_runtime_spec(topology, index)
-                .unwrap_or_else(|| panic!("compose_descriptor is not implemented for this app"))
-        });
-        ComposeDescriptor::new(nodes)
+    ) -> Result<ComposeDescriptor, DynError> {
+        let mut nodes = Vec::with_capacity(topology.node_count());
+        for index in 0..topology.node_count() {
+            let spec = Self::loopback_node_runtime_spec(topology, index).ok_or_else(|| {
+                std::io::Error::other("compose_descriptor is not implemented for this app")
+            })?;
+            nodes.push(NodeDescriptor::with_loopback_ports(
+                crate::infrastructure::ports::node_identifier(index),
+                spec.image,
+                spec.entrypoint,
+                spec.volumes,
+                spec.extra_hosts,
+                spec.container_ports,
+                spec.environment,
+                spec.platform,
+            ));
+        }
+        Ok(ComposeDescriptor::new(nodes))
     }
 
     /// Container ports (API/testing) per node, used for docker-compose port
     /// discovery.
     fn node_container_ports(
         topology: &<Self as Application>::Deployment,
-    ) -> Vec<NodeContainerPorts> {
-        let descriptor = Self::compose_descriptor(topology, 0);
-        descriptor
+    ) -> Result<Vec<NodeContainerPorts>, DynError> {
+        let descriptor = Self::compose_descriptor(topology, 0)?;
+        Ok(descriptor
             .nodes()
             .iter()
             .enumerate()
             .take(topology.node_count())
             .filter_map(|(index, node)| parse_node_container_ports(index, node))
-            .collect()
+            .collect())
     }
 
     /// Hostnames used when rewriting node configs for cfgsync delivery.
@@ -126,15 +148,19 @@ pub trait ComposeDeployEnv: Application {
     /// Build the config server container specification.
     fn cfgsync_container_spec(
         _cfgsync_path: &Path,
-        port: u16,
-        network: &str,
+        _port: u16,
+        _network: &str,
     ) -> Result<DockerConfigServerSpec, DynError> {
-        Ok(dummy_cfgsync_spec(port, network))
+        Err(std::io::Error::other("cfgsync_container_spec is not implemented for this app").into())
     }
 
     /// Timeout used when launching the config server container.
     fn cfgsync_start_timeout() -> Duration {
         Duration::from_secs(180)
+    }
+
+    fn cfgsync_server_mode() -> ComposeConfigServerMode {
+        ComposeConfigServerMode::Disabled
     }
 
     /// Build node clients from discovered host ports.
@@ -167,6 +193,12 @@ pub trait ComposeDeployEnv: Application {
         <Self as Application>::node_readiness_path()
     }
 
+    fn node_readiness_probe() -> ComposeReadinessProbe {
+        ComposeReadinessProbe::Http {
+            path: <Self as ComposeDeployEnv>::node_readiness_path(),
+        }
+    }
+
     /// Host used by default remote readiness checks.
     fn compose_runner_host() -> String {
         compose_runner_host()
@@ -178,14 +210,15 @@ pub trait ComposeDeployEnv: Application {
         mapping: &HostPortMapping,
         requirement: HttpReadinessRequirement,
     ) -> Result<(), DynError> {
-        let host = Self::compose_runner_host();
-        let urls = readiness_urls(
-            &host,
-            mapping,
-            <Self as ComposeDeployEnv>::node_readiness_path(),
-        )?;
-        wait_http_readiness(&urls, requirement).await?;
-        Ok(())
+        match <Self as ComposeDeployEnv>::node_readiness_probe() {
+            ComposeReadinessProbe::Http { path } => {
+                let host = Self::compose_runner_host();
+                let urls = readiness_urls(&host, mapping, path)?;
+                wait_http_readiness(&urls, requirement).await?;
+                Ok(())
+            }
+            ComposeReadinessProbe::Tcp => wait_for_tcp_readiness(&mapping.nodes, requirement).await,
+        }
     }
 
     /// Wait for HTTP readiness on node ports.
@@ -194,14 +227,24 @@ pub trait ComposeDeployEnv: Application {
         host: &str,
         requirement: HttpReadinessRequirement,
     ) -> Result<(), DynError> {
-        wait_for_http_ports_with_host_and_requirement(
-            ports,
-            host,
-            <Self as ComposeDeployEnv>::node_readiness_path(),
-            requirement,
-        )
-        .await?;
-        Ok(())
+        match <Self as ComposeDeployEnv>::node_readiness_probe() {
+            ComposeReadinessProbe::Http { path } => {
+                wait_for_http_ports_with_host_and_requirement(ports, host, path, requirement)
+                    .await?;
+                Ok(())
+            }
+            ComposeReadinessProbe::Tcp => {
+                let ports = ports
+                    .iter()
+                    .copied()
+                    .map(|port| NodeHostPorts {
+                        api: port,
+                        testing: port,
+                    })
+                    .collect::<Vec<_>>();
+                wait_for_tcp_readiness(&ports, requirement).await
+            }
+        }
     }
 }
 
@@ -257,33 +300,62 @@ fn write_dummy_cfgsync_config(path: &Path, port: u16) -> Result<(), DynError> {
     Ok(())
 }
 
-fn dummy_cfgsync_spec(port: u16, network: &str) -> DockerConfigServerSpec {
-    use crate::docker::config_server::DockerPortBinding;
-
-    DockerConfigServerSpec::new(
-        "cfgsync".to_owned(),
-        network.to_owned(),
-        "sh".to_owned(),
-        "busybox:1.36".to_owned(),
-    )
-    .with_network_alias("cfgsync".to_owned())
-    .with_args(vec![
-        "-c".to_owned(),
-        format!("while true; do nc -l -p {port} >/dev/null 2>&1; done"),
-    ])
-    .with_ports(vec![DockerPortBinding::tcp(port, port)])
-}
-
 fn parse_node_container_ports(index: usize, node: &NodeDescriptor) -> Option<NodeContainerPorts> {
     let mut ports = node.container_ports().iter().copied();
     let api = ports.next()?;
-    let testing = ports.next()?;
+    let testing = ports.next().unwrap_or(api);
 
     Some(NodeContainerPorts {
         index,
         api,
         testing,
     })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComposeReadinessProbe {
+    Http { path: &'static str },
+    Tcp,
+}
+
+async fn wait_for_tcp_readiness(
+    ports: &[NodeHostPorts],
+    requirement: HttpReadinessRequirement,
+) -> Result<(), DynError> {
+    let timeout = Duration::from_secs(60);
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        let mut ready = 0;
+        for node in ports {
+            if TcpStream::connect(("127.0.0.1", node.testing))
+                .await
+                .is_ok()
+            {
+                ready += 1;
+            }
+        }
+
+        let total = ports.len();
+        let satisfied = match requirement {
+            HttpReadinessRequirement::AllNodesReady => ready == total,
+            HttpReadinessRequirement::AnyNodeReady => ready >= 1,
+            HttpReadinessRequirement::AtLeast(min_ready) => ready >= min_ready,
+        };
+
+        if satisfied {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "tcp readiness timed out: ready={ready}, total={total}, requirement={requirement:?}"
+            )
+            .into());
+        }
+
+        sleep(Duration::from_millis(200)).await;
+    }
 }
 
 pub fn discovered_node_access(host: &str, ports: &NodeHostPorts) -> NodeAccess {

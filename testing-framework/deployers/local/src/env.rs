@@ -511,15 +511,17 @@ where
         None
     }
 
-    fn node_endpoints(config: &<Self as Application>::NodeConfig) -> NodeEndpoints {
+    fn node_endpoints(
+        config: &<Self as Application>::NodeConfig,
+    ) -> Result<NodeEndpoints, DynError> {
         if let Some(port) = Self::http_api_port(config) {
-            return NodeEndpoints {
+            return Ok(NodeEndpoints {
                 api: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
                 extra_ports: HashMap::new(),
-            };
+            });
         }
 
-        panic!("node_endpoints is not implemented for this app");
+        Err(std::io::Error::other("node_endpoints is not implemented for this app").into())
     }
 
     fn node_peer_port(node: &Node<Self>) -> u16 {
@@ -530,18 +532,18 @@ where
         None
     }
 
-    fn node_client(endpoints: &NodeEndpoints) -> Self::NodeClient {
+    fn node_client(endpoints: &NodeEndpoints) -> Result<Self::NodeClient, DynError> {
         if let Ok(client) =
             <Self as Application>::build_node_client(&discovered_node_access(endpoints))
         {
-            return client;
+            return Ok(client);
         }
 
         if let Some(client) = Self::node_client_from_api_endpoint(endpoints.api) {
-            return client;
+            return Ok(client);
         }
 
-        panic!("node_client is not implemented for this app");
+        Err(std::io::Error::other("node_client is not implemented for this app").into())
     }
 
     fn readiness_endpoint_path() -> &'static str {
@@ -680,11 +682,15 @@ mod tests {
             Ok(LaunchSpec::default())
         }
 
-        fn node_endpoints(_config: &<Self as Application>::NodeConfig) -> NodeEndpoints {
-            NodeEndpoints::default()
+        fn node_endpoints(
+            _config: &<Self as Application>::NodeConfig,
+        ) -> Result<NodeEndpoints, DynError> {
+            Ok(NodeEndpoints::default())
         }
 
-        fn node_client(_endpoints: &NodeEndpoints) -> Self::NodeClient {}
+        fn node_client(_endpoints: &NodeEndpoints) -> Result<Self::NodeClient, DynError> {
+            Ok(())
+        }
 
         async fn wait_readiness_stable(_nodes: &[Node<Self>]) -> Result<(), DynError> {
             STABLE_CALLS.fetch_add(1, Ordering::SeqCst);

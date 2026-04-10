@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use cfgsync_artifacts::ArtifactSet;
 use kube::Client;
 use reqwest::Url;
+use serde::Serialize;
 use tempfile::TempDir;
 use testing_framework_core::{
     cfgsync::StaticNodeConfigProvider,
@@ -35,6 +36,11 @@ pub struct RenderedHelmChartAssets {
     _tempdir: TempDir,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct HelmManifest {
+    documents: Vec<String>,
+}
+
 #[derive(Clone, Debug)]
 pub struct BinaryConfigK8sSpec {
     pub chart_name: String,
@@ -52,6 +58,38 @@ pub struct BinaryConfigK8sSpec {
 impl HelmReleaseAssets for RenderedHelmChartAssets {
     fn release_bundle(&self) -> HelmReleaseBundle {
         HelmReleaseBundle::new(self.chart_path.clone())
+    }
+}
+
+impl HelmManifest {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push_yaml<T>(&mut self, value: &T) -> Result<(), DynError>
+    where
+        T: Serialize,
+    {
+        self.documents
+            .push(normalize_yaml_document(&serde_yaml::to_string(value)?));
+        Ok(())
+    }
+
+    pub fn push_raw_yaml(&mut self, yaml: &str) {
+        let yaml = yaml.trim();
+        if !yaml.is_empty() {
+            self.documents.push(yaml.to_owned());
+        }
+    }
+
+    pub fn extend(&mut self, other: Self) {
+        self.documents.extend(other.documents);
+    }
+
+    #[must_use]
+    pub fn render(&self) -> String {
+        self.documents.join("\n---\n")
     }
 }
 
@@ -201,12 +239,24 @@ pub fn render_single_template_chart_assets(
     })
 }
 
+pub fn render_manifest_chart_assets(
+    chart_name: &str,
+    template_name: &str,
+    manifest: &HelmManifest,
+) -> Result<RenderedHelmChartAssets, DynError> {
+    render_single_template_chart_assets(chart_name, template_name, &manifest.render())
+}
+
 pub fn discovered_node_access(host: &str, api_port: u16, auxiliary_port: u16) -> NodeAccess {
     NodeAccess::new(host, api_port).with_testing_port(auxiliary_port)
 }
 
 fn render_chart_yaml(chart_name: &str) -> String {
     format!("apiVersion: v2\nname: {chart_name}\nversion: 0.1.0\n")
+}
+
+fn normalize_yaml_document(yaml: &str) -> String {
+    yaml.trim_start_matches("---\n").trim().to_owned()
 }
 
 pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(

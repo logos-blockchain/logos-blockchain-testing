@@ -28,7 +28,9 @@ pub use capabilities::{
 };
 pub use client::NodeAccess;
 pub use common_builder_ext::CoreBuilderExt;
-pub use config::{ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView};
+pub use config::{
+    ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, serialize_cluster_yaml_config,
+};
 pub use control::{ClusterWaitHandle, NodeControlHandle};
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};

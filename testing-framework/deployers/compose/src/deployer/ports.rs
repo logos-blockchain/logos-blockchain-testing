@@ -20,7 +20,9 @@ impl<E: ComposeDeployEnv> PortManager<E> {
         environment: &mut StackEnvironment,
         descriptors: &E::Deployment,
     ) -> Result<HostPortMapping, ComposeRunnerError> {
-        let nodes = E::node_container_ports(descriptors);
+        let nodes = E::node_container_ports(descriptors).map_err(|source| {
+            ComposeRunnerError::Config(crate::errors::ConfigError::Descriptor { source })
+        })?;
         debug!(
             nodes = nodes.len(),
             "resolving host ports for compose services"

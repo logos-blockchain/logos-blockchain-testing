@@ -72,6 +72,17 @@ pub trait StaticNodeConfigProvider: Application + Sized {
     }
 }
 
+pub fn serialize_yaml_config<T>(config: &T) -> Result<String, serde_yaml::Error>
+where
+    T: Serialize,
+{
+    serde_yaml::to_string(config)
+}
+
+pub fn serialize_plain_text_config(config: &str) -> Result<String, std::convert::Infallible> {
+    Ok(config.to_owned())
+}
+
 impl<T> StaticArtifactRenderer for T
 where
     T: StaticNodeConfigProvider,

@@ -1,5 +1,6 @@
 use std::{
     fmt, io,
+    io::Read,
     net::{Ipv4Addr, TcpListener, TcpStream},
     process::{Child, Command as StdCommand, ExitStatus, Stdio},
     thread,
@@ -86,7 +87,7 @@ fn spawn_kubectl_port_forward(
         .arg(format!("svc/{service}"))
         .arg(format!("{local_port}:{remote_port}"))
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
 }
 
@@ -107,7 +108,13 @@ fn wait_until_port_forward_ready(
     }
 
     let _ = child.kill();
-    Err(port_forward_ready_timeout_error(service, remote_port))
+    let _ = child.wait();
+    let details = read_port_forward_stderr(child);
+    Err(port_forward_ready_timeout_error(
+        service,
+        remote_port,
+        details.as_deref(),
+    ))
 }
 
 fn ensure_port_forward_running(
@@ -122,7 +129,7 @@ fn ensure_port_forward_running(
     Err(port_forward_error(
         service,
         remote_port,
-        anyhow!("kubectl exited with {status}"),
+        port_forward_process_error(status, read_port_forward_stderr(child)),
     ))
 }
 
@@ -134,16 +141,47 @@ fn port_forward_error(service: &str, remote_port: u16, source: anyhow::Error) ->
     }
 }
 
-fn port_forward_ready_timeout_error(service: &str, remote_port: u16) -> ClusterWaitError {
+fn port_forward_ready_timeout_error(
+    service: &str,
+    remote_port: u16,
+    details: Option<&str>,
+) -> ClusterWaitError {
     port_forward_error(
         service,
         remote_port,
-        anyhow!("port-forward did not become ready"),
+        anyhow!(
+            "port-forward did not become ready{}",
+            format_port_forward_details(details)
+        ),
     )
 }
 
 fn exited_status(child: &mut Child) -> Option<ExitStatus> {
     child.try_wait().ok().flatten()
+}
+
+fn read_port_forward_stderr(child: &mut Child) -> Option<String> {
+    let mut stderr = child.stderr.take()?;
+    let mut output = String::new();
+    if stderr.read_to_string(&mut output).is_err() {
+        return None;
+    }
+    let trimmed = output.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+}
+
+fn port_forward_process_error(status: ExitStatus, details: Option<String>) -> anyhow::Error {
+    anyhow!(
+        "kubectl exited with {status}{}",
+        format_port_forward_details(details.as_deref())
+    )
+}
+
+fn format_port_forward_details(details: Option<&str>) -> String {
+    match details {
+        Some(details) => format!(": {details}"),
+        None => String::new(),
+    }
 }
 
 fn local_port_reachable(local_port: u16) -> bool {

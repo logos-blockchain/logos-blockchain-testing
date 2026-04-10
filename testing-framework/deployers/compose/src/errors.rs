@@ -73,6 +73,11 @@ impl WorkspaceError {
 #[derive(Debug, thiserror::Error)]
 /// Configuration-related failures while preparing compose runs.
 pub enum ConfigError {
+    #[error("failed to build compose descriptor: {source}")]
+    Descriptor {
+        #[source]
+        source: DynError,
+    },
     #[error("failed to update cfgsync configuration at {path:?}: {source}")]
     Cfgsync {
         path: PathBuf,

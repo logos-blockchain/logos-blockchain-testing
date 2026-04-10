@@ -24,7 +24,6 @@ use crate::{
     K8sDeployer,
     env::{HelmReleaseAssets, K8sDeployEnv, discovered_node_access},
     host::node_host,
-    infrastructure::helm::install_release,
     lifecycle::{
         cleanup::RunnerCleanup,
         wait::{
@@ -140,20 +139,9 @@ where
         let assets = E::prepare_assets(&topology, None)
             .map_err(|source| ManualClusterError::Assets { source })?;
         let (namespace, release) = E::cluster_identifiers();
-        let install_spec = assets
-            .release_bundle()
-            .install_spec(release.clone(), namespace.clone());
-        install_release(&install_spec).await.map_err(|source| {
-            ManualClusterError::InstallStack {
-                source: source.into(),
-            }
-        })?;
-        let cleanup = RunnerCleanup::new(
-            client.clone(),
-            namespace.clone(),
-            release.clone(),
-            std::env::var("K8S_RUNNER_PRESERVE").is_ok(),
-        );
+        let cleanup = E::install_stack(&client, &assets, &namespace, &release, nodes)
+            .await
+            .map_err(|source| ManualClusterError::InstallStack { source })?;
 
         let node_ports = E::collect_port_specs(&topology).nodes;
         let node_allocations =

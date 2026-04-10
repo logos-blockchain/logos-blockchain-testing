@@ -25,7 +25,7 @@ use crate::{
         ensure_image_present,
         workspace::ComposeWorkspace,
     },
-    env::{ComposeCfgsyncEnv, ComposeDeployEnv, ConfigServerHandle},
+    env::{ComposeCfgsyncEnv, ComposeConfigServerMode, ComposeDeployEnv, ConfigServerHandle},
     errors::{ComposeRunnerError, ConfigError, WorkspaceError},
     infrastructure::template::write_compose_file,
     lifecycle::cleanup::RunnerCleanup,
@@ -216,7 +216,11 @@ pub async fn start_cfgsync_stage<E: ComposeDeployEnv>(
     workspace: &WorkspaceState,
     cfgsync_port: u16,
     project_name: &str,
-) -> Result<Box<dyn ConfigServerHandle>, ComposeRunnerError> {
+) -> Result<Option<Box<dyn ConfigServerHandle>>, ComposeRunnerError> {
+    if matches!(E::cfgsync_server_mode(), ComposeConfigServerMode::Disabled) {
+        return Ok(None);
+    }
+
     info!(cfgsync_port = cfgsync_port, "launching cfgsync server");
 
     let network = compose_network_name(project_name);
@@ -244,7 +248,7 @@ pub async fn start_cfgsync_stage<E: ComposeDeployEnv>(
     wait_for_cfgsync_ready(cfgsync_port, Some(&handle)).await?;
     log_cfgsync_started(&handle);
 
-    Ok(Box::new(handle))
+    Ok(Some(Box::new(handle)))
 }
 
 /// Write cfgsync YAML from topology data.
@@ -299,7 +303,8 @@ pub fn write_compose_artifacts<E: ComposeDeployEnv>(
         workspace_root = %workspace.root.display(),
         "building compose descriptor"
     );
-    let descriptor = E::compose_descriptor(descriptors, cfgsync_port);
+    let descriptor = E::compose_descriptor(descriptors, cfgsync_port)
+        .map_err(|source| ConfigError::Descriptor { source })?;
 
     let compose_path = workspace.root.join("compose.generated.yml");
     write_compose_file(&descriptor, &compose_path)
@@ -326,10 +331,12 @@ pub async fn bring_up_stack(
     compose_path: &Path,
     project_name: &str,
     workspace_root: &Path,
-    cfgsync_handle: &mut dyn ConfigServerHandle,
+    cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
 ) -> Result<(), ComposeRunnerError> {
     if let Err(err) = compose_up(compose_path, project_name, workspace_root).await {
-        cfgsync_handle.shutdown();
+        if let Some(cfgsync_handle) = cfgsync_handle.as_deref_mut() {
+            cfgsync_handle.shutdown();
+        }
         return Err(ComposeRunnerError::Compose(err));
     }
     debug!(project = %project_name, "docker compose up completed");
@@ -341,7 +348,7 @@ pub async fn bring_up_stack_logged(
     compose_path: &Path,
     project_name: &str,
     workspace_root: &Path,
-    cfgsync_handle: &mut dyn ConfigServerHandle,
+    cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
 ) -> Result<(), ComposeRunnerError> {
     info!(project = %project_name, "bringing up docker compose stack");
     bring_up_stack(compose_path, project_name, workspace_root, cfgsync_handle).await
@@ -357,13 +364,10 @@ where
 {
     let prepared = prepare_stack_artifacts::<E>(descriptors, metrics_otlp_ingest_url).await?;
     let mut cfgsync_handle = start_cfgsync_for_prepared::<E>(&prepared).await?;
-    start_compose_stack(&prepared, cfgsync_handle.as_mut()).await?;
+    start_compose_stack(&prepared, &mut cfgsync_handle).await?;
     log_compose_environment_ready(&prepared, "compose stack is up");
 
-    Ok(stack_environment_from_prepared(
-        prepared,
-        Some(cfgsync_handle),
-    ))
+    Ok(stack_environment_from_prepared(prepared, cfgsync_handle))
 }
 
 /// Prepare workspace, cfgsync, and compose artifacts without starting services.
@@ -379,10 +383,7 @@ where
 
     log_compose_environment_ready(&prepared, "compose manual environment prepared");
 
-    Ok(stack_environment_from_prepared(
-        prepared,
-        Some(cfgsync_handle),
-    ))
+    Ok(stack_environment_from_prepared(prepared, cfgsync_handle))
 }
 
 async fn prepare_stack_artifacts<E>(
@@ -418,25 +419,28 @@ async fn ensure_compose_images_present<E: ComposeDeployEnv>(
     descriptors: &E::Deployment,
     cfgsync_port: u16,
 ) -> Result<(), ComposeRunnerError> {
-    let descriptor = E::compose_descriptor(descriptors, 0);
+    let descriptor = E::compose_descriptor(descriptors, 0)
+        .map_err(|source| ComposeRunnerError::Config(ConfigError::Descriptor { source }))?;
     let mut images = descriptor
         .nodes()
         .iter()
         .map(|node| (node.image().to_owned(), node.platform().map(str::to_owned)))
         .collect::<BTreeSet<_>>();
-    let cfgsync_spec = E::cfgsync_container_spec(
-        &workspace.cfgsync_path,
-        cfgsync_port,
-        &compose_network_name("compose-image-check"),
-    )
-    .map_err(|source| {
-        ComposeRunnerError::Config(ConfigError::CfgsyncStart {
-            port: cfgsync_port,
-            source,
-        })
-    })?;
+    if matches!(E::cfgsync_server_mode(), ComposeConfigServerMode::Docker) {
+        let cfgsync_spec = E::cfgsync_container_spec(
+            &workspace.cfgsync_path,
+            cfgsync_port,
+            &compose_network_name("compose-image-check"),
+        )
+        .map_err(|source| {
+            ComposeRunnerError::Config(ConfigError::CfgsyncStart {
+                port: cfgsync_port,
+                source,
+            })
+        })?;
 
-    images.insert((cfgsync_spec.image, cfgsync_spec.platform));
+        images.insert((cfgsync_spec.image, cfgsync_spec.platform));
+    }
 
     for (image, platform) in images {
         ensure_image_present(&image, platform.as_deref()).await?;
@@ -451,7 +455,7 @@ fn create_project_name() -> String {
 
 async fn start_cfgsync_for_prepared<E: ComposeDeployEnv>(
     prepared: &PreparedEnvironment,
-) -> Result<Box<dyn ConfigServerHandle>, ComposeRunnerError> {
+) -> Result<Option<Box<dyn ConfigServerHandle>>, ComposeRunnerError> {
     start_cfgsync_stage::<E>(
         &prepared.workspace,
         prepared.cfgsync_port,
@@ -462,7 +466,7 @@ async fn start_cfgsync_for_prepared<E: ComposeDeployEnv>(
 
 async fn handle_compose_start_failure(
     prepared: &PreparedEnvironment,
-    cfgsync_handle: &mut dyn ConfigServerHandle,
+    cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
 ) {
     dump_compose_logs(
         &prepared.compose_path,
@@ -470,7 +474,9 @@ async fn handle_compose_start_failure(
         &prepared.workspace.root,
     )
     .await;
-    cfgsync_handle.shutdown();
+    if let Some(cfgsync_handle) = cfgsync_handle.as_deref_mut() {
+        cfgsync_handle.shutdown();
+    }
 }
 
 fn stack_environment_from_prepared(
@@ -487,7 +493,7 @@ fn stack_environment_from_prepared(
 
 async fn start_compose_stack(
     prepared: &PreparedEnvironment,
-    cfgsync_handle: &mut dyn ConfigServerHandle,
+    cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
 ) -> Result<(), ComposeRunnerError> {
     if let Err(error) = bring_up_stack_logged(
         &prepared.compose_path,

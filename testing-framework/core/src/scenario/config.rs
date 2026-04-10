@@ -1,6 +1,7 @@
 use std::{collections::HashMap, error::Error, io};
 
 use cfgsync_artifacts::{ArtifactFile, ArtifactSet};
+use serde::Serialize;
 
 use crate::{
     cfgsync::StaticNodeConfigProvider,
@@ -117,6 +118,13 @@ pub trait ClusterNodeConfigApplication: Application {
     fn serialize_cluster_node_config(
         config: &Self::NodeConfig,
     ) -> Result<String, Self::ConfigError>;
+}
+
+pub fn serialize_cluster_yaml_config<T>(config: &T) -> Result<String, serde_yaml::Error>
+where
+    T: Serialize,
+{
+    serde_yaml::to_string(config)
 }
 
 impl<T> StaticNodeConfigProvider for T

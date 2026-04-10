@@ -203,11 +203,11 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         label: &str,
         config: Config,
         build_launch_spec: impl FnOnce(&Config, &Path, &str) -> Result<LaunchSpec, DynError>,
-        endpoints_from_config: impl FnOnce(&Config) -> NodeEndpoints,
+        endpoints_from_config: impl FnOnce(&Config) -> Result<NodeEndpoints, DynError>,
         keep_tempdir: bool,
         persist_dir: Option<&Path>,
         snapshot_dir: Option<&Path>,
-        client_from_endpoints: impl FnOnce(&NodeEndpoints) -> Client,
+        client_from_endpoints: impl FnOnce(&NodeEndpoints) -> Result<Client, DynError>,
     ) -> Result<Self, ProcessSpawnError> {
         let tempdir = create_tempdir(persist_dir)?;
         if let Some(snapshot_dir) = snapshot_dir {
@@ -217,8 +217,10 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
 
         let launch = build_launch_spec(&config, tempdir.path(), label)
             .map_err(|source| ProcessSpawnError::Config { source })?;
-        let endpoints = endpoints_from_config(&config);
-        let client = client_from_endpoints(&endpoints);
+        let endpoints = endpoints_from_config(&config)
+            .map_err(|source| ProcessSpawnError::Config { source })?;
+        let client = client_from_endpoints(&endpoints)
+            .map_err(|source| ProcessSpawnError::Config { source })?;
 
         let child = spawn_child_for_launch(tempdir.path(), &launch).await?;
 

@@ -6,8 +6,7 @@ exclude-dev         = true
 no-default-features = true
 
 [advisories]
-ignore = [
-]
+ignore = []
 yanked = "deny"
 
 [bans]
