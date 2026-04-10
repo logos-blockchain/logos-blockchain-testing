@@ -1,0 +1,19 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "kvstore-examples"
+version.workspace = true
+
+[dependencies]
+kvstore-node                     = { path = "../kvstore-node" }
+kvstore-runtime-ext              = { path = "../testing/integration" }
+kvstore-runtime-workloads        = { path = "../testing/workloads" }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+
+anyhow             = "1.0"
+serde              = { workspace = true }
+tokio              = { workspace = true, features = ["full"] }
+tracing            = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

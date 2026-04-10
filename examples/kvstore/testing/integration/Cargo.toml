@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "kvstore-runtime-ext"
+version.workspace = true
+
+[dependencies]
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+testing-framework-runner-local   = { workspace = true }
+
+async-trait  = { workspace = true }
+kvstore-node = { path = "../../kvstore-node" }
+serde        = { workspace = true }

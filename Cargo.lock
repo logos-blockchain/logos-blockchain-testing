@@ -1543,6 +1543,65 @@ dependencies = [
 ]
 
 [[package]]
+name = "kvstore-examples"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "kvstore-node",
+ "kvstore-runtime-ext",
+ "kvstore-runtime-workloads",
+ "serde",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "testing-framework-runner-k8s",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kvstore-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "reqwest",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kvstore-runtime-ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "kvstore-node",
+ "serde",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "testing-framework-runner-k8s",
+ "testing-framework-runner-local",
+]
+
+[[package]]
+name = "kvstore-runtime-workloads"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "kvstore-node",
+ "kvstore-runtime-ext",
+ "serde",
+ "testing-framework-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2244,6 +2303,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "queue-examples"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "queue-runtime-ext",
+ "queue-runtime-workloads",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "queue-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "reqwest",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "queue-runtime-ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "queue-node",
+ "serde",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "testing-framework-runner-local",
+]
+
+[[package]]
+name = "queue-runtime-workloads"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "queue-node",
+ "queue-runtime-ext",
+ "serde",
+ "testing-framework-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2546,6 +2661,61 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "891d81b926048e76efe18581bf793546b4c0eaf8448d72be8de2bbee5fd166e1"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "scheduler-examples"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "scheduler-runtime-ext",
+ "scheduler-runtime-workloads",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "scheduler-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "reqwest",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "scheduler-runtime-ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "scheduler-node",
+ "serde",
+ "testing-framework-core",
+ "testing-framework-runner-compose",
+ "testing-framework-runner-local",
+]
+
+[[package]]
+name = "scheduler-runtime-workloads"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "scheduler-node",
+ "scheduler-runtime-ext",
+ "serde",
+ "testing-framework-core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
