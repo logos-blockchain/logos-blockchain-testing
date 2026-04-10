@@ -13,7 +13,7 @@ use crate::{
         discover_attachable_services, discover_service_container_id,
         inspect_api_container_port_label, inspect_mapped_tcp_ports,
     },
-    env::ComposeDeployEnv,
+    env::{ComposeDeployEnv, readiness_http_path},
 };
 
 pub(super) struct ComposeAttachProvider<E: ComposeDeployEnv> {
@@ -198,7 +198,7 @@ async fn collect_readiness_endpoints<E: ComposeDeployEnv>(
         let container_id = discover_service_container_id(project, service).await?;
         let api_port = discover_api_port(&container_id).await?;
         let mut endpoint = build_service_endpoint(host, api_port)?;
-        endpoint.set_path(<E as ComposeDeployEnv>::node_readiness_path());
+        endpoint.set_path(readiness_http_path::<E>());
         endpoints.push(endpoint);
     }
 

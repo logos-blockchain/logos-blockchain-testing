@@ -4,7 +4,7 @@ use testing_framework_core::scenario::{HttpReadinessRequirement, NodeClients};
 use tokio::time::sleep;
 
 use crate::{
-    env::ComposeDeployEnv,
+    env::{ComposeDeployEnv, build_node_clients, wait_for_nodes},
     errors::{NodeClientError, StackReadinessError},
     infrastructure::ports::{HostPortMapping, compose_runner_host},
 };
@@ -21,7 +21,8 @@ pub async fn ensure_nodes_ready_with_ports<E: ComposeDeployEnv>(
     }
 
     let host = compose_runner_host();
-    E::wait_for_nodes(ports, &host, requirement)
+    wait_for_nodes::<E>(ports, &host, requirement)
+        .map_err(|source| StackReadinessError::Remote { source })?
         .await
         .map_err(|source| StackReadinessError::Remote { source })
 }
@@ -41,6 +42,6 @@ pub fn build_node_clients_with_ports<E: ComposeDeployEnv>(
     mapping: &HostPortMapping,
     host: &str,
 ) -> Result<NodeClients<E>, NodeClientError> {
-    E::build_node_clients(descriptors, mapping, host)
+    build_node_clients::<E>(descriptors, mapping, host)
         .map_err(|source| NodeClientError::Build { source })
 }

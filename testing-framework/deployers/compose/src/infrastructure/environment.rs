@@ -9,7 +9,6 @@ use anyhow::anyhow;
 use reqwest::Url;
 use testing_framework_core::{
     adjust_timeout,
-    cfgsync::StaticArtifactRenderer,
     scenario::{Application, internal::CleanupGuard},
     topology::DeploymentDescriptor,
 };
@@ -25,7 +24,10 @@ use crate::{
         ensure_image_present,
         workspace::ComposeWorkspace,
     },
-    env::{ComposeCfgsyncEnv, ComposeConfigServerMode, ComposeDeployEnv, ConfigServerHandle},
+    env::{
+        ComposeConfigServerMode, ComposeDeployEnv, ConfigServerHandle, cfgsync_container_spec,
+        cfgsync_server_mode, cfgsync_start_timeout, compose_descriptor, prepare_compose_configs,
+    },
     errors::{ComposeRunnerError, ConfigError, WorkspaceError},
     infrastructure::template::write_compose_file,
     lifecycle::cleanup::RunnerCleanup,
@@ -197,7 +199,7 @@ pub fn update_cfgsync_logged<E>(
     metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<(), ComposeRunnerError>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     info!(cfgsync_port, "updating cfgsync configuration");
 
@@ -217,24 +219,26 @@ pub async fn start_cfgsync_stage<E: ComposeDeployEnv>(
     cfgsync_port: u16,
     project_name: &str,
 ) -> Result<Option<Box<dyn ConfigServerHandle>>, ComposeRunnerError> {
-    if matches!(E::cfgsync_server_mode(), ComposeConfigServerMode::Disabled) {
+    if matches!(
+        cfgsync_server_mode::<E>(),
+        ComposeConfigServerMode::Disabled
+    ) {
         return Ok(None);
     }
 
     info!(cfgsync_port = cfgsync_port, "launching cfgsync server");
 
     let network = compose_network_name(project_name);
-    let spec = E::cfgsync_container_spec(&workspace.cfgsync_path, cfgsync_port, &network).map_err(
-        |source| {
+    let spec = cfgsync_container_spec::<E>(&workspace.cfgsync_path, cfgsync_port, &network)
+        .map_err(|source| {
             ComposeRunnerError::Config(ConfigError::CfgsyncStart {
                 port: cfgsync_port,
                 source,
             })
-        },
-    )?;
+        })?;
     let handle = start_docker_config_server(
         &spec,
-        adjust_timeout(E::cfgsync_start_timeout()),
+        adjust_timeout(cfgsync_start_timeout::<E>()),
         "docker run cfgsync server",
     )
     .await
@@ -259,9 +263,9 @@ pub fn configure_cfgsync<E>(
     metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<(), ConfigError>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
-    E::write_cfgsync_config(
+    prepare_compose_configs::<E>(
         &workspace.cfgsync_path,
         descriptors,
         cfgsync_port,
@@ -303,7 +307,7 @@ pub fn write_compose_artifacts<E: ComposeDeployEnv>(
         workspace_root = %workspace.root.display(),
         "building compose descriptor"
     );
-    let descriptor = E::compose_descriptor(descriptors, cfgsync_port)
+    let descriptor = compose_descriptor::<E>(descriptors, cfgsync_port)
         .map_err(|source| ConfigError::Descriptor { source })?;
 
     let compose_path = workspace.root.join("compose.generated.yml");
@@ -360,7 +364,7 @@ pub async fn prepare_environment<E>(
     metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<StackEnvironment, ComposeRunnerError>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     let prepared = prepare_stack_artifacts::<E>(descriptors, metrics_otlp_ingest_url).await?;
     let mut cfgsync_handle = start_cfgsync_for_prepared::<E>(&prepared).await?;
@@ -376,7 +380,7 @@ pub async fn prepare_environment_manual<E>(
     metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<StackEnvironment, ComposeRunnerError>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     let prepared = prepare_stack_artifacts::<E>(descriptors, metrics_otlp_ingest_url).await?;
     let cfgsync_handle = start_cfgsync_for_prepared::<E>(&prepared).await?;
@@ -391,7 +395,7 @@ async fn prepare_stack_artifacts<E>(
     metrics_otlp_ingest_url: Option<&Url>,
 ) -> Result<PreparedEnvironment, ComposeRunnerError>
 where
-    E: ComposeDeployEnv + StaticArtifactRenderer<Deployment = <E as Application>::Deployment>,
+    E: ComposeDeployEnv,
 {
     let workspace = prepare_workspace_logged()?;
     let cfgsync_port = allocate_cfgsync_port()?;
@@ -419,15 +423,15 @@ async fn ensure_compose_images_present<E: ComposeDeployEnv>(
     descriptors: &E::Deployment,
     cfgsync_port: u16,
 ) -> Result<(), ComposeRunnerError> {
-    let descriptor = E::compose_descriptor(descriptors, 0)
+    let descriptor = compose_descriptor::<E>(descriptors, 0)
         .map_err(|source| ComposeRunnerError::Config(ConfigError::Descriptor { source }))?;
     let mut images = descriptor
         .nodes()
         .iter()
         .map(|node| (node.image().to_owned(), node.platform().map(str::to_owned)))
         .collect::<BTreeSet<_>>();
-    if matches!(E::cfgsync_server_mode(), ComposeConfigServerMode::Docker) {
-        let cfgsync_spec = E::cfgsync_container_spec(
+    if matches!(cfgsync_server_mode::<E>(), ComposeConfigServerMode::Docker) {
+        let cfgsync_spec = cfgsync_container_spec::<E>(
             &workspace.cfgsync_path,
             cfgsync_port,
             &compose_network_name("compose-image-check"),

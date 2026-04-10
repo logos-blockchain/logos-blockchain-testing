@@ -4,7 +4,7 @@ use testing_framework_core::scenario::HttpReadinessRequirement;
 use tracing::{info, warn};
 
 use crate::{
-    env::ComposeDeployEnv,
+    env::{ComposeDeployEnv, wait_remote_readiness as remote_readiness_future},
     errors::ComposeRunnerError,
     infrastructure::{environment::StackEnvironment, ports::HostPortMapping},
     lifecycle::readiness::ensure_nodes_ready_with_ports,
@@ -55,7 +55,10 @@ async fn wait_remote_readiness<E: ComposeDeployEnv>(
     run_readiness_check(
         environment,
         "remote readiness probe failed",
-        E::wait_remote_readiness(descriptors, host_ports, requirement)
+        remote_readiness_future::<E>(descriptors, host_ports, requirement)
+            .map_err(|source| {
+                ComposeRunnerError::Readiness(crate::errors::StackReadinessError::Remote { source })
+            })?
             .await
             .map_err(|source| {
                 ComposeRunnerError::Readiness(crate::errors::StackReadinessError::Remote { source })

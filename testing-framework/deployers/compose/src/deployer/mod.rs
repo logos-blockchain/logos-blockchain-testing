@@ -14,11 +14,7 @@ use testing_framework_core::scenario::{
     internal::{CleanupGuard, FeedHandle},
 };
 
-use crate::{
-    env::{ComposeCfgsyncEnv, ComposeDeployEnv},
-    errors::ComposeRunnerError,
-    lifecycle::cleanup::RunnerCleanup,
-};
+use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
 
 /// Docker Compose-based deployer for test scenarios.
 #[derive(Clone, Copy)]
@@ -145,7 +141,7 @@ impl<E: ComposeDeployEnv> ComposeDeployer<E> {
         scenario: &Scenario<E, Caps>,
     ) -> Result<(Runner<E>, ComposeDeploymentMetadata), ComposeRunnerError>
     where
-        E: ComposeCfgsyncEnv,
+        E: ComposeDeployEnv,
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
         let deployer = Self {
@@ -163,7 +159,7 @@ impl<E: ComposeDeployEnv> ComposeDeployer<E> {
 impl<E, Caps> Deployer<E, Caps> for ComposeDeployer<E>
 where
     Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     type Error = ComposeRunnerError;
 

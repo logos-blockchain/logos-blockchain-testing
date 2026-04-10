@@ -10,7 +10,7 @@ pub use deployer::{ComposeDeployer, ComposeDeploymentMetadata};
 pub use descriptor::{
     BinaryConfigNodeSpec, ComposeDescriptor, EnvEntry, LoopbackNodeRuntimeSpec, NodeDescriptor,
     binary_config_node_runtime_spec, build_binary_config_node_descriptors,
-    build_loopback_node_descriptors,
+    build_binary_config_node_descriptors_with_file_name, build_loopback_node_descriptors,
 };
 pub use docker::{
     commands::{ComposeCommandError, compose_down, compose_up, dump_compose_logs},
@@ -21,8 +21,9 @@ pub use docker::{
     platform::host_gateway_entry,
 };
 pub use env::{
-    ComposeConfigServerMode, ComposeDeployEnv, ComposeReadinessProbe, ConfigServerHandle,
-    discovered_node_access,
+    ComposeAccess, ComposeCfgsync, ComposeConfigContext, ComposeConfigServerMode, ComposeConfigs,
+    ComposeDeployEnv, ComposeNodeConfigFileName, ComposeNodes, ComposeReadinessProbe,
+    ComposeRuntime, ComposeStack, ConfigServerHandle, discovered_node_access,
 };
 pub use errors::ComposeRunnerError;
 pub use infrastructure::{

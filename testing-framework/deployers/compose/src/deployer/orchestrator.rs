@@ -28,7 +28,7 @@ use super::{
 };
 use crate::{
     docker::control::{ComposeAttachedNodeControl, ComposeNodeControl},
-    env::{ComposeCfgsyncEnv, ComposeDeployEnv},
+    env::ComposeDeployEnv,
     errors::ComposeRunnerError,
     infrastructure::{
         environment::StackEnvironment,
@@ -41,14 +41,14 @@ const PRINT_ENDPOINTS_ENV: &str = "TESTNET_PRINT_ENDPOINTS";
 
 pub struct DeploymentOrchestrator<E>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     deployer: ComposeDeployer<E>,
 }
 
 impl<E> DeploymentOrchestrator<E>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     pub const fn new(deployer: ComposeDeployer<E>) -> Self {
         Self { deployer }
@@ -656,7 +656,7 @@ fn profiling_url(host: &str, api_port: u16) -> String {
 
 struct PreparedDeployment<E>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     environment: StackEnvironment,
     descriptors: <E as Application>::Deployment,
@@ -667,7 +667,7 @@ async fn prepare_deployment<E>(
     observability: &ObservabilityInputs,
 ) -> Result<PreparedDeployment<E>, ComposeRunnerError>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     let DeploymentContext {
         environment,

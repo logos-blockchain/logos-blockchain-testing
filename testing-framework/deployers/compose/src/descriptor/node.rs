@@ -223,6 +223,35 @@ pub fn build_binary_config_node_descriptors(
     })
 }
 
+pub fn build_binary_config_node_descriptors_with_file_name(
+    node_count: usize,
+    spec: &BinaryConfigNodeSpec,
+    file_name_for_index: impl Fn(usize) -> String,
+) -> Vec<NodeDescriptor> {
+    (0..node_count)
+        .map(|index| {
+            let file_name = file_name_for_index(index);
+            NodeDescriptor::with_loopback_ports(
+                node_identifier(index),
+                env::var(&spec.image_env_var).unwrap_or_else(|_| spec.default_image.clone()),
+                vec![
+                    spec.binary_path.clone(),
+                    "--config".to_owned(),
+                    spec.config_container_path.clone(),
+                ],
+                vec![format!(
+                    "./stack/configs/{file_name}:{}:ro",
+                    spec.config_container_path
+                )],
+                vec![],
+                spec.container_ports.clone(),
+                vec![EnvEntry::new("RUST_LOG", &spec.rust_log)],
+                env::var(&spec.platform_env_var).ok(),
+            )
+        })
+        .collect()
+}
+
 pub fn binary_config_node_runtime_spec(
     index: usize,
     spec: &BinaryConfigNodeSpec,

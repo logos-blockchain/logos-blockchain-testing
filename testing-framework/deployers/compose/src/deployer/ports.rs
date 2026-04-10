@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use tracing::{debug, info, warn};
 
 use crate::{
-    env::ComposeDeployEnv,
+    env::{ComposeDeployEnv, node_container_ports},
     errors::ComposeRunnerError,
     infrastructure::{
         environment::StackEnvironment,
@@ -20,7 +20,7 @@ impl<E: ComposeDeployEnv> PortManager<E> {
         environment: &mut StackEnvironment,
         descriptors: &E::Deployment,
     ) -> Result<HostPortMapping, ComposeRunnerError> {
-        let nodes = E::node_container_ports(descriptors).map_err(|source| {
+        let nodes = node_container_ports::<E>(descriptors).map_err(|source| {
             ComposeRunnerError::Config(crate::errors::ConfigError::Descriptor { source })
         })?;
         debug!(

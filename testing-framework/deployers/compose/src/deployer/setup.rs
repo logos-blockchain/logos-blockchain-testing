@@ -6,7 +6,7 @@ use tracing::info;
 
 use crate::{
     docker::ensure_docker_available,
-    env::ComposeCfgsyncEnv,
+    env::ComposeDeployEnv,
     errors::ComposeRunnerError,
     infrastructure::environment::{
         StackEnvironment, ensure_supported_topology, prepare_environment,
@@ -15,14 +15,14 @@ use crate::{
 
 pub struct DeploymentSetup<'a, E>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     descriptors: &'a <E as Application>::Deployment,
 }
 
 pub struct DeploymentContext<'a, E>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     pub descriptors: &'a <E as Application>::Deployment,
     pub environment: StackEnvironment,
@@ -30,7 +30,7 @@ where
 
 impl<'a, E> DeploymentSetup<'a, E>
 where
-    E: ComposeCfgsyncEnv,
+    E: ComposeDeployEnv,
 {
     pub fn new(descriptors: &'a <E as Application>::Deployment) -> Self {
         Self { descriptors }

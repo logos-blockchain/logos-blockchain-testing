@@ -5,7 +5,7 @@ mod node;
 pub use node::{
     BinaryConfigNodeSpec, EnvEntry, LoopbackNodeRuntimeSpec, NodeDescriptor,
     binary_config_node_runtime_spec, build_binary_config_node_descriptors,
-    build_loopback_node_descriptors,
+    build_binary_config_node_descriptors_with_file_name, build_loopback_node_descriptors,
 };
 
 /// Top-level docker-compose descriptor built from an environment-specific
