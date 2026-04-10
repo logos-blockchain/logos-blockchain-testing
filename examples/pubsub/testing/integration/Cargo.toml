@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "pubsub-runtime-ext"
+version.workspace = true
+
+[dependencies]
+async-trait                      = { workspace = true }
+pubsub-node                      = { path = "../../pubsub-node" }
+serde                            = { workspace = true }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+testing-framework-runner-local   = { workspace = true }
+tokio                            = { workspace = true }

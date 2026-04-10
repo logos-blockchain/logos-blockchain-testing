@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "nats-runtime-ext"
+version.workspace = true
+
+[dependencies]
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-local   = { workspace = true }
+
+async-nats  = "0.47"
+async-trait = { workspace = true }
+reqwest     = { workspace = true, features = ["json"] }
+serde       = { workspace = true }

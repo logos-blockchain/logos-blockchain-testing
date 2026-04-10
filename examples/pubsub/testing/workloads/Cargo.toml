@@ -1,0 +1,14 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "pubsub-runtime-workloads"
+version.workspace = true
+
+[dependencies]
+async-trait            = { workspace = true }
+pubsub-node            = { path = "../../pubsub-node" }
+pubsub-runtime-ext     = { path = "../integration" }
+serde                  = { workspace = true }
+testing-framework-core = { workspace = true }
+tokio                  = { workspace = true, features = ["full"] }
+tracing                = { workspace = true }
