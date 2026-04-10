@@ -281,170 +281,467 @@ pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(
 }
 
 #[async_trait]
-pub trait K8sDeployEnv: Application + Sized {
-    type Assets: Send + Sync;
-
-    /// Collect container port specs from the topology.
-    fn collect_port_specs(topology: &Self::Deployment) -> PortSpecs;
-
-    /// Build deploy-time assets (charts, config payloads, scripts).
-    fn prepare_assets(
-        topology: &Self::Deployment,
-        metrics_otlp_ingest_url: Option<&Url>,
-    ) -> Result<Self::Assets, DynError>;
-
-    /// Install the k8s stack using the prepared assets.
-    async fn install_stack(
+pub trait PreparedK8sStack: Send + Sync {
+    async fn install(
+        &self,
         client: &Client,
-        assets: &Self::Assets,
         namespace: &str,
         release: &str,
         nodes: usize,
-    ) -> Result<RunnerCleanup, DynError>
-    where
-        Self::Assets: HelmReleaseAssets,
-    {
+    ) -> Result<RunnerCleanup, DynError>;
+}
+
+#[async_trait]
+impl<T> PreparedK8sStack for T
+where
+    T: HelmReleaseAssets + Send + Sync,
+{
+    async fn install(
+        &self,
+        client: &Client,
+        namespace: &str,
+        release: &str,
+        nodes: usize,
+    ) -> Result<RunnerCleanup, DynError> {
         let _ = nodes;
-        install_helm_release_with_cleanup(client, assets, namespace, release).await
+        install_helm_release_with_cleanup(client, self, namespace, release).await
+    }
+}
+
+type K8sPortSpecsBuilder<E> =
+    Box<dyn Fn(&<E as Application>::Deployment) -> PortSpecs + Send + Sync>;
+type K8sPreparedStackBuilder<E> = Box<
+    dyn Fn(
+            &<E as Application>::Deployment,
+            Option<&Url>,
+        ) -> Result<Box<dyn PreparedK8sStack>, DynError>
+        + Send
+        + Sync,
+>;
+type K8sClusterIdentifiers = Box<dyn Fn() -> (String, String) + Send + Sync>;
+type K8sIndexedName = Box<dyn Fn(&str, usize) -> String + Send + Sync>;
+type K8sAttachSelector = Box<dyn Fn(&str) -> String + Send + Sync>;
+type K8sNodeClientsBuilder<E> = Box<
+    dyn Fn(&str, &[u16], &[u16]) -> Result<Vec<<E as Application>::NodeClient>, DynError>
+        + Send
+        + Sync,
+>;
+type K8sNodeBaseUrl<E> =
+    Box<dyn Fn(&<E as Application>::NodeClient) -> Option<String> + Send + Sync>;
+type K8sCfgsyncService = Box<dyn Fn(&str) -> Option<(String, u16)> + Send + Sync>;
+type K8sCfgsyncHostnames = Box<dyn Fn(&str, usize) -> Vec<String> + Send + Sync>;
+type K8sCfgsyncOverrideBuilder<E> = Box<
+    dyn Fn(
+            &<E as Application>::Deployment,
+            usize,
+            &[String],
+            &testing_framework_core::scenario::StartNodeOptions<E>,
+        ) -> Result<Option<ArtifactSet>, DynError>
+        + Send
+        + Sync,
+>;
+
+pub struct K8sRuntime<E: Application> {
+    install: K8sInstall<E>,
+    access: K8sAccess<E>,
+    manual: K8sManual<E>,
+}
+
+pub struct K8sInstall<E: Application> {
+    collect_port_specs: K8sPortSpecsBuilder<E>,
+    prepare_stack: K8sPreparedStackBuilder<E>,
+    cluster_identifiers: K8sClusterIdentifiers,
+    node_deployment_name: K8sIndexedName,
+    node_service_name: K8sIndexedName,
+    attach_node_service_selector: K8sAttachSelector,
+}
+
+pub struct K8sAccess<E: Application> {
+    build_node_clients: K8sNodeClientsBuilder<E>,
+    readiness_path: &'static str,
+    node_role: &'static str,
+    node_base_url: K8sNodeBaseUrl<E>,
+}
+
+pub struct K8sManual<E: Application> {
+    cfgsync_service: K8sCfgsyncService,
+    cfgsync_hostnames: Option<K8sCfgsyncHostnames>,
+    build_cfgsync_override_artifacts: K8sCfgsyncOverrideBuilder<E>,
+}
+
+impl<E: Application> K8sRuntime<E> {
+    #[must_use]
+    pub fn new(install: K8sInstall<E>) -> Self {
+        Self {
+            install,
+            access: K8sAccess::default(),
+            manual: K8sManual::default(),
+        }
     }
 
-    /// Provide a namespace/release identifier pair.
-    fn cluster_identifiers() -> (String, String) {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or_default();
-        let suffix = format!("{stamp:x}-{:x}", process::id());
-        (format!("tf-testnet-{suffix}"), String::from("tf-runner"))
+    #[must_use]
+    pub fn with_access(mut self, access: K8sAccess<E>) -> Self {
+        self.access = access;
+        self
     }
 
-    /// Build a single node client from forwarded ports.
-    fn node_client_from_ports(
-        host: &str,
-        api_port: u16,
-        auxiliary_port: u16,
-    ) -> Result<Self::NodeClient, DynError> {
-        <Self as Application>::build_node_client(&discovered_node_access(
-            host,
-            api_port,
-            auxiliary_port,
-        ))
+    #[must_use]
+    pub fn with_manual(mut self, manual: K8sManual<E>) -> Self {
+        self.manual = manual;
+        self
     }
+}
 
-    /// Build node clients from forwarded ports.
-    fn build_node_clients(
-        host: &str,
-        node_api_ports: &[u16],
-        node_auxiliary_ports: &[u16],
-    ) -> Result<Vec<Self::NodeClient>, DynError> {
-        node_api_ports
-            .iter()
-            .zip(node_auxiliary_ports.iter())
-            .map(|(&api_port, &auxiliary_port)| {
-                Self::node_client_from_ports(host, api_port, auxiliary_port)
-            })
-            .collect()
-    }
+impl<E> K8sRuntime<E>
+where
+    E: Application + StaticNodeConfigProvider,
+    E::Deployment: DeploymentDescriptor,
+{
+    #[must_use]
+    pub fn binary_config(spec: BinaryConfigK8sSpec) -> Self {
+        let prepare_spec = spec.clone();
+        let name_prefix = spec.node_name_prefix.clone();
+        let container_http_port = spec.container_http_port;
+        let service_testing_port = spec.service_testing_port;
 
-    /// Path appended to readiness probe URLs.
-    fn node_readiness_path() -> &'static str {
-        <Self as Application>::node_readiness_path()
-    }
-
-    /// Wait for remote readiness using topology + URLs.
-    async fn wait_remote_readiness(
-        topology: &Self::Deployment,
-        urls: &[Url],
-        requirement: HttpReadinessRequirement,
-    ) -> Result<(), DynError> {
-        let _ = topology;
-        let readiness_urls: Vec<_> = urls
-            .iter()
-            .map(|url| {
-                let mut endpoint = url.clone();
-                endpoint.set_path(<Self as K8sDeployEnv>::node_readiness_path());
-                endpoint
-            })
-            .collect();
-        wait_http_readiness(&readiness_urls, requirement).await?;
-        Ok(())
-    }
-
-    /// Label used for readiness probe logging.
-    fn node_role() -> &'static str {
-        "node"
-    }
-
-    /// Deployment resource name for a node index.
-    fn node_deployment_name(release: &str, index: usize) -> String {
-        format!("{release}-node-{index}")
-    }
-
-    /// Service resource name for a node index.
-    fn node_service_name(release: &str, index: usize) -> String {
-        format!("{release}-node-{index}")
-    }
-
-    /// Label selector used to discover managed node services in
-    /// existing-cluster mode.
-    fn attach_node_service_selector(release: &str) -> String {
-        format!("app.kubernetes.io/instance={release}")
-    }
-
-    /// Wait for HTTP readiness on provided ports for a given host.
-    async fn wait_for_node_http(
-        ports: &[u16],
-        role: &'static str,
-        host: &str,
-        timeout: Duration,
-        poll_interval: Duration,
-        requirement: HttpReadinessRequirement,
-    ) -> Result<(), DynError> {
-        let _ = role;
-        let _ = timeout;
-        let _ = poll_interval;
-        wait_for_http_ports_with_host_and_requirement(
-            ports,
-            host,
-            <Self as K8sDeployEnv>::node_readiness_path(),
-            requirement,
+        Self::new(
+            K8sInstall::new(
+                move |topology: &E::Deployment| {
+                    standard_port_specs(
+                        topology.node_count(),
+                        container_http_port,
+                        service_testing_port,
+                    )
+                },
+                move |topology, _metrics_otlp_ingest_url| {
+                    let assets =
+                        render_binary_config_node_chart_assets::<E>(topology, &prepare_spec)?;
+                    Ok(Box::new(assets) as Box<dyn PreparedK8sStack>)
+                },
+            )
+            .with_node_name_prefix(name_prefix),
         )
-        .await?;
-        Ok(())
+    }
+}
+
+impl<E: Application> K8sInstall<E> {
+    #[must_use]
+    pub fn new<FP, FA>(collect_port_specs: FP, prepare_stack: FA) -> Self
+    where
+        FP: Fn(&E::Deployment) -> PortSpecs + Send + Sync + 'static,
+        FA: Fn(&E::Deployment, Option<&Url>) -> Result<Box<dyn PreparedK8sStack>, DynError>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            collect_port_specs: Box::new(collect_port_specs),
+            prepare_stack: Box::new(prepare_stack),
+            cluster_identifiers: Box::new(default_cluster_identifiers),
+            node_deployment_name: Box::new(default_node_name),
+            node_service_name: Box::new(default_node_name),
+            attach_node_service_selector: Box::new(default_attach_node_service_selector),
+        }
     }
 
-    /// Optional base URL for node client diagnostics.
-    fn node_base_url(_client: &Self::NodeClient) -> Option<String> {
-        None
+    #[must_use]
+    pub fn with_cluster_identifiers<F>(mut self, cluster_identifiers: F) -> Self
+    where
+        F: Fn() -> (String, String) + Send + Sync + 'static,
+    {
+        self.cluster_identifiers = Box::new(cluster_identifiers);
+        self
     }
 
-    /// Optional cfgsync/bootstrap service reachable from inside the cluster.
-    ///
-    /// Manual cluster uses this to update one node's served config before
-    /// start.
-    fn cfgsync_service(_release: &str) -> Option<(String, u16)> {
-        None
+    #[must_use]
+    pub fn with_node_name_prefix(mut self, prefix: impl Into<String>) -> Self {
+        let prefix = prefix.into();
+        self.node_deployment_name = Box::new(named_resource(prefix.clone()));
+        self.node_service_name = Box::new(named_resource(prefix));
+        self
     }
 
-    /// Hostnames that should be rendered into cfgsync-served node configs.
-    fn cfgsync_hostnames(release: &str, node_count: usize) -> Vec<String> {
-        (0..node_count)
-            .map(|index| Self::node_service_name(release, index))
-            .collect()
+    #[must_use]
+    pub fn with_resource_names<FD, FS>(
+        mut self,
+        node_deployment_name: FD,
+        node_service_name: FS,
+    ) -> Self
+    where
+        FD: Fn(&str, usize) -> String + Send + Sync + 'static,
+        FS: Fn(&str, usize) -> String + Send + Sync + 'static,
+    {
+        self.node_deployment_name = Box::new(node_deployment_name);
+        self.node_service_name = Box::new(node_service_name);
+        self
     }
 
-    /// Optional node-local artifact override for manual cluster startup
-    /// options.
-    ///
-    /// Return `Some(..)` when options require a node-specific config
-    /// replacement before the node starts. Return `None` to keep the
-    /// original cfgsync artifact set.
-    fn build_cfgsync_override_artifacts(
-        _topology: &Self::Deployment,
-        _node_index: usize,
-        _hostnames: &[String],
-        _options: &testing_framework_core::scenario::StartNodeOptions<Self>,
-    ) -> Result<Option<ArtifactSet>, DynError> {
-        Ok(None)
+    #[must_use]
+    pub fn with_attach_node_service_selector<F>(mut self, attach_node_service_selector: F) -> Self
+    where
+        F: Fn(&str) -> String + Send + Sync + 'static,
+    {
+        self.attach_node_service_selector = Box::new(attach_node_service_selector);
+        self
     }
+}
+
+impl<E: Application> Default for K8sAccess<E> {
+    fn default() -> Self {
+        Self {
+            build_node_clients: Box::new(default_build_node_clients::<E>),
+            readiness_path: E::node_readiness_path(),
+            node_role: "node",
+            node_base_url: Box::new(|_client| None),
+        }
+    }
+}
+
+impl<E: Application> K8sAccess<E> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn with_node_clients<F>(mut self, build_node_clients: F) -> Self
+    where
+        F: Fn(&str, &[u16], &[u16]) -> Result<Vec<E::NodeClient>, DynError> + Send + Sync + 'static,
+    {
+        self.build_node_clients = Box::new(build_node_clients);
+        self
+    }
+
+    #[must_use]
+    pub fn with_readiness_path(mut self, readiness_path: &'static str) -> Self {
+        self.readiness_path = readiness_path;
+        self
+    }
+
+    #[must_use]
+    pub fn with_node_role(mut self, node_role: &'static str) -> Self {
+        self.node_role = node_role;
+        self
+    }
+
+    #[must_use]
+    pub fn with_node_base_url<F>(mut self, node_base_url: F) -> Self
+    where
+        F: Fn(&E::NodeClient) -> Option<String> + Send + Sync + 'static,
+    {
+        self.node_base_url = Box::new(node_base_url);
+        self
+    }
+}
+
+impl<E: Application> Default for K8sManual<E> {
+    fn default() -> Self {
+        Self {
+            cfgsync_service: Box::new(|_release| None),
+            cfgsync_hostnames: None,
+            build_cfgsync_override_artifacts: Box::new(
+                |_topology, _node_index, _hostnames, _options| Ok(None),
+            ),
+        }
+    }
+}
+
+impl<E: Application> K8sManual<E> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn with_cfgsync_service<F>(mut self, cfgsync_service: F) -> Self
+    where
+        F: Fn(&str) -> Option<(String, u16)> + Send + Sync + 'static,
+    {
+        self.cfgsync_service = Box::new(cfgsync_service);
+        self
+    }
+
+    #[must_use]
+    pub fn with_cfgsync_hostnames<F>(mut self, cfgsync_hostnames: F) -> Self
+    where
+        F: Fn(&str, usize) -> Vec<String> + Send + Sync + 'static,
+    {
+        self.cfgsync_hostnames = Some(Box::new(cfgsync_hostnames));
+        self
+    }
+
+    #[must_use]
+    pub fn with_cfgsync_override_artifacts<F>(mut self, build_override_artifacts: F) -> Self
+    where
+        F: Fn(
+                &E::Deployment,
+                usize,
+                &[String],
+                &testing_framework_core::scenario::StartNodeOptions<E>,
+            ) -> Result<Option<ArtifactSet>, DynError>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.build_cfgsync_override_artifacts = Box::new(build_override_artifacts);
+        self
+    }
+}
+
+pub trait K8sDeployEnv: Application + Sized {
+    fn k8s_runtime() -> K8sRuntime<Self>;
+}
+
+pub(crate) fn runtime_for<E: K8sDeployEnv>() -> K8sRuntime<E> {
+    E::k8s_runtime()
+}
+
+pub(crate) fn collect_port_specs<E: K8sDeployEnv>(deployment: &E::Deployment) -> PortSpecs {
+    (runtime_for::<E>().install.collect_port_specs)(deployment)
+}
+
+pub(crate) fn prepare_stack<E: K8sDeployEnv>(
+    deployment: &E::Deployment,
+    metrics_otlp_ingest_url: Option<&Url>,
+) -> Result<Box<dyn PreparedK8sStack>, DynError> {
+    (runtime_for::<E>().install.prepare_stack)(deployment, metrics_otlp_ingest_url)
+}
+
+pub(crate) fn cluster_identifiers<E: K8sDeployEnv>() -> (String, String) {
+    (runtime_for::<E>().install.cluster_identifiers)()
+}
+
+pub(crate) fn build_node_clients<E: K8sDeployEnv>(
+    host: &str,
+    node_api_ports: &[u16],
+    node_auxiliary_ports: &[u16],
+) -> Result<Vec<E::NodeClient>, DynError> {
+    (runtime_for::<E>().access.build_node_clients)(host, node_api_ports, node_auxiliary_ports)
+}
+
+pub(crate) fn node_readiness_path<E: K8sDeployEnv>() -> &'static str {
+    runtime_for::<E>().access.readiness_path
+}
+
+pub(crate) async fn wait_remote_readiness<E: K8sDeployEnv>(
+    _deployment: &E::Deployment,
+    urls: &[Url],
+    requirement: HttpReadinessRequirement,
+) -> Result<(), DynError> {
+    let readiness_urls: Vec<_> = urls
+        .iter()
+        .map(|url| {
+            let mut endpoint = url.clone();
+            endpoint.set_path(node_readiness_path::<E>());
+            endpoint
+        })
+        .collect();
+    wait_http_readiness(&readiness_urls, requirement).await?;
+    Ok(())
+}
+
+pub(crate) fn node_role<E: K8sDeployEnv>() -> &'static str {
+    runtime_for::<E>().access.node_role
+}
+
+pub(crate) fn node_deployment_name<E: K8sDeployEnv>(release: &str, index: usize) -> String {
+    (runtime_for::<E>().install.node_deployment_name)(release, index)
+}
+
+pub(crate) fn node_service_name<E: K8sDeployEnv>(release: &str, index: usize) -> String {
+    (runtime_for::<E>().install.node_service_name)(release, index)
+}
+
+pub(crate) fn attach_node_service_selector<E: K8sDeployEnv>(release: &str) -> String {
+    (runtime_for::<E>().install.attach_node_service_selector)(release)
+}
+
+pub(crate) async fn wait_for_node_http<E: K8sDeployEnv>(
+    ports: &[u16],
+    role: &'static str,
+    host: &str,
+    timeout: Duration,
+    poll_interval: Duration,
+    requirement: HttpReadinessRequirement,
+) -> Result<(), DynError> {
+    let _ = role;
+    let _ = timeout;
+    let _ = poll_interval;
+    wait_for_http_ports_with_host_and_requirement(
+        ports,
+        host,
+        node_readiness_path::<E>(),
+        requirement,
+    )
+    .await?;
+    Ok(())
+}
+
+pub(crate) fn node_base_url<E: K8sDeployEnv>(client: &E::NodeClient) -> Option<String> {
+    (runtime_for::<E>().access.node_base_url)(client)
+}
+
+pub(crate) fn cfgsync_service<E: K8sDeployEnv>(release: &str) -> Option<(String, u16)> {
+    (runtime_for::<E>().manual.cfgsync_service)(release)
+}
+
+pub(crate) fn cfgsync_hostnames<E: K8sDeployEnv>(release: &str, node_count: usize) -> Vec<String> {
+    let runtime = runtime_for::<E>();
+    if let Some(cfgsync_hostnames) = runtime.manual.cfgsync_hostnames {
+        return cfgsync_hostnames(release, node_count);
+    }
+
+    (0..node_count)
+        .map(|index| (runtime.install.node_service_name)(release, index))
+        .collect()
+}
+
+pub(crate) fn build_cfgsync_override_artifacts<E: K8sDeployEnv>(
+    deployment: &E::Deployment,
+    node_index: usize,
+    hostnames: &[String],
+    options: &testing_framework_core::scenario::StartNodeOptions<E>,
+) -> Result<Option<ArtifactSet>, DynError> {
+    (runtime_for::<E>().manual.build_cfgsync_override_artifacts)(
+        deployment, node_index, hostnames, options,
+    )
+}
+
+fn default_cluster_identifiers() -> (String, String) {
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    let suffix = format!("{stamp:x}-{:x}", process::id());
+    (format!("tf-testnet-{suffix}"), String::from("tf-runner"))
+}
+
+fn default_build_node_clients<E: Application>(
+    host: &str,
+    node_api_ports: &[u16],
+    node_auxiliary_ports: &[u16],
+) -> Result<Vec<E::NodeClient>, DynError> {
+    node_api_ports
+        .iter()
+        .zip(node_auxiliary_ports.iter())
+        .map(|(&api_port, &auxiliary_port)| {
+            <E as Application>::build_node_client(&discovered_node_access(
+                host,
+                api_port,
+                auxiliary_port,
+            ))
+        })
+        .collect()
+}
+
+fn default_node_name(release: &str, index: usize) -> String {
+    format!("{release}-node-{index}")
+}
+
+fn default_attach_node_service_selector(release: &str) -> String {
+    format!("app.kubernetes.io/instance={release}")
+}
+
+fn named_resource(prefix: String) -> impl Fn(&str, usize) -> String + Send + Sync + 'static {
+    move |_release, index| format!("{prefix}-{index}")
 }

@@ -24,7 +24,10 @@ use crate::{
         K8sDeploymentMetadata,
         attach_provider::{K8sAttachProvider, K8sAttachedClusterWait},
     },
-    env::{HelmReleaseAssets, K8sDeployEnv},
+    env::{
+        K8sDeployEnv, attach_node_service_selector, cluster_identifiers, node_base_url,
+        prepare_stack,
+    },
     infrastructure::cluster::{
         ClusterEnvironment, ClusterEnvironmentError, NodeClientError, PortSpecs,
         RemoteReadinessError, build_node_clients, collect_port_specs, ensure_cluster_readiness,
@@ -72,7 +75,6 @@ impl<E: K8sDeployEnv> K8sDeployer<E> {
         scenario: &Scenario<E, Caps>,
     ) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
     where
-        E::Assets: HelmReleaseAssets,
         Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
     {
         deploy_with_observability(self, scenario).await
@@ -131,7 +133,6 @@ pub enum K8sRunnerError {
 impl<E, Caps> Deployer<E, Caps> for K8sDeployer<E>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
     Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
 {
     type Error = K8sRunnerError;
@@ -174,7 +175,6 @@ async fn deploy_with_observability<E, Caps>(
 ) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
     Caps: ObservabilityCapabilityProvider + Send + Sync,
 {
     validate_supported_cluster_mode(scenario)
@@ -198,7 +198,7 @@ where
     let deployment = build_k8s_deployment::<E, Caps>(deployer, scenario, &observability).await?;
     let metadata = K8sDeploymentMetadata {
         namespace: Some(deployment.cluster.namespace().to_owned()),
-        label_selector: Some(E::attach_node_service_selector(
+        label_selector: Some(attach_node_service_selector::<E>(
             deployment.cluster.release(),
         )),
     };
@@ -397,7 +397,6 @@ async fn build_k8s_deployment<E, Caps>(
 ) -> Result<BuiltK8sDeployment, K8sRunnerError>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
     Caps: ObservabilityCapabilityProvider,
 {
     let descriptors = scenario.deployment();
@@ -439,10 +438,7 @@ async fn setup_cluster<E: K8sDeployEnv>(
     readiness_checks: bool,
     readiness_requirement: HttpReadinessRequirement,
     observability: &ObservabilityInputs,
-) -> Result<ClusterEnvironment, K8sRunnerError>
-where
-    E::Assets: HelmReleaseAssets,
-{
+) -> Result<ClusterEnvironment, K8sRunnerError> {
     let (setup, cleanup) = prepare_cluster_setup::<E>(client, descriptors, observability).await?;
     let mut cleanup_guard = Some(cleanup);
 
@@ -475,17 +471,15 @@ async fn prepare_cluster_setup<E: K8sDeployEnv>(
     client: &Client,
     descriptors: &E::Deployment,
     observability: &ObservabilityInputs,
-) -> Result<(ClusterSetup, RunnerCleanup), K8sRunnerError>
-where
-    E::Assets: HelmReleaseAssets,
-{
-    let assets = E::prepare_assets(descriptors, observability.metrics_otlp_ingest_url.as_ref())
+) -> Result<(ClusterSetup, RunnerCleanup), K8sRunnerError> {
+    let assets = prepare_stack::<E>(descriptors, observability.metrics_otlp_ingest_url.as_ref())
         .map_err(|source| K8sRunnerError::Assets { source })?;
     let nodes = descriptors.node_count();
-    let (namespace, release) = E::cluster_identifiers();
+    let (namespace, release) = cluster_identifiers::<E>();
     info!(%namespace, %release, nodes, "preparing k8s assets and namespace");
 
-    let cleanup = E::install_stack(client, &assets, &namespace, &release, nodes)
+    let cleanup = assets
+        .install(client, &namespace, &release, nodes)
         .await
         .map_err(|source| K8sRunnerError::InstallStack { source })?;
 
@@ -749,7 +743,7 @@ fn print_node_pprof_endpoints<E: K8sDeployEnv>(node_clients: &NodeClients<E>) {
     let nodes = node_clients.snapshot();
 
     for (idx, client) in nodes.iter().enumerate() {
-        if let Some(base_url) = E::node_base_url(client) {
+        if let Some(base_url) = node_base_url::<E>(client) {
             println!(
                 "TESTNET_PPROF node_{}={}/debug/pprof/profile?seconds=15&format=proto",
                 idx, base_url

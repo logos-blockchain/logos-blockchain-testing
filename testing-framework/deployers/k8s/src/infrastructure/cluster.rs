@@ -7,7 +7,10 @@ use tracing::{debug, info};
 use url::ParseError;
 
 use crate::{
-    env::K8sDeployEnv,
+    env::{
+        K8sDeployEnv, build_node_clients as build_k8s_node_clients,
+        collect_port_specs as collect_k8s_port_specs, node_role, wait_remote_readiness,
+    },
     lifecycle::{cleanup::RunnerCleanup, logs::dump_namespace_logs},
     wait::{
         ClusterPorts, ClusterReady, NodeConfigPorts, PortForwardHandle, wait_for_cluster_ready,
@@ -131,7 +134,7 @@ pub enum RemoteReadinessError {
 }
 
 pub fn collect_port_specs<E: K8sDeployEnv>(descriptors: &E::Deployment) -> PortSpecs {
-    let specs = E::collect_port_specs(descriptors);
+    let specs = collect_k8s_port_specs::<E>(descriptors);
     debug!(nodes = specs.nodes.len(), "collected k8s port specs");
     specs
 }
@@ -139,7 +142,7 @@ pub fn collect_port_specs<E: K8sDeployEnv>(descriptors: &E::Deployment) -> PortS
 pub fn build_node_clients<E: K8sDeployEnv>(
     cluster: &ClusterEnvironment,
 ) -> Result<NodeClients<E>, NodeClientError> {
-    let nodes = E::build_node_clients(
+    let nodes = build_k8s_node_clients::<E>(
         &cluster.node_host,
         &cluster.node_api_ports,
         &cluster.node_auxiliary_ports,
@@ -159,9 +162,9 @@ pub async fn ensure_cluster_readiness<E: K8sDeployEnv>(
     info!("waiting for remote readiness (API + membership)");
     let (node_api, _node_auxiliary) = cluster.node_ports();
 
-    let node_urls = readiness_urls(node_api, E::node_role(), &cluster.node_host)?;
+    let node_urls = readiness_urls(node_api, node_role::<E>(), &cluster.node_host)?;
 
-    E::wait_remote_readiness(descriptors, &node_urls, requirement)
+    wait_remote_readiness::<E>(descriptors, &node_urls, requirement)
         .await
         .map_err(|source| RemoteReadinessError::Remote { source })?;
 

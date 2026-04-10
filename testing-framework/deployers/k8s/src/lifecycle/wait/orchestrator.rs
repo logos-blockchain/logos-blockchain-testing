@@ -2,7 +2,7 @@ use kube::Client;
 
 use super::{ClusterPorts, ClusterReady, ClusterWaitError, NodeConfigPorts, NodePortAllocation};
 use crate::{
-    env::K8sDeployEnv,
+    env::{K8sDeployEnv, node_deployment_name, node_role, node_service_name},
     lifecycle::wait::{
         deployment::wait_for_deployment_ready,
         forwarding::{
@@ -27,7 +27,7 @@ pub async fn wait_for_cluster_ready<E: K8sDeployEnv>(
 
     let node_allocations =
         discover_ready_node_allocations::<E>(client, namespace, release, node_ports).await?;
-    let role = E::node_role();
+    let role = node_role::<E>();
 
     let (readiness, node_allocations) =
         if needs_port_forward_fallback::<E>(&node_allocations, role).await {
@@ -112,7 +112,7 @@ async fn discover_ready_node_allocations<E: K8sDeployEnv>(
     let mut allocations = Vec::with_capacity(node_ports.len());
 
     for (index, ports) in node_ports.iter().enumerate() {
-        let deployment_name = E::node_deployment_name(release, index);
+        let deployment_name = node_deployment_name::<E>(release, index);
         wait_for_deployment_ready(client, namespace, &deployment_name).await?;
         let allocation = discover_node_ports(client, namespace, &deployment_name, *ports).await?;
         allocations.push(allocation);
@@ -131,7 +131,7 @@ async fn spawn_port_forwards<E: K8sDeployEnv>(
         let mut forwards = Vec::new();
 
         for (index, ports) in node_ports.iter().enumerate() {
-            let service = E::node_service_name(&release, index);
+            let service = node_service_name::<E>(&release, index);
             let api_forward = port_forward_service(&namespace, &service, ports.api)?;
             let auxiliary_forward = port_forward_service(&namespace, &service, ports.auxiliary)?;
             register_forward_pair(

@@ -22,7 +22,11 @@ use tokio_retry::{RetryIf, strategy::FixedInterval};
 
 use crate::{
     K8sDeployer,
-    env::{HelmReleaseAssets, K8sDeployEnv, discovered_node_access},
+    env::{
+        K8sDeployEnv, build_cfgsync_override_artifacts, cfgsync_hostnames, cfgsync_service,
+        cluster_identifiers, collect_port_specs, discovered_node_access, node_deployment_name,
+        node_readiness_path, node_service_name, prepare_stack,
+    },
     host::node_host,
     lifecycle::{
         cleanup::RunnerCleanup,
@@ -107,10 +111,7 @@ struct ManualClusterState<E: K8sDeployEnv> {
     known_clients: Vec<Option<E::NodeClient>>,
 }
 
-pub struct ManualCluster<E: K8sDeployEnv>
-where
-    E::Assets: HelmReleaseAssets,
-{
+pub struct ManualCluster<E: K8sDeployEnv> {
     client: Client,
     namespace: String,
     release: String,
@@ -122,10 +123,7 @@ where
     state: Arc<Mutex<ManualClusterState<E>>>,
 }
 
-impl<E: K8sDeployEnv> ManualCluster<E>
-where
-    E::Assets: HelmReleaseAssets,
-{
+impl<E: K8sDeployEnv> ManualCluster<E> {
     pub async fn from_topology(topology: E::Deployment) -> Result<Self, ManualClusterError> {
         let nodes = testing_framework_core::topology::DeploymentDescriptor::node_count(&topology);
         if nodes == 0 {
@@ -136,14 +134,15 @@ where
         let client = Client::try_default()
             .await
             .map_err(|source| ManualClusterError::ClientInit { source })?;
-        let assets = E::prepare_assets(&topology, None)
+        let assets = prepare_stack::<E>(&topology, None)
             .map_err(|source| ManualClusterError::Assets { source })?;
-        let (namespace, release) = E::cluster_identifiers();
-        let cleanup = E::install_stack(&client, &assets, &namespace, &release, nodes)
+        let (namespace, release) = cluster_identifiers::<E>();
+        let cleanup = assets
+            .install(&client, &namespace, &release, nodes)
             .await
             .map_err(|source| ManualClusterError::InstallStack { source })?;
 
-        let node_ports = E::collect_port_specs(&topology).nodes;
+        let node_ports = collect_port_specs::<E>(&topology).nodes;
         let node_allocations =
             discover_all_node_ports::<E>(&client, &namespace, &release, &node_ports).await?;
         scale_all_nodes::<E>(&client, &namespace, &release, nodes, 0).await?;
@@ -296,7 +295,7 @@ where
         testing_framework_core::scenario::wait_for_http_ports_with_host_and_requirement(
             &ports,
             &self.node_host,
-            <E as K8sDeployEnv>::node_readiness_path(),
+            node_readiness_path::<E>(),
             HttpReadinessRequirement::AllNodesReady,
         )
         .await
@@ -311,7 +310,7 @@ where
         testing_framework_core::scenario::wait_for_http_ports_with_host_and_requirement(
             &[port],
             &self.node_host,
-            <E as K8sDeployEnv>::node_readiness_path(),
+            node_readiness_path::<E>(),
             HttpReadinessRequirement::AllNodesReady,
         )
         .await
@@ -393,13 +392,13 @@ where
         index: usize,
         options: &StartNodeOptions<E>,
     ) -> Result<(), ManualClusterError> {
-        let Some((service, port)) = E::cfgsync_service(&self.release) else {
+        let Some((service, port)) = cfgsync_service::<E>(&self.release) else {
             return ensure_default_cfgsync_options(options);
         };
 
-        let hostnames = E::cfgsync_hostnames(&self.release, self.node_count);
+        let hostnames = cfgsync_hostnames::<E>(&self.release, self.node_count);
         let artifacts =
-            E::build_cfgsync_override_artifacts(&self.topology, index, &hostnames, options)
+            build_cfgsync_override_artifacts::<E>(&self.topology, index, &hostnames, options)
                 .map_err(|source| ManualClusterError::CfgsyncUpdate {
                     name: canonical_node_name(index),
                     source,
@@ -431,7 +430,6 @@ where
 impl<E> Drop for ManualCluster<E>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
 {
     fn drop(&mut self) {
         self.stop_all();
@@ -445,7 +443,6 @@ where
 impl<E> NodeControlHandle<E> for ManualCluster<E>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
 {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         Self::restart_node(self, name).await.map_err(Into::into)
@@ -478,7 +475,6 @@ where
 impl<E> ClusterWaitHandle<E> for ManualCluster<E>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
 {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         Self::wait_network_ready(self).await.map_err(Into::into)
@@ -486,17 +482,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<E> ManualClusterHandle<E> for ManualCluster<E>
-where
-    E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
-{
-}
+impl<E> ManualClusterHandle<E> for ManualCluster<E> where E: K8sDeployEnv {}
 
 impl<E> K8sDeployer<E>
 where
     E: K8sDeployEnv,
-    E::Assets: HelmReleaseAssets,
 {
     pub async fn manual_cluster_from_descriptors(
         &self,
@@ -515,7 +505,7 @@ async fn discover_all_node_ports<E: K8sDeployEnv>(
 ) -> Result<Vec<crate::wait::NodePortAllocation>, ManualClusterError> {
     let mut allocations = Vec::with_capacity(node_ports.len());
     for (index, ports) in node_ports.iter().enumerate() {
-        let service_name = E::node_service_name(release, index);
+        let service_name = node_service_name::<E>(release, index);
         allocations.push(discover_node_ports(client, namespace, &service_name, *ports).await?);
     }
     Ok(allocations)
@@ -541,7 +531,7 @@ async fn scale_node<E: K8sDeployEnv>(
     index: usize,
     replicas: i32,
 ) -> Result<(), ManualClusterError> {
-    let name = E::node_deployment_name(release, index);
+    let name = node_deployment_name::<E>(release, index);
     let deployments = Api::<Deployment>::namespaced(client.clone(), namespace);
     let patch = serde_json::json!({"spec": {"replicas": replicas}});
     deployments
@@ -663,8 +653,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        PortSpecs, RenderedHelmChartAssets, render_single_template_chart_assets,
-        standard_port_specs,
+        RenderedHelmChartAssets, render_single_template_chart_assets, standard_port_specs,
     };
 
     struct DummyEnv;
@@ -695,31 +684,25 @@ mod tests {
 
     #[async_trait::async_trait]
     impl K8sDeployEnv for DummyEnv {
-        type Assets = RenderedHelmChartAssets;
-
-        fn collect_port_specs(_topology: &Self::Deployment) -> PortSpecs {
-            standard_port_specs(1, 8080, 8081)
-        }
-
-        fn prepare_assets(
-            _topology: &Self::Deployment,
-            _metrics_otlp_ingest_url: Option<&reqwest::Url>,
-        ) -> Result<Self::Assets, DynError> {
-            render_single_template_chart_assets("dummy", "dummy.yaml", "")
-        }
-
-        fn cfgsync_service(release: &str) -> Option<(String, u16)> {
-            Some((format!("{release}-cfgsync"), 4400))
-        }
-
-        fn build_cfgsync_override_artifacts(
-            topology: &Self::Deployment,
-            node_index: usize,
-            hostnames: &[String],
-            options: &StartNodeOptions<Self>,
-        ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, DynError> {
-            build_node_artifact_override::<Self>(topology, node_index, hostnames, options)
-                .map_err(Into::into)
+        fn k8s_runtime() -> crate::env::K8sRuntime<Self> {
+            crate::env::K8sRuntime::new(crate::env::K8sInstall::new(
+                |_topology| standard_port_specs(1, 8080, 8081),
+                |_topology, _metrics_otlp_ingest_url| {
+                    let assets: RenderedHelmChartAssets =
+                        render_single_template_chart_assets("dummy", "dummy.yaml", "")?;
+                    Ok(Box::new(assets) as Box<dyn crate::env::PreparedK8sStack>)
+                },
+            ))
+            .with_manual(
+                crate::env::K8sManual::new()
+                    .with_cfgsync_service(|release| Some((format!("{release}-cfgsync"), 4400)))
+                    .with_cfgsync_override_artifacts(|topology, node_index, hostnames, options| {
+                        build_node_artifact_override::<Self>(
+                            topology, node_index, hostnames, options,
+                        )
+                        .map_err(Into::into)
+                    }),
+            )
         }
     }
 
@@ -827,7 +810,7 @@ mod tests {
         let options = StartNodeOptions::<DummyEnv>::default()
             .with_peers(PeerSelection::Named(vec!["node-0".to_owned()]));
 
-        let artifacts = DummyEnv::build_cfgsync_override_artifacts(
+        let artifacts = crate::env::build_cfgsync_override_artifacts::<DummyEnv>(
             &topology,
             1,
             &["node-0".to_owned(), "node-1".to_owned()],
@@ -846,7 +829,7 @@ mod tests {
         let options =
             StartNodeOptions::<DummyEnv>::default().with_config_override("override".to_owned());
 
-        let artifacts = DummyEnv::build_cfgsync_override_artifacts(
+        let artifacts = crate::env::build_cfgsync_override_artifacts::<DummyEnv>(
             &topology,
             1,
             &["node-0".to_owned(), "node-1".to_owned()],
