@@ -9,9 +9,10 @@ pub mod process;
 pub use binary::{BinaryConfig, BinaryResolver};
 pub use deployer::{ProcessDeployer, ProcessDeployerError};
 pub use env::{
-    BuiltNodeConfig, LocalDeployerEnv, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
-    NodeConfigEntry, build_indexed_http_peers, build_indexed_node_configs,
-    build_local_cluster_node_config, build_local_peer_nodes, default_yaml_launch_spec,
+    BuiltNodeConfig, LocalAccess, LocalBuildContext, LocalDeployerEnv, LocalNodePorts,
+    LocalPeerNode, LocalProcess, LocalProcessSpec, LocalRuntime, NodeConfigEntry,
+    build_indexed_http_peers, build_indexed_node_configs, build_local_cluster_node_config,
+    build_local_peer_nodes, cluster_node_config_from_context, default_yaml_launch_spec,
     discovered_node_access, preallocate_ports, reserve_local_node_ports,
     single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
     yaml_node_config,
