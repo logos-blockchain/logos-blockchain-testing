@@ -1,9 +1,5 @@
-use std::{
-    path::Path,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{Application, DynError, Feed, FeedRuntime, HttpReadinessRequirement, NodeClients},
     topology::DeploymentDescriptor,
@@ -25,7 +21,7 @@ impl Feed for DummyFeed {
 #[derive(Default)]
 struct DummyFeedRuntime;
 
-#[async_trait]
+#[async_trait::async_trait]
 impl FeedRuntime for DummyFeedRuntime {
     type Feed = DummyFeed;
 
@@ -46,7 +42,7 @@ impl DeploymentDescriptor for DummyTopology {
 
 struct DummyEnv;
 
-#[async_trait]
+#[async_trait::async_trait]
 impl Application for DummyEnv {
     type Deployment = DummyTopology;
     type NodeClient = ();
@@ -60,46 +56,46 @@ impl Application for DummyEnv {
     }
 }
 
-#[async_trait]
 impl LocalDeployerEnv for DummyEnv {
-    fn build_node_config(
-        _topology: &Self::Deployment,
-        _index: usize,
-        _peer_ports_by_name: &std::collections::HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        _peer_ports: &[u16],
-    ) -> Result<BuiltNodeConfig<<Self as Application>::NodeConfig>, DynError> {
-        unreachable!("not used in this test")
+    fn local_runtime() -> LocalRuntime<Self> {
+        LocalRuntime::new(
+            LocalProcess::custom(build_dummy_node, build_dummy_launch_spec)
+                .with_initial_nodes(build_dummy_initial_nodes),
+            LocalAccess::custom(dummy_endpoints).with_client(|_| Ok(())),
+        )
+        .with_lifecycle(LocalLifecycle::new().with_stable_readiness(dummy_wait_stable))
     }
+}
 
-    fn build_initial_node_configs(
-        _topology: &Self::Deployment,
-    ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError> {
-        unreachable!("not used in this test")
-    }
+fn build_dummy_node(
+    _context: LocalBuildContext<'_, DummyEnv>,
+) -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+    unreachable!("not used in this test")
+}
 
-    fn build_launch_spec(
-        _config: &<Self as Application>::NodeConfig,
-        _dir: &Path,
-        _label: &str,
-    ) -> Result<crate::process::LaunchSpec, DynError> {
-        Ok(crate::process::LaunchSpec::default())
-    }
+fn build_dummy_initial_nodes(
+    _topology: &DummyTopology,
+) -> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+    unreachable!("not used in this test")
+}
 
-    fn node_endpoints(
-        _config: &<Self as Application>::NodeConfig,
-    ) -> Result<NodeEndpoints, DynError> {
-        Ok(NodeEndpoints::default())
-    }
+fn build_dummy_launch_spec(
+    _config: &DummyConfig,
+    _dir: &std::path::Path,
+    _label: &str,
+) -> Result<crate::process::LaunchSpec, DynError> {
+    Ok(crate::process::LaunchSpec::default())
+}
 
-    fn node_client(_endpoints: &NodeEndpoints) -> Result<Self::NodeClient, DynError> {
-        Ok(())
-    }
+fn dummy_endpoints(_config: &DummyConfig) -> Result<NodeEndpoints, DynError> {
+    Ok(NodeEndpoints::default())
+}
 
-    async fn wait_readiness_stable(_nodes: &[Node<Self>]) -> Result<(), DynError> {
+fn dummy_wait_stable<'a>(_nodes: &'a [Node<DummyEnv>]) -> runtime::LocalStableReadinessFuture<'a> {
+    Box::pin(async {
         STABLE_CALLS.fetch_add(1, Ordering::SeqCst);
         Ok(())
-    }
+    })
 }
 
 #[tokio::test]

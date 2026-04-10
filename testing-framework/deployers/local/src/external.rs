@@ -2,7 +2,7 @@ use std::net::ToSocketAddrs;
 
 use testing_framework_core::scenario::{DynError, ExternalNodeSource};
 
-use crate::{LocalDeployerEnv, NodeEndpoints};
+use crate::{LocalDeployerEnv, NodeEndpoints, env::node_client};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExternalClientBuildError {
@@ -31,7 +31,7 @@ pub fn build_external_client<E: LocalDeployerEnv>(
     let api = resolve_api_socket(source)?;
     let mut endpoints = NodeEndpoints::default();
     endpoints.api = api;
-    E::node_client(&endpoints)
+    node_client::<E>(&endpoints)
 }
 
 fn resolve_api_socket(source: &ExternalNodeSource) -> Result<std::net::SocketAddr, DynError> {

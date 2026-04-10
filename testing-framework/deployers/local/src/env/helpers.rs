@@ -1,12 +1,18 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use serde::Serialize;
-use testing_framework_core::scenario::{
-    Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
-    NodeAccess,
+use testing_framework_core::{
+    scenario::{
+        Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
+        NodeAccess,
+    },
+    topology::DeploymentDescriptor,
 };
 
-use crate::process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError};
+use crate::{
+    env::LocalBuildContext,
+    process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError},
+};
 
 pub struct BuiltNodeConfig<Config> {
     pub config: Config,
@@ -237,6 +243,50 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
             (index != self_index).then_some(LocalPeerNode {
                 index,
                 network_port: *port,
+            })
+        })
+        .collect()
+}
+
+pub fn build_generated_initial_nodes<E>(
+    topology: &E::Deployment,
+    node_name_prefix: &str,
+    port_names: &[&'static str],
+    build_node: impl Fn(LocalBuildContext<'_, E>) -> Result<BuiltNodeConfig<E::NodeConfig>, DynError>,
+) -> Result<Vec<NodeConfigEntry<E::NodeConfig>>, ProcessSpawnError>
+where
+    E: Application,
+{
+    let reserved_ports =
+        reserve_local_node_ports(topology.node_count(), port_names, node_name_prefix)?;
+    let peer_ports = reserved_ports
+        .iter()
+        .map(LocalNodePorts::network_port)
+        .collect::<Vec<_>>();
+    let peer_ports_by_name = HashMap::new();
+    let options = testing_framework_core::scenario::StartNodeOptions::<E>::default();
+
+    reserved_ports
+        .iter()
+        .enumerate()
+        .map(|(index, ports)| {
+            let compact_peer_ports = compact_peer_ports(&peer_ports, index);
+            let peers = build_local_peer_nodes(&compact_peer_ports, index);
+            let built = build_node(LocalBuildContext {
+                topology,
+                index,
+                ports,
+                peers: &peers,
+                peer_ports: &compact_peer_ports,
+                peer_ports_by_name: &peer_ports_by_name,
+                options: &options,
+                template_config: None,
+            })
+            .map_err(|source| ProcessSpawnError::Config { source })?;
+
+            Ok(NodeConfigEntry {
+                name: format!("{node_name_prefix}-{index}"),
+                config: built.config,
             })
         })
         .collect()

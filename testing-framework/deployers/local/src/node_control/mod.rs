@@ -10,7 +10,11 @@ use testing_framework_core::scenario::{
 use thiserror::Error;
 
 use crate::{
-    env::{LocalDeployerEnv, Node, spawn_node_from_config},
+    env::{
+        LocalDeployerEnv, Node, build_initial_node_configs, build_node_from_template,
+        initial_persist_dir, initial_snapshot_dir, node_peer_port, readiness_endpoint_path,
+        spawn_node_from_config,
+    },
     process::ProcessSpawnError,
 };
 
@@ -79,12 +83,12 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         descriptors: &E::Deployment,
         keep_tempdir: bool,
     ) -> Result<Vec<Node<E>>, ProcessSpawnError> {
-        let configs = E::build_initial_node_configs(descriptors)?;
+        let configs = build_initial_node_configs::<E>(descriptors)?;
         let mut spawned = Vec::with_capacity(configs.len());
 
         for (index, config_entry) in configs.into_iter().enumerate() {
-            let persist_dir = E::initial_persist_dir(descriptors, &config_entry.name, index);
-            let snapshot_dir = E::initial_snapshot_dir(descriptors, &config_entry.name, index);
+            let persist_dir = initial_persist_dir::<E>(descriptors, &config_entry.name, index);
+            let snapshot_dir = initial_snapshot_dir::<E>(descriptors, &config_entry.name, index);
             spawned.push(
                 spawn_node_from_config::<E>(
                     config_entry.name,
@@ -174,7 +178,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
         for (idx, node) in nodes.into_iter().enumerate() {
             let name = default_node_label(idx);
-            let port = E::node_peer_port(&node);
+            let port = node_peer_port::<E>(&node);
             let client = node.client();
 
             self.node_clients.add_node(client.clone());
@@ -201,7 +205,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             return Ok(());
         }
 
-        wait_for_http_ports(&ports, E::readiness_endpoint_path()).await
+        wait_for_http_ports(&ports, readiness_endpoint_path::<E>()).await
     }
 
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), NodeManagerError> {
@@ -224,7 +228,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 })?
         };
 
-        wait_for_http_ports(&[port], E::readiness_endpoint_path())
+        wait_for_http_ports(&[port], readiness_endpoint_path::<E>())
             .await
             .map_err(|source| NodeManagerError::Readiness { source })
     }
@@ -236,7 +240,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     ) -> Result<StartedNode<E>, NodeManagerError> {
         let snapshot = self.start_snapshot(name)?;
 
-        let mut built = E::build_node_config_from_template(
+        let mut built = build_node_from_template::<E>(
             &self.descriptors,
             snapshot.index,
             &snapshot.peer_ports_by_name,
