@@ -1,0 +1,13 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "redis-streams-runtime-workloads"
+version.workspace = true
+
+[dependencies]
+redis-streams-runtime-ext = { path = "../integration" }
+testing-framework-core    = { workspace = true }
+
+async-trait = { workspace = true }
+tokio       = { workspace = true, features = ["full"] }
+tracing     = { workspace = true }

@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "redis-streams-examples"
+version.workspace = true
+
+[dependencies]
+anyhow                           = "1.0"
+redis-streams-runtime-ext        = { path = "../testing/integration" }
+redis-streams-runtime-workloads  = { path = "../testing/workloads" }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+tokio                            = { workspace = true, features = ["full"] }
+tracing                          = { workspace = true }
+tracing-subscriber               = { version = "0.3", features = ["env-filter"] }
