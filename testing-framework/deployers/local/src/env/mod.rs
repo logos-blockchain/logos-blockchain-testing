@@ -111,14 +111,20 @@ where
             Self::initial_node_name_prefix(),
             Self::initial_local_port_names(),
             |context| {
-                Self::build_node_config_from_template(
+                let config = Self::build_local_node_config_with_peers(
                     context.topology,
                     context.index,
+                    context.ports,
+                    context.peers,
                     context.peer_ports_by_name,
                     context.options,
-                    context.peer_ports,
                     context.template_config,
-                )
+                )?;
+
+                Ok(BuiltNodeConfig {
+                    config,
+                    network_port: context.ports.network_port(),
+                })
             },
         )
     }
