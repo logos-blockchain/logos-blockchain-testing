@@ -684,25 +684,33 @@ mod tests {
 
     #[async_trait::async_trait]
     impl K8sDeployEnv for DummyEnv {
-        fn k8s_runtime() -> crate::env::K8sRuntime<Self> {
-            crate::env::K8sRuntime::new(crate::env::K8sInstall::new(
-                |_topology| standard_port_specs(1, 8080, 8081),
-                |_topology, _metrics_otlp_ingest_url| {
-                    let assets: RenderedHelmChartAssets =
-                        render_single_template_chart_assets("dummy", "dummy.yaml", "")?;
-                    Ok(Box::new(assets) as Box<dyn crate::env::PreparedK8sStack>)
-                },
-            ))
-            .with_manual(
-                crate::env::K8sManual::new()
-                    .with_cfgsync_service(|release| Some((format!("{release}-cfgsync"), 4400)))
-                    .with_cfgsync_override_artifacts(|topology, node_index, hostnames, options| {
-                        build_node_artifact_override::<Self>(
-                            topology, node_index, hostnames, options,
-                        )
-                        .map_err(Into::into)
-                    }),
-            )
+        type Assets = RenderedHelmChartAssets;
+
+        fn collect_port_specs(
+            _topology: &Self::Deployment,
+        ) -> crate::infrastructure::cluster::PortSpecs {
+            standard_port_specs(1, 8080, 8081)
+        }
+
+        fn prepare_assets(
+            _topology: &Self::Deployment,
+            _metrics_otlp_ingest_url: Option<&reqwest::Url>,
+        ) -> Result<Self::Assets, DynError> {
+            render_single_template_chart_assets("dummy", "dummy.yaml", "")
+        }
+
+        fn cfgsync_service(release: &str) -> Option<(String, u16)> {
+            Some((format!("{release}-cfgsync"), 4400))
+        }
+
+        fn build_cfgsync_override_artifacts(
+            topology: &Self::Deployment,
+            node_index: usize,
+            hostnames: &[String],
+            options: &testing_framework_core::scenario::StartNodeOptions<Self>,
+        ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, DynError> {
+            build_node_artifact_override::<Self>(topology, node_index, hostnames, options)
+                .map_err(Into::into)
         }
     }
 

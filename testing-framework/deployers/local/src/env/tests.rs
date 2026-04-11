@@ -56,26 +56,51 @@ impl Application for DummyEnv {
     }
 }
 
+#[async_trait::async_trait]
 impl LocalDeployerEnv for DummyEnv {
-    fn local_runtime() -> LocalRuntime<Self> {
-        LocalRuntime::new(
-            LocalProcess::custom(build_dummy_node, build_dummy_launch_spec)
-                .with_initial_nodes(build_dummy_initial_nodes),
-            LocalAccess::custom(dummy_endpoints).with_client(|_| Ok(())),
-        )
-        .with_lifecycle(LocalLifecycle::new().with_stable_readiness(dummy_wait_stable))
+    fn build_node_config(
+        _topology: &Self::Deployment,
+        _index: usize,
+        _peer_ports_by_name: &std::collections::HashMap<String, u16>,
+        _options: &testing_framework_core::scenario::StartNodeOptions<Self>,
+        _peer_ports: &[u16],
+    ) -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+        build_dummy_node()
+    }
+
+    fn build_initial_node_configs(
+        _topology: &Self::Deployment,
+    ) -> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+        build_dummy_initial_nodes()
+    }
+
+    fn build_launch_spec(
+        config: &DummyConfig,
+        dir: &std::path::Path,
+        label: &str,
+    ) -> Result<crate::process::LaunchSpec, DynError> {
+        build_dummy_launch_spec(config, dir, label)
+    }
+
+    fn node_endpoints(_config: &DummyConfig) -> Result<NodeEndpoints, DynError> {
+        dummy_endpoints()
+    }
+
+    fn node_client(_endpoints: &NodeEndpoints) -> Result<Self::NodeClient, DynError> {
+        Ok(())
+    }
+
+    async fn wait_readiness_stable(_nodes: &[Node<Self>]) -> Result<(), DynError> {
+        dummy_wait_stable().await
     }
 }
 
-fn build_dummy_node(
-    _context: LocalBuildContext<'_, DummyEnv>,
-) -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+fn build_dummy_node() -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
     unreachable!("not used in this test")
 }
 
-fn build_dummy_initial_nodes(
-    _topology: &DummyTopology,
-) -> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+fn build_dummy_initial_nodes()
+-> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
     unreachable!("not used in this test")
 }
 
@@ -87,15 +112,13 @@ fn build_dummy_launch_spec(
     Ok(crate::process::LaunchSpec::default())
 }
 
-fn dummy_endpoints(_config: &DummyConfig) -> Result<NodeEndpoints, DynError> {
+fn dummy_endpoints() -> Result<NodeEndpoints, DynError> {
     Ok(NodeEndpoints::default())
 }
 
-fn dummy_wait_stable<'a>(_nodes: &'a [Node<DummyEnv>]) -> runtime::LocalStableReadinessFuture<'a> {
-    Box::pin(async {
-        STABLE_CALLS.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    })
+async fn dummy_wait_stable() -> Result<(), DynError> {
+    STABLE_CALLS.fetch_add(1, Ordering::SeqCst);
+    Ok(())
 }
 
 #[tokio::test]

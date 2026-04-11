@@ -21,9 +21,9 @@ pub use docker::{
     platform::host_gateway_entry,
 };
 pub use env::{
-    ComposeAccess, ComposeCfgsync, ComposeConfigContext, ComposeConfigServerMode, ComposeConfigs,
-    ComposeDeployEnv, ComposeNodeConfigFileName, ComposeNodes, ComposeReadinessProbe,
-    ComposeRuntime, ComposeStack, ConfigServerHandle, discovered_node_access,
+    ComposeBinaryApp, ComposeConfigServerMode, ComposeDeployEnv, ComposeNodeConfigFileName,
+    ComposeReadinessProbe, ConfigServerHandle, discovered_node_access,
+    write_registration_server_compose_configs,
 };
 pub use errors::ComposeRunnerError;
 pub use infrastructure::{
