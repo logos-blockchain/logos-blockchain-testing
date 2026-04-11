@@ -6,13 +6,13 @@ use reqwest::Url;
 use testing_framework_core::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, ClusterWaitHandle, Deployer, DynError,
-        ExistingCluster, FeedRuntime, HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
+        ExistingCluster, HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
         ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
         Scenario,
         internal::{
-            ApplicationExternalProvider, CleanupGuard, FeedHandle, RuntimeAssembly,
-            SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-            build_source_orchestration_plan, orchestrate_sources_with_providers,
+            ApplicationExternalProvider, CleanupGuard, RuntimeAssembly, SourceOrchestrationPlan,
+            SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
+            orchestrate_sources_with_providers,
         },
     },
     topology::DeploymentDescriptor,
@@ -33,7 +33,7 @@ use crate::{
         RemoteReadinessError, build_node_clients, collect_port_specs, ensure_cluster_readiness,
         kill_port_forwards, wait_for_ports_or_cleanup,
     },
-    lifecycle::{block_feed::spawn_block_feed_with, cleanup::RunnerCleanup},
+    lifecycle::cleanup::RunnerCleanup,
     wait::{ClusterReady, ClusterWaitError, PortForwardHandle},
 };
 
@@ -113,17 +113,10 @@ pub enum K8sRunnerError {
     Telemetry(#[from] MetricsError),
     #[error("internal invariant violated: {message}")]
     InternalInvariant { message: String },
-    #[error("k8s runner requires at least one node client for feed data")]
-    BlockFeedMissing,
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
     #[error("source orchestration failed: {source}")]
     SourceOrchestration {
-        #[source]
-        source: DynError,
-    },
-    #[error("failed to initialize feed: {source}")]
-    BlockFeed {
         #[source]
         source: DynError,
     },
@@ -155,8 +148,6 @@ impl From<ClusterWaitError> for K8sRunnerError {
         Self::Cluster(Box::new(value))
     }
 }
-
-type Feed<E> = <<E as Application>::FeedRuntime as FeedRuntime>::Feed;
 
 fn ensure_supported_topology<E: K8sDeployEnv>(
     descriptors: &E::Deployment,
@@ -239,7 +230,6 @@ where
     ensure_non_empty_node_clients(&node_clients)?;
 
     let telemetry = observability.telemetry_handle()?;
-    let (feed, feed_task) = spawn_block_feed_with::<E>(&node_clients).await?;
     let cluster_wait = attached_cluster_wait::<E, Caps>(scenario, client)?;
     let context = RuntimeAssembly::new(
         scenario.deployment().clone(),
@@ -248,11 +238,10 @@ where
         scenario.expectation_cooldown(),
         scenario.cluster_control_profile(),
         telemetry,
-        feed,
     )
     .with_cluster_wait(cluster_wait);
 
-    Ok(context.build_runner(Some(Box::new(feed_task))))
+    Ok(context.build_runner(None))
 }
 
 fn existing_cluster_metadata<E, Caps>(scenario: &Scenario<E, Caps>) -> K8sDeploymentMetadata
@@ -548,8 +537,6 @@ async fn build_node_clients_or_fail<E: K8sDeployEnv>(
 struct RuntimeArtifacts<E: K8sDeployEnv> {
     node_clients: NodeClients<E>,
     telemetry: Metrics,
-    feed: Feed<E>,
-    feed_task: FeedHandle,
 }
 
 fn build_runner_parts<E: K8sDeployEnv, Caps>(
@@ -566,10 +553,8 @@ fn build_runner_parts<E: K8sDeployEnv, Caps>(
             scenario.expectation_cooldown(),
             scenario.cluster_control_profile(),
             runtime.telemetry,
-            runtime.feed,
             cluster_wait,
         ),
-        feed_task: runtime.feed_task,
         node_count,
         duration_secs: scenario.duration().as_secs(),
     }
@@ -591,13 +576,9 @@ async fn build_runtime_artifacts<E: K8sDeployEnv>(
     }
 
     let telemetry = build_telemetry_or_fail(cluster, observability).await?;
-    let (feed, feed_task) = spawn_block_feed_or_fail::<E>(cluster, &node_clients).await?;
-
     Ok(RuntimeArtifacts {
         node_clients,
         telemetry,
-        feed,
-        feed_task,
     })
 }
 
@@ -615,19 +596,6 @@ async fn build_telemetry_or_fail(
             )
             .await;
             Err(err.into())
-        }
-    }
-}
-
-async fn spawn_block_feed_or_fail<E: K8sDeployEnv>(
-    cluster: &mut Option<ClusterEnvironment>,
-    node_clients: &NodeClients<E>,
-) -> Result<(Feed<E>, FeedHandle), K8sRunnerError> {
-    match spawn_block_feed_with::<E>(node_clients).await {
-        Ok(pair) => Ok(pair),
-        Err(err) => {
-            fail_cluster_with_log(cluster, "failed to initialize block feed", &err).await;
-            Err(err)
         }
     }
 }
@@ -660,7 +628,6 @@ fn maybe_print_endpoints<E: K8sDeployEnv>(
 
 struct K8sRunnerParts<E: K8sDeployEnv> {
     assembly: RuntimeAssembly<E>,
-    feed_task: FeedHandle,
     node_count: usize,
     duration_secs: u64,
 }
@@ -674,13 +641,12 @@ fn finalize_runner<E: K8sDeployEnv>(
 
     let K8sRunnerParts {
         assembly,
-        feed_task,
         node_count,
         duration_secs,
     } = parts;
 
     let cleanup_guard: Box<dyn CleanupGuard> =
-        Box::new(K8sCleanupGuard::new(cleanup, feed_task, port_forwards));
+        Box::new(K8sCleanupGuard::new(cleanup, port_forwards));
 
     info!(
         nodes = node_count,
@@ -707,7 +673,6 @@ fn build_k8s_runtime_assembly<E: K8sDeployEnv>(
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
-    feed: Feed<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> RuntimeAssembly<E> {
     RuntimeAssembly::new(
@@ -717,7 +682,6 @@ fn build_k8s_runtime_assembly<E: K8sDeployEnv>(
         expectation_cooldown,
         cluster_control_profile,
         telemetry,
-        feed,
     )
     .with_cluster_wait(cluster_wait)
 }
@@ -781,19 +745,13 @@ fn log_k8s_deploy_start<E>(
 
 struct K8sCleanupGuard {
     cleanup: RunnerCleanup,
-    feed_task: Option<FeedHandle>,
     port_forwards: Vec<PortForwardHandle>,
 }
 
 impl K8sCleanupGuard {
-    const fn new(
-        cleanup: RunnerCleanup,
-        feed_task: FeedHandle,
-        port_forwards: Vec<PortForwardHandle>,
-    ) -> Self {
+    const fn new(cleanup: RunnerCleanup, port_forwards: Vec<PortForwardHandle>) -> Self {
         Self {
             cleanup,
-            feed_task: Some(feed_task),
             port_forwards,
         }
     }
@@ -801,9 +759,6 @@ impl K8sCleanupGuard {
 
 impl CleanupGuard for K8sCleanupGuard {
     fn cleanup(mut self: Box<Self>) {
-        if let Some(feed_task) = self.feed_task.take() {
-            CleanupGuard::cleanup(Box::new(feed_task));
-        }
         kill_port_forwards(&mut self.port_forwards);
         CleanupGuard::cleanup(Box::new(self.cleanup));
     }

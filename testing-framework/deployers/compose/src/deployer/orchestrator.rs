@@ -4,13 +4,13 @@ use reqwest::Url;
 use testing_framework_core::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, ClusterWaitHandle, DeploymentPolicy,
-        DynError, ExistingCluster, FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients,
+        DynError, ExistingCluster, HttpReadinessRequirement, Metrics, NodeClients,
         NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
         RequiresNodeControl, Runner, Scenario,
         internal::{
-            ApplicationExternalProvider, CleanupGuard, FeedHandle, RuntimeAssembly,
-            SourceOrchestrationPlan, SourceProviders, StaticManagedProvider,
-            build_source_orchestration_plan, orchestrate_sources_with_providers,
+            ApplicationExternalProvider, RuntimeAssembly, SourceOrchestrationPlan, SourceProviders,
+            StaticManagedProvider, build_source_orchestration_plan,
+            orchestrate_sources_with_providers,
         },
     },
     topology::DeploymentDescriptor,
@@ -34,7 +34,6 @@ use crate::{
         environment::StackEnvironment,
         ports::{HostPortMapping, compose_runner_host},
     },
-    lifecycle::block_feed::spawn_block_feed_with_retry,
 };
 
 const PRINT_ENDPOINTS_ENV: &str = "TESTNET_PRINT_ENDPOINTS";
@@ -172,7 +171,6 @@ where
 
         let node_control = self.attached_node_control::<Caps>(scenario)?;
         let cluster_wait = self.attached_cluster_wait(scenario)?;
-        let (feed, feed_task) = spawn_block_feed_with_retry::<E>(&node_clients).await?;
         let assembly = build_runtime_assembly(
             scenario.deployment().clone(),
             node_clients,
@@ -180,13 +178,11 @@ where
             scenario.expectation_cooldown(),
             scenario.cluster_control_profile(),
             observability.telemetry_handle()?,
-            feed,
             node_control,
             cluster_wait,
         );
 
-        let cleanup_guard: Box<dyn CleanupGuard> = Box::new(feed_task);
-        Ok(assembly.build_runner(Some(cleanup_guard)))
+        Ok(assembly.build_runner(None))
     }
 
     fn source_providers(&self, managed_clients: Vec<E::NodeClient>) -> SourceProviders<E> {
@@ -262,7 +258,7 @@ where
     async fn build_runner<Caps>(
         &self,
         scenario: &Scenario<E, Caps>,
-        mut prepared: PreparedDeployment<E>,
+        prepared: PreparedDeployment<E>,
         deployed: DeployedNodes<E>,
         observability: ObservabilityInputs,
         readiness_enabled: bool,
@@ -287,13 +283,11 @@ where
             expectation_cooldown: scenario.expectation_cooldown(),
             cluster_control_profile: scenario.cluster_control_profile(),
             telemetry,
-            environment: &mut prepared.environment,
             node_control,
             cluster_wait,
         };
         let runtime = build_compose_runtime::<E>(input).await?;
-        let cleanup_guard =
-            make_cleanup_guard(prepared.environment.into_cleanup()?, runtime.feed_task);
+        let cleanup_guard = make_cleanup_guard(prepared.environment.into_cleanup()?);
 
         info!(
             effective_readiness = readiness_enabled,
@@ -442,12 +436,10 @@ struct DeployedNodes<E: ComposeDeployEnv> {
     host_ports: HostPortMapping,
     host: String,
     node_clients: NodeClients<E>,
-    client_builder: ClientBuilder<E>,
 }
 
 struct ComposeRuntime<E: ComposeDeployEnv> {
     assembly: RuntimeAssembly<E>,
-    feed_task: FeedHandle,
 }
 
 struct RuntimeBuildInput<'a, E: ComposeDeployEnv> {
@@ -457,7 +449,6 @@ struct RuntimeBuildInput<'a, E: ComposeDeployEnv> {
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
-    environment: &'a mut StackEnvironment,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 }
@@ -470,12 +461,6 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
         return Err(ComposeRunnerError::RuntimePreflight);
     }
 
-    let (feed, feed_task) = input
-        .deployed
-        .client_builder
-        .start_block_feed(&node_clients, input.environment)
-        .await?;
-
     let assembly = build_runtime_assembly(
         input.descriptors,
         node_clients,
@@ -483,15 +468,11 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
         input.expectation_cooldown,
         input.cluster_control_profile,
         input.telemetry,
-        feed,
         input.node_control,
         input.cluster_wait,
     );
 
-    Ok(ComposeRuntime {
-        assembly,
-        feed_task,
-    })
+    Ok(ComposeRuntime { assembly })
 }
 
 async fn deploy_nodes<E: ComposeDeployEnv>(
@@ -520,7 +501,6 @@ async fn deploy_nodes<E: ComposeDeployEnv>(
         host_ports,
         host,
         node_clients,
-        client_builder,
     })
 }
 
@@ -531,7 +511,6 @@ fn build_runtime_assembly<E: ComposeDeployEnv>(
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
-    feed: <E::FeedRuntime as FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 ) -> RuntimeAssembly<E> {
@@ -542,7 +521,6 @@ fn build_runtime_assembly<E: ComposeDeployEnv>(
         expectation_cooldown,
         cluster_control_profile,
         telemetry,
-        feed,
     )
     .with_cluster_wait(cluster_wait);
 

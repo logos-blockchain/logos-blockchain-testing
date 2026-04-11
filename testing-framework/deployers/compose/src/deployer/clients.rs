@@ -1,17 +1,13 @@
 use std::{fmt::Debug, marker::PhantomData};
 
-use testing_framework_core::scenario::{
-    Application, FeedRuntime, NodeClients, internal::FeedHandle,
-};
-use tracing::{info, warn};
+use testing_framework_core::scenario::NodeClients;
+use tracing::warn;
 
 use crate::{
     env::ComposeDeployEnv,
     errors::ComposeRunnerError,
     infrastructure::{environment::StackEnvironment, ports::HostPortMapping},
-    lifecycle::{
-        block_feed::spawn_block_feed_with_retry, readiness::build_node_clients_with_ports,
-    },
+    lifecycle::readiness::build_node_clients_with_ports,
 };
 
 pub struct ClientBuilder<E: ComposeDeployEnv> {
@@ -38,29 +34,6 @@ impl<E: ComposeDeployEnv> ClientBuilder<E> {
             "failed to build node clients",
         )
         .await
-    }
-
-    pub async fn start_block_feed(
-        &self,
-        node_clients: &NodeClients<E>,
-        environment: &mut StackEnvironment,
-    ) -> Result<
-        (
-            <<E as Application>::FeedRuntime as FeedRuntime>::Feed,
-            FeedHandle,
-        ),
-        ComposeRunnerError,
-    > {
-        let pair = ensure_step(
-            environment,
-            spawn_block_feed_with_retry::<E>(node_clients).await,
-            "failed to initialize block feed",
-            "block feed initialization failed",
-        )
-        .await?;
-
-        info!("block feed connected to node");
-        Ok(pair)
     }
 }
 

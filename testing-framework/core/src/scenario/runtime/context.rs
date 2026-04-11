@@ -19,7 +19,6 @@ pub struct RunContext<E: Application> {
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
-    feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
@@ -33,7 +32,6 @@ pub struct RuntimeAssembly<E: Application> {
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
-    feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
@@ -48,7 +46,6 @@ impl<E: Application> RunContext<E> {
         expectation_cooldown: Duration,
         cluster_control_profile: ClusterControlProfile,
         telemetry: Metrics,
-        feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
         node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     ) -> Self {
         let metrics = RunMetrics::new(run_duration);
@@ -60,7 +57,6 @@ impl<E: Application> RunContext<E> {
             expectation_cooldown,
             cluster_control_profile,
             telemetry,
-            feed,
             node_control,
             cluster_wait: None,
         }
@@ -85,11 +81,6 @@ impl<E: Application> RunContext<E> {
     #[must_use]
     pub fn random_node_client(&self) -> Option<E::NodeClient> {
         self.node_clients.random_client()
-    }
-
-    #[must_use]
-    pub fn feed(&self) -> <E::FeedRuntime as super::FeedRuntime>::Feed {
-        self.feed.clone()
     }
 
     #[must_use]
@@ -143,7 +134,6 @@ impl<E: Application> RuntimeAssembly<E> {
         expectation_cooldown: Duration,
         cluster_control_profile: ClusterControlProfile,
         telemetry: Metrics,
-        feed: <E::FeedRuntime as super::FeedRuntime>::Feed,
     ) -> Self {
         Self {
             descriptors,
@@ -152,7 +142,6 @@ impl<E: Application> RuntimeAssembly<E> {
             expectation_cooldown,
             cluster_control_profile,
             telemetry,
-            feed,
             node_control: None,
             cluster_wait: None,
         }
@@ -179,7 +168,6 @@ impl<E: Application> RuntimeAssembly<E> {
             self.expectation_cooldown,
             self.cluster_control_profile,
             self.telemetry,
-            self.feed,
             self.node_control,
         );
 
@@ -204,7 +192,6 @@ impl<E: Application> From<RunContext<E>> for RuntimeAssembly<E> {
             expectation_cooldown: context.expectation_cooldown,
             cluster_control_profile: context.cluster_control_profile,
             telemetry: context.telemetry,
-            feed: context.feed,
             node_control: context.node_control,
             cluster_wait: context.cluster_wait,
         }

@@ -10,8 +10,7 @@ use std::marker::PhantomData;
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
     Deployer, DynError, ExistingCluster, IntoExistingCluster, ObservabilityCapabilityProvider,
-    RequiresNodeControl, Runner, Scenario,
-    internal::{CleanupGuard, FeedHandle},
+    RequiresNodeControl, Runner, Scenario, internal::CleanupGuard,
 };
 
 use crate::{env::ComposeDeployEnv, errors::ComposeRunnerError, lifecycle::cleanup::RunnerCleanup};
@@ -176,32 +175,22 @@ where
 
 pub(super) struct ComposeCleanupGuard {
     environment: RunnerCleanup,
-    block_feed: Option<FeedHandle>,
 }
 
 impl ComposeCleanupGuard {
-    const fn new(environment: RunnerCleanup, block_feed: FeedHandle) -> Self {
-        Self {
-            environment,
-            block_feed: Some(block_feed),
-        }
+    const fn new(environment: RunnerCleanup) -> Self {
+        Self { environment }
     }
 }
 
 impl CleanupGuard for ComposeCleanupGuard {
-    fn cleanup(mut self: Box<Self>) {
-        if let Some(block_feed) = self.block_feed.take() {
-            CleanupGuard::cleanup(Box::new(block_feed));
-        }
+    fn cleanup(self: Box<Self>) {
         CleanupGuard::cleanup(Box::new(self.environment));
     }
 }
 
-pub(super) fn make_cleanup_guard(
-    environment: RunnerCleanup,
-    block_feed: FeedHandle,
-) -> Box<dyn CleanupGuard> {
-    Box::new(ComposeCleanupGuard::new(environment, block_feed))
+pub(super) fn make_cleanup_guard(environment: RunnerCleanup) -> Box<dyn CleanupGuard> {
+    Box::new(ComposeCleanupGuard::new(environment))
 }
 
 #[cfg(test)]

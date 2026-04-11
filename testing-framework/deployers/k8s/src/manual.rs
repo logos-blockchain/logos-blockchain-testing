@@ -645,10 +645,7 @@ fn block_on_best_effort(fut: impl std::future::Future<Output = Result<(), Manual
 mod tests {
     use testing_framework_core::{
         cfgsync::{StaticNodeConfigProvider, build_node_artifact_override},
-        scenario::{
-            Application, DefaultFeedRuntime, NodeAccess, NodeClients, PeerSelection,
-            default_feed_result,
-        },
+        scenario::{Application, NodeAccess, PeerSelection},
     };
 
     use super::*;
@@ -663,22 +660,9 @@ mod tests {
         type Deployment = testing_framework_core::topology::ClusterTopology;
         type NodeClient = String;
         type NodeConfig = String;
-        type FeedRuntime = DefaultFeedRuntime;
 
         fn build_node_client(access: &NodeAccess) -> Result<Self::NodeClient, DynError> {
             Ok(access.api_base_url()?.to_string())
-        }
-
-        async fn prepare_feed(
-            _node_clients: NodeClients<Self>,
-        ) -> Result<
-            (
-                testing_framework_core::scenario::DefaultFeed,
-                Self::FeedRuntime,
-            ),
-            DynError,
-        > {
-            default_feed_result()
         }
     }
 

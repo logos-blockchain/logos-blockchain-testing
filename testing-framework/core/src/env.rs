@@ -3,10 +3,7 @@ use std::io;
 use async_trait::async_trait;
 
 use crate::{
-    scenario::{
-        DefaultFeed, DefaultFeedRuntime, DynError, ExternalNodeSource, FeedRuntime, NodeAccess,
-        NodeClients,
-    },
+    scenario::{DynError, ExternalNodeSource, NodeAccess},
     topology::DeploymentDescriptor,
 };
 
@@ -18,8 +15,6 @@ pub trait Application: Send + Sync + 'static {
     type NodeClient: Clone + Send + Sync + 'static;
 
     type NodeConfig: Clone + Send + Sync + 'static;
-
-    type FeedRuntime: FeedRuntime;
 
     /// Build an application node client from a static external source.
     ///
@@ -36,15 +31,5 @@ pub trait Application: Send + Sync + 'static {
     /// Path appended by deployers during default readiness probing.
     fn node_readiness_path() -> &'static str {
         "/"
-    }
-
-    async fn prepare_feed(
-        _node_clients: NodeClients<Self>,
-    ) -> Result<(<Self::FeedRuntime as FeedRuntime>::Feed, Self::FeedRuntime), DynError>
-    where
-        Self: Sized,
-    {
-        let _ = (DefaultFeed::default(), DefaultFeedRuntime::default());
-        Ok((Default::default(), Default::default()))
     }
 }

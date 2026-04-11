@@ -13,7 +13,6 @@ mod definition;
 mod deployment_policy;
 mod expectation;
 pub mod internal;
-mod noop;
 mod observability;
 mod runtime;
 mod sources;
@@ -35,16 +34,15 @@ pub use control::{ClusterWaitHandle, NodeControlHandle};
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
-pub use noop::{DefaultFeed, DefaultFeedRuntime, default_feed_result};
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
-    Deployer, Feed, FeedRuntime, HttpReadinessRequirement, NodeClients, ReadinessError, RunContext,
-    RunHandle, RunMetrics, Runner, ScenarioError, StabilizationConfig,
+    Deployer, HttpReadinessRequirement, NodeClients, ReadinessError, RunContext, RunHandle,
+    RunMetrics, Runner, ScenarioError, StabilizationConfig,
     metrics::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
         PrometheusEndpoint, PrometheusInstantSample,
     },
-    spawn_feed, wait_for_http_ports, wait_for_http_ports_with_host,
+    wait_for_http_ports, wait_for_http_ports_with_host,
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
     wait_http_readiness, wait_until_stable,
 };

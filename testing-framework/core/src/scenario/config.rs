@@ -294,7 +294,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scenario::{Application, DefaultFeed, DefaultFeedRuntime, NodeAccess, NodeClients};
+    use crate::scenario::{Application, NodeAccess};
 
     struct DummyClusterApp;
 
@@ -303,18 +303,11 @@ mod tests {
         type Deployment = crate::topology::ClusterTopology;
         type NodeClient = String;
         type NodeConfig = String;
-        type FeedRuntime = DefaultFeedRuntime;
 
         fn build_node_client(
             _access: &NodeAccess,
         ) -> Result<Self::NodeClient, crate::scenario::DynError> {
             Ok("client".to_owned())
-        }
-
-        async fn prepare_feed(
-            _node_clients: NodeClients<Self>,
-        ) -> Result<(DefaultFeed, Self::FeedRuntime), crate::scenario::DynError> {
-            crate::scenario::default_feed_result()
         }
     }
 

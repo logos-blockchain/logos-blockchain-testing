@@ -11,13 +11,11 @@ use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy, DynError,
-        FeedRuntime, HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability,
-        NodeControlHandle, RetryPolicy, Runner, Scenario, ScenarioError,
+        HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
+        RetryPolicy, Runner, Scenario, ScenarioError,
         internal::{
-            CleanupGuard, FeedHandle, RuntimeAssembly, SourceOrchestrationPlan,
-            build_source_orchestration_plan,
+            CleanupGuard, RuntimeAssembly, SourceOrchestrationPlan, build_source_orchestration_plan,
         },
-        spawn_feed,
     },
     topology::DeploymentDescriptor,
 };
@@ -42,23 +40,16 @@ const READINESS_BACKOFF_MAX_SECS: u64 = 2;
 
 struct LocalProcessGuard<E: LocalDeployerEnv> {
     nodes: Vec<Node<E>>,
-    feed_task: Option<FeedHandle>,
 }
 
 impl<E: LocalDeployerEnv> LocalProcessGuard<E> {
-    fn new(nodes: Vec<Node<E>>, feed_task: FeedHandle) -> Self {
-        Self {
-            nodes,
-            feed_task: Some(feed_task),
-        }
+    fn new(nodes: Vec<Node<E>>) -> Self {
+        Self { nodes }
     }
 }
 
 impl<E: LocalDeployerEnv> CleanupGuard for LocalProcessGuard<E> {
-    fn cleanup(mut self: Box<Self>) {
-        if let Some(feed_task) = self.feed_task.take() {
-            CleanupGuard::cleanup(Box::new(feed_task));
-        }
+    fn cleanup(self: Box<Self>) {
         // Nodes own local processes; dropping them stops the processes.
         drop(self.nodes);
     }
@@ -222,8 +213,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         )
         .await?;
 
-        let cleanup_guard: Box<dyn CleanupGuard> =
-            Box::new(LocalProcessGuard::<E>::new(nodes, runtime.feed_task));
+        let cleanup_guard: Box<dyn CleanupGuard> = Box::new(LocalProcessGuard::<E>::new(nodes));
 
         Ok(runtime.assembly.build_runner(Some(cleanup_guard)))
     }
@@ -262,9 +252,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         )
         .await?;
 
-        Ok(runtime
-            .assembly
-            .build_runner(Some(Box::new(runtime.feed_task))))
+        Ok(runtime.assembly.build_runner(None))
     }
 
     fn node_control_from(
@@ -489,29 +477,6 @@ fn keep_tempdir(policy: DeploymentPolicy) -> bool {
     policy.cleanup_policy.preserve_artifacts || keep_tempdir_from_env()
 }
 
-async fn spawn_feed_with<E: Application>(
-    node_clients: &NodeClients<E>,
-) -> Result<(<E::FeedRuntime as FeedRuntime>::Feed, FeedHandle), ProcessDeployerError> {
-    let node_count = node_clients.len();
-    debug!(nodes = node_count, "starting local feed");
-
-    if node_count == 0 {
-        return Err(ProcessDeployerError::WorkloadFailed {
-            source: "feed requires at least one node".into(),
-        });
-    }
-
-    info!("starting feed");
-
-    spawn_feed::<E>(node_clients.clone())
-        .await
-        .map_err(workload_error)
-}
-
-fn workload_error(source: DynError) -> ProcessDeployerError {
-    ProcessDeployerError::WorkloadFailed { source }
-}
-
 fn log_local_deploy_start(node_count: usize, policy: DeploymentPolicy, has_node_control: bool) {
     info!(
         nodes = node_count,
@@ -524,7 +489,6 @@ fn log_local_deploy_start(node_count: usize, policy: DeploymentPolicy, has_node_
 
 struct RuntimeContext<E: Application> {
     assembly: RuntimeAssembly<E>,
-    feed_task: FeedHandle,
 }
 
 async fn run_context_for<E: Application>(
@@ -539,7 +503,6 @@ async fn run_context_for<E: Application>(
         return Err(ProcessDeployerError::RuntimePreflight);
     }
 
-    let (feed, feed_task) = spawn_feed_with::<E>(&node_clients).await?;
     let mut assembly = RuntimeAssembly::new(
         descriptors,
         node_clients,
@@ -547,14 +510,10 @@ async fn run_context_for<E: Application>(
         expectation_cooldown,
         cluster_control_profile,
         Metrics::empty(),
-        feed,
     );
     if let Some(node_control) = node_control {
         assembly = assembly.with_node_control(node_control);
     }
 
-    Ok(RuntimeContext {
-        assembly,
-        feed_task,
-    })
+    Ok(RuntimeContext { assembly })
 }

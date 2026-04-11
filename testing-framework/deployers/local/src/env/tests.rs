@@ -1,32 +1,13 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use testing_framework_core::{
-    scenario::{Application, DynError, Feed, FeedRuntime, HttpReadinessRequirement, NodeClients},
+    scenario::{Application, DynError, HttpReadinessRequirement},
     topology::DeploymentDescriptor,
 };
 
 use super::*;
 
 static STABLE_CALLS: AtomicUsize = AtomicUsize::new(0);
-
-#[derive(Clone, Default)]
-struct DummyFeed;
-
-impl Feed for DummyFeed {
-    type Subscription = ();
-
-    fn subscribe(&self) -> Self::Subscription {}
-}
-
-#[derive(Default)]
-struct DummyFeedRuntime;
-
-#[async_trait::async_trait]
-impl FeedRuntime for DummyFeedRuntime {
-    type Feed = DummyFeed;
-
-    async fn run(self: Box<Self>) {}
-}
 
 #[derive(Clone)]
 struct DummyConfig;
@@ -47,13 +28,6 @@ impl Application for DummyEnv {
     type Deployment = DummyTopology;
     type NodeClient = ();
     type NodeConfig = DummyConfig;
-    type FeedRuntime = DummyFeedRuntime;
-
-    async fn prepare_feed(
-        _node_clients: NodeClients<Self>,
-    ) -> Result<(<Self::FeedRuntime as FeedRuntime>::Feed, Self::FeedRuntime), DynError> {
-        Ok((DummyFeed, DummyFeedRuntime))
-    }
 }
 
 #[async_trait::async_trait]
