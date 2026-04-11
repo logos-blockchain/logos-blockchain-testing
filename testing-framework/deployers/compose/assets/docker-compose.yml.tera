@@ -1,25 +1,25 @@
 services:
 {% for node in nodes %}
   {{ node.name }}:
-    image: {{ node.image }}
-{% if node.platform %}    platform: {{ node.platform }}
+    image: {{ node.image | json_encode() }}
+{% if node.platform %}    platform: {{ node.platform | json_encode() }}
 {% endif %}    entrypoint:
 {% for arg in node.entrypoint %}
-      - {{ arg }}
+      - {{ arg | json_encode() }}
 {% endfor %}
     volumes:
 {% for volume in node.volumes %}
-      - {{ volume }}
+      - {{ volume | json_encode() }}
 {% endfor %}
 {% if node.extra_hosts | length > 0 %}
     extra_hosts:
 {% for host in node.extra_hosts %}
-      - {{ host }}
+      - {{ host | json_encode() }}
 {% endfor %}
 {% endif %}
     ports:
 {% for port in node.ports %}
-      - {{ port }}
+      - {{ port | json_encode() }}
 {% endfor %}
     environment:
 {% for env in node.environment %}
