@@ -226,7 +226,7 @@ impl<E: Application> RuntimeAssembly<E> {
         mut self,
         cleanup_guard: Option<Box<dyn CleanupGuard>>,
     ) -> super::Runner<E> {
-        let cleanup_guard = chain_cleanup_guards(self.cleanup_guard.take(), cleanup_guard);
+        let cleanup_guard = chain_cleanup_guards(cleanup_guard, self.cleanup_guard.take());
         super::Runner::new(self.build_context(), cleanup_guard)
     }
 }
