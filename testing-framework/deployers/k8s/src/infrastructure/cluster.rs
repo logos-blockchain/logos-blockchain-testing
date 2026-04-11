@@ -18,7 +18,9 @@ use crate::{
 };
 
 #[derive(Default)]
+/// Port specification for a k8s deployment before port-forwarding starts.
 pub struct PortSpecs {
+    /// Per-node API and auxiliary ports that must be exposed.
     pub nodes: Vec<NodeConfigPorts>,
 }
 
@@ -35,12 +37,15 @@ pub struct ClusterEnvironment {
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Failures while managing the cluster environment wrapper.
 pub enum ClusterEnvironmentError {
     #[error("cleanup guard is missing (it may have already been consumed)")]
+    /// The environment no longer owns a cleanup guard.
     MissingCleanupGuard,
 }
 
 impl ClusterEnvironment {
+    /// Creates a cluster environment from forwarded ports and cleanup state.
     pub fn new(
         client: Client,
         namespace: String,
@@ -64,6 +69,8 @@ impl ClusterEnvironment {
         }
     }
 
+    /// Marks the environment as failed, dumps diagnostics, and triggers
+    /// cleanup.
     pub async fn fail(&mut self, reason: &str) {
         tracing::error!(
             reason = reason,
@@ -78,6 +85,8 @@ impl ClusterEnvironment {
         }
     }
 
+    /// Consumes the environment and returns the cleanup handle plus remaining
+    /// port-forwards.
     pub fn into_cleanup(
         self,
     ) -> Result<(RunnerCleanup, Vec<PortForwardHandle>), ClusterEnvironmentError> {
@@ -88,38 +97,44 @@ impl ClusterEnvironment {
     }
 
     #[allow(dead_code)]
+    /// Returns the namespace backing this cluster.
     pub fn namespace(&self) -> &str {
         &self.namespace
     }
 
     #[allow(dead_code)]
+    /// Returns the Helm release name backing this cluster.
     pub fn release(&self) -> &str {
         &self.release
     }
 
+    /// Returns the Kubernetes client used by this environment.
     pub fn client(&self) -> &Client {
         &self.client
     }
 
+    /// Returns forwarded API and auxiliary node ports.
     pub fn node_ports(&self) -> (&[u16], &[u16]) {
         (&self.node_api_ports, &self.node_auxiliary_ports)
     }
 }
 
-#[derive(Debug, thiserror::Error)]
 /// Failures while building node clients against forwarded ports.
+#[derive(Debug, thiserror::Error)]
 pub enum NodeClientError {
     #[error("failed to build node clients: {source}")]
+    /// Building one or more node clients failed.
     Build {
         #[source]
         source: DynError,
     },
 }
 
-#[derive(Debug, thiserror::Error)]
 /// Readiness check failures for the remote cluster endpoints.
+#[derive(Debug, thiserror::Error)]
 pub enum RemoteReadinessError {
     #[error("failed to build readiness URL for {role} port {port}: {source}")]
+    /// Building one readiness URL failed.
     Endpoint {
         role: &'static str,
         port: u16,
@@ -127,18 +142,21 @@ pub enum RemoteReadinessError {
         source: ParseError,
     },
     #[error("remote readiness probe failed: {source}")]
+    /// The remote readiness probe failed after the URLs were built.
     Remote {
         #[source]
         source: DynError,
     },
 }
 
+/// Collects the required port-forward specification for one deployment.
 pub fn collect_port_specs<E: K8sDeployEnv>(descriptors: &E::Deployment) -> PortSpecs {
     let specs = collect_k8s_port_specs::<E>(descriptors);
     debug!(nodes = specs.nodes.len(), "collected k8s port specs");
     specs
 }
 
+/// Builds node clients against the forwarded cluster ports.
 pub fn build_node_clients<E: K8sDeployEnv>(
     cluster: &ClusterEnvironment,
 ) -> Result<NodeClients<E>, NodeClientError> {
@@ -154,6 +172,8 @@ pub fn build_node_clients<E: K8sDeployEnv>(
     Ok(NodeClients::new(nodes))
 }
 
+/// Waits until the remote k8s cluster satisfies the requested readiness
+/// requirement.
 pub async fn ensure_cluster_readiness<E: K8sDeployEnv>(
     descriptors: &E::Deployment,
     cluster: &ClusterEnvironment,
@@ -176,6 +196,7 @@ pub async fn ensure_cluster_readiness<E: K8sDeployEnv>(
     Ok(())
 }
 
+/// Waits for cluster port-forwards and cleans up on failure.
 pub async fn wait_for_ports_or_cleanup<E: K8sDeployEnv>(
     client: &Client,
     namespace: &str,
@@ -205,6 +226,7 @@ pub async fn wait_for_ports_or_cleanup<E: K8sDeployEnv>(
     }
 }
 
+/// Stops all active port-forwards and clears the handle list.
 pub fn kill_port_forwards(handles: &mut Vec<PortForwardHandle>) {
     for handle in handles.iter_mut() {
         handle.shutdown();

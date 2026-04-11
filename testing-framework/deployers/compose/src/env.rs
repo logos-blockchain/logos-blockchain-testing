@@ -35,32 +35,46 @@ use crate::{
 
 /// Handle returned by a compose config server (cfgsync or equivalent).
 pub trait ConfigServerHandle: Send + Sync {
+    /// Stops the config server and releases any local resources it owns.
     fn shutdown(&mut self);
+    /// Marks the config server as preserved so runner cleanup should not remove
+    /// it.
     fn mark_preserved(&mut self);
+    /// Returns the backing container name when the handle is container-backed.
     fn container_name(&self) -> Option<&str> {
         None
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Selects how compose nodes receive config updates.
 pub enum ComposeConfigServerMode {
+    /// Do not start any config server.
     Disabled,
+    /// Start a Docker-backed config server sidecar.
     Docker,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Readiness probe used for compose nodes.
 pub enum ComposeReadinessProbe {
+    /// Probe a concrete HTTP path on each node.
     Http { path: &'static str },
+    /// Probe raw TCP reachability on the testing port.
     Tcp,
 }
 
 #[derive(Clone, Copy)]
+/// Naming strategy for static compose node config files.
 pub enum ComposeNodeConfigFileName {
+    /// Use `node-{index}.<extension>`.
     FixedExtension(&'static str),
+    /// Build the file name directly from the node index.
     Custom(fn(usize) -> String),
 }
 
 impl ComposeNodeConfigFileName {
+    /// Resolves the config file name for one node index.
     #[must_use]
     pub fn resolve(&self, index: usize) -> String {
         match self {
@@ -73,6 +87,7 @@ impl ComposeNodeConfigFileName {
 /// Advanced compose deployer integration.
 #[async_trait]
 pub trait ComposeDeployEnv: Application + Sized {
+    /// Prepares compose workspace files before the stack is started.
     fn prepare_compose_configs(
         _path: &Path,
         _topology: &<Self as Application>::Deployment,
@@ -82,10 +97,13 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(())
     }
 
+    /// Returns the static config file name used for one node.
     fn static_node_config_file_name(index: usize) -> String {
         format!("node-{index}.yaml")
     }
 
+    /// Returns the runtime spec for one loopback node when using the standard
+    /// one-container-per-node shape.
     fn loopback_node_runtime_spec(
         topology: &<Self as Application>::Deployment,
         index: usize,
@@ -96,6 +114,8 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(None)
     }
 
+    /// Returns the binary+config node spec when the app follows the standard
+    /// binary compose path.
     fn binary_config_node_spec(
         _topology: &<Self as Application>::Deployment,
         _index: usize,
@@ -103,6 +123,7 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(None)
     }
 
+    /// Builds the full compose descriptor for the deployment.
     fn compose_descriptor(
         topology: &<Self as Application>::Deployment,
         _cfgsync_port: u16,
@@ -116,6 +137,7 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(ComposeDescriptor::new(nodes))
     }
 
+    /// Returns the container ports exposed by each compose node.
     fn node_container_ports(
         topology: &<Self as Application>::Deployment,
     ) -> Result<Vec<NodeContainerPorts>, DynError> {
@@ -129,12 +151,14 @@ pub trait ComposeDeployEnv: Application + Sized {
             .collect())
     }
 
+    /// Returns the hostnames advertised to cfgsync-rendered node configs.
     fn cfgsync_hostnames(topology: &<Self as Application>::Deployment) -> Vec<String> {
         (0..topology.node_count())
             .map(crate::infrastructure::ports::node_identifier)
             .collect()
     }
 
+    /// Adds extra artifacts to the cfgsync materialization output.
     fn enrich_cfgsync_artifacts(
         _topology: &<Self as Application>::Deployment,
         _artifacts: &mut MaterializedArtifacts,
@@ -142,10 +166,12 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(())
     }
 
+    /// Selects how compose nodes receive config updates.
     fn cfgsync_server_mode() -> ComposeConfigServerMode {
         ComposeConfigServerMode::Disabled
     }
 
+    /// Builds the config-server container spec when cfgsync is enabled.
     fn cfgsync_container_spec(
         _cfgsync_path: &Path,
         _port: u16,
@@ -154,10 +180,12 @@ pub trait ComposeDeployEnv: Application + Sized {
         Err(std::io::Error::other("cfgsync_container_spec is not implemented for this app").into())
     }
 
+    /// Returns how long the runner should wait for the config server to start.
     fn cfgsync_start_timeout() -> Duration {
         Duration::from_secs(180)
     }
 
+    /// Builds one node client from mapped compose ports.
     fn node_client_from_ports(
         ports: &NodeHostPorts,
         host: &str,
@@ -165,6 +193,7 @@ pub trait ComposeDeployEnv: Application + Sized {
         <Self as Application>::build_node_client(&discovered_node_access(host, ports))
     }
 
+    /// Builds node clients for the full compose deployment.
     fn build_node_clients(
         _topology: &<Self as Application>::Deployment,
         host_ports: &HostPortMapping,
@@ -178,16 +207,19 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(NodeClients::new(clients))
     }
 
+    /// Returns the readiness probe used for compose nodes.
     fn readiness_probe() -> ComposeReadinessProbe {
         ComposeReadinessProbe::Http {
             path: <Self as Application>::node_readiness_path(),
         }
     }
 
+    /// Returns the host that should be used to access forwarded compose ports.
     fn compose_runner_host() -> String {
         compose_runner_host()
     }
 
+    /// Waits for remote readiness using the app's compose-specific probe model.
     async fn wait_remote_readiness(
         _topology: &<Self as Application>::Deployment,
         mapping: &HostPortMapping,
@@ -204,6 +236,7 @@ pub trait ComposeDeployEnv: Application + Sized {
         }
     }
 
+    /// Waits for local host ports using the app's compose-specific probe model.
     async fn wait_for_nodes(
         ports: &[u16],
         host: &str,
@@ -234,8 +267,10 @@ pub trait ComposeDeployEnv: Application + Sized {
 pub trait ComposeBinaryApp:
     Application + Sized + StaticArtifactRenderer<Deployment = <Self as Application>::Deployment>
 {
+    /// Returns the binary+config runtime spec shared by all compose nodes.
     fn compose_node_spec() -> BinaryConfigNodeSpec;
 
+    /// Prepares any extra workspace files needed before config rendering.
     fn prepare_compose_workspace(
         _path: &Path,
         _topology: &<Self as Application>::Deployment,
@@ -244,17 +279,21 @@ pub trait ComposeBinaryApp:
         Ok(())
     }
 
+    /// Returns extra non-node services that should be added to the compose
+    /// stack.
     fn compose_extra_services(
         _topology: &<Self as Application>::Deployment,
     ) -> Result<Vec<NodeDescriptor>, DynError> {
         Ok(Vec::new())
     }
 
+    /// Returns the static node config file name used for one node.
     fn static_node_config_file_name(index: usize) -> String {
         make_extension_node_config_file_name(&Self::compose_node_spec().config_file_extension)
             .resolve(index)
     }
 
+    /// Builds one node client from mapped compose ports.
     fn node_client_from_ports(
         ports: &NodeHostPorts,
         host: &str,
@@ -262,12 +301,14 @@ pub trait ComposeBinaryApp:
         <Self as Application>::build_node_client(&discovered_node_access(host, ports))
     }
 
+    /// Returns the readiness probe used for compose nodes.
     fn readiness_probe() -> ComposeReadinessProbe {
         ComposeReadinessProbe::Http {
             path: <Self as Application>::node_readiness_path(),
         }
     }
 
+    /// Returns the host that should be used to access forwarded compose ports.
     fn compose_runner_host() -> String {
         compose_runner_host()
     }
@@ -439,6 +480,7 @@ where
     Ok(())
 }
 
+/// Materializes cfgsync registration-server config files for a compose stack.
 pub fn write_registration_server_compose_configs<E>(
     path: &Path,
     topology: &<E as Application>::Deployment,
@@ -529,6 +571,7 @@ async fn wait_for_tcp_readiness(
     }
 }
 
+/// Converts mapped compose ports into generic node access.
 pub fn discovered_node_access(host: &str, ports: &NodeHostPorts) -> NodeAccess {
     NodeAccess::new(host, ports.api).with_testing_port(ports.testing)
 }

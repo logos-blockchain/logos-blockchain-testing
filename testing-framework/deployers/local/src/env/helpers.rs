@@ -14,64 +14,81 @@ use crate::{
     process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError},
 };
 
+/// Result of building a local node config together with the node's reserved
+/// network port.
 pub struct BuiltNodeConfig<Config> {
+    /// Materialized node config value.
     pub config: Config,
+    /// Reserved network port used for peer traffic.
     pub network_port: u16,
 }
 
+/// Named initial config entry generated for one node.
 pub struct NodeConfigEntry<NodeConfigValue> {
+    /// Stable generated node name.
     pub name: String,
+    /// Config value associated with `name`.
     pub config: NodeConfigValue,
 }
 
+/// Reserved local ports assigned to one node.
 pub struct LocalNodePorts {
     network_port: u16,
     named_ports: HashMap<&'static str, u16>,
 }
 
 impl LocalNodePorts {
+    /// Returns the reserved network port.
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
     }
 
+    /// Returns a reserved named port, if present.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<u16> {
         self.named_ports.get(name).copied()
     }
 
+    /// Returns a reserved named port or an error if it is missing.
     pub fn require(&self, name: &str) -> Result<u16, DynError> {
         self.get(name)
             .ok_or_else(|| format!("missing reserved local port '{name}'").into())
     }
 
+    /// Iterates over all reserved named ports.
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, u16)> + '_ {
         self.named_ports.iter().map(|(name, port)| (*name, *port))
     }
 }
 
 #[derive(Clone, Debug)]
+/// Peer node view used while constructing local configs.
 pub struct LocalPeerNode {
     index: usize,
     network_port: u16,
 }
 
 impl LocalPeerNode {
+    /// Returns the peer's zero-based node index.
     #[must_use]
     pub fn index(&self) -> usize {
         self.index
     }
 
+    /// Returns the peer's reserved network port.
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
     }
 
+    /// Returns the peer's loopback HTTP authority as `127.0.0.1:<port>`.
     #[must_use]
     pub fn http_address(&self) -> String {
         format!("127.0.0.1:{}", self.network_port)
     }
 
+    /// Returns the peer authority used in local configs.
     #[must_use]
     pub fn authority(&self) -> String {
         self.http_address()
@@ -79,16 +96,24 @@ impl LocalPeerNode {
 }
 
 #[derive(Clone, Default)]
+/// Standard local process description for one node binary plus one config file.
 pub struct LocalProcessSpec {
+    /// Environment variable that points to the node binary.
     pub binary_env_var: String,
+    /// Fallback binary name resolved from `PATH` or `target/`.
     pub binary_name: String,
+    /// Config file name written into the temp launch directory.
     pub config_file_name: String,
+    /// CLI flag used to point the process at `config_file_name`.
     pub config_arg: String,
+    /// Extra CLI arguments passed after the config flag.
     pub extra_args: Vec<String>,
+    /// Extra environment variables for the child process.
     pub env: Vec<crate::process::LaunchEnvVar>,
 }
 
 impl LocalProcessSpec {
+    /// Creates a standard binary+config local process spec.
     #[must_use]
     pub fn new(binary_env_var: &str, binary_name: &str) -> Self {
         Self {
@@ -101,6 +126,7 @@ impl LocalProcessSpec {
         }
     }
 
+    /// Overrides the config file name and CLI flag used to pass it.
     #[must_use]
     pub fn with_config_file(mut self, file_name: &str, arg: &str) -> Self {
         self.config_file_name = file_name.to_owned();
@@ -108,17 +134,20 @@ impl LocalProcessSpec {
         self
     }
 
+    /// Appends one extra environment variable.
     #[must_use]
     pub fn with_env(mut self, key: &str, value: &str) -> Self {
         self.env.push(crate::process::LaunchEnvVar::new(key, value));
         self
     }
 
+    /// Convenience helper for setting `RUST_LOG`.
     #[must_use]
     pub fn with_rust_log(self, value: &str) -> Self {
         self.with_env("RUST_LOG", value)
     }
 
+    /// Appends extra CLI arguments after the config flag pair.
     #[must_use]
     pub fn with_args(mut self, args: impl IntoIterator<Item = String>) -> Self {
         self.extra_args.extend(args);
@@ -126,6 +155,7 @@ impl LocalProcessSpec {
     }
 }
 
+/// Preallocates `count` local TCP ports for later use.
 pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessSpawnError> {
     (0..count)
         .map(|_| crate::process::allocate_available_port())
@@ -135,6 +165,7 @@ pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessS
         })
 }
 
+/// Builds a stable `name_prefix-{index}` config list.
 pub fn build_indexed_node_configs<T>(
     count: usize,
     name_prefix: &str,
@@ -150,6 +181,7 @@ pub fn build_indexed_node_configs<T>(
         .collect()
 }
 
+/// Reserves network and named ports for `count` local nodes.
 pub fn reserve_local_node_ports(
     count: usize,
     names: &[&'static str],
@@ -172,10 +204,13 @@ pub fn reserve_local_node_ports(
         .collect())
 }
 
+/// Builds the default single-HTTP-endpoint node access shape.
 pub fn single_http_node_endpoints(port: u16) -> NodeEndpoints {
     NodeEndpoints::from_api_port(port)
 }
 
+/// Builds a cluster node config for the local loopback environment from the
+/// shared cluster-config application model.
 pub fn build_local_cluster_node_config<E>(
     index: usize,
     ports: &LocalNodePorts,
@@ -197,6 +232,8 @@ where
     E::build_cluster_node_config(&node, &peer_views).map_err(Into::into)
 }
 
+/// Converts discovered local node endpoints into the generic `NodeAccess`
+/// shape used by `Application::build_node_client`.
 pub fn discovered_node_access(endpoints: &NodeEndpoints) -> NodeAccess {
     let mut access = NodeAccess::new("127.0.0.1", endpoints.api.port());
 
@@ -215,6 +252,8 @@ pub fn discovered_node_access(endpoints: &NodeEndpoints) -> NodeAccess {
     access
 }
 
+/// Builds peer values from a full indexed port list while skipping
+/// `self_index`.
 pub fn build_indexed_http_peers<T>(
     node_count: usize,
     self_index: usize,
@@ -235,6 +274,8 @@ pub(crate) fn compact_peer_ports(peer_ports: &[u16], self_index: usize) -> Vec<u
         .collect()
 }
 
+/// Builds local peer-node views from a full indexed port list while skipping
+/// `self_index`.
 pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<LocalPeerNode> {
     peer_ports
         .iter()
@@ -248,6 +289,7 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
         .collect()
 }
 
+/// Generates the initial local node configs for one deployment.
 pub fn build_generated_initial_nodes<E>(
     topology: &E::Deployment,
     node_name_prefix: &str,
@@ -292,6 +334,7 @@ where
         .collect()
 }
 
+/// Serializes a config as YAML and builds a launch spec for `spec`.
 pub fn yaml_config_launch_spec<T: Serialize>(
     config: &T,
     spec: &LocalProcessSpec,
@@ -300,6 +343,7 @@ pub fn yaml_config_launch_spec<T: Serialize>(
     rendered_config_launch_spec(config_yaml.into_bytes(), spec)
 }
 
+/// Uses an already rendered text config to build a launch spec for `spec`.
 pub fn text_config_launch_spec(
     rendered_config: impl Into<Vec<u8>>,
     spec: &LocalProcessSpec,
@@ -307,6 +351,7 @@ pub fn text_config_launch_spec(
     rendered_config_launch_spec(rendered_config.into(), spec)
 }
 
+/// Uses the standard binary+config launch shape for a YAML-rendered config.
 pub fn default_yaml_launch_spec<T: Serialize>(
     config: &T,
     binary_env_var: &str,
@@ -319,10 +364,12 @@ pub fn default_yaml_launch_spec<T: Serialize>(
     )
 }
 
+/// Serializes a node config as YAML bytes.
 pub fn yaml_node_config<T: Serialize>(config: &T) -> Result<Vec<u8>, DynError> {
     Ok(serde_yaml::to_string(config)?.into_bytes())
 }
 
+/// Converts an already rendered text config into launch-file bytes.
 pub fn text_node_config(rendered_config: impl Into<Vec<u8>>) -> Vec<u8> {
     rendered_config.into()
 }

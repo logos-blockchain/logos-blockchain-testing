@@ -26,32 +26,47 @@ use crate::{
     lifecycle::cleanup::RunnerCleanup,
 };
 
+/// Assets that can be installed as one Helm release.
 pub trait HelmReleaseAssets {
+    /// Returns the Helm bundle used to install the release.
     fn release_bundle(&self) -> HelmReleaseBundle;
 }
 
 #[derive(Debug)]
+/// Rendered chart directory backed by a temporary workspace.
 pub struct RenderedHelmChartAssets {
     chart_path: PathBuf,
     _tempdir: TempDir,
 }
 
 #[derive(Clone, Debug, Default)]
+/// In-memory YAML manifest that can be rendered into a single Helm template.
 pub struct HelmManifest {
     documents: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
+/// Standard binary+config k8s node installation contract.
 pub struct BinaryConfigK8sSpec {
+    /// Helm chart name used for the generated chart.
     pub chart_name: String,
+    /// Prefix used for generated node deployment and service names.
     pub node_name_prefix: String,
+    /// Binary path inside the container image.
     pub binary_path: String,
+    /// Absolute config path inside the container.
     pub config_container_path: String,
+    /// Main HTTP port exposed by the container.
     pub container_http_port: u16,
+    /// Auxiliary service port exposed by the Service object.
     pub service_testing_port: u16,
+    /// Primary environment variable used to override the image.
     pub image_env_var: String,
+    /// Secondary fallback environment variable used to override the image.
     pub fallback_image_env_var: String,
+    /// Default local image tag used when no override is present.
     pub default_image: String,
+    /// Image pull policy written into the generated Deployment.
     pub image_pull_policy: String,
 }
 
@@ -62,11 +77,13 @@ impl HelmReleaseAssets for RenderedHelmChartAssets {
 }
 
 impl HelmManifest {
+    /// Creates an empty manifest.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Serializes one structured value as YAML and appends it as a document.
     pub fn push_yaml<T>(&mut self, value: &T) -> Result<(), DynError>
     where
         T: Serialize,
@@ -76,6 +93,7 @@ impl HelmManifest {
         Ok(())
     }
 
+    /// Appends a raw YAML document after trimming surrounding whitespace.
     pub fn push_raw_yaml(&mut self, yaml: &str) {
         let yaml = yaml.trim();
         if !yaml.is_empty() {
@@ -83,16 +101,20 @@ impl HelmManifest {
         }
     }
 
+    /// Appends all documents from another manifest.
     pub fn extend(&mut self, other: Self) {
         self.documents.extend(other.documents);
     }
 
+    /// Renders all documents separated by `---`.
     #[must_use]
     pub fn render(&self) -> String {
         self.documents.join("\n---\n")
     }
 }
 
+/// Builds the standard forwarded port layout for a generated binary-config
+/// k8s stack.
 pub fn standard_port_specs(node_count: usize, api: u16, auxiliary: u16) -> PortSpecs {
     PortSpecs {
         nodes: (0..node_count)
@@ -102,6 +124,7 @@ pub fn standard_port_specs(node_count: usize, api: u16, auxiliary: u16) -> PortS
 }
 
 impl BinaryConfigK8sSpec {
+    /// Builds the conventional binary-config spec for a generated chart.
     #[must_use]
     pub fn conventional(
         chart_name: &str,
@@ -137,6 +160,8 @@ impl BinaryConfigK8sSpec {
     }
 }
 
+/// Renders a temporary single-template Helm chart for the standard
+/// binary-config node layout.
 pub fn render_binary_config_node_chart_assets<E>(
     deployment: &E::Deployment,
     spec: &BinaryConfigK8sSpec,
@@ -153,6 +178,8 @@ where
     )
 }
 
+/// Renders the standard ConfigMap, Deployment, and Service objects for each
+/// node in a binary-config k8s stack.
 pub fn render_binary_config_node_manifest<E>(
     deployment: &E::Deployment,
     spec: &BinaryConfigK8sSpec,
@@ -222,6 +249,7 @@ fn k8s_image(spec: &BinaryConfigK8sSpec) -> String {
         .unwrap_or_else(|_| spec.default_image.clone())
 }
 
+/// Renders a minimal chart directory with a single YAML template file.
 pub fn render_single_template_chart_assets(
     chart_name: &str,
     template_name: &str,
@@ -239,6 +267,7 @@ pub fn render_single_template_chart_assets(
     })
 }
 
+/// Renders a chart from an in-memory manifest.
 pub fn render_manifest_chart_assets(
     chart_name: &str,
     template_name: &str,
@@ -247,6 +276,7 @@ pub fn render_manifest_chart_assets(
     render_single_template_chart_assets(chart_name, template_name, &manifest.render())
 }
 
+/// Converts forwarded k8s ports into generic node access.
 pub fn discovered_node_access(host: &str, api_port: u16, auxiliary_port: u16) -> NodeAccess {
     NodeAccess::new(host, api_port).with_testing_port(auxiliary_port)
 }
@@ -259,6 +289,7 @@ fn normalize_yaml_document(yaml: &str) -> String {
     yaml.trim_start_matches("---\n").trim().to_owned()
 }
 
+/// Installs a Helm release and returns the corresponding cleanup handle.
 pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(
     client: &Client,
     assets: &A,
@@ -281,7 +312,9 @@ pub async fn install_helm_release_with_cleanup<A: HelmReleaseAssets>(
 }
 
 #[async_trait]
+/// Prepared k8s stack ready to be installed into a namespace.
 pub trait PreparedK8sStack: Send + Sync {
+    /// Installs the prepared stack and returns the cleanup handle.
     async fn install(
         &self,
         client: &Client,
@@ -311,15 +344,19 @@ where
 /// Advanced k8s deployer integration.
 #[async_trait]
 pub trait K8sDeployEnv: Application + Sized {
+    /// Prepared stack type produced by this environment.
     type Assets: PreparedK8sStack + Send + Sync + 'static;
 
+    /// Returns the ports that must be exposed and forwarded for the deployment.
     fn collect_port_specs(topology: &Self::Deployment) -> PortSpecs;
 
+    /// Prepares installable assets for the deployment.
     fn prepare_assets(
         topology: &Self::Deployment,
         metrics_otlp_ingest_url: Option<&Url>,
     ) -> Result<Self::Assets, DynError>;
 
+    /// Installs one prepared stack into the target namespace and release name.
     async fn install_stack(
         client: &Client,
         assets: &Self::Assets,
@@ -333,10 +370,12 @@ pub trait K8sDeployEnv: Application + Sized {
         assets.install(client, namespace, release, nodes).await
     }
 
+    /// Returns the generated namespace and release names for one test run.
     fn cluster_identifiers() -> (String, String) {
         default_cluster_identifiers()
     }
 
+    /// Builds one node client from forwarded k8s ports.
     fn node_client_from_ports(
         host: &str,
         api_port: u16,
@@ -349,6 +388,7 @@ pub trait K8sDeployEnv: Application + Sized {
         ))
     }
 
+    /// Builds node clients for the full deployment.
     fn build_node_clients(
         host: &str,
         node_api_ports: &[u16],
@@ -363,10 +403,12 @@ pub trait K8sDeployEnv: Application + Sized {
             .collect()
     }
 
+    /// Returns the readiness endpoint path used for remote HTTP probes.
     fn node_readiness_path() -> &'static str {
         <Self as Application>::node_readiness_path()
     }
 
+    /// Waits for remote node readiness after port-forwarding is established.
     async fn wait_remote_readiness(
         _deployment: &Self::Deployment,
         urls: &[Url],
@@ -384,22 +426,27 @@ pub trait K8sDeployEnv: Application + Sized {
         Ok(())
     }
 
+    /// Returns the Kubernetes role label used for node workloads.
     fn node_role() -> &'static str {
         "node"
     }
 
+    /// Returns the Deployment name for one node.
     fn node_deployment_name(release: &str, index: usize) -> String {
         default_node_name(release, index)
     }
 
+    /// Returns the Service name for one node.
     fn node_service_name(release: &str, index: usize) -> String {
         default_node_name(release, index)
     }
 
+    /// Returns the label selector used by attach flows to locate node services.
     fn attach_node_service_selector(release: &str) -> String {
         default_attach_node_service_selector(release)
     }
 
+    /// Waits for direct HTTP readiness against forwarded node ports.
     async fn wait_for_node_http(
         ports: &[u16],
         role: &'static str,
@@ -421,20 +468,26 @@ pub trait K8sDeployEnv: Application + Sized {
         Ok(())
     }
 
+    /// Returns the externally reachable base URL for a node client, if the app
+    /// needs it for attach or manual flows.
     fn node_base_url(_client: &Self::NodeClient) -> Option<String> {
         None
     }
 
+    /// Returns the cfgsync service host and port when manual-cluster override
+    /// flows are enabled.
     fn cfgsync_service(_release: &str) -> Option<(String, u16)> {
         None
     }
 
+    /// Returns cfgsync hostnames for all nodes in the deployment.
     fn cfgsync_hostnames(release: &str, node_count: usize) -> Vec<String> {
         (0..node_count)
             .map(|index| Self::node_service_name(release, index))
             .collect()
     }
 
+    /// Builds app-specific cfgsync override artifacts for one node.
     fn build_cfgsync_override_artifacts(
         _deployment: &Self::Deployment,
         _node_index: usize,
@@ -450,8 +503,10 @@ pub trait K8sBinaryApp: Application + StaticNodeConfigProvider + Sized
 where
     Self::Deployment: DeploymentDescriptor,
 {
+    /// Returns the standard binary+config install specification.
     fn k8s_binary_spec() -> BinaryConfigK8sSpec;
 
+    /// Adds extra YAML resources to the generated manifest.
     fn extend_k8s_manifest(
         _deployment: &Self::Deployment,
         _manifest: &mut HelmManifest,
@@ -459,6 +514,7 @@ where
         Ok(())
     }
 
+    /// Builds node clients for the full deployment.
     fn build_node_clients(
         host: &str,
         node_api_ports: &[u16],
@@ -477,10 +533,12 @@ where
             .collect()
     }
 
+    /// Returns the Kubernetes role label used for node workloads.
     fn node_role() -> &'static str {
         "node"
     }
 
+    /// Returns the externally reachable base URL for a node client, if needed.
     fn node_base_url(_client: &Self::NodeClient) -> Option<String> {
         None
     }

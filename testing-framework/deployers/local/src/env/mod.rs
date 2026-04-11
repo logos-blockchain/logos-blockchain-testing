@@ -29,13 +29,21 @@ pub use helpers::{
 
 /// Context passed while building a local node config.
 pub struct LocalBuildContext<'a, E: Application> {
+    /// Full deployment topology for the current scenario.
     pub topology: &'a E::Deployment,
+    /// Zero-based node index being built.
     pub index: usize,
+    /// Reserved local ports assigned to this node.
     pub ports: &'a LocalNodePorts,
+    /// Peer nodes visible to this node after excluding `index`.
     pub peers: &'a [LocalPeerNode],
+    /// Peer network ports for the current node view.
     pub peer_ports: &'a [u16],
+    /// Peer ports keyed by application-defined port name.
     pub peer_ports_by_name: &'a HashMap<String, u16>,
+    /// Start-time options for the node being built.
     pub options: &'a StartNodeOptions<E>,
+    /// Optional template config to derive from during manual restart flows.
     pub template_config: Option<&'a E::NodeConfig>,
 }
 
@@ -52,10 +60,14 @@ pub trait LocalDeployerEnv: Application + Sized
 where
     <Self as Application>::NodeConfig: Clone + Send + Sync + 'static,
 {
+    /// Returns named ports that should be reserved in addition to the main
+    /// network port for each node.
     fn local_port_names() -> &'static [&'static str] {
         Self::initial_local_port_names()
     }
 
+    /// Builds a node config and reserves any local ports needed for a node
+    /// started after initial cluster creation.
     fn build_node_config(
         topology: &Self::Deployment,
         index: usize,
@@ -73,6 +85,8 @@ where
         )
     }
 
+    /// Builds a node config from an optional template during restart or
+    /// manual-cluster flows.
     fn build_node_config_from_template(
         topology: &Self::Deployment,
         index: usize,
@@ -103,6 +117,7 @@ where
         })
     }
 
+    /// Builds the initial local configs for every node in the deployment.
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError> {
@@ -129,14 +144,17 @@ where
         )
     }
 
+    /// Prefix used for generated node names such as `node-0`.
     fn initial_node_name_prefix() -> &'static str {
         "node"
     }
 
+    /// Additional named ports to reserve for each initial node.
     fn initial_local_port_names() -> &'static [&'static str] {
         &[]
     }
 
+    /// Builds one initial node config from already reserved ports.
     fn build_initial_node_config(
         topology: &Self::Deployment,
         index: usize,
@@ -157,6 +175,7 @@ where
         )
     }
 
+    /// Builds a local node config from peer port information.
     fn build_local_node_config(
         topology: &Self::Deployment,
         index: usize,
@@ -178,6 +197,7 @@ where
         )
     }
 
+    /// Builds a local node config from full peer node descriptions.
     fn build_local_node_config_with_peers(
         _topology: &Self::Deployment,
         _index: usize,
@@ -193,6 +213,8 @@ where
         .into())
     }
 
+    /// Returns the initial persist directory for a node, if one should be
+    /// mounted before startup.
     fn initial_persist_dir(
         _topology: &Self::Deployment,
         _node_name: &str,
@@ -201,6 +223,8 @@ where
         None
     }
 
+    /// Returns the initial snapshot directory for a node, if one should be
+    /// mounted before startup.
     fn initial_snapshot_dir(
         _topology: &Self::Deployment,
         _node_name: &str,
@@ -209,16 +233,20 @@ where
         None
     }
 
+    /// Returns the default local process description for this app.
     fn local_process_spec() -> Option<LocalProcessSpec> {
         None
     }
 
+    /// Serializes a local node config into the file bytes written next to the
+    /// spawned process.
     fn render_local_config(
         _config: &<Self as Application>::NodeConfig,
     ) -> Result<Vec<u8>, DynError> {
         Err(std::io::Error::other("render_local_config is not implemented for this app").into())
     }
 
+    /// Builds the full launch spec for a local node process.
     fn build_launch_spec(
         config: &<Self as Application>::NodeConfig,
         _dir: &Path,
@@ -231,10 +259,13 @@ where
         helpers::rendered_config_launch_spec(rendered, &spec)
     }
 
+    /// Returns the main HTTP API port from a node config when the app follows
+    /// the standard single-HTTP-endpoint pattern.
     fn http_api_port(_config: &<Self as Application>::NodeConfig) -> Option<u16> {
         None
     }
 
+    /// Resolves the full local endpoint set exposed by a node.
     fn node_endpoints(
         config: &<Self as Application>::NodeConfig,
     ) -> Result<NodeEndpoints, DynError> {
@@ -248,14 +279,18 @@ where
         Err(std::io::Error::other("node_endpoints is not implemented for this app").into())
     }
 
+    /// Resolves the port peers should use for cluster traffic.
     fn node_peer_port(node: &Node<Self>) -> u16 {
         node.endpoints().api.port()
     }
 
+    /// Builds a node client directly from the API endpoint when the default
+    /// `NodeAccess`-based path is not suitable.
     fn node_client_from_api_endpoint(_api: SocketAddr) -> Option<Self::NodeClient> {
         None
     }
 
+    /// Builds a node client from discovered local endpoints.
     fn node_client(endpoints: &NodeEndpoints) -> Result<Self::NodeClient, DynError> {
         if let Ok(client) =
             <Self as Application>::build_node_client(&discovered_node_access(endpoints))
@@ -270,10 +305,13 @@ where
         Err(std::io::Error::other("node_client is not implemented for this app").into())
     }
 
+    /// Returns the readiness endpoint path used for local HTTP probes.
     fn readiness_endpoint_path() -> &'static str {
         <Self as Application>::node_readiness_path()
     }
 
+    /// Waits for any additional cluster-specific stabilization after the HTTP
+    /// readiness probe succeeds.
     async fn wait_readiness_stable(_nodes: &[Node<Self>]) -> Result<(), DynError> {
         Ok(())
     }
@@ -290,12 +328,15 @@ pub trait LocalBinaryApp: Application + Sized
 where
     <Self as Application>::NodeConfig: Clone + Send + Sync + 'static,
 {
+    /// Prefix used for generated initial node names such as `node-0`.
     fn initial_node_name_prefix() -> &'static str;
 
+    /// Additional named ports to reserve for each local node.
     fn initial_local_port_names() -> &'static [&'static str] {
         &[]
     }
 
+    /// Builds a local node config from full peer node descriptions.
     fn build_local_node_config_with_peers(
         topology: &Self::Deployment,
         index: usize,
@@ -306,17 +347,24 @@ where
         template_config: Option<&<Self as Application>::NodeConfig>,
     ) -> Result<<Self as Application>::NodeConfig, DynError>;
 
+    /// Returns the standard process description for launching one local node.
     fn local_process_spec() -> LocalProcessSpec;
 
+    /// Serializes a local node config into the file bytes written next to the
+    /// spawned process.
     fn render_local_config(config: &<Self as Application>::NodeConfig)
     -> Result<Vec<u8>, DynError>;
 
+    /// Returns the main HTTP API port used for discovery and readiness.
     fn http_api_port(config: &<Self as Application>::NodeConfig) -> u16;
 
+    /// Returns the readiness endpoint path used for local HTTP probes.
     fn readiness_endpoint_path() -> &'static str {
         <Self as Application>::node_readiness_path()
     }
 
+    /// Waits for any additional cluster-specific stabilization after the HTTP
+    /// readiness probe succeeds.
     async fn wait_readiness_stable(_nodes: &[Node<Self>]) -> Result<(), DynError> {
         Ok(())
     }
@@ -433,6 +481,8 @@ pub(crate) fn readiness_endpoint_path<E: LocalDeployerEnv>() -> &'static str {
     E::readiness_endpoint_path()
 }
 
+/// Waits for local HTTP readiness across the provided nodes and then applies
+/// any app-specific stabilization hook.
 pub async fn wait_local_http_readiness<E: LocalDeployerEnv>(
     nodes: &[Node<E>],
     requirement: HttpReadinessRequirement,
@@ -449,6 +499,7 @@ pub async fn wait_local_http_readiness<E: LocalDeployerEnv>(
         .map_err(|source| ReadinessError::ClusterStable { source })
 }
 
+/// Spawns a local process node from an already prepared config value.
 pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
     label: String,
     config: <E as Application>::NodeConfig,
