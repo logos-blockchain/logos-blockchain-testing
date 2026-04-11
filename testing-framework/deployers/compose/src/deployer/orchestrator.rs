@@ -168,6 +168,10 @@ where
             .await?;
 
         self.ensure_non_empty_node_clients(&node_clients)?;
+        let (runtime_extensions, runtime_cleanup) = scenario
+            .prepare_runtime_extensions(node_clients.clone())
+            .await
+            .map_err(|source| ComposeRunnerError::RuntimeExtensions { source })?;
 
         let node_control = self.attached_node_control::<Caps>(scenario)?;
         let cluster_wait = self.attached_cluster_wait(scenario)?;
@@ -180,7 +184,9 @@ where
             observability.telemetry_handle()?,
             node_control,
             cluster_wait,
-        );
+        )
+        .with_runtime_extensions(runtime_extensions)
+        .with_cleanup_guard(runtime_cleanup);
 
         Ok(assembly.build_runner(None))
     }
@@ -277,6 +283,7 @@ where
         maybe_print_endpoints(&observability, &deployed.host, &deployed.host_ports);
 
         let input = RuntimeBuildInput {
+            scenario,
             deployed: &deployed,
             descriptors: prepared.descriptors.clone(),
             duration: scenario.duration(),
@@ -286,7 +293,7 @@ where
             node_control,
             cluster_wait,
         };
-        let runtime = build_compose_runtime::<E>(input).await?;
+        let runtime = build_compose_runtime::<E, Caps>(input).await?;
         let cleanup_guard = make_cleanup_guard(prepared.environment.into_cleanup()?);
 
         info!(
@@ -442,7 +449,8 @@ struct ComposeRuntime<E: ComposeDeployEnv> {
     assembly: RuntimeAssembly<E>,
 }
 
-struct RuntimeBuildInput<'a, E: ComposeDeployEnv> {
+struct RuntimeBuildInput<'a, E: ComposeDeployEnv, Caps> {
+    scenario: &'a Scenario<E, Caps>,
     deployed: &'a DeployedNodes<E>,
     descriptors: E::Deployment,
     duration: Duration,
@@ -453,13 +461,19 @@ struct RuntimeBuildInput<'a, E: ComposeDeployEnv> {
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
 }
 
-async fn build_compose_runtime<E: ComposeDeployEnv>(
-    input: RuntimeBuildInput<'_, E>,
+async fn build_compose_runtime<E: ComposeDeployEnv, Caps>(
+    input: RuntimeBuildInput<'_, E, Caps>,
 ) -> Result<ComposeRuntime<E>, ComposeRunnerError> {
     let node_clients = input.deployed.node_clients.clone();
     if node_clients.is_empty() {
         return Err(ComposeRunnerError::RuntimePreflight);
     }
+
+    let (runtime_extensions, runtime_cleanup) = input
+        .scenario
+        .prepare_runtime_extensions(node_clients.clone())
+        .await
+        .map_err(|source| ComposeRunnerError::RuntimeExtensions { source })?;
 
     let assembly = build_runtime_assembly(
         input.descriptors,
@@ -470,7 +484,9 @@ async fn build_compose_runtime<E: ComposeDeployEnv>(
         input.telemetry,
         input.node_control,
         input.cluster_wait,
-    );
+    )
+    .with_runtime_extensions(runtime_extensions)
+    .with_cleanup_guard(runtime_cleanup);
 
     Ok(ComposeRuntime { assembly })
 }

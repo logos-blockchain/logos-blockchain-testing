@@ -115,6 +115,11 @@ pub enum K8sRunnerError {
     InternalInvariant { message: String },
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
+    #[error("runtime extension setup failed: {source}")]
+    RuntimeExtensions {
+        #[source]
+        source: DynError,
+    },
     #[error("source orchestration failed: {source}")]
     SourceOrchestration {
         #[source]
@@ -209,7 +214,7 @@ where
     log_configured_observability(&observability);
     maybe_print_endpoints::<E>(&observability, &runtime.node_clients);
 
-    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait);
+    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait).await?;
     let runner = finalize_runner::<E>(&mut cluster, parts)?;
     Ok((runner, metadata))
 }
@@ -228,6 +233,10 @@ where
     let node_clients = resolve_node_clients(&source_plan, source_providers).await?;
 
     ensure_non_empty_node_clients(&node_clients)?;
+    let (runtime_extensions, runtime_cleanup) = scenario
+        .prepare_runtime_extensions(node_clients.clone())
+        .await
+        .map_err(|source| K8sRunnerError::RuntimeExtensions { source })?;
 
     let telemetry = observability.telemetry_handle()?;
     let cluster_wait = attached_cluster_wait::<E, Caps>(scenario, client)?;
@@ -239,6 +248,8 @@ where
         scenario.cluster_control_profile(),
         telemetry,
     )
+    .with_runtime_extensions(runtime_extensions)
+    .with_cleanup_guard(runtime_cleanup)
     .with_cluster_wait(cluster_wait);
 
     Ok(context.build_runner(None))
@@ -539,13 +550,18 @@ struct RuntimeArtifacts<E: K8sDeployEnv> {
     telemetry: Metrics,
 }
 
-fn build_runner_parts<E: K8sDeployEnv, Caps>(
+async fn build_runner_parts<E: K8sDeployEnv, Caps>(
     scenario: &Scenario<E, Caps>,
     node_count: usize,
     runtime: RuntimeArtifacts<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
-) -> K8sRunnerParts<E> {
-    K8sRunnerParts {
+) -> Result<K8sRunnerParts<E>, K8sRunnerError> {
+    let (runtime_extensions, runtime_cleanup) = scenario
+        .prepare_runtime_extensions(runtime.node_clients.clone())
+        .await
+        .map_err(|source| K8sRunnerError::RuntimeExtensions { source })?;
+
+    Ok(K8sRunnerParts {
         assembly: build_k8s_runtime_assembly(
             scenario.deployment().clone(),
             runtime.node_clients,
@@ -554,10 +570,12 @@ fn build_runner_parts<E: K8sDeployEnv, Caps>(
             scenario.cluster_control_profile(),
             runtime.telemetry,
             cluster_wait,
-        ),
+        )
+        .with_runtime_extensions(runtime_extensions)
+        .with_cleanup_guard(runtime_cleanup),
         node_count,
         duration_secs: scenario.duration().as_secs(),
-    }
+    })
 }
 
 async fn build_runtime_artifacts<E: K8sDeployEnv>(

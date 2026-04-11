@@ -13,9 +13,9 @@ use crate::{
     scenario::{
         Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
         HttpReadinessRequirement, IntoExistingCluster, NodeControlCapability,
-        ObservabilityCapability, RequiresNodeControl, builder_ops::CoreBuilderAccess,
-        expectation::Expectation, runtime::context::RunMetrics, sources::ScenarioSources,
-        workload::Workload,
+        ObservabilityCapability, RequiresNodeControl, RuntimeExtensionFactory,
+        builder_ops::CoreBuilderAccess, expectation::Expectation, runtime::context::RunMetrics,
+        sources::ScenarioSources, workload::Workload,
     },
     topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, FixedDeploymentProvider},
 };
@@ -26,6 +26,7 @@ pub struct Builder<E: Application, Caps = ()> {
     pub(super) topology_seed: Option<DeploymentSeed>,
     pub(super) workloads: Vec<Box<dyn Workload<E>>>,
     pub(super) expectations: Vec<Box<dyn Expectation<E>>>,
+    pub(super) runtime_extensions: Vec<Box<dyn RuntimeExtensionFactory<E>>>,
     pub(super) duration: Duration,
     pub(super) expectation_cooldown: Option<Duration>,
     pub(super) deployment_policy: DeploymentPolicy,
@@ -97,6 +98,14 @@ macro_rules! impl_common_builder_methods {
             #[must_use]
             pub fn with_expectation_boxed(self, expectation: Box<dyn Expectation<E>>) -> Self {
                 self.map_core_builder(|builder| builder.with_expectation_boxed(expectation))
+            }
+
+            #[must_use]
+            pub fn with_runtime_extension_factory(
+                self,
+                extension: Box<dyn RuntimeExtensionFactory<E>>,
+            ) -> Self {
+                self.map_core_builder(|builder| builder.with_runtime_extension_factory(extension))
             }
 
             #[must_use]
@@ -251,6 +260,7 @@ impl<E: Application, Caps: Default> Builder<E, Caps> {
             topology_seed: None,
             workloads: Vec::new(),
             expectations: Vec::new(),
+            runtime_extensions: Vec::new(),
             duration: Duration::ZERO,
             expectation_cooldown: None,
             deployment_policy: DeploymentPolicy::default(),
@@ -357,6 +367,7 @@ impl<E: Application, Caps> Builder<E, Caps> {
             topology_seed,
             workloads,
             expectations,
+            runtime_extensions,
             duration,
             expectation_cooldown,
             deployment_policy,
@@ -369,6 +380,7 @@ impl<E: Application, Caps> Builder<E, Caps> {
             topology_seed,
             workloads,
             expectations,
+            runtime_extensions,
             duration,
             expectation_cooldown,
             deployment_policy,
@@ -411,6 +423,15 @@ impl<E: Application, Caps> Builder<E, Caps> {
     #[must_use]
     pub fn with_expectation_boxed(mut self, expectation: Box<dyn Expectation<E>>) -> Self {
         self.add_expectation(expectation);
+        self
+    }
+
+    #[must_use]
+    pub fn with_runtime_extension_factory(
+        mut self,
+        extension: Box<dyn RuntimeExtensionFactory<E>>,
+    ) -> Self {
+        self.runtime_extensions.push(extension);
         self
     }
 
@@ -549,6 +570,7 @@ impl<E: Application, Caps> Builder<E, Caps> {
             descriptors,
             workloads,
             parts.expectations,
+            parts.runtime_extensions,
             run_plan.duration,
             run_plan.expectation_cooldown,
             parts.deployment_policy,
@@ -569,6 +591,7 @@ struct BuilderParts<E: Application, Caps> {
     topology_seed: Option<DeploymentSeed>,
     workloads: Vec<Box<dyn Workload<E>>>,
     expectations: Vec<Box<dyn Expectation<E>>>,
+    runtime_extensions: Vec<Box<dyn RuntimeExtensionFactory<E>>>,
     duration: Duration,
     expectation_cooldown: Option<Duration>,
     deployment_policy: DeploymentPolicy,
@@ -583,6 +606,7 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             topology_seed,
             workloads,
             expectations,
+            runtime_extensions,
             duration,
             expectation_cooldown,
             deployment_policy,
@@ -596,6 +620,7 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             topology_seed,
             workloads,
             expectations,
+            runtime_extensions,
             duration,
             expectation_cooldown,
             deployment_policy,

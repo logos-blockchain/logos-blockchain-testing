@@ -12,7 +12,7 @@ use testing_framework_core::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy, DynError,
         HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, Runner, Scenario, ScenarioError,
+        RetryPolicy, Runner, RuntimeExtensions, Scenario, ScenarioError,
         internal::{
             CleanupGuard, RuntimeAssembly, SourceOrchestrationPlan, build_source_orchestration_plan,
         },
@@ -83,6 +83,11 @@ pub enum ProcessDeployerError {
     },
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
+    #[error("runtime extension setup failed: {source}")]
+    RuntimeExtensions {
+        #[source]
+        source: DynError,
+    },
     #[error("source orchestration failed: {source}")]
     SourceOrchestration {
         #[source]
@@ -203,12 +208,19 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let node_clients = merge_source_clients_for_local::<E>(&source_plan, node_clients)
             .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
 
+        let (runtime_extensions, runtime_cleanup) = scenario
+            .prepare_runtime_extensions(node_clients.clone())
+            .await
+            .map_err(|source| ProcessDeployerError::RuntimeExtensions { source })?;
+
         let runtime = run_context_for(
             scenario.deployment().clone(),
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
             scenario.cluster_control_profile(),
+            runtime_extensions,
+            runtime_cleanup,
             None,
         )
         .await?;
@@ -242,12 +254,18 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let node_clients =
             merge_source_clients_for_local::<E>(&source_plan, node_control.node_clients())
                 .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
+        let (runtime_extensions, runtime_cleanup) = scenario
+            .prepare_runtime_extensions(node_clients.clone())
+            .await
+            .map_err(|source| ProcessDeployerError::RuntimeExtensions { source })?;
         let runtime = run_context_for(
             scenario.deployment().clone(),
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
             scenario.cluster_control_profile(),
+            runtime_extensions,
+            runtime_cleanup,
             Some(node_control),
         )
         .await?;
@@ -497,6 +515,8 @@ async fn run_context_for<E: Application>(
     duration: Duration,
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
+    runtime_extensions: RuntimeExtensions,
+    runtime_cleanup: Option<Box<dyn CleanupGuard>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<RuntimeContext<E>, ProcessDeployerError> {
     if node_clients.is_empty() {
@@ -510,7 +530,9 @@ async fn run_context_for<E: Application>(
         expectation_cooldown,
         cluster_control_profile,
         Metrics::empty(),
-    );
+    )
+    .with_runtime_extensions(runtime_extensions)
+    .with_cleanup_guard(runtime_cleanup);
     if let Some(node_control) = node_control {
         assembly = assembly.with_node_control(node_control);
     }

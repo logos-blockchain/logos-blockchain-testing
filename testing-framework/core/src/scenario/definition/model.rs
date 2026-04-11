@@ -6,8 +6,14 @@ use super::builder::Builder;
 use crate::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError,
-        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, expectation::Expectation,
-        runtime::SourceOrchestrationPlan, sources::ScenarioSources, workload::Workload,
+        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
+        expectation::Expectation,
+        runtime::{
+            CleanupGuard, RuntimeExtensionFactory, RuntimeExtensions, SourceOrchestrationPlan,
+            prepare_runtime_extensions,
+        },
+        sources::ScenarioSources,
+        workload::Workload,
     },
     topology::DynTopologyError,
 };
@@ -32,6 +38,7 @@ pub struct Scenario<E: Application, Caps = ()> {
     deployment: E::Deployment,
     workloads: Vec<Arc<dyn Workload<E>>>,
     expectations: Vec<Box<dyn Expectation<E>>>,
+    runtime_extensions: Vec<Box<dyn RuntimeExtensionFactory<E>>>,
     duration: Duration,
     expectation_cooldown: Duration,
     deployment_policy: DeploymentPolicy,
@@ -45,6 +52,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
         deployment: E::Deployment,
         workloads: Vec<Arc<dyn Workload<E>>>,
         expectations: Vec<Box<dyn Expectation<E>>>,
+        runtime_extensions: Vec<Box<dyn RuntimeExtensionFactory<E>>>,
         duration: Duration,
         expectation_cooldown: Duration,
         deployment_policy: DeploymentPolicy,
@@ -56,6 +64,7 @@ impl<E: Application, Caps> Scenario<E, Caps> {
             deployment,
             workloads,
             expectations,
+            runtime_extensions,
             duration,
             expectation_cooldown,
             deployment_policy,
@@ -144,6 +153,18 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     #[must_use]
     pub const fn capabilities(&self) -> &Caps {
         &self.capabilities
+    }
+
+    #[doc(hidden)]
+    pub async fn prepare_runtime_extensions(
+        &self,
+        node_clients: NodeClients<E>,
+    ) -> Result<(RuntimeExtensions, Option<Box<dyn CleanupGuard>>), DynError> {
+        Ok(
+            prepare_runtime_extensions(&self.runtime_extensions, &self.deployment, node_clients)
+                .await?
+                .into_parts(),
+        )
     }
 }
 

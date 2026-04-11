@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use super::{metrics::Metrics, node_clients::ClusterClient};
+use super::{CleanupChain, RuntimeExtensions, metrics::Metrics, node_clients::ClusterClient};
 use crate::scenario::{
     Application, ClusterControlProfile, ClusterWaitHandle, DynError, NodeClients, NodeControlHandle,
 };
@@ -19,6 +19,7 @@ pub struct RunContext<E: Application> {
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
+    runtime_extensions: RuntimeExtensions,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
@@ -32,6 +33,8 @@ pub struct RuntimeAssembly<E: Application> {
     expectation_cooldown: Duration,
     cluster_control_profile: ClusterControlProfile,
     telemetry: Metrics,
+    runtime_extensions: RuntimeExtensions,
+    cleanup_guard: Option<Box<dyn CleanupGuard>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
@@ -46,6 +49,7 @@ impl<E: Application> RunContext<E> {
         expectation_cooldown: Duration,
         cluster_control_profile: ClusterControlProfile,
         telemetry: Metrics,
+        runtime_extensions: RuntimeExtensions,
         node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     ) -> Self {
         let metrics = RunMetrics::new(run_duration);
@@ -57,6 +61,7 @@ impl<E: Application> RunContext<E> {
             expectation_cooldown,
             cluster_control_profile,
             telemetry,
+            runtime_extensions,
             node_control,
             cluster_wait: None,
         }
@@ -103,6 +108,29 @@ impl<E: Application> RunContext<E> {
         self.cluster_control_profile
     }
 
+    /// Returns a cloned runtime extension value by type.
+    #[must_use]
+    pub fn extension<T>(&self) -> Option<T>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        self.runtime_extensions.get::<T>()
+    }
+
+    /// Returns a runtime extension value by type or an error if it is missing.
+    pub fn require_extension<T>(&self) -> Result<T, DynError>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        self.extension::<T>().ok_or_else(|| {
+            format!(
+                "runtime extension is not available: {}",
+                std::any::type_name::<T>()
+            )
+            .into()
+        })
+    }
+
     #[must_use]
     pub fn node_control(&self) -> Option<Arc<dyn NodeControlHandle<E>>> {
         self.node_control.clone()
@@ -142,6 +170,8 @@ impl<E: Application> RuntimeAssembly<E> {
             expectation_cooldown,
             cluster_control_profile,
             telemetry,
+            runtime_extensions: RuntimeExtensions::default(),
+            cleanup_guard: None,
             node_control: None,
             cluster_wait: None,
         }
@@ -150,6 +180,19 @@ impl<E: Application> RuntimeAssembly<E> {
     #[must_use]
     pub fn with_node_control(mut self, node_control: Arc<dyn NodeControlHandle<E>>) -> Self {
         self.node_control = Some(node_control);
+        self
+    }
+
+    #[must_use]
+    pub fn with_runtime_extensions(mut self, runtime_extensions: RuntimeExtensions) -> Self {
+        self.runtime_extensions = runtime_extensions;
+        self
+    }
+
+    #[must_use]
+    #[doc(hidden)]
+    pub fn with_cleanup_guard(mut self, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> Self {
+        self.cleanup_guard = chain_cleanup_guards(self.cleanup_guard.take(), cleanup_guard);
         self
     }
 
@@ -168,6 +211,7 @@ impl<E: Application> RuntimeAssembly<E> {
             self.expectation_cooldown,
             self.cluster_control_profile,
             self.telemetry,
+            self.runtime_extensions,
             self.node_control,
         );
 
@@ -178,7 +222,11 @@ impl<E: Application> RuntimeAssembly<E> {
     }
 
     #[must_use]
-    pub fn build_runner(self, cleanup_guard: Option<Box<dyn CleanupGuard>>) -> super::Runner<E> {
+    pub fn build_runner(
+        mut self,
+        cleanup_guard: Option<Box<dyn CleanupGuard>>,
+    ) -> super::Runner<E> {
+        let cleanup_guard = chain_cleanup_guards(self.cleanup_guard.take(), cleanup_guard);
         super::Runner::new(self.build_context(), cleanup_guard)
     }
 }
@@ -192,8 +240,26 @@ impl<E: Application> From<RunContext<E>> for RuntimeAssembly<E> {
             expectation_cooldown: context.expectation_cooldown,
             cluster_control_profile: context.cluster_control_profile,
             telemetry: context.telemetry,
+            runtime_extensions: context.runtime_extensions,
+            cleanup_guard: None,
             node_control: context.node_control,
             cluster_wait: context.cluster_wait,
+        }
+    }
+}
+
+fn chain_cleanup_guards(
+    left: Option<Box<dyn CleanupGuard>>,
+    right: Option<Box<dyn CleanupGuard>>,
+) -> Option<Box<dyn CleanupGuard>> {
+    match (left, right) {
+        (None, None) => None,
+        (Some(guard), None) | (None, Some(guard)) => Some(guard),
+        (Some(left), Some(right)) => {
+            let mut chain = CleanupChain::default();
+            chain.push(left);
+            chain.push(right);
+            Some(Box::new(chain))
         }
     }
 }

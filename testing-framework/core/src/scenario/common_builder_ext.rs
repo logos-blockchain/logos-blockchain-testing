@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::{
     Application, CleanupPolicy, DeploymentPolicy, Expectation, HttpReadinessRequirement,
-    RetryPolicy, Workload, internal::CoreBuilderAccess,
+    RetryPolicy, RuntimeExtensionFactory, Workload, internal::CoreBuilderAccess,
 };
 use crate::topology::{DeploymentProvider, DeploymentSeed};
 
@@ -50,6 +50,14 @@ pub trait CoreBuilderExt: CoreBuilderAccess + Sized {
     #[must_use]
     fn with_expectation_boxed(self, expectation: Box<dyn Expectation<Self::Env>>) -> Self {
         self.map_core_builder(|builder| builder.with_expectation_boxed(expectation))
+    }
+
+    #[must_use]
+    fn with_runtime_extension_factory(
+        self,
+        extension: Box<dyn RuntimeExtensionFactory<Self::Env>>,
+    ) -> Self {
+        self.map_core_builder(|builder| builder.with_runtime_extension_factory(extension))
     }
 
     #[must_use]

@@ -1,5 +1,6 @@
 pub mod context;
 mod deployer;
+mod extensions;
 mod internal;
 mod inventory;
 pub mod metrics;
@@ -9,6 +10,8 @@ mod runner;
 
 pub use context::{CleanupGuard, RunContext, RunHandle, RunMetrics, RuntimeAssembly};
 pub use deployer::{Deployer, ScenarioError};
+pub(crate) use extensions::{CleanupChain, prepare_runtime_extensions};
+pub use extensions::{PreparedRuntimeExtension, RuntimeExtensionFactory, RuntimeExtensions};
 #[doc(hidden)]
 pub use internal::{
     ApplicationExternalProvider, AttachProvider, AttachProviderError, AttachedNode, ManagedSource,

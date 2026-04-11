@@ -36,8 +36,9 @@ pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
 pub use runtime::{
-    Deployer, HttpReadinessRequirement, NodeClients, ReadinessError, RunContext, RunHandle,
-    RunMetrics, Runner, ScenarioError, StabilizationConfig,
+    Deployer, HttpReadinessRequirement, NodeClients, PreparedRuntimeExtension, ReadinessError,
+    RunContext, RunHandle, RunMetrics, Runner, RuntimeExtensionFactory, RuntimeExtensions,
+    ScenarioError, StabilizationConfig,
     metrics::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
         PrometheusEndpoint, PrometheusInstantSample,
