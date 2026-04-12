@@ -33,6 +33,15 @@ pub struct OpenRaftMembership {
 }
 
 impl OpenRaftMembership {
+    /// Builds a membership view from already observed node states.
+    #[must_use]
+    pub fn from_states(states: &[OpenRaftKvState]) -> Self {
+        let mut states = states.to_vec();
+        states.sort_by_key(|state| state.node_id);
+
+        Self { states }
+    }
+
     /// Reads and sorts the current node states by id.
     pub async fn discover(clients: &[OpenRaftKvClient]) -> Result<Self, OpenRaftClusterError> {
         let mut states = Vec::with_capacity(clients.len());
@@ -41,9 +50,7 @@ impl OpenRaftMembership {
             states.push(client.state().await.map_err(OpenRaftClusterError::Client)?);
         }
 
-        states.sort_by_key(|state| state.node_id);
-
-        Ok(Self { states })
+        Ok(Self::from_states(&states))
     }
 
     /// Returns the full voter set implied by the discovered nodes.

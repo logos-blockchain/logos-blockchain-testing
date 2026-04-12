@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    sync::Arc,
     time::Duration,
 };
 
@@ -11,6 +12,7 @@ use testing_framework_core::{
     },
     scenario::{Application, DynError, NodeClients},
 };
+use testing_framework_runner_k8s::ManualCluster;
 
 use crate::OpenRaftKvEnv;
 
@@ -188,6 +190,47 @@ pub fn openraft_cluster_source_provider(
     Ok(Box::new(StaticSourceProvider::new(named_sources(
         node_clients.snapshot(),
     ))))
+}
+
+/// Dynamic source provider backed by a manual cluster.
+///
+/// This keeps observation aligned with the latest client handles after manual
+/// node restarts.
+#[derive(Clone)]
+pub struct OpenRaftManualClusterSourceProvider {
+    cluster: Arc<ManualCluster<OpenRaftKvEnv>>,
+    node_names: Vec<String>,
+}
+
+impl OpenRaftManualClusterSourceProvider {
+    /// Builds a provider for the fixed node names used by the OpenRaft
+    /// examples.
+    #[must_use]
+    pub fn new(cluster: Arc<ManualCluster<OpenRaftKvEnv>>, node_count: usize) -> Self {
+        Self {
+            cluster,
+            node_names: (0..node_count)
+                .map(|index| format!("node-{index}"))
+                .collect(),
+        }
+    }
+}
+
+#[async_trait]
+impl testing_framework_core::observation::SourceProvider<OpenRaftKvClient>
+    for OpenRaftManualClusterSourceProvider
+{
+    async fn sources(&self) -> Result<Vec<ObservedSource<OpenRaftKvClient>>, DynError> {
+        Ok(self
+            .node_names
+            .iter()
+            .filter_map(|name| {
+                self.cluster
+                    .node_client(name)
+                    .map(|client| ObservedSource::new(name, client))
+            })
+            .collect())
+    }
 }
 
 fn named_sources(clients: Vec<OpenRaftKvClient>) -> Vec<ObservedSource<OpenRaftKvClient>> {
