@@ -2106,6 +2106,7 @@ dependencies = [
 name = "openraft-kv-runtime-ext"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "openraft-kv-node",
  "reqwest",
  "testing-framework-core",

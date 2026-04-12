@@ -2,13 +2,16 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use openraft_kv_node::OpenRaftKvClient;
-use openraft_kv_runtime_ext::OpenRaftKvEnv;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use openraft_kv_runtime_ext::{OpenRaftClusterObserver, OpenRaftKvEnv};
+use testing_framework_core::{
+    observation::ObservationHandle,
+    scenario::{DynError, RunContext, Workload},
+};
 use tracing::info;
 
 use crate::support::{
-    OpenRaftMembership, ensure_cluster_size, resolve_client_for_node, wait_for_leader,
-    wait_for_membership, write_batch,
+    OpenRaftMembership, ensure_cluster_size, resolve_client_for_node, wait_for_observed_leader,
+    wait_for_observed_membership, write_batch,
 };
 
 /// Workload that bootstraps the cluster, expands it to three voters, writes one
@@ -77,19 +80,21 @@ impl Workload<OpenRaftKvEnv> for OpenRaftKvFailoverWorkload {
 
     async fn start(&self, ctx: &RunContext<OpenRaftKvEnv>) -> Result<(), DynError> {
         let clients = ctx.node_clients().snapshot();
+        let observer = ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()?;
+
         ensure_cluster_size(&clients, 3)?;
 
         self.bootstrap_cluster(&clients).await?;
 
-        let initial_leader = wait_for_leader(&clients, self.timeout, None).await?;
+        let initial_leader = wait_for_observed_leader(&observer, self.timeout, None).await?;
         let membership = OpenRaftMembership::discover(&clients).await?;
 
-        self.promote_cluster(&clients, initial_leader, &membership)
+        self.promote_cluster(&observer, &clients, initial_leader, &membership)
             .await?;
         self.write_initial_batch(&clients, initial_leader).await?;
 
         let new_leader = self
-            .restart_leader_and_wait_for_failover(ctx, &clients, initial_leader)
+            .restart_leader_and_wait_for_failover(ctx, &observer, initial_leader)
             .await?;
         self.write_second_batch(&clients, new_leader).await?;
 
@@ -108,6 +113,7 @@ impl OpenRaftKvFailoverWorkload {
 
     async fn promote_cluster(
         &self,
+        observer: &ObservationHandle<OpenRaftClusterObserver>,
         clients: &[OpenRaftKvClient],
         leader_id: u64,
         membership: &OpenRaftMembership,
@@ -129,7 +135,7 @@ impl OpenRaftKvFailoverWorkload {
         let voter_ids = membership.voter_ids();
         leader.change_membership(voter_ids.iter().copied()).await?;
 
-        wait_for_membership(clients, &voter_ids, self.timeout).await?;
+        wait_for_observed_membership(observer, &voter_ids, self.timeout).await?;
 
         Ok(())
     }
@@ -154,7 +160,7 @@ impl OpenRaftKvFailoverWorkload {
     async fn restart_leader_and_wait_for_failover(
         &self,
         ctx: &RunContext<OpenRaftKvEnv>,
-        clients: &[OpenRaftKvClient],
+        observer: &ObservationHandle<OpenRaftClusterObserver>,
         leader_id: u64,
     ) -> Result<u64, DynError> {
         let Some(control) = ctx.node_control() else {
@@ -166,7 +172,7 @@ impl OpenRaftKvFailoverWorkload {
 
         control.restart_node(&leader_name).await?;
 
-        let new_leader = wait_for_leader(clients, self.timeout, Some(leader_id)).await?;
+        let new_leader = wait_for_observed_leader(observer, self.timeout, Some(leader_id)).await?;
 
         info!(
             old_leader = leader_id,

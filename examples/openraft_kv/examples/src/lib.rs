@@ -21,6 +21,7 @@ pub fn build_failover_scenario(
 ) -> anyhow::Result<Scenario<OpenRaftKvEnv, NodeControlCapability>> {
     Ok(
         OpenRaftKvScenarioBuilder::deployment_with(|deployment| deployment)
+            .with_cluster_observer()
             .enable_node_control()
             .with_run_duration(run_duration)
             .with_workload(

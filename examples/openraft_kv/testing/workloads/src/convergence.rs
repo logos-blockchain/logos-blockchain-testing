@@ -1,10 +1,13 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use openraft_kv_runtime_ext::OpenRaftKvEnv;
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use openraft_kv_runtime_ext::{OpenRaftClusterObserver, OpenRaftKvEnv};
+use testing_framework_core::{
+    observation::ObservationHandle,
+    scenario::{DynError, Expectation, RunContext},
+};
 
-use crate::support::{expected_kv, wait_for_replication};
+use crate::support::{expected_kv, wait_for_observed_replication};
 
 /// Expectation that waits for the full voter set and the writes from this run
 /// to converge on every node.
@@ -49,9 +52,9 @@ impl Expectation<OpenRaftKvEnv> for OpenRaftKvConverges {
 
     async fn evaluate(&mut self, ctx: &RunContext<OpenRaftKvEnv>) -> Result<(), DynError> {
         let expected = expected_kv(&self.key_prefix, self.total_writes);
-        let clients = ctx.node_clients().snapshot();
+        let observer = ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()?;
 
-        wait_for_replication(&clients, &expected, self.timeout).await?;
+        wait_for_observed_replication(&observer, &expected, self.timeout).await?;
 
         Ok(())
     }

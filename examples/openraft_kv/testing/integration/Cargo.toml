@@ -5,6 +5,7 @@ name              = "openraft-kv-runtime-ext"
 version.workspace = true
 
 [dependencies]
+async-trait                      = { workspace = true }
 openraft-kv-node                 = { path = "../../openraft-kv-node" }
 reqwest                          = { workspace = true }
 testing-framework-core           = { workspace = true }

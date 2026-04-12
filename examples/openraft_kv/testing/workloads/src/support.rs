@@ -4,6 +4,10 @@ use std::{
 };
 
 use openraft_kv_node::{OpenRaftKvClient, OpenRaftKvState};
+use openraft_kv_runtime_ext::{
+    OpenRaftClusterObserver, OpenRaftClusterSnapshot, capture_openraft_cluster_snapshot,
+};
+use testing_framework_core::observation::{ObservationHandle, ObservationSnapshot};
 use thiserror::Error;
 use tokio::time::{Instant, sleep};
 
@@ -62,98 +66,6 @@ impl OpenRaftMembership {
     }
 }
 
-/// One poll result across all known clients.
-#[derive(Clone, Debug, Default)]
-pub struct OpenRaftObservation {
-    states: Vec<OpenRaftKvState>,
-    failures: Vec<String>,
-}
-
-impl OpenRaftObservation {
-    /// Captures one best-effort view of the cluster.
-    pub async fn capture(clients: &[OpenRaftKvClient]) -> Self {
-        let mut states = Vec::with_capacity(clients.len());
-        let mut failures = Vec::new();
-
-        for (index, client) in clients.iter().enumerate() {
-            match client.state().await {
-                Ok(state) => states.push(state),
-                Err(error) => failures.push(format!("client_index={index} error={error}")),
-            }
-        }
-
-        states.sort_by_key(|state| state.node_id);
-
-        Self { states, failures }
-    }
-
-    /// Returns the unique observed leader when all responding nodes agree.
-    #[must_use]
-    pub fn agreed_leader(&self, different_from: Option<u64>) -> Option<u64> {
-        let observed = self
-            .states
-            .iter()
-            .filter_map(|state| state.current_leader)
-            .collect::<BTreeSet<_>>();
-
-        let leader = observed.iter().next().copied()?;
-
-        (observed.len() == 1 && different_from != Some(leader)).then_some(leader)
-    }
-
-    /// Returns `true` when every responding node reports the expected voter
-    /// set.
-    #[must_use]
-    pub fn all_voters_match(&self, expected_voters: &BTreeSet<u64>) -> bool {
-        !self.states.is_empty()
-            && self.failures.is_empty()
-            && self.states.iter().all(|state| {
-                state.voters.iter().copied().collect::<BTreeSet<_>>() == *expected_voters
-            })
-    }
-
-    /// Returns `true` when every responding node exposes the expected key/value
-    /// data.
-    #[must_use]
-    pub fn all_kv_match(&self, expected: &BTreeMap<String, String>) -> bool {
-        !self.states.is_empty()
-            && self.failures.is_empty()
-            && self.states.iter().all(|state| {
-                state.current_leader.is_some()
-                    && state.voters == FULL_VOTER_SET
-                    && expected
-                        .iter()
-                        .all(|(key, value)| state.kv.get(key) == Some(value))
-            })
-    }
-
-    /// Returns a concise summary for timeout errors.
-    #[must_use]
-    pub fn summary(&self) -> String {
-        let mut lines = self
-            .states
-            .iter()
-            .map(|state| {
-                format!(
-                    "node={} leader={:?} voters={:?} keys={}",
-                    state.node_id,
-                    state.current_leader,
-                    state.voters,
-                    state.kv.len()
-                )
-            })
-            .collect::<Vec<_>>();
-
-        lines.extend(self.failures.iter().cloned());
-
-        if lines.is_empty() {
-            return "no state observed yet".to_owned();
-        }
-
-        lines.join("; ")
-    }
-}
-
 /// Errors raised by the OpenRaft example cluster helpers.
 #[derive(Debug, Error)]
 pub enum OpenRaftClusterError {
@@ -161,6 +73,8 @@ pub enum OpenRaftClusterError {
     InsufficientClients { expected: usize, actual: usize },
     #[error("failed to query openraft node state: {0}")]
     Client(#[source] anyhow::Error),
+    #[error("openraft cluster observation is not available yet")]
+    MissingObservation,
     #[error(
         "timed out waiting for {action} after {timeout:?}; last observation: {last_observation}"
     )]
@@ -197,7 +111,7 @@ pub async fn wait_for_leader(
     let deadline = Instant::now() + timeout;
 
     loop {
-        let last_observation = OpenRaftObservation::capture(clients).await;
+        let last_observation = capture_openraft_cluster_snapshot(clients).await;
 
         if let Some(leader) = last_observation.agreed_leader(different_from) {
             return Ok(leader);
@@ -224,7 +138,7 @@ pub async fn wait_for_membership(
     let deadline = Instant::now() + timeout;
 
     loop {
-        let last_observation = OpenRaftObservation::capture(clients).await;
+        let last_observation = capture_openraft_cluster_snapshot(clients).await;
 
         if last_observation.all_voters_match(expected_voters) {
             return Ok(());
@@ -251,9 +165,9 @@ pub async fn wait_for_replication(
     let deadline = Instant::now() + timeout;
 
     loop {
-        let last_observation = OpenRaftObservation::capture(clients).await;
+        let last_observation = capture_openraft_cluster_snapshot(clients).await;
 
-        if last_observation.all_kv_match(expected) {
+        if last_observation.all_kv_match(expected, &FULL_VOTER_SET) {
             return Ok(());
         }
 
@@ -267,6 +181,58 @@ pub async fn wait_for_replication(
 
         sleep(POLL_INTERVAL).await;
     }
+}
+
+/// Waits until the observer reports one agreed leader.
+pub async fn wait_for_observed_leader(
+    handle: &ObservationHandle<OpenRaftClusterObserver>,
+    timeout: Duration,
+    different_from: Option<u64>,
+) -> Result<u64, OpenRaftClusterError> {
+    let snapshot =
+        wait_for_observed_snapshot(handle, timeout, "observed leader agreement", |snapshot| {
+            snapshot.agreed_leader(different_from).is_some()
+        })
+        .await?;
+
+    snapshot
+        .value
+        .agreed_leader(different_from)
+        .ok_or(OpenRaftClusterError::MissingObservation)
+}
+
+/// Waits until the observer reports the expected voter set on every node.
+pub async fn wait_for_observed_membership(
+    handle: &ObservationHandle<OpenRaftClusterObserver>,
+    expected_voters: &BTreeSet<u64>,
+    timeout: Duration,
+) -> Result<(), OpenRaftClusterError> {
+    wait_for_observed_snapshot(
+        handle,
+        timeout,
+        "observed membership convergence",
+        |snapshot| snapshot.all_voters_match(expected_voters),
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// Waits until the observer reports the full replicated key set.
+pub async fn wait_for_observed_replication(
+    handle: &ObservationHandle<OpenRaftClusterObserver>,
+    expected: &BTreeMap<String, String>,
+    timeout: Duration,
+) -> Result<(), OpenRaftClusterError> {
+    wait_for_observed_snapshot(
+        handle,
+        timeout,
+        "observed replicated state convergence",
+        |snapshot| snapshot.all_kv_match(expected, &FULL_VOTER_SET),
+    )
+    .await?;
+
+    Ok(())
 }
 
 /// Resolves the client handle that currently identifies as `node_id`.
@@ -322,4 +288,34 @@ pub fn expected_kv(prefix: &str, total_writes: usize) -> BTreeMap<String, String
     (0..total_writes)
         .map(|index| (format!("{prefix}-{index}"), format!("value-{index}")))
         .collect()
+}
+
+async fn wait_for_observed_snapshot(
+    handle: &ObservationHandle<OpenRaftClusterObserver>,
+    timeout: Duration,
+    action: &'static str,
+    matches: impl Fn(&OpenRaftClusterSnapshot) -> bool,
+) -> Result<ObservationSnapshot<OpenRaftClusterSnapshot>, OpenRaftClusterError> {
+    let deadline = Instant::now() + timeout;
+    let mut last_summary = "no state observed yet".to_owned();
+
+    loop {
+        if let Some(snapshot) = handle.latest_snapshot() {
+            last_summary = snapshot.value.summary();
+
+            if matches(&snapshot.value) {
+                return Ok(snapshot);
+            }
+        }
+
+        if Instant::now() >= deadline {
+            return Err(OpenRaftClusterError::Timeout {
+                action,
+                timeout,
+                last_observation: last_summary,
+            });
+        }
+
+        sleep(POLL_INTERVAL).await;
+    }
 }
