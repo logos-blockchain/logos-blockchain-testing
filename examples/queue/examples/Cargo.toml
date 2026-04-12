@@ -4,6 +4,26 @@ license.workspace = true
 name              = "queue-examples"
 version.workspace = true
 
+[[bin]]
+name = "queue_basic_convergence"
+path = "src/bin/basic_convergence.rs"
+
+[[bin]]
+name = "queue_basic_restart_chaos"
+path = "src/bin/basic_restart_chaos.rs"
+
+[[bin]]
+name = "queue_basic_roundtrip"
+path = "src/bin/basic_roundtrip.rs"
+
+[[bin]]
+name = "queue_compose_convergence"
+path = "src/bin/compose_convergence.rs"
+
+[[bin]]
+name = "queue_compose_roundtrip"
+path = "src/bin/compose_roundtrip.rs"
+
 [dependencies]
 anyhow                           = "1.0"
 async-trait                      = { workspace = true }

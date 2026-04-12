@@ -8,14 +8,14 @@ members = [
   "examples/kvstore/kvstore-node",
   "examples/kvstore/testing/integration",
   "examples/kvstore/testing/workloads",
+  "examples/openraft_kv/examples",
+  "examples/openraft_kv/openraft-kv-node",
+  "examples/openraft_kv/testing/integration",
+  "examples/openraft_kv/testing/workloads",
   "examples/queue/examples",
   "examples/queue/queue-node",
   "examples/queue/testing/integration",
   "examples/queue/testing/workloads",
-  "examples/scheduler/examples",
-  "examples/scheduler/scheduler-node",
-  "examples/scheduler/testing/integration",
-  "examples/scheduler/testing/workloads",
   "examples/metrics_counter/examples",
   "examples/metrics_counter/metrics-counter-node",
   "examples/metrics_counter/testing/integration",
@@ -68,6 +68,8 @@ bytes               = { default-features = false, version = "1.3" }
 hex                 = { default-features = false, version = "0.4.3" }
 libp2p              = { default-features = false, version = "0.55" }
 num-bigint          = { default-features = false, version = "0.4" }
+openraft            = { default-features = true, features = ["serde", "type-alias"], version = "0.10.0-alpha.17" }
+openraft-memstore   = { default-features = true, version = "0.10.0-alpha.17" }
 parking_lot         = { default-features = false, version = "0.12" }
 rand                = { default-features = false, features = ["std", "std_rng"], version = "0.8" }
 reqwest             = { default-features = false, version = "0.12" }

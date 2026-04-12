@@ -25,11 +25,11 @@ Each example follows the same pattern:
 ## Run with Docker Compose
 
 ```bash
-cargo run -p redis-streams-examples --bin compose_roundtrip
+cargo run -p redis-streams-examples --bin redis_streams_compose_roundtrip
 ```
 
 ## Run the reclaim scenario
 
 ```bash
-cargo run -p redis-streams-examples --bin compose_failover
+cargo run -p redis-streams-examples --bin redis_streams_compose_failover
 ```

@@ -4,6 +4,22 @@ license.workspace = true
 name              = "kvstore-examples"
 version.workspace = true
 
+[[bin]]
+name = "kvstore_basic_convergence"
+path = "src/bin/basic_convergence.rs"
+
+[[bin]]
+name = "kvstore_compose_convergence"
+path = "src/bin/compose_convergence.rs"
+
+[[bin]]
+name = "kvstore_k8s_convergence"
+path = "src/bin/k8s_convergence.rs"
+
+[[bin]]
+name = "kvstore_k8s_manual_convergence"
+path = "src/bin/k8s_manual_convergence.rs"
+
 [dependencies]
 kvstore-node                     = { path = "../kvstore-node" }
 kvstore-runtime-ext              = { path = "../testing/integration" }

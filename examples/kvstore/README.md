@@ -31,13 +31,13 @@ Each node exposes:
 ## Run locally
 
 ```bash
-cargo run -p kvstore-examples --bin basic_convergence
+cargo run -p kvstore-examples --bin kvstore_basic_convergence
 ```
 
 ## Run with Docker Compose
 
 ```bash
-cargo run -p kvstore-examples --bin compose_convergence
+cargo run -p kvstore-examples --bin kvstore_compose_convergence
 ```
 
 Set `KVSTORE_IMAGE` to override the default compose image tag.
@@ -46,7 +46,7 @@ Set `KVSTORE_IMAGE` to override the default compose image tag.
 
 ```bash
 docker build -t kvstore-node:local -f examples/kvstore/Dockerfile .
-cargo run -p kvstore-examples --bin k8s_convergence
+cargo run -p kvstore-examples --bin kvstore_k8s_convergence
 ```
 
 Prerequisites:
@@ -60,5 +60,5 @@ Optional image override:
 
 ```bash
 docker build -t kvstore-node:local -f examples/kvstore/Dockerfile .
-cargo run -p kvstore-examples --bin k8s_manual_convergence
+cargo run -p kvstore-examples --bin kvstore_k8s_manual_convergence
 ```

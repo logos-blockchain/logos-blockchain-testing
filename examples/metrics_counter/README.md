@@ -31,7 +31,7 @@ Each node exposes:
 
 ```bash
 LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://127.0.0.1:19091 \
-cargo run -p metrics-counter-examples --bin compose_prometheus_expectation
+cargo run -p metrics-counter-examples --bin metrics_counter_compose_prometheus_expectation
 ```
 
 ## Run with Kubernetes
@@ -39,7 +39,7 @@ cargo run -p metrics-counter-examples --bin compose_prometheus_expectation
 ```bash
 docker build -t metrics-counter-node:local -f examples/metrics_counter/Dockerfile .
 LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://127.0.0.1:30991 \
-cargo run -p metrics-counter-examples --bin k8s_prometheus_expectation
+cargo run -p metrics-counter-examples --bin metrics_counter_k8s_prometheus_expectation
 ```
 
 Overrides:
@@ -51,5 +51,5 @@ Overrides:
 ```bash
 docker build -t metrics-counter-node:local -f examples/metrics_counter/Dockerfile .
 LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://127.0.0.1:30991 \
-cargo run -p metrics-counter-examples --bin k8s_manual_prometheus
+cargo run -p metrics-counter-examples --bin metrics_counter_k8s_manual_prometheus
 ```

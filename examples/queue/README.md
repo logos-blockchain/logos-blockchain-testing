@@ -32,16 +32,16 @@ Each node exposes:
 ## Run locally
 
 ```bash
-cargo run -p queue-examples --bin basic_convergence
-cargo run -p queue-examples --bin basic_roundtrip
-cargo run -p queue-examples --bin basic_restart_chaos
+cargo run -p queue-examples --bin queue_basic_convergence
+cargo run -p queue-examples --bin queue_basic_roundtrip
+cargo run -p queue-examples --bin queue_basic_restart_chaos
 ```
 
 ## Run with Docker Compose
 
 ```bash
-cargo run -p queue-examples --bin compose_convergence
-cargo run -p queue-examples --bin compose_roundtrip
+cargo run -p queue-examples --bin queue_compose_convergence
+cargo run -p queue-examples --bin queue_compose_roundtrip
 ```
 
 Set `QUEUE_IMAGE` to override the default compose image tag.

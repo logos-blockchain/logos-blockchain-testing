@@ -23,23 +23,23 @@ Each example follows the same pattern:
 ## Run locally
 
 ```bash
-cargo run -p nats-examples --bin basic_roundtrip
+cargo run -p nats-examples --bin nats_basic_roundtrip
 ```
 
 If `nats-server` is not on `PATH`:
 
 ```bash
-NATS_SERVER_BIN=/path/to/nats-server cargo run -p nats-examples --bin basic_roundtrip
+NATS_SERVER_BIN=/path/to/nats-server cargo run -p nats-examples --bin nats_basic_roundtrip
 ```
 
 ## Run with Docker Compose
 
 ```bash
-cargo run -p nats-examples --bin compose_roundtrip
+cargo run -p nats-examples --bin nats_compose_roundtrip
 ```
 
 ## Run the parity check
 
 ```bash
-cargo run -p nats-examples --bin parity_check
+cargo run -p nats-examples --bin nats_parity_check
 ```
