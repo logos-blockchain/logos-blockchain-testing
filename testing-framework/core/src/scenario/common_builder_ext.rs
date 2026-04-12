@@ -4,7 +4,12 @@ use super::{
     Application, CleanupPolicy, DeploymentPolicy, Expectation, HttpReadinessRequirement,
     RetryPolicy, RuntimeExtensionFactory, Workload, internal::CoreBuilderAccess,
 };
-use crate::topology::{DeploymentProvider, DeploymentSeed};
+use crate::{
+    observation::{
+        ObservationConfig, ObservationExtensionFactory, Observer, SourceProviderFactory,
+    },
+    topology::{DeploymentProvider, DeploymentSeed},
+};
 
 type DeploymentProviderHandle<E> = Box<dyn DeploymentProvider<<E as Application>::Deployment>>;
 
@@ -58,6 +63,48 @@ pub trait CoreBuilderExt: CoreBuilderAccess + Sized {
         extension: Box<dyn RuntimeExtensionFactory<Self::Env>>,
     ) -> Self {
         self.map_core_builder(|builder| builder.with_runtime_extension_factory(extension))
+    }
+
+    /// Registers one clonable observer as a runtime extension.
+    #[must_use]
+    fn with_observer<O>(
+        self,
+        observer: O,
+        source_provider_factory: impl SourceProviderFactory<Self::Env, O::Source>,
+        config: ObservationConfig,
+    ) -> Self
+    where
+        O: Observer + Clone,
+        Self::Env: Application,
+    {
+        let extension = ObservationExtensionFactory::<Self::Env, O>::new(
+            observer,
+            source_provider_factory,
+            config,
+        );
+
+        self.with_runtime_extension_factory(Box::new(extension))
+    }
+
+    /// Registers one observer built lazily per run as a runtime extension.
+    #[must_use]
+    fn with_observer_factory<O>(
+        self,
+        observer_builder: impl Fn() -> O + Send + Sync + 'static,
+        source_provider_factory: impl SourceProviderFactory<Self::Env, O::Source>,
+        config: ObservationConfig,
+    ) -> Self
+    where
+        O: Observer,
+        Self::Env: Application,
+    {
+        let extension = ObservationExtensionFactory::<Self::Env, O>::from_parts(
+            observer_builder,
+            source_provider_factory,
+            config,
+        );
+
+        self.with_runtime_extension_factory(Box::new(extension))
     }
 
     #[must_use]

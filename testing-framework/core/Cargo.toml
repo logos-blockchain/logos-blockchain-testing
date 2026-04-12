@@ -29,5 +29,5 @@ reqwest               = { features = ["json"], workspace = true }
 serde                 = { workspace = true }
 serde_yaml            = { workspace = true }
 thiserror             = { workspace = true }
-tokio                 = { features = ["macros", "process", "rt-multi-thread", "time"], workspace = true }
+tokio                 = { features = ["macros", "process", "rt-multi-thread", "sync", "time"], workspace = true }
 tracing               = { workspace = true }

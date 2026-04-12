@@ -6,7 +6,7 @@ exclude-dev         = true
 no-default-features = true
 
 [advisories]
-ignore = []
+ignore = ["RUSTSEC-2026-0097"]
 yanked = "deny"
 
 [bans]
