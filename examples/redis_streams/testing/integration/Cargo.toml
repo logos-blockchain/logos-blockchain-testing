@@ -1,0 +1,13 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "redis-streams-runtime-ext"
+version.workspace = true
+
+[dependencies]
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+
+async-trait = { workspace = true }
+redis       = { version = "0.29", features = ["aio", "connection-manager", "streams", "tokio-comp"] }
+reqwest     = { workspace = true }

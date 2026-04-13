@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "metrics-counter-runtime-workloads"
+version.workspace = true
+
+[dependencies]
+metrics-counter-runtime-ext = { path = "../integration" }
+testing-framework-core      = { workspace = true }
+
+async-trait = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+tokio       = { workspace = true, features = ["full"] }
+tracing     = { workspace = true }
