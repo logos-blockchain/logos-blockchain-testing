@@ -1,0 +1,18 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "pubsub-examples"
+version.workspace = true
+
+[dependencies]
+anyhow                           = "1.0"
+pubsub-node                      = { path = "../pubsub-node" }
+pubsub-runtime-ext               = { path = "../testing/integration" }
+pubsub-runtime-workloads         = { path = "../testing/workloads" }
+serde                            = { workspace = true }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-k8s     = { workspace = true }
+tokio                            = { workspace = true, features = ["full"] }
+tracing                          = { workspace = true }
+tracing-subscriber               = { version = "0.3", features = ["env-filter"] }

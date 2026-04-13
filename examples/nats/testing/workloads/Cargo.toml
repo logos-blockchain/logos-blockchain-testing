@@ -1,0 +1,14 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "nats-runtime-workloads"
+version.workspace = true
+
+[dependencies]
+nats-runtime-ext       = { path = "../integration" }
+testing-framework-core = { workspace = true }
+
+async-trait  = { workspace = true }
+futures-util = "0.3"
+tokio        = { workspace = true, features = ["full"] }
+tracing      = { workspace = true }

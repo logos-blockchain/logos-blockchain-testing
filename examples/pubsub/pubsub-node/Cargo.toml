@@ -1,0 +1,24 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "pubsub-node"
+version.workspace = true
+
+[[bin]]
+name = "pubsub-node"
+path = "src/main.rs"
+
+[dependencies]
+anyhow             = "1.0"
+axum               = { version = "0.7", features = ["ws"] }
+clap               = { version = "4.0", features = ["derive"] }
+futures-util       = "0.3"
+reqwest            = { workspace = true, features = ["json"] }
+serde              = { workspace = true }
+serde_json         = { workspace = true }
+serde_yaml         = { workspace = true }
+tokio              = { workspace = true, features = ["full"] }
+tokio-tungstenite  = "0.24"
+tower-http         = { version = "0.6", features = ["trace"] }
+tracing            = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
