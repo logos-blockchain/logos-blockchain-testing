@@ -16,8 +16,8 @@ use crate::scenario::{
 type WorkloadOutcome = Result<(), DynError>;
 
 const MIN_NODE_CONTROL_COOLDOWN: Duration = Duration::from_secs(30);
-const DEFAULT_BLOCK_FEED_SETTLE_WAIT: Duration = Duration::from_secs(1);
-const MIN_BLOCK_FEED_SETTLE_WAIT: Duration = Duration::from_secs(2);
+const DEFAULT_POST_WORKLOAD_SETTLE_WAIT: Duration = Duration::from_secs(1);
+const MIN_POST_WORKLOAD_SETTLE_WAIT: Duration = Duration::from_secs(2);
 const EXPECTATION_CAPTURE_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 const UNKNOWN_PANIC: &str = "<unknown panic>";
 
@@ -183,7 +183,8 @@ impl<E: Application> Runner<E> {
     }
 
     async fn settle_before_expectations(context: &RunContext<E>) {
-        // Give the feed a short catch-up window before evaluating expectations.
+        // Give runtime extensions a short catch-up window before evaluating
+        // expectations.
         let Some(wait) = Self::settle_wait_duration(context) else {
             return;
         };
@@ -200,12 +201,12 @@ impl<E: Application> Runner<E> {
         }
 
         let wait = if configured_wait.is_zero() {
-            DEFAULT_BLOCK_FEED_SETTLE_WAIT
+            DEFAULT_POST_WORKLOAD_SETTLE_WAIT
         } else {
             configured_wait
         };
 
-        Some(wait.max(MIN_BLOCK_FEED_SETTLE_WAIT))
+        Some(wait.max(MIN_POST_WORKLOAD_SETTLE_WAIT))
     }
 
     /// Evaluates every registered expectation, aggregating failures so callers
@@ -231,8 +232,8 @@ impl<E: Application> Runner<E> {
     }
 
     fn cooldown_duration(context: &RunContext<E>) -> Option<Duration> {
-        // Managed environments need a minimum cooldown so feed and expectations
-        // observe stabilized state.
+        // Managed environments need a minimum cooldown so runtime extensions and
+        // expectations observe stabilized state.
         let needs_stabilization = context.cluster_control_profile().framework_owns_lifecycle();
 
         let mut wait = context.expectation_cooldown();
