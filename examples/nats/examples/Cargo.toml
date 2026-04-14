@@ -4,6 +4,18 @@ license.workspace = true
 name              = "nats-examples"
 version.workspace = true
 
+[[bin]]
+name = "nats_basic_roundtrip"
+path = "src/bin/basic_roundtrip.rs"
+
+[[bin]]
+name = "nats_compose_roundtrip"
+path = "src/bin/compose_roundtrip.rs"
+
+[[bin]]
+name = "nats_parity_check"
+path = "src/bin/parity_check.rs"
+
 [dependencies]
 anyhow                           = "1.0"
 nats-runtime-ext                 = { path = "../testing/integration" }

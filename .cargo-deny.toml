@@ -6,7 +6,11 @@ exclude-dev         = true
 no-default-features = true
 
 [advisories]
-ignore = []
+ignore = [
+  # Existing workspace dependencies still resolve rand 0.8 via tera/tokio-retry.
+  # Track removal when those upstream edges move to a fixed release.
+  "RUSTSEC-2026-0097",
+]
 yanked = "deny"
 
 [bans]

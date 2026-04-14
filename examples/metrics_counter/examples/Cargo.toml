@@ -4,6 +4,18 @@ license.workspace = true
 name              = "metrics-counter-examples"
 version.workspace = true
 
+[[bin]]
+name = "metrics_counter_compose_prometheus_expectation"
+path = "src/bin/compose_prometheus_expectation.rs"
+
+[[bin]]
+name = "metrics_counter_k8s_prometheus_expectation"
+path = "src/bin/k8s_prometheus_expectation.rs"
+
+[[bin]]
+name = "metrics_counter_k8s_manual_prometheus"
+path = "src/bin/k8s_manual_prometheus.rs"
+
 [dependencies]
 anyhow                            = "1.0"
 metrics-counter-node              = { path = "../metrics-counter-node" }

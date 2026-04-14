@@ -4,6 +4,14 @@ license.workspace = true
 name              = "redis-streams-examples"
 version.workspace = true
 
+[[bin]]
+name = "redis_streams_compose_roundtrip"
+path = "src/bin/compose_roundtrip.rs"
+
+[[bin]]
+name = "redis_streams_compose_failover"
+path = "src/bin/compose_failover.rs"
+
 [dependencies]
 anyhow                           = "1.0"
 redis-streams-runtime-ext        = { path = "../testing/integration" }

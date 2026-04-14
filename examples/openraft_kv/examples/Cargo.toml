@@ -1,0 +1,28 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "openraft-kv-examples"
+version.workspace = true
+
+[[bin]]
+name = "openraft_kv_basic_failover"
+path = "src/bin/basic_failover.rs"
+
+[[bin]]
+name = "openraft_kv_compose_failover"
+path = "src/bin/compose_failover.rs"
+
+[[bin]]
+name = "openraft_kv_k8s_failover"
+path = "src/bin/k8s_failover.rs"
+
+[dependencies]
+anyhow                        = "1.0"
+openraft-kv-node              = { path = "../openraft-kv-node" }
+openraft-kv-runtime-ext       = { path = "../testing/integration" }
+openraft-kv-runtime-workloads = { path = "../testing/workloads" }
+testing-framework-core        = { workspace = true }
+testing-framework-runner-k8s  = { workspace = true }
+tokio                         = { workspace = true, features = ["full"] }
+tracing                       = { workspace = true }
+tracing-subscriber            = { version = "0.3", features = ["env-filter"] }

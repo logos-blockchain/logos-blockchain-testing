@@ -1,0 +1,24 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "kvstore-node"
+version.workspace = true
+
+[[bin]]
+name = "kvstore-node"
+path = "src/main.rs"
+
+[dependencies]
+axum       = "0.7"
+tower-http = { version = "0.6", features = ["trace"] }
+
+serde      = { workspace = true }
+serde_yaml = { workspace = true }
+
+tokio              = { workspace = true, features = ["full"] }
+tracing            = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+anyhow  = "1.0"
+clap    = { version = "4.0", features = ["derive"] }
+reqwest = { workspace = true, features = ["json"] }

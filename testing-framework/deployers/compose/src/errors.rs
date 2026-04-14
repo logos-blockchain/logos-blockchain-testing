@@ -31,8 +31,8 @@ pub enum ComposeRunnerError {
     NodeClients(#[from] NodeClientError),
     #[error(transparent)]
     Telemetry(#[from] MetricsError),
-    #[error("feed requires at least one node client")]
-    BlockFeedMissing,
+    #[error("observation runtime requires at least one node client")]
+    ObservationMissing,
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
     #[error("runtime extension setup failed: {source}")]
@@ -45,8 +45,8 @@ pub enum ComposeRunnerError {
         #[source]
         source: DynError,
     },
-    #[error("failed to start feed: {source}")]
-    BlockFeed {
+    #[error("failed to start observation runtime: {source}")]
+    ObservationRuntime {
         #[source]
         source: DynError,
     },

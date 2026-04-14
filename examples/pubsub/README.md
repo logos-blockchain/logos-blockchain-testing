@@ -26,15 +26,15 @@ Each example follows the same pattern:
 ## Run locally
 
 ```bash
-cargo run -p pubsub-examples --bin basic_ws_roundtrip
-cargo run -p pubsub-examples --bin basic_ws_reconnect
+cargo run -p pubsub-examples --bin pubsub_basic_ws_roundtrip
+cargo run -p pubsub-examples --bin pubsub_basic_ws_reconnect
 ```
 
 ## Run with Docker Compose
 
 ```bash
-cargo run -p pubsub-examples --bin compose_ws_roundtrip
-cargo run -p pubsub-examples --bin compose_ws_reconnect
+cargo run -p pubsub-examples --bin pubsub_compose_ws_roundtrip
+cargo run -p pubsub-examples --bin pubsub_compose_ws_reconnect
 ```
 
 Set `PUBSUB_IMAGE` to override the default compose image tag.
@@ -43,7 +43,7 @@ Set `PUBSUB_IMAGE` to override the default compose image tag.
 
 ```bash
 docker build -t pubsub-node:local -f examples/pubsub/Dockerfile .
-cargo run -p pubsub-examples --bin k8s_ws_roundtrip
+cargo run -p pubsub-examples --bin pubsub_k8s_ws_roundtrip
 ```
 
 Prerequisites:
@@ -57,5 +57,5 @@ Optional image override:
 
 ```bash
 docker build -t pubsub-node:local -f examples/pubsub/Dockerfile .
-cargo run -p pubsub-examples --bin k8s_manual_ws_roundtrip
+cargo run -p pubsub-examples --bin pubsub_k8s_manual_ws_roundtrip
 ```

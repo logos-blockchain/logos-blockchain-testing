@@ -4,6 +4,30 @@ license.workspace = true
 name              = "pubsub-examples"
 version.workspace = true
 
+[[bin]]
+name = "pubsub_basic_ws_roundtrip"
+path = "src/bin/basic_ws_roundtrip.rs"
+
+[[bin]]
+name = "pubsub_basic_ws_reconnect"
+path = "src/bin/basic_ws_reconnect.rs"
+
+[[bin]]
+name = "pubsub_compose_ws_roundtrip"
+path = "src/bin/compose_ws_roundtrip.rs"
+
+[[bin]]
+name = "pubsub_compose_ws_reconnect"
+path = "src/bin/compose_ws_reconnect.rs"
+
+[[bin]]
+name = "pubsub_k8s_ws_roundtrip"
+path = "src/bin/k8s_ws_roundtrip.rs"
+
+[[bin]]
+name = "pubsub_k8s_manual_ws_roundtrip"
+path = "src/bin/k8s_manual_ws_roundtrip.rs"
+
 [dependencies]
 anyhow                           = "1.0"
 pubsub-node                      = { path = "../pubsub-node" }
