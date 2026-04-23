@@ -163,16 +163,16 @@ where
         options: &StartNodeOptions<Self>,
     ) -> Result<Option<ArtifactSet>, Self::Error> {
         let mut config = match &options.peers {
-            PeerSelection::DefaultLayout => {
+            None | Some(PeerSelection::DefaultLayout) => {
                 if options.config_override.is_none() && options.config_patch.is_none() {
                     return Ok(None);
                 }
                 build_static_cluster_node_config::<T>(deployment, node_index, Some(hostnames))?
             }
-            PeerSelection::None => {
+            Some(PeerSelection::None) => {
                 build_cluster_node_config_for_indices::<T>(node_index, hostnames, &[])?
             }
-            PeerSelection::Named(names) => {
+            Some(PeerSelection::Named(names)) => {
                 let indices = resolve_named_peer_indices::<T>(deployment, node_index, names)?;
                 build_cluster_node_config_for_indices::<T>(node_index, hostnames, &indices)?
             }

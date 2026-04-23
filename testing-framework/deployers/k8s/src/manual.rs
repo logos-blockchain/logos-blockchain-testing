@@ -14,7 +14,7 @@ use testing_framework_core::{
     manual::ManualClusterHandle,
     scenario::{
         ClusterWaitHandle, DynError, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
-        NodeControlHandle, StartNodeOptions, StartedNode,
+        NodeControlHandle, PeerSelection, StartNodeOptions, StartedNode,
     },
 };
 use thiserror::Error;
@@ -604,10 +604,7 @@ fn validate_start_options<E: K8sDeployEnv>(
 fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
-    let default_peers = matches!(
-        options.peers,
-        testing_framework_core::scenario::PeerSelection::DefaultLayout
-    );
+    let default_peers = matches!(options.peers, None | Some(PeerSelection::DefaultLayout));
     if default_peers && options.config_override.is_none() && options.config_patch.is_none() {
         return Ok(());
     }
@@ -719,14 +716,14 @@ mod tests {
             options: &StartNodeOptions<Self>,
         ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, Self::Error> {
             let mut config = match &options.peers {
-                PeerSelection::DefaultLayout => {
+                None | Some(PeerSelection::DefaultLayout) => {
                     if options.config_override.is_none() && options.config_patch.is_none() {
                         return Ok(None);
                     }
                     format!("node={node_index};peers=default")
                 }
-                PeerSelection::None => format!("node={node_index};peers=none"),
-                PeerSelection::Named(names) => {
+                Some(PeerSelection::None) => format!("node={node_index};peers=none"),
+                Some(PeerSelection::Named(names)) => {
                     format!("node={node_index};peers={}", names.join(","))
                 }
             };

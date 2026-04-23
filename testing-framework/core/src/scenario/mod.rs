@@ -22,8 +22,8 @@ pub type DynError = Box<dyn Error + Send + Sync + 'static>;
 
 pub use builder_ext::{BuilderInputError, ObservabilityBuilderExt};
 pub use capabilities::{
-    NodeControlCapability, ObservabilityCapability, PeerSelection, RequiresNodeControl,
-    StartNodeOptions, StartedNode,
+    NodeControlCapability, NodeRuntimeOptions, ObservabilityCapability, PeerSelection,
+    RequiresNodeControl, StartNodeOptions, StartedNode,
 };
 pub use client::NodeAccess;
 pub use common_builder_ext::CoreBuilderExt;
@@ -45,6 +45,7 @@ pub use runtime::{
     },
     wait_for_http_ports, wait_for_http_ports_with_host,
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
+    wait_for_http_ports_with_requirement_and_timeout, wait_for_http_ports_with_timeout,
     wait_http_readiness, wait_until_stable,
 };
 pub use sources::{

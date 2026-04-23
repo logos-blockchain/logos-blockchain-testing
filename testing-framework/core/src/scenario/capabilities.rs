@@ -1,4 +1,4 @@
-use std::{fmt, marker::PhantomData, path::PathBuf, sync::Arc};
+use std::{fmt, marker::PhantomData, path::PathBuf, sync::Arc, time::Duration};
 
 use reqwest::Url;
 
@@ -34,7 +34,7 @@ pub enum PeerSelection {
 #[derive(Clone)]
 pub struct StartNodeOptions<E: Application> {
     /// How to select initial peers on startup.
-    pub peers: PeerSelection,
+    pub peers: Option<PeerSelection>,
     /// Optional backend-specific initial config override.
     pub config_override: Option<E::NodeConfig>,
     /// Optional patch callback applied to generated node config before spawn.
@@ -44,7 +44,18 @@ pub struct StartNodeOptions<E: Application> {
     pub persist_dir: Option<PathBuf>,
     /// Optional directory whose contents should seed the node working dir.
     pub snapshot_dir: Option<PathBuf>,
+    /// Extra process arguments appended on launch.
+    pub args: Vec<String>,
+    /// Runtime policy for this node launch.
+    pub runtime: NodeRuntimeOptions,
     _phantom: PhantomData<E>,
+}
+
+/// Runtime supervision options for a node process.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NodeRuntimeOptions {
+    /// Optional readiness/start timeout override for this node.
+    pub start_timeout: Option<Duration>,
 }
 
 impl<E: Application> fmt::Debug for StartNodeOptions<E> {
@@ -55,6 +66,8 @@ impl<E: Application> fmt::Debug for StartNodeOptions<E> {
             .field("config_patch", &self.config_patch.is_some())
             .field("persist_dir", &self.persist_dir)
             .field("snapshot_dir", &self.snapshot_dir)
+            .field("args", &self.args)
+            .field("runtime", &self.runtime)
             .finish()
     }
 }
@@ -62,11 +75,13 @@ impl<E: Application> fmt::Debug for StartNodeOptions<E> {
 impl<E: Application> Default for StartNodeOptions<E> {
     fn default() -> Self {
         Self {
-            peers: PeerSelection::DefaultLayout,
+            peers: None,
             config_override: None,
             config_patch: None,
             persist_dir: None,
             snapshot_dir: None,
+            args: Vec::new(),
+            runtime: NodeRuntimeOptions::default(),
             _phantom: PhantomData,
         }
     }
@@ -75,7 +90,7 @@ impl<E: Application> Default for StartNodeOptions<E> {
 impl<E: Application> StartNodeOptions<E> {
     #[must_use]
     pub fn with_peers(mut self, peers: PeerSelection) -> Self {
-        self.peers = peers;
+        self.peers = Some(peers);
         self
     }
 
@@ -103,6 +118,24 @@ impl<E: Application> StartNodeOptions<E> {
     #[must_use]
     pub fn with_snapshot_dir(mut self, snapshot_dir: PathBuf) -> Self {
         self.snapshot_dir = Some(snapshot_dir);
+        self
+    }
+
+    #[must_use]
+    pub fn with_args(mut self, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.args.extend(args.into_iter().map(Into::into));
+        self
+    }
+
+    #[must_use]
+    pub fn with_runtime(mut self, runtime: NodeRuntimeOptions) -> Self {
+        self.runtime = runtime;
+        self
+    }
+
+    #[must_use]
+    pub fn with_start_timeout(mut self, start_timeout: Duration) -> Self {
+        self.runtime.start_timeout = Some(start_timeout);
         self
     }
 }

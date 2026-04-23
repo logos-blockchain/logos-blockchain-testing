@@ -9,6 +9,14 @@ pub trait NodeControlHandle<E: Application>: Send + Sync {
         Err("restart_node not supported by this deployer".into())
     }
 
+    async fn restart_node_with(
+        &self,
+        _name: &str,
+        _options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        Err("restart_node_with not supported by this deployer".into())
+    }
+
     async fn start_node(&self, _name: &str) -> Result<StartedNode<E>, DynError> {
         Err("start_node not supported by this deployer".into())
     }

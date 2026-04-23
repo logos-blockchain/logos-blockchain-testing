@@ -21,10 +21,11 @@ mod tests;
 
 pub use helpers::{
     BuiltNodeConfig, LocalNodePorts, LocalPeerNode, LocalProcessSpec, NodeConfigEntry,
-    build_indexed_http_peers, build_indexed_node_configs, build_local_cluster_node_config,
-    build_local_peer_nodes, default_yaml_launch_spec, discovered_node_access, preallocate_ports,
-    reserve_local_node_ports, single_http_node_endpoints, text_config_launch_spec,
-    text_node_config, yaml_config_launch_spec, yaml_node_config,
+    build_indexed_http_peers, build_indexed_node_configs, build_launch_spec_with_args,
+    build_local_cluster_node_config, build_local_peer_nodes, default_yaml_launch_spec,
+    discovered_node_access, preallocate_ports, reserve_local_node_ports,
+    single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
+    yaml_node_config,
 };
 
 /// Context passed while building a local node config.
@@ -506,11 +507,14 @@ pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
     keep_tempdir: bool,
     persist_dir: Option<&std::path::Path>,
     snapshot_dir: Option<&std::path::Path>,
+    extra_args: &[String],
 ) -> Result<Node<E>, ProcessSpawnError> {
+    let extra_args = extra_args.to_vec();
+
     ProcessNode::spawn(
         &label,
         config,
-        E::build_launch_spec,
+        move |config, dir, label| build_launch_spec_with_args::<E>(config, dir, label, &extra_args),
         E::node_endpoints,
         keep_tempdir,
         persist_dir,
