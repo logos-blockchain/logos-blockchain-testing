@@ -4,8 +4,8 @@ use std::{
 };
 
 use testing_framework_core::scenario::{
-    Application, DynError, NodeClients, NodeControlHandle, ReadinessError, StartNodeOptions,
-    StartedNode, wait_for_http_ports,
+    Application, DynError, NodeClients, NodeControlHandle, NodeRuntimeOptions, ReadinessError,
+    StartNodeOptions, StartedNode, wait_for_http_ports, wait_for_http_ports_with_timeout,
 };
 use thiserror::Error;
 
@@ -29,6 +29,12 @@ struct NodeStartSnapshot<Config> {
     node_name: String,
     index: usize,
     template_config: Option<Config>,
+}
+
+#[derive(Clone, Copy)]
+struct NodeReadinessTarget {
+    port: u16,
+    runtime: NodeRuntimeOptions,
 }
 
 #[derive(Debug, Error)]
@@ -120,6 +126,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             peer_ports_by_name: seed.peer_ports_by_name.clone(),
             clients_by_name: HashMap::new(),
             indices_by_name: HashMap::new(),
+            runtime_by_name: HashMap::new(),
             nodes: Vec::new(),
             template_config: None,
         };
@@ -166,6 +173,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             .clone_from(&self.seed.peer_ports_by_name);
         state.clients_by_name.clear();
         state.indices_by_name.clear();
+        state.runtime_by_name.clear();
         state.node_count = self.seed.node_count;
         state.template_config = None;
         self.node_clients.clear();
@@ -183,7 +191,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             let client = node.client();
 
             self.node_clients.add_node(client.clone());
-            state.register_node(&name, port, client, node);
+            state.register_node(&name, port, client, NodeRuntimeOptions::default(), node);
         }
     }
 
@@ -210,28 +218,15 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     }
 
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), NodeManagerError> {
-        let port = {
-            let state = self.lock_state();
-            let index =
-                *state
-                    .indices_by_name
-                    .get(name)
-                    .ok_or_else(|| NodeManagerError::NodeName {
-                        name: name.to_string(),
-                    })?;
+        let target = self.readiness_target(name)?;
 
-            state
-                .nodes
-                .get(index)
-                .map(|node| node.endpoints().api.port())
-                .ok_or_else(|| NodeManagerError::NodeName {
-                    name: name.to_string(),
-                })?
-        };
-
-        wait_for_http_ports(&[port], readiness_endpoint_path::<E>())
-            .await
-            .map_err(|source| NodeManagerError::Readiness { source })
+        wait_for_http_ports_with_timeout(
+            &[target.port],
+            readiness_endpoint_path::<E>(),
+            target.runtime.start_timeout,
+        )
+        .await
+        .map_err(|source| NodeManagerError::Readiness { source })
     }
 
     pub async fn start_node_with(
@@ -263,9 +258,10 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 &snapshot.node_name,
                 built.network_port,
                 built.config,
+                options.runtime,
                 options.persist_dir.as_deref(),
                 options.snapshot_dir.as_deref(),
-                &[],
+                &options.args,
             )
             .await?;
 
@@ -276,21 +272,24 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     }
 
     pub async fn restart_node(&self, name: &str) -> Result<(), NodeManagerError> {
-        self.restart_node_with_args(name, Vec::new()).await
+        self.restart_node_with(name, StartNodeOptions::default())
+            .await
     }
 
-    pub async fn restart_node_with_args(
+    pub async fn restart_node_with(
         &self,
         name: &str,
-        args: Vec<String>,
+        options: StartNodeOptions<E>,
     ) -> Result<(), NodeManagerError> {
         let (index, mut node) = self.take_node(name)?;
+
+        validate_restart_options(&options)?;
 
         let launch = build_launch_spec_with_args::<E>(
             node.config(),
             node.working_dir(),
             name,
-            &args,
+            &options.args,
         )
         .map_err(|source| NodeManagerError::Config { source })?;
 
@@ -303,6 +302,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         }
 
         self.put_node_back(index, node);
+        self.store_runtime_options(name, options.runtime);
 
         Ok(())
     }
@@ -321,6 +321,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         node_name: &str,
         network_port: u16,
         config: <E as Application>::NodeConfig,
+        runtime: NodeRuntimeOptions,
         persist_dir: Option<&std::path::Path>,
         snapshot_dir: Option<&std::path::Path>,
         extra_args: &[String],
@@ -346,7 +347,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             state.template_config = Some(node.config().clone());
         }
 
-        state.register_node(node_name, network_port, client.clone(), node);
+        state.register_node(node_name, network_port, client.clone(), runtime, node);
 
         Ok(client)
     }
@@ -359,6 +360,20 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     fn put_node_back(&self, index: usize, node: Node<E>) {
         let mut state = self.lock_state();
         reinsert_node_at(&mut state, index, node);
+    }
+
+    fn store_runtime_options(&self, name: &str, runtime: NodeRuntimeOptions) {
+        let mut state = self.lock_state();
+        state.runtime_by_name.insert(name.to_string(), runtime);
+    }
+
+    fn readiness_target(&self, name: &str) -> Result<NodeReadinessTarget, NodeManagerError> {
+        let state = self.lock_state();
+        let index = node_index(&state, name)?;
+        let port = node_api_port(&state, index, name)?;
+        let runtime = node_runtime_options(&state, name);
+
+        Ok(NodeReadinessTarget { port, runtime })
     }
 
     fn start_snapshot(
@@ -391,6 +406,7 @@ fn clear_registered_nodes<E: LocalDeployerEnv>(state: &mut LocalNodeManagerState
     state.peer_ports_by_name.clear();
     state.clients_by_name.clear();
     state.indices_by_name.clear();
+    state.runtime_by_name.clear();
     state.node_count = 0;
     state.template_config = None;
 }
@@ -421,6 +437,72 @@ fn normalize_node_name(index: usize, requested_name: &str) -> String {
     }
 
     format!("node-{requested_name}")
+}
+
+fn validate_restart_options<E: LocalDeployerEnv>(
+    options: &StartNodeOptions<E>,
+) -> Result<(), NodeManagerError> {
+    if options.peers.is_some() {
+        return Err(unsupported_restart_override("peer selection"));
+    }
+
+    if options.config_override.is_some() {
+        return Err(unsupported_restart_override("config override"));
+    }
+
+    if options.config_patch.is_some() {
+        return Err(unsupported_restart_override("config patch"));
+    }
+
+    if options.persist_dir.is_some() {
+        return Err(unsupported_restart_override("persist dir"));
+    }
+
+    if options.snapshot_dir.is_some() {
+        return Err(unsupported_restart_override("snapshot dir"));
+    }
+
+    Ok(())
+}
+
+fn unsupported_restart_override(field: &str) -> NodeManagerError {
+    NodeManagerError::InvalidArgument {
+        message: format!("restart_node_with does not support {field} overrides"),
+    }
+}
+
+fn node_index<E: LocalDeployerEnv>(
+    state: &LocalNodeManagerState<E>,
+    name: &str,
+) -> Result<usize, NodeManagerError> {
+    state
+        .indices_by_name
+        .get(name)
+        .copied()
+        .ok_or_else(|| NodeManagerError::NodeName {
+            name: name.to_string(),
+        })
+}
+
+fn node_api_port<E: LocalDeployerEnv>(
+    state: &LocalNodeManagerState<E>,
+    index: usize,
+    name: &str,
+) -> Result<u16, NodeManagerError> {
+    state
+        .nodes
+        .get(index)
+        .map(|node| node.endpoints().api.port())
+        .ok_or_else(|| NodeManagerError::NodeName {
+            name: name.to_string(),
+        })
+}
+
+fn node_runtime_options<E: LocalDeployerEnv>(
+    state: &LocalNodeManagerState<E>,
+    name: &str,
+) -> NodeRuntimeOptions {
+    state.runtime_by_name.get(name).copied().unwrap_or_default()
 }
 
 fn default_node_label(index: usize) -> String {
@@ -464,8 +546,12 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
         self.restart_node(name).await.map_err(|err| err.into())
     }
 
-    async fn restart_node_with_args(&self, name: &str, args: Vec<String>) -> Result<(), DynError> {
-        self.restart_node_with_args(name, args)
+    async fn restart_node_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        self.restart_node_with(name, options)
             .await
             .map_err(|err| err.into())
     }

@@ -23,6 +23,7 @@ pub use node_clients::NodeClients;
 pub use readiness::{
     HttpReadinessRequirement, ReadinessError, StabilizationConfig, wait_for_http_ports,
     wait_for_http_ports_with_host, wait_for_http_ports_with_host_and_requirement,
-    wait_for_http_ports_with_requirement, wait_http_readiness, wait_until_stable,
+    wait_for_http_ports_with_requirement, wait_for_http_ports_with_requirement_and_timeout,
+    wait_for_http_ports_with_timeout, wait_http_readiness, wait_until_stable,
 };
 pub use runner::Runner;

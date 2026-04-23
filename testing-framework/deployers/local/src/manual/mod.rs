@@ -70,12 +70,12 @@ impl<E: LocalDeployerEnv> ManualCluster<E> {
         Ok(self.nodes.restart_node(name).await?)
     }
 
-    pub async fn restart_node_with_args(
+    pub async fn restart_node_with(
         &self,
         name: &str,
-        args: Vec<String>,
+        options: StartNodeOptions<E>,
     ) -> Result<(), ManualClusterError> {
-        Ok(self.nodes.restart_node_with_args(name, args).await?)
+        Ok(self.nodes.restart_node_with(name, options).await?)
     }
 
     pub async fn stop_node(&self, name: &str) -> Result<(), ManualClusterError> {
@@ -133,9 +133,13 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
             .map_err(|err| err.into())
     }
 
-    async fn restart_node_with_args(&self, name: &str, args: Vec<String>) -> Result<(), DynError> {
+    async fn restart_node_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
         self.nodes
-            .restart_node_with_args(name, args)
+            .restart_node_with(name, options)
             .await
             .map_err(|err| err.into())
     }

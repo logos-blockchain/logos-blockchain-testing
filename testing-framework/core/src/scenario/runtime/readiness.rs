@@ -233,11 +233,19 @@ pub async fn wait_http_readiness(
     endpoints: &[Url],
     requirement: HttpReadinessRequirement,
 ) -> Result<(), ReadinessError> {
+    wait_http_readiness_with_timeout(endpoints, requirement, None).await
+}
+
+pub async fn wait_http_readiness_with_timeout(
+    endpoints: &[Url],
+    requirement: HttpReadinessRequirement,
+    timeout: Option<Duration>,
+) -> Result<(), ReadinessError> {
     if endpoints.is_empty() {
         return Ok(());
     }
 
-    let (poll_interval, max_attempts) = http_retry_plan();
+    let (poll_interval, max_attempts) = http_retry_plan(timeout);
     let client = Client::new();
     let retry = RetryConfig::bounded(max_attempts, poll_interval, poll_interval);
     retry_async(retry, |_| async {
@@ -254,8 +262,8 @@ pub async fn wait_http_readiness(
     })
 }
 
-fn http_retry_plan() -> (Duration, usize) {
-    let timeout_duration = adjust_timeout(DEFAULT_TIMEOUT);
+fn http_retry_plan(timeout: Option<Duration>) -> (Duration, usize) {
+    let timeout_duration = adjust_timeout(timeout.unwrap_or(DEFAULT_TIMEOUT));
     let poll_interval = DEFAULT_POLL_INTERVAL;
     let max_attempts = retry_attempts(timeout_duration, poll_interval);
     (poll_interval, max_attempts)
@@ -269,8 +277,21 @@ fn retry_attempts(timeout: Duration, interval: Duration) -> usize {
 }
 
 pub async fn wait_for_http_ports(ports: &[u16], endpoint_path: &str) -> Result<(), ReadinessError> {
-    wait_for_http_ports_with_requirement(ports, endpoint_path, default_readiness_requirement())
-        .await
+    wait_for_http_ports_with_timeout(ports, endpoint_path, None).await
+}
+
+pub async fn wait_for_http_ports_with_timeout(
+    ports: &[u16],
+    endpoint_path: &str,
+    timeout: Option<Duration>,
+) -> Result<(), ReadinessError> {
+    wait_for_http_ports_with_requirement_and_timeout(
+        ports,
+        endpoint_path,
+        default_readiness_requirement(),
+        timeout,
+    )
+    .await
 }
 
 pub async fn wait_for_http_ports_with_requirement(
@@ -278,8 +299,17 @@ pub async fn wait_for_http_ports_with_requirement(
     endpoint_path: &str,
     requirement: HttpReadinessRequirement,
 ) -> Result<(), ReadinessError> {
+    wait_for_http_ports_with_requirement_and_timeout(ports, endpoint_path, requirement, None).await
+}
+
+pub async fn wait_for_http_ports_with_requirement_and_timeout(
+    ports: &[u16],
+    endpoint_path: &str,
+    requirement: HttpReadinessRequirement,
+    timeout: Option<Duration>,
+) -> Result<(), ReadinessError> {
     let endpoints = build_local_endpoints(ports, endpoint_path)?;
-    wait_http_readiness(&endpoints, requirement).await
+    wait_http_readiness_with_timeout(&endpoints, requirement, timeout).await
 }
 
 pub async fn wait_for_http_ports_with_host(

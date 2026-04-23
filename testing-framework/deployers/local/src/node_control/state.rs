@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use testing_framework_core::scenario::NodeRuntimeOptions;
+
 use crate::env::{LocalDeployerEnv, Node};
 
 pub(crate) struct LocalNodeManagerState<E: LocalDeployerEnv> {
@@ -8,6 +10,7 @@ pub(crate) struct LocalNodeManagerState<E: LocalDeployerEnv> {
     pub(crate) peer_ports_by_name: HashMap<String, u16>,
     pub(crate) clients_by_name: HashMap<String, E::NodeClient>,
     pub(crate) indices_by_name: HashMap<String, usize>,
+    pub(crate) runtime_by_name: HashMap<String, NodeRuntimeOptions>,
     pub(crate) nodes: Vec<Node<E>>,
     pub(crate) template_config: Option<E::NodeConfig>,
 }
@@ -25,11 +28,13 @@ impl<E: LocalDeployerEnv> LocalNodeManagerState<E> {
         node_name: &str,
         network_port: u16,
         client: E::NodeClient,
+        runtime: NodeRuntimeOptions,
         node: Node<E>,
     ) {
         self.register_common(node_name, network_port, client);
         let index = self.nodes.len();
         self.indices_by_name.insert(node_name.to_string(), index);
+        self.runtime_by_name.insert(node_name.to_string(), runtime);
         self.node_count += 1;
         self.nodes.push(node);
     }
