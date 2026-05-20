@@ -28,7 +28,7 @@ impl LocalBinaryApp for QueueEnv {
     }
 
     fn local_process_spec() -> LocalProcessSpec {
-        LocalProcessSpec::new("QUEUE_NODE_BIN", "queue-node").with_rust_log("queue_node=info")
+        LocalProcessSpec::new("QUEUE_NODE_BIN").with_rust_log("queue_node=info")
     }
 
     fn render_local_config(config: &QueueNodeConfig) -> Result<Vec<u8>, DynError> {

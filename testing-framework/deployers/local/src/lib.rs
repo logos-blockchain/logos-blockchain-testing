@@ -6,7 +6,11 @@ mod manual;
 mod node_control;
 pub mod process;
 
-pub use binary::{BinaryConfig, BinaryResolver};
+pub use binary::{
+    BinaryProvider, BinaryProviderError, BinaryProviderRef, BuildBinaryProvider, BuildCommand,
+    DownloadBinaryProvider, DownloadChecksum, DownloadUrl, EnvBinaryProvider,
+    FallbackBinaryProvider, PathBinaryProvider,
+};
 pub use deployer::{ProcessDeployer, ProcessDeployerError};
 pub use env::{
     BuiltNodeConfig, LocalBinaryApp, LocalBuildContext, LocalDeployerEnv, LocalNodePorts,

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, sync::Arc};
 
 use serde::Serialize;
 use testing_framework_core::{
@@ -10,6 +10,7 @@ use testing_framework_core::{
 };
 
 use crate::{
+    binary::{BinaryProvider, BinaryProviderRef, EnvBinaryProvider},
     env::LocalBuildContext,
     process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError},
 };
@@ -95,13 +96,11 @@ impl LocalPeerNode {
     }
 }
 
-#[derive(Clone, Default)]
 /// Standard local process description for one node binary plus one config file.
+#[derive(Clone)]
 pub struct LocalProcessSpec {
-    /// Environment variable that points to the node binary.
-    pub binary_env_var: String,
-    /// Fallback binary name resolved from `PATH` or `target/`.
-    pub binary_name: String,
+    /// Binary preparation and resolution policy.
+    pub binary: BinaryProviderRef,
     /// Config file name written into the temp launch directory.
     pub config_file_name: String,
     /// CLI flag used to point the process at `config_file_name`.
@@ -115,10 +114,9 @@ pub struct LocalProcessSpec {
 impl LocalProcessSpec {
     /// Creates a standard binary+config local process spec.
     #[must_use]
-    pub fn new(binary_env_var: &str, binary_name: &str) -> Self {
+    pub fn new(binary_env_var: &str) -> Self {
         Self {
-            binary_env_var: binary_env_var.to_owned(),
-            binary_name: binary_name.to_owned(),
+            binary: Arc::new(EnvBinaryProvider::new(binary_env_var)),
             config_file_name: "config.yaml".to_owned(),
             config_arg: "--config".to_owned(),
             extra_args: Vec::new(),
@@ -151,6 +149,20 @@ impl LocalProcessSpec {
     #[must_use]
     pub fn with_args(mut self, args: impl IntoIterator<Item = String>) -> Self {
         self.extra_args.extend(args);
+        self
+    }
+
+    /// Overrides the binary provider used by this process.
+    #[must_use]
+    pub fn with_binary_provider(mut self, binary: impl BinaryProvider + 'static) -> Self {
+        self.binary = Arc::new(binary);
+        self
+    }
+
+    /// Overrides the binary provider with an already shared provider handle.
+    #[must_use]
+    pub fn with_binary_provider_ref(mut self, binary: BinaryProviderRef) -> Self {
+        self.binary = binary;
         self
     }
 }
@@ -369,12 +381,11 @@ pub fn text_config_launch_spec(
 pub fn default_yaml_launch_spec<T: Serialize>(
     config: &T,
     binary_env_var: &str,
-    binary_name: &str,
     rust_log: &str,
 ) -> Result<LaunchSpec, DynError> {
     yaml_config_launch_spec(
         config,
-        &LocalProcessSpec::new(binary_env_var, binary_name).with_rust_log(rust_log),
+        &LocalProcessSpec::new(binary_env_var).with_rust_log(rust_log),
     )
 }
 
@@ -392,7 +403,7 @@ pub(crate) fn rendered_config_launch_spec(
     rendered_config: Vec<u8>,
     spec: &LocalProcessSpec,
 ) -> Result<LaunchSpec, DynError> {
-    let binary = resolve_binary(spec);
+    let binary = spec.binary.resolve()?;
     let mut args = vec![spec.config_arg.clone(), spec.config_file_name.clone()];
     args.extend(spec.extra_args.iter().cloned());
 
@@ -405,21 +416,4 @@ pub(crate) fn rendered_config_launch_spec(
         args,
         env: spec.env.clone(),
     })
-}
-
-fn resolve_binary(spec: &LocalProcessSpec) -> PathBuf {
-    std::env::var(&spec.binary_env_var)
-        .map(PathBuf::from)
-        .or_else(|_| which::which(&spec.binary_name))
-        .unwrap_or_else(|_| {
-            let mut path = std::env::current_dir().unwrap_or_default();
-            let mut debug = path.clone();
-            debug.push(format!("target/debug/{}", spec.binary_name));
-            if debug.exists() {
-                return debug;
-            }
-
-            path.push(format!("target/release/{}", spec.binary_name));
-            path
-        })
 }

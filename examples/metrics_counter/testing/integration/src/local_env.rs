@@ -30,8 +30,7 @@ impl LocalBinaryApp for MetricsCounterEnv {
     }
 
     fn local_process_spec() -> LocalProcessSpec {
-        LocalProcessSpec::new("METRICS_COUNTER_NODE_BIN", "metrics-counter-node")
-            .with_rust_log("metrics_counter_node=info")
+        LocalProcessSpec::new("METRICS_COUNTER_NODE_BIN").with_rust_log("metrics_counter_node=info")
     }
 
     fn render_local_config(config: &MetricsCounterNodeConfig) -> Result<Vec<u8>, DynError> {

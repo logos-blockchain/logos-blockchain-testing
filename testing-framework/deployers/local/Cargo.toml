@@ -15,12 +15,13 @@ workspace = true
 [dependencies]
 async-trait            = "0.1"
 fs_extra               = "1.3"
+reqwest                = { features = ["blocking", "rustls-tls"], workspace = true }
 serde                  = { workspace = true }
 serde_yaml             = { workspace = true }
+sha2                   = "0.10"
 tempfile               = { workspace = true }
 testing-framework-core = { path = "../../core" }
 thiserror              = { workspace = true }
 tokio                  = { workspace = true }
 tokio-retry            = "0.3"
 tracing                = { workspace = true }
-which                  = "6.0"
