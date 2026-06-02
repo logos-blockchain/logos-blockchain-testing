@@ -11,8 +11,10 @@ use crate::binary::{BinaryProvider, BinaryProviderError, FallbackBinaryProvider}
 impl BinaryProvider for FallbackBinaryProvider {
     fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         for provider in &self.providers {
-            if let Some(path) = provider.try_resolve()? {
-                return Ok(Some(path));
+            match provider.resolve() {
+                Ok(path) => return Ok(Some(path)),
+                Err(BinaryProviderError::NotFound { .. }) => continue,
+                Err(error) => return Err(error),
             }
         }
 

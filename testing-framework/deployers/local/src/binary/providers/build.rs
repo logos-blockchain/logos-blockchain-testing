@@ -11,6 +11,7 @@ use std::{
     process::Command,
 };
 
+use sha2::{Digest as _, Sha256};
 use tracing::info;
 
 use crate::binary::{
@@ -95,16 +96,31 @@ impl BuildBinaryProvider {
     }
 
     fn lock_path(&self) -> PathBuf {
-        let lock_file_name = self
-            .output_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("binary");
+        let output_path = self.output_path();
+        let lock_file_name = self.lock_file_name(&output_path);
 
         self.lock_dir
             .clone()
             .unwrap_or_else(|| self.workspace_dir().join(".tf-binaries"))
-            .join(format!("{lock_file_name}.lock"))
+            .join(lock_file_name)
+    }
+
+    fn lock_file_name(&self, output_path: &Path) -> String {
+        let binary_name = output_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("binary");
+        let artifact_hash = self.artifact_path_hash(output_path);
+
+        format!("{binary_name}-{artifact_hash}.lock")
+    }
+
+    fn artifact_path_hash(&self, output_path: &Path) -> String {
+        Sha256::digest(output_path.to_string_lossy().as_bytes())
+            .iter()
+            .take(8)
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 
     fn workspace_dir(&self) -> PathBuf {

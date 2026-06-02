@@ -2,8 +2,11 @@ use std::{
     fs,
     io::{Read as _, Write as _},
     net::TcpListener,
-    path::Path,
-    sync::Arc,
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     thread,
 };
 
@@ -52,6 +55,31 @@ fn resolves_first_available_fallback_provider() {
     let path = provider.resolve().expect("fallback provider resolves");
 
     assert_eq!(path, binary);
+}
+
+#[test]
+fn fallback_reuses_inner_provider_cache() {
+    let temp = TempDir::new().expect("temp dir");
+    let binary = temp.path().join("node");
+    write_file(&binary, b"binary");
+
+    let resolve_count = Arc::new(AtomicUsize::new(0));
+    let cached_provider: BinaryProviderRef = Arc::new(CountingBinaryProvider::new(
+        &binary,
+        Arc::clone(&resolve_count),
+    ));
+    let first = FallbackBinaryProvider::new([
+        missing_binary_provider(temp.path().join("missing-first")),
+        Arc::clone(&cached_provider),
+    ]);
+    let second = FallbackBinaryProvider::new([
+        missing_binary_provider(temp.path().join("missing-second")),
+        cached_provider,
+    ]);
+
+    assert_eq!(first.resolve().expect("first fallback resolves"), binary);
+    assert_eq!(second.resolve().expect("second fallback resolves"), binary);
+    assert_eq!(resolve_count.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -158,6 +186,40 @@ fn rejects_download_checksum_mismatch() {
 
 fn write_file(path: &Path, contents: &[u8]) {
     fs::write(path, contents).expect("write file");
+}
+
+fn missing_binary_provider(path: PathBuf) -> BinaryProviderRef {
+    Arc::new(PathBinaryProvider::new(path))
+}
+
+struct CountingBinaryProvider {
+    path: PathBuf,
+    resolve_count: Arc<AtomicUsize>,
+}
+
+impl CountingBinaryProvider {
+    fn new(path: &Path, resolve_count: Arc<AtomicUsize>) -> Self {
+        Self {
+            path: path.to_owned(),
+            resolve_count,
+        }
+    }
+}
+
+impl BinaryProvider for CountingBinaryProvider {
+    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+        self.resolve_count.fetch_add(1, Ordering::SeqCst);
+
+        Ok(Some(self.path.clone()))
+    }
+
+    fn display(&self) -> String {
+        "counting".to_owned()
+    }
+
+    fn cache_key(&self) -> String {
+        format!("counting:{}", self.path.display())
+    }
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
