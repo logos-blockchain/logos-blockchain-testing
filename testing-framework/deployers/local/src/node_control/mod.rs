@@ -163,7 +163,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     pub fn stop_all(&self) {
         let mut state = self.lock_state();
         for node in &mut state.nodes {
-            node.start_kill();
+            node.stop_blocking();
         }
 
         state.nodes.clear();
