@@ -28,7 +28,7 @@ impl LocalBinaryApp for KvEnv {
     }
 
     fn local_process_spec() -> LocalProcessSpec {
-        LocalProcessSpec::new("KVSTORE_NODE_BIN", "kvstore-node").with_rust_log("kvstore_node=info")
+        LocalProcessSpec::new("KVSTORE_NODE_BIN").with_rust_log("kvstore_node=info")
     }
 
     fn render_local_config(config: &KvNodeConfig) -> Result<Vec<u8>, DynError> {

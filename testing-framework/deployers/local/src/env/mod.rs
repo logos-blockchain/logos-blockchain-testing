@@ -239,6 +239,18 @@ where
         None
     }
 
+    /// Returns the local process description for this concrete node config.
+    ///
+    /// Apps that need mixed-version or mixed-binary clusters can override this
+    /// hook and choose a different binary provider per node while keeping the
+    /// standard launch-spec rendering path.
+    fn local_process_spec_for_node(
+        _config: &<Self as Application>::NodeConfig,
+        _label: &str,
+    ) -> Option<LocalProcessSpec> {
+        Self::local_process_spec()
+    }
+
     /// Serializes a local node config into the file bytes written next to the
     /// spawned process.
     fn render_local_config(
@@ -251,9 +263,9 @@ where
     fn build_launch_spec(
         config: &<Self as Application>::NodeConfig,
         _dir: &Path,
-        _label: &str,
+        label: &str,
     ) -> Result<LaunchSpec, DynError> {
-        let spec = Self::local_process_spec().ok_or_else(|| {
+        let spec = Self::local_process_spec_for_node(config, label).ok_or_else(|| {
             std::io::Error::other("build_launch_spec is not implemented for this app")
         })?;
         let rendered = Self::render_local_config(config)?;

@@ -28,7 +28,7 @@ impl LocalBinaryApp for PubSubEnv {
     }
 
     fn local_process_spec() -> LocalProcessSpec {
-        LocalProcessSpec::new("PUBSUB_NODE_BIN", "pubsub-node").with_rust_log("pubsub_node=info")
+        LocalProcessSpec::new("PUBSUB_NODE_BIN").with_rust_log("pubsub_node=info")
     }
 
     fn render_local_config(config: &PubSubNodeConfig) -> Result<Vec<u8>, DynError> {

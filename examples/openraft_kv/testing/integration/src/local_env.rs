@@ -80,9 +80,7 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
     }
 
     fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(
-            LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN", "openraft-kv-node").with_rust_log("info"),
-        )
+        Some(LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN").with_rust_log("info"))
     }
 
     fn render_local_config(config: &OpenRaftKvNodeConfig) -> Result<Vec<u8>, DynError> {

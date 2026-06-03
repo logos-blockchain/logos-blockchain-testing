@@ -35,10 +35,7 @@ impl LocalDeployerEnv for NatsEnv {
     }
 
     fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(
-            LocalProcessSpec::new("NATS_SERVER_BIN", "nats-server")
-                .with_config_file("nats.conf", "-c"),
-        )
+        Some(LocalProcessSpec::new("NATS_SERVER_BIN").with_config_file("nats.conf", "-c"))
     }
 
     fn render_local_config(config: &NatsNodeConfig) -> Result<Vec<u8>, DynError> {
