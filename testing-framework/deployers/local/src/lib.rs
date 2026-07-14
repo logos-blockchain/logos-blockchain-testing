@@ -8,8 +8,9 @@ pub mod process;
 
 pub use binary::{
     BinaryProvider, BinaryProviderError, BinaryProviderRef, BuildBinaryProvider, BuildCommand,
-    DownloadBinaryProvider, DownloadChecksum, DownloadUrl, EnvBinaryProvider,
-    FallbackBinaryProvider, PathBinaryProvider,
+    DownloadBinaryProvider, DownloadChecksum, DownloadProcessor, DownloadProcessorError,
+    DownloadProcessorFn, DownloadUrl, EnvBinaryProvider, FallbackBinaryProvider,
+    PathBinaryProvider,
 };
 pub use deployer::{ProcessDeployer, ProcessDeployerError};
 pub use env::{

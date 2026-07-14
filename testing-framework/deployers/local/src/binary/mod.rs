@@ -17,8 +17,9 @@ use cache::BinaryCache;
 pub(super) use types::optional_path_display;
 pub use types::{
     BinaryProviderError, BinaryProviderRef, BuildBinaryProvider, BuildCommand,
-    DownloadBinaryProvider, DownloadChecksum, DownloadUrl, EnvBinaryProvider,
-    FallbackBinaryProvider, PathBinaryProvider,
+    DownloadBinaryProvider, DownloadChecksum, DownloadProcessor, DownloadProcessorError,
+    DownloadProcessorFn, DownloadUrl, EnvBinaryProvider, FallbackBinaryProvider,
+    PathBinaryProvider,
 };
 
 /// Resolves an executable path for a local process.

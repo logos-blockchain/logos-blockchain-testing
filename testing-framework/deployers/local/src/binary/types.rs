@@ -1,4 +1,8 @@
-use std::{env, fmt, iter, path::PathBuf, sync::Arc};
+use std::{
+    env, fmt, iter,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use thiserror::Error;
 
@@ -132,7 +136,64 @@ impl BuildBinaryProvider {
     }
 }
 
-#[derive(Clone, Debug)]
+/// Error returned by integration-specific download processors.
+pub type DownloadProcessorError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// Post-download preparation step for artifacts that are not directly
+/// executable.
+///
+/// Implementations receive the checksum-verified downloaded artifact and must
+/// materialize the executable at `output`. The stable cache key ensures that a
+/// change in preparation logic invalidates the previously prepared binary.
+pub trait DownloadProcessor: Send + Sync {
+    fn process(&self, artifact: &Path, output: &Path) -> Result<(), DownloadProcessorError>;
+
+    fn cache_key(&self) -> &str;
+}
+
+type DownloadProcessorCallback =
+    dyn Fn(&Path, &Path) -> Result<(), DownloadProcessorError> + Send + Sync;
+
+/// Named callback adapter for lightweight, integration-specific processing.
+#[derive(Clone)]
+pub struct DownloadProcessorFn {
+    cache_key: String,
+    callback: Arc<DownloadProcessorCallback>,
+}
+
+impl DownloadProcessorFn {
+    #[must_use]
+    pub fn new(
+        cache_key: impl Into<String>,
+        callback: impl Fn(&Path, &Path) -> Result<(), DownloadProcessorError> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            cache_key: cache_key.into(),
+            callback: Arc::new(callback),
+        }
+    }
+}
+
+impl DownloadProcessor for DownloadProcessorFn {
+    fn process(&self, artifact: &Path, output: &Path) -> Result<(), DownloadProcessorError> {
+        (self.callback)(artifact, output)
+    }
+
+    fn cache_key(&self) -> &str {
+        &self.cache_key
+    }
+}
+
+impl fmt::Debug for DownloadProcessorFn {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DownloadProcessorFn")
+            .field("cache_key", &self.cache_key)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
 pub struct DownloadBinaryProvider {
     /// Download source used to fetch the executable.
     pub url: DownloadUrl,
@@ -143,6 +204,8 @@ pub struct DownloadBinaryProvider {
     /// If unset, downloads are cached under `target/.tf-binaries` in the
     /// current process directory.
     pub cache_dir: Option<PathBuf>,
+    /// Optional preparation step for archives or other packaged artifacts.
+    pub processor: Option<Arc<dyn DownloadProcessor>>,
 }
 
 impl DownloadBinaryProvider {
@@ -152,7 +215,41 @@ impl DownloadBinaryProvider {
             url: DownloadUrl::Fixed(url.into()),
             sha256: None,
             cache_dir: None,
+            processor: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_processor(mut self, processor: impl DownloadProcessor + 'static) -> Self {
+        self.processor = Some(Arc::new(processor));
+        self
+    }
+
+    #[must_use]
+    pub fn with_processor_fn(
+        self,
+        cache_key: impl Into<String>,
+        callback: impl Fn(&Path, &Path) -> Result<(), DownloadProcessorError> + Send + Sync + 'static,
+    ) -> Self {
+        self.with_processor(DownloadProcessorFn::new(cache_key, callback))
+    }
+}
+
+impl fmt::Debug for DownloadBinaryProvider {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DownloadBinaryProvider")
+            .field("url", &self.url)
+            .field("sha256", &self.sha256)
+            .field("cache_dir", &self.cache_dir)
+            .field(
+                "processor",
+                &self
+                    .processor
+                    .as_ref()
+                    .map(|processor| processor.cache_key()),
+            )
+            .finish()
     }
 }
 
@@ -252,6 +349,23 @@ pub enum BinaryProviderError {
         expected: String,
         /// Actual lowercase SHA-256 checksum of the downloaded bytes.
         actual: String,
+    },
+    /// A download processor completed without creating its configured output.
+    #[error("download processor {processor} did not produce binary output {path:?}")]
+    MissingProcessedOutput {
+        /// Stable identifier of the processor that failed to produce output.
+        processor: String,
+        /// Expected temporary executable output path.
+        path: PathBuf,
+    },
+    /// A configured download processor failed while preparing the executable.
+    #[error("download processor {processor} failed: {source}")]
+    DownloadProcessing {
+        /// Stable identifier of the processor that failed.
+        processor: String,
+        #[source]
+        /// Processor-specific error.
+        source: DownloadProcessorError,
     },
     /// Filesystem operation failed while preparing or resolving a binary.
     #[error("failed to prepare binary path {path:?}: {source}")]

@@ -158,6 +158,7 @@ fn downloads_binary_from_minimal_http_server() {
         url: DownloadUrl::Fixed(server.url()),
         sha256: Some(DownloadChecksum::Fixed(sha256_hex(body))),
         cache_dir: Some(temp.path().join("cache")),
+        processor: None,
     };
     let path = provider.resolve().expect("download provider resolves");
 
@@ -172,6 +173,7 @@ fn rejects_download_checksum_mismatch() {
         url: DownloadUrl::Fixed(server.url()),
         sha256: Some(DownloadChecksum::Fixed("00".repeat(32))),
         cache_dir: Some(temp.path().join("cache")),
+        processor: None,
     };
 
     let error = provider
@@ -181,6 +183,61 @@ fn rejects_download_checksum_mismatch() {
     assert!(matches!(
         error,
         BinaryProviderError::ChecksumMismatch { .. }
+    ));
+}
+
+#[test]
+fn processes_downloaded_artifact_before_publishing_binary() {
+    let temp = TempDir::new().expect("temp dir");
+    let body = b"archive:downloaded-node";
+    let server = SingleResponseServer::start(body);
+    let process_count = Arc::new(AtomicUsize::new(0));
+    let callback_count = Arc::clone(&process_count);
+    let provider = DownloadBinaryProvider {
+        url: DownloadUrl::Fixed(server.url()),
+        sha256: Some(DownloadChecksum::Fixed(sha256_hex(body))),
+        cache_dir: Some(temp.path().join("cache")),
+        processor: None,
+    }
+    .with_processor_fn("strip-test-archive-v1", move |artifact, output| {
+        callback_count.fetch_add(1, Ordering::SeqCst);
+        let contents = fs::read(artifact)?;
+        fs::write(
+            output,
+            contents.strip_prefix(b"archive:").unwrap_or(&contents),
+        )?;
+        Ok(())
+    });
+
+    let path = provider.resolve().expect("processed download resolves");
+
+    assert_eq!(
+        fs::read(path).expect("processed binary"),
+        b"downloaded-node"
+    );
+    assert_eq!(process_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn rejects_processor_that_does_not_create_output() {
+    let temp = TempDir::new().expect("temp dir");
+    let body = b"archive";
+    let server = SingleResponseServer::start(body);
+    let provider = DownloadBinaryProvider {
+        url: DownloadUrl::Fixed(server.url()),
+        sha256: Some(DownloadChecksum::Fixed(sha256_hex(body))),
+        cache_dir: Some(temp.path().join("cache")),
+        processor: None,
+    }
+    .with_processor_fn("empty-v1", |_artifact, _output| Ok(()));
+
+    let error = provider
+        .resolve()
+        .expect_err("missing processed output is rejected");
+
+    assert!(matches!(
+        error,
+        BinaryProviderError::MissingProcessedOutput { .. }
     ));
 }
 
