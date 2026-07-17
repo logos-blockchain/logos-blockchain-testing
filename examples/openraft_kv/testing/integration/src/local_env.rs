@@ -1,4 +1,8 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use openraft_kv_node::OpenRaftKvNodeConfig;
 use testing_framework_core::{
@@ -6,7 +10,8 @@ use testing_framework_core::{
     topology::DeploymentDescriptor,
 };
 use testing_framework_runner_local::{
-    BuiltNodeConfig, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec, NodeConfigEntry,
+    BinaryProviderRef, BuildBinaryProvider, BuildCommand, BuiltNodeConfig, EnvBinaryProvider,
+    FallbackBinaryProvider, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec, NodeConfigEntry,
     reserve_local_node_ports, yaml_node_config,
 };
 
@@ -80,7 +85,11 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
     }
 
     fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN").with_rust_log("info"))
+        Some(
+            LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN")
+                .with_binary_provider(openraft_binary_provider())
+                .with_rust_log("info"),
+        )
     }
 
     fn render_local_config(config: &OpenRaftKvNodeConfig) -> Result<Vec<u8>, DynError> {
@@ -90,6 +99,34 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
     fn http_api_port(config: &OpenRaftKvNodeConfig) -> Option<u16> {
         Some(config.http_port)
     }
+}
+
+fn openraft_binary_provider() -> FallbackBinaryProvider {
+    let workspace = workspace_root();
+    let providers: [BinaryProviderRef; 2] = [
+        Arc::new(EnvBinaryProvider::new("OPENRAFT_KV_NODE_BIN")),
+        Arc::new(BuildBinaryProvider {
+            command: BuildCommand::new("cargo").with_args([
+                "build",
+                "-p",
+                "openraft-kv-node",
+                "--bin",
+                "openraft-kv-node",
+            ]),
+            output_path: PathBuf::from(format!(
+                "target/debug/openraft-kv-node{}",
+                std::env::consts::EXE_SUFFIX
+            )),
+            working_dir: Some(workspace),
+            lock_dir: None,
+        }),
+    ];
+
+    FallbackBinaryProvider::new(providers)
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
 }
 
 fn local_node_config(

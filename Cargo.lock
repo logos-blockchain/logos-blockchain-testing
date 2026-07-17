@@ -1700,10 +1700,12 @@ name = "kvstore-examples"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "kvstore-node",
  "kvstore-runtime-ext",
  "kvstore-runtime-workloads",
  "serde",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -1735,6 +1737,7 @@ dependencies = [
  "async-trait",
  "kvstore-node",
  "serde",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -1749,6 +1752,7 @@ dependencies = [
  "kvstore-node",
  "kvstore-runtime-ext",
  "serde",
+ "testing-framework-app",
  "testing-framework-core",
  "tokio",
  "tracing",
@@ -1921,6 +1925,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-app-examples"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "kvstore-runtime-ext",
+ "openraft-kv-runtime-ext",
+ "openraft-kv-runtime-workloads",
+ "serde",
+ "testing-framework-app",
+ "testing-framework-core",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2085,9 +2106,11 @@ name = "openraft-kv-examples"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "openraft-kv-node",
  "openraft-kv-runtime-ext",
  "openraft-kv-runtime-workloads",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-k8s",
  "tokio",
@@ -2120,6 +2143,7 @@ dependencies = [
  "async-trait",
  "openraft-kv-node",
  "reqwest",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -2134,6 +2158,7 @@ dependencies = [
  "async-trait",
  "openraft-kv-node",
  "openraft-kv-runtime-ext",
+ "testing-framework-app",
  "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",

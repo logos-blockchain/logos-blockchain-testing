@@ -1,11 +1,14 @@
 mod convergence;
 mod failover;
+mod handle_access;
 mod support;
 
 /// Replication expectation used by the OpenRaft example binaries.
 pub use convergence::OpenRaftKvConverges;
 /// Failover workload used by the OpenRaft example binaries.
 pub use failover::OpenRaftKvFailoverWorkload;
+/// Workload that proves app handles are available to OpenRaft workloads.
+pub use handle_access::OpenRaftKvClusterAccessible;
 /// Shared cluster helpers used by the OpenRaft workload and manual k8s example.
 pub use support::{
     FULL_VOTER_SET, OpenRaftClusterError, OpenRaftMembership, ensure_cluster_size, expected_kv,

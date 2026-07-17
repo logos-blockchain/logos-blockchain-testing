@@ -9,6 +9,7 @@ anyhow                  = "1.0"
 async-trait             = { workspace = true }
 openraft-kv-node        = { path = "../../openraft-kv-node" }
 openraft-kv-runtime-ext = { path = "../integration" }
+testing-framework-app   = { workspace = true }
 testing-framework-core  = { workspace = true }
 thiserror               = "2.0"
 tokio                   = { workspace = true, features = ["full"] }

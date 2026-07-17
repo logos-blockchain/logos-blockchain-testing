@@ -12,6 +12,7 @@ members = [
   "examples/metrics_counter/metrics-counter-node",
   "examples/metrics_counter/testing/integration",
   "examples/metrics_counter/testing/workloads",
+  "examples/multi_app/examples",
   "examples/nats/examples",
   "examples/nats/testing/integration",
   "examples/nats/testing/workloads",

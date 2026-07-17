@@ -2,5 +2,7 @@ mod expectations;
 mod write;
 
 pub use expectations::KvConverges;
-pub use kvstore_runtime_ext::{KvBuilderExt, KvEnv, KvScenarioBuilder, KvTopology};
-pub use write::KvWriteWorkload;
+pub use kvstore_runtime_ext::{
+    KvBuilderExt, KvEnv, KvExistingClusterApp, KvScenarioBuilder, KvStoreCluster, KvTopology,
+};
+pub use write::{KvClusterAccessible, KvWriteWorkload};

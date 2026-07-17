@@ -5,6 +5,7 @@ name              = "kvstore-runtime-ext"
 version.workspace = true
 
 [dependencies]
+testing-framework-app            = { workspace = true }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 testing-framework-runner-k8s     = { workspace = true }

@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use testing_framework_core::scenario::{DynError, StartNodeOptions};
 use testing_framework_runner_local::{
-    LocalBinaryApp, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
+    BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
+    FallbackBinaryProvider, LocalBinaryApp, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
     build_local_cluster_node_config, yaml_node_config,
 };
 
@@ -28,7 +29,9 @@ impl LocalBinaryApp for KvEnv {
     }
 
     fn local_process_spec() -> LocalProcessSpec {
-        LocalProcessSpec::new("KVSTORE_NODE_BIN").with_rust_log("kvstore_node=info")
+        LocalProcessSpec::new("KVSTORE_NODE_BIN")
+            .with_binary_provider(kvstore_binary_provider())
+            .with_rust_log("kvstore_node=info")
     }
 
     fn render_local_config(config: &KvNodeConfig) -> Result<Vec<u8>, DynError> {
@@ -38,4 +41,32 @@ impl LocalBinaryApp for KvEnv {
     fn http_api_port(config: &KvNodeConfig) -> u16 {
         config.http_port
     }
+}
+
+fn kvstore_binary_provider() -> FallbackBinaryProvider {
+    let workspace = workspace_root();
+    let providers: [BinaryProviderRef; 2] = [
+        Arc::new(EnvBinaryProvider::new("KVSTORE_NODE_BIN")),
+        Arc::new(BuildBinaryProvider {
+            command: BuildCommand::new("cargo").with_args([
+                "build",
+                "-p",
+                "kvstore-node",
+                "--bin",
+                "kvstore-node",
+            ]),
+            output_path: PathBuf::from(format!(
+                "target/debug/kvstore-node{}",
+                std::env::consts::EXE_SUFFIX
+            )),
+            working_dir: Some(workspace),
+            lock_dir: None,
+        }),
+    ];
+
+    FallbackBinaryProvider::new(providers)
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../..")
 }
