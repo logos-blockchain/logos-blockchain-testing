@@ -1,59 +1,24 @@
-use std::{
-    marker::PhantomData,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, ClusterControlProfile, ClusterMode, Deployer, DeploymentPolicy, DynError,
-        HttpReadinessRequirement, Metrics, NodeClients, NodeControlCapability, NodeControlHandle,
-        RetryPolicy, Runner, RuntimeExtensions, Scenario, ScenarioError,
-        internal::{
-            CleanupGuard, RuntimeAssembly, SourceOrchestrationPlan, build_source_orchestration_plan,
-        },
+        Application, ClusterControlProfile, ClusterControlRequest, ClusterMode, ClusterRequest,
+        ClusterWaitHandle, Deployer, DeploymentPolicy, DynError, Metrics, NodeClients,
+        NodeControlCapability, NodeControlHandle, Runner, RuntimeExtensions, Scenario,
+        ScenarioError,
+        internal::{CleanupGuard, RuntimeAssembly},
     },
     topology::DeploymentDescriptor,
 };
 use thiserror::Error;
-use tokio_retry::{
-    RetryIf,
-    strategy::{ExponentialBackoff, jitter},
-};
-use tracing::{debug, info, warn};
+use tracing::info;
 
 use crate::{
-    env::{LocalDeployerEnv, Node, wait_local_readiness},
-    external::build_external_client,
-    keep_tempdir_from_env,
+    LocalClusterProvisioner, LocalClusterProvisionerError, env::LocalDeployerEnv,
     manual::ManualCluster,
-    node_control::{NodeManager, NodeManagerSeed},
 };
 
-const READINESS_ATTEMPTS: usize = 3;
-const READINESS_BACKOFF_BASE_MS: u64 = 250;
-const READINESS_BACKOFF_MAX_SECS: u64 = 2;
-
-struct LocalProcessGuard<E: LocalDeployerEnv> {
-    nodes: Vec<Node<E>>,
-}
-
-impl<E: LocalDeployerEnv> LocalProcessGuard<E> {
-    fn new(nodes: Vec<Node<E>>) -> Self {
-        Self { nodes }
-    }
-}
-
-impl<E: LocalDeployerEnv> CleanupGuard for LocalProcessGuard<E> {
-    fn cleanup(self: Box<Self>) {
-        // Nodes own local processes; dropping them stops the processes.
-        drop(self.nodes);
-    }
-}
 /// Spawns nodes as local processes.
 #[derive(Clone)]
 pub struct ProcessDeployer<E: LocalDeployerEnv> {
@@ -100,37 +65,6 @@ pub enum ProcessDeployerError {
     },
 }
 
-#[derive(Debug, Error)]
-enum RetryAttemptError {
-    #[error("failed to spawn local topology: {source}")]
-    Spawn {
-        #[source]
-        source: DynError,
-    },
-    #[error("readiness probe failed: {source}")]
-    Readiness {
-        #[source]
-        source: DynError,
-    },
-}
-
-impl From<RetryAttemptError> for ProcessDeployerError {
-    fn from(value: RetryAttemptError) -> Self {
-        match value {
-            RetryAttemptError::Spawn { source } => Self::Spawn { source },
-            RetryAttemptError::Readiness { source } => Self::ReadinessFailed { source },
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct RetryExecutionConfig {
-    max_attempts: usize,
-    keep_tempdir: bool,
-    readiness_enabled: bool,
-    readiness_requirement: HttpReadinessRequirement,
-}
-
 impl From<ScenarioError> for ProcessDeployerError {
     fn from(value: ScenarioError) -> Self {
         match value {
@@ -138,6 +72,19 @@ impl From<ScenarioError> for ProcessDeployerError {
             ScenarioError::ExpectationCapture(source)
             | ScenarioError::ExpectationFailedDuringCapture(source)
             | ScenarioError::Expectations(source) => Self::ExpectationsFailed { source },
+        }
+    }
+}
+
+impl From<LocalClusterProvisionerError> for ProcessDeployerError {
+    fn from(value: LocalClusterProvisionerError) -> Self {
+        match value {
+            LocalClusterProvisionerError::Spawn { source } => Self::Spawn { source },
+            LocalClusterProvisionerError::Readiness { source } => Self::ReadinessFailed { source },
+            LocalClusterProvisionerError::Source { source } => Self::SourceOrchestration { source },
+            LocalClusterProvisionerError::AttachedUnsupported => Self::SourceOrchestration {
+                source: LocalClusterProvisionerError::AttachedUnsupported.into(),
+            },
         }
     }
 }
@@ -189,24 +136,20 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
     ) -> Result<Runner<E>, ProcessDeployerError> {
         validate_supported_cluster_mode(scenario)?;
 
-        // Source planning is currently resolved here before node spawn/runtime setup.
-        let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
-            ProcessDeployerError::SourceOrchestration {
-                source: source.into(),
-            }
-        })?;
-
         log_local_deploy_start(
             scenario.deployment().node_count(),
             scenario.deployment_policy(),
             false,
         );
 
-        let nodes = Self::spawn_nodes_for_scenario(scenario, self.membership_check).await?;
-        let node_clients = NodeClients::<E>::new(nodes.iter().map(|node| node.client()).collect());
-
-        let node_clients = merge_source_clients_for_local::<E>(&source_plan, node_clients)
-            .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
+        let provisioned = LocalClusterProvisioner
+            .provision(
+                cluster_request(scenario, ClusterControlRequest::None),
+                self.membership_check,
+            )
+            .await?;
+        let (_cluster, mut unit) = provisioned.into_parts();
+        let node_clients = unit.node_clients().clone();
 
         let (runtime_extensions, runtime_cleanup) = scenario
             .prepare_runtime_extensions(node_clients.clone())
@@ -218,16 +161,14 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
-            scenario.cluster_control_profile(),
+            unit.control_profile(),
             runtime_extensions,
             runtime_cleanup,
-            None,
+            unit.node_control(),
+            unit.cluster_wait(),
         )
         .await?;
-
-        let cleanup_guard: Box<dyn CleanupGuard> = Box::new(LocalProcessGuard::<E>::new(nodes));
-
-        Ok(runtime.assembly.build_runner(Some(cleanup_guard)))
+        Ok(runtime.assembly.build_runner(unit.take_cleanup()))
     }
 
     async fn deploy_with_node_control(
@@ -236,24 +177,20 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
     ) -> Result<Runner<E>, ProcessDeployerError> {
         validate_supported_cluster_mode(scenario)?;
 
-        // Source planning is currently resolved here before node spawn/runtime setup.
-        let source_plan = build_source_orchestration_plan(scenario).map_err(|source| {
-            ProcessDeployerError::SourceOrchestration {
-                source: source.into(),
-            }
-        })?;
-
         log_local_deploy_start(
             scenario.deployment().node_count(),
             scenario.deployment_policy(),
             true,
         );
 
-        let nodes = Self::spawn_nodes_for_scenario(scenario, self.membership_check).await?;
-        let node_control = self.node_control_from(scenario, nodes);
-        let node_clients =
-            merge_source_clients_for_local::<E>(&source_plan, node_control.node_clients())
-                .map_err(|source| ProcessDeployerError::SourceOrchestration { source })?;
+        let provisioned = LocalClusterProvisioner
+            .provision(
+                cluster_request(scenario, ClusterControlRequest::Full),
+                self.membership_check,
+            )
+            .await?;
+        let (_cluster, mut unit) = provisioned.into_parts();
+        let node_clients = unit.node_clients().clone();
         let (runtime_extensions, runtime_cleanup) = scenario
             .prepare_runtime_extensions(node_clients.clone())
             .await
@@ -263,67 +200,14 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             node_clients,
             scenario.duration(),
             scenario.expectation_cooldown(),
-            scenario.cluster_control_profile(),
+            unit.control_profile(),
             runtime_extensions,
             runtime_cleanup,
-            Some(node_control),
+            unit.node_control(),
+            unit.cluster_wait(),
         )
         .await?;
-
-        Ok(runtime.assembly.build_runner(None))
-    }
-
-    fn node_control_from(
-        &self,
-        scenario: &Scenario<E, NodeControlCapability>,
-        nodes: Vec<Node<E>>,
-    ) -> Arc<NodeManager<E>> {
-        let node_control = Arc::new(NodeManager::new_with_seed(
-            scenario.deployment().clone(),
-            NodeClients::default(),
-            keep_tempdir(scenario.deployment_policy()),
-            NodeManagerSeed::default(),
-        ));
-        node_control.initialize_with_nodes(nodes);
-        node_control
-    }
-
-    async fn spawn_nodes_for_scenario<Caps>(
-        scenario: &Scenario<E, Caps>,
-        membership_check: bool,
-    ) -> Result<Vec<Node<E>>, ProcessDeployerError> {
-        info!(
-            nodes = scenario.deployment().node_count(),
-            "spawning local nodes"
-        );
-        Self::spawn_with_readiness_retry(
-            scenario.deployment(),
-            membership_check,
-            scenario.deployment_policy(),
-        )
-        .await
-    }
-
-    async fn spawn_with_readiness_retry(
-        descriptors: &E::Deployment,
-        membership_check: bool,
-        deployment_policy: DeploymentPolicy,
-    ) -> Result<Vec<Node<E>>, ProcessDeployerError> {
-        let (retry_policy, execution) =
-            build_retry_execution_config(deployment_policy, membership_check);
-        let attempts = Arc::new(AtomicUsize::new(0));
-        let strategy = retry_backoff_strategy(retry_policy, execution.max_attempts);
-        let operation = {
-            let attempts = Arc::clone(&attempts);
-            move || {
-                let attempts = Arc::clone(&attempts);
-                async move { run_retry_attempt::<E>(descriptors, execution, attempts).await }
-            }
-        };
-        let should_retry = retry_decision(Arc::clone(&attempts), execution.max_attempts);
-
-        let nodes = RetryIf::spawn(strategy, operation, should_retry).await?;
-        Ok(nodes)
+        Ok(runtime.assembly.build_runner(unit.take_cleanup()))
     }
 }
 
@@ -343,31 +227,26 @@ fn ensure_local_cluster_mode(mode: ClusterMode) -> Result<(), ProcessDeployerErr
     Ok(())
 }
 
-fn merge_source_clients_for_local<E: LocalDeployerEnv>(
-    source_plan: &SourceOrchestrationPlan,
-    node_clients: NodeClients<E>,
-) -> Result<NodeClients<E>, DynError> {
-    for source in source_plan.external_sources() {
-        let client =
-            E::external_node_client(source).or_else(|_| build_external_client::<E>(source))?;
-        node_clients.add_node(client);
-    }
-    Ok(node_clients)
-}
-
-fn build_retry_execution_config(
-    deployment_policy: DeploymentPolicy,
-    membership_check: bool,
-) -> (RetryPolicy, RetryExecutionConfig) {
-    let retry_policy = retry_policy_from(deployment_policy);
-    let execution = RetryExecutionConfig {
-        max_attempts: retry_policy.max_attempts.max(1),
-        keep_tempdir: keep_tempdir(deployment_policy),
-        readiness_enabled: deployment_policy.readiness_enabled && membership_check,
-        readiness_requirement: deployment_policy.readiness_requirement,
+fn cluster_request<E: Application, Caps>(
+    scenario: &Scenario<E, Caps>,
+    control: ClusterControlRequest,
+) -> ClusterRequest<E> {
+    let request = match scenario.cluster_mode() {
+        ClusterMode::Managed => ClusterRequest::managed(scenario.deployment().clone())
+            .with_external_nodes(scenario.external_nodes().to_vec()),
+        ClusterMode::ExistingCluster => ClusterRequest::attached(
+            scenario
+                .existing_cluster()
+                .expect("existing-cluster mode must contain an attached source")
+                .clone(),
+        )
+        .with_external_nodes(scenario.external_nodes().to_vec()),
+        ClusterMode::ExternalOnly => ClusterRequest::external(scenario.external_nodes().to_vec()),
     };
 
-    (retry_policy, execution)
+    request
+        .with_policy(scenario.deployment_policy())
+        .with_control(control)
 }
 
 #[cfg(test)]
@@ -393,87 +272,6 @@ mod tests {
     }
 }
 
-async fn run_retry_attempt<E: LocalDeployerEnv>(
-    descriptors: &E::Deployment,
-    execution: RetryExecutionConfig,
-    attempts: Arc<AtomicUsize>,
-) -> Result<Vec<Node<E>>, RetryAttemptError> {
-    let attempt = attempts.fetch_add(1, Ordering::Relaxed) + 1;
-    let nodes = spawn_nodes_for_attempt::<E>(descriptors, execution.keep_tempdir).await?;
-    run_readiness_for_attempt::<E>(attempt, nodes, execution).await
-}
-
-fn retry_policy_from(deployment_policy: DeploymentPolicy) -> RetryPolicy {
-    deployment_policy
-        .retry_policy
-        .unwrap_or_else(default_local_retry_policy)
-}
-
-fn retry_backoff_strategy(
-    retry_policy: RetryPolicy,
-    max_attempts: usize,
-) -> impl Iterator<Item = Duration> {
-    ExponentialBackoff::from_millis(retry_policy.base_delay.as_millis() as u64)
-        .max_delay(retry_policy.max_delay)
-        .map(jitter)
-        .take(max_attempts.saturating_sub(1))
-}
-
-async fn spawn_nodes_for_attempt<E: LocalDeployerEnv>(
-    descriptors: &E::Deployment,
-    keep_tempdir: bool,
-) -> Result<Vec<Node<E>>, RetryAttemptError> {
-    NodeManager::<E>::spawn_initial_nodes(descriptors, keep_tempdir)
-        .await
-        .map_err(|source| RetryAttemptError::Spawn {
-            source: source.into(),
-        })
-}
-
-async fn run_readiness_for_attempt<E: LocalDeployerEnv>(
-    attempt: usize,
-    nodes: Vec<Node<E>>,
-    execution: RetryExecutionConfig,
-) -> Result<Vec<Node<E>>, RetryAttemptError> {
-    if !execution.readiness_enabled {
-        info!("skipping local readiness checks");
-        return Ok(nodes);
-    }
-
-    match wait_local_readiness::<E>(&nodes, execution.readiness_requirement).await {
-        Ok(()) => {
-            info!(attempt, "local nodes are ready");
-            Ok(nodes)
-        }
-        Err(source) => {
-            let error: DynError = source.into();
-            debug!(attempt, error = ?error, "local readiness failed");
-            drop(nodes);
-            Err(RetryAttemptError::Readiness { source: error })
-        }
-    }
-}
-
-fn retry_decision(
-    attempts: Arc<AtomicUsize>,
-    max_attempts: usize,
-) -> impl FnMut(&RetryAttemptError) -> bool {
-    move |error: &RetryAttemptError| {
-        let attempt = attempts.load(Ordering::Relaxed);
-        if attempt < max_attempts {
-            warn!(
-                attempt,
-                max_attempts,
-                error = %error,
-                "local spawn/readiness failed; retrying with backoff"
-            );
-            true
-        } else {
-            false
-        }
-    }
-}
-
 impl<E: LocalDeployerEnv> Default for ProcessDeployer<E> {
     fn default() -> Self {
         Self {
@@ -481,18 +279,6 @@ impl<E: LocalDeployerEnv> Default for ProcessDeployer<E> {
             _env: PhantomData,
         }
     }
-}
-
-const fn default_local_retry_policy() -> RetryPolicy {
-    RetryPolicy::new(
-        READINESS_ATTEMPTS,
-        Duration::from_millis(READINESS_BACKOFF_BASE_MS),
-        Duration::from_secs(READINESS_BACKOFF_MAX_SECS),
-    )
-}
-
-fn keep_tempdir(policy: DeploymentPolicy) -> bool {
-    policy.cleanup_policy.preserve_artifacts || keep_tempdir_from_env()
 }
 
 fn log_local_deploy_start(node_count: usize, policy: DeploymentPolicy, has_node_control: bool) {
@@ -518,6 +304,7 @@ async fn run_context_for<E: Application>(
     runtime_extensions: RuntimeExtensions,
     runtime_cleanup: Option<Box<dyn CleanupGuard>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 ) -> Result<RuntimeContext<E>, ProcessDeployerError> {
     if node_clients.is_empty() && runtime_extensions.is_empty() {
         return Err(ProcessDeployerError::RuntimePreflight);
@@ -535,6 +322,9 @@ async fn run_context_for<E: Application>(
     .with_cleanup_guard(runtime_cleanup);
     if let Some(node_control) = node_control {
         assembly = assembly.with_node_control(node_control);
+    }
+    if let Some(cluster_wait) = cluster_wait {
+        assembly = assembly.with_cluster_wait(cluster_wait);
     }
 
     Ok(RuntimeContext { assembly })
