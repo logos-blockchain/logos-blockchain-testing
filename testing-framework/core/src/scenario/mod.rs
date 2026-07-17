@@ -15,6 +15,7 @@ mod expectation;
 pub mod internal;
 mod observability;
 mod runtime;
+mod snapshot;
 mod sources;
 mod workload;
 
@@ -47,6 +48,10 @@ pub use runtime::{
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
     wait_for_http_ports_with_requirement_and_timeout, wait_for_http_ports_with_timeout,
     wait_http_readiness, wait_until_stable,
+};
+pub use snapshot::{
+    NodeStateSource, SnapshotArtifact, SnapshotArtifactProvider, SnapshotContext, SnapshotFactory,
+    SnapshotHandle, SnapshotManifest, SnapshotNodeStateAdapter, SnapshotSpec, SnapshotStore,
 };
 pub use sources::{
     ClusterControlProfile, ClusterMode, ExistingCluster, ExternalNodeSource, IntoExistingCluster,
