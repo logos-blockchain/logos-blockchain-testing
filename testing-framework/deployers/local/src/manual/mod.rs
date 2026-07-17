@@ -128,6 +128,10 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
         self.cluster.start_node_with(name, options).await
     }
 
+    async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
+        self.cluster.wait_node_ready(name).await.map_err(Into::into)
+    }
+
     fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.cluster.node_client(name)
     }

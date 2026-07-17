@@ -577,6 +577,10 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
             .map_err(|err| err.into())
     }
 
+    async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
+        self.wait_node_ready(name).await.map_err(|err| err.into())
+    }
+
     fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.node_client(name)
     }
