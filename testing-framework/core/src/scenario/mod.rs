@@ -50,7 +50,7 @@ pub use runtime::{
     wait_http_readiness, wait_until_stable,
 };
 pub use snapshot::{
-    NodeStateSource, SnapshotArtifact, SnapshotContext, SnapshotExtension, SnapshotFactory,
+    NodeStateSource, SnapshotArtifact, SnapshotArtifactProvider, SnapshotContext, SnapshotFactory,
     SnapshotHandle, SnapshotManifest, SnapshotNodeStateAdapter, SnapshotSpec, SnapshotStore,
 };
 pub use sources::{

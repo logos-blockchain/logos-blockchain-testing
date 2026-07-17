@@ -19,8 +19,8 @@ pub use store::SnapshotStore;
 
 /// Logical name of a snapshot inside the configured snapshot store.
 pub type SnapshotName = String;
-/// Stable identifier for an application-specific snapshot extension artifact.
-pub type SnapshotExtensionId = String;
+/// Stable identifier for an application-specific snapshot artifact provider.
+pub type SnapshotArtifactProviderId = String;
 /// Stable node identifier used as the key for per-node state in a snapshot.
 pub type SnapshotNodeName = String;
 
@@ -33,7 +33,7 @@ pub type SnapshotNodeName = String;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SnapshotSpec {
     include_node_state: bool,
-    extensions: BTreeSet<SnapshotExtensionId>,
+    providers: BTreeSet<SnapshotArtifactProviderId>,
 }
 
 impl SnapshotSpec {
@@ -42,24 +42,24 @@ impl SnapshotSpec {
     pub fn node_state() -> Self {
         Self {
             include_node_state: true,
-            extensions: BTreeSet::new(),
+            providers: BTreeSet::new(),
         }
     }
 
-    /// Include only one extension artifact.
+    /// Include only artifacts from one provider.
     #[must_use]
-    pub fn extension(extension: impl Into<SnapshotExtensionId>) -> Self {
-        Self::extensions([extension])
+    pub fn provider(provider: impl Into<SnapshotArtifactProviderId>) -> Self {
+        Self::providers([provider])
     }
 
-    /// Include only the given extension artifacts.
+    /// Include only artifacts from the given providers.
     #[must_use]
-    pub fn extensions(
-        extensions: impl IntoIterator<Item = impl Into<SnapshotExtensionId>>,
+    pub fn providers(
+        providers: impl IntoIterator<Item = impl Into<SnapshotArtifactProviderId>>,
     ) -> Self {
         Self {
             include_node_state: false,
-            extensions: extensions.into_iter().map(Into::into).collect(),
+            providers: providers.into_iter().map(Into::into).collect(),
         }
     }
 
@@ -77,21 +77,21 @@ impl SnapshotSpec {
         self
     }
 
-    /// Return a copy of this spec with one additional extension artifact.
+    /// Return a copy of this spec with one additional artifact provider.
     #[must_use]
-    pub fn with_extension(mut self, extension: impl Into<SnapshotExtensionId>) -> Self {
-        self.extensions.insert(extension.into());
+    pub fn with_provider(mut self, provider: impl Into<SnapshotArtifactProviderId>) -> Self {
+        self.providers.insert(provider.into());
         self
     }
 
-    /// Return a copy of this spec with the given extension artifacts.
+    /// Return a copy of this spec with the given artifact providers.
     #[must_use]
-    pub fn with_extensions(
+    pub fn with_providers(
         mut self,
-        extensions: impl IntoIterator<Item = impl Into<SnapshotExtensionId>>,
+        providers: impl IntoIterator<Item = impl Into<SnapshotArtifactProviderId>>,
     ) -> Self {
-        for extension in extensions {
-            self = self.with_extension(extension);
+        for provider in providers {
+            self = self.with_provider(provider);
         }
         self
     }
@@ -102,10 +102,10 @@ impl SnapshotSpec {
         self.include_node_state
     }
 
-    /// Whether this spec includes an extension artifact with the given id.
+    /// Whether this spec includes artifacts from the given provider id.
     #[must_use]
-    pub fn includes_extension(&self, id: &str) -> bool {
-        self.extensions.contains(id)
+    pub fn includes_provider(&self, id: &str) -> bool {
+        self.providers.contains(id)
     }
 }
 
@@ -118,8 +118,8 @@ impl Default for SnapshotSpec {
 /// Source for one node's local state when preparing or restoring a runtime dir.
 ///
 /// This type is deliberately narrower than a whole snapshot reference.
-/// Extension artifacts and full snapshot loads are addressed by snapshot name
-/// through [`SnapshotHandle::load`]. Node startup/restore needs a concrete
+/// Provider-owned artifacts and full snapshot loads are addressed by snapshot
+/// name through [`SnapshotHandle::load`]. Node startup/restore needs a concrete
 /// directory, so a snapshot source must name both the snapshot and the source
 /// node.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -184,8 +184,8 @@ impl SnapshotArtifact {
 
 /// Manifest file describing the contents of one snapshot.
 ///
-/// Node state entries are keyed by node name. Extension entries are keyed by
-/// extension id. The actual node files live beside the manifest in
+/// Node state entries are keyed by node name. Provider-owned artifacts are
+/// keyed by provider id. The actual node files live beside the manifest in
 /// deployer/application-specific directories.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SnapshotManifest {
@@ -197,8 +197,8 @@ pub struct SnapshotManifest {
     pub created_unix_millis: u128,
     /// Per-node state artifacts saved by the deployer/node-state adapter.
     pub node_state: BTreeMap<SnapshotNodeName, SnapshotArtifact>,
-    /// Application-specific extension artifacts.
-    pub extensions: BTreeMap<SnapshotExtensionId, SnapshotArtifact>,
+    /// Application-specific artifacts keyed by provider id.
+    pub providers: BTreeMap<SnapshotArtifactProviderId, SnapshotArtifact>,
 }
 
 impl SnapshotManifest {
@@ -212,12 +212,12 @@ impl SnapshotManifest {
             name: name.into(),
             created_unix_millis: unix_millis_now(),
             node_state: BTreeMap::new(),
-            extensions: BTreeMap::new(),
+            providers: BTreeMap::new(),
         }
     }
 }
 
-/// Runtime context passed to snapshot extensions.
+/// Runtime context passed to snapshot artifact providers.
 pub struct SnapshotContext<E: Application> {
     deployment: E::Deployment,
     node_clients: NodeClients<E>,
@@ -233,7 +233,7 @@ impl<E: Application> Clone for SnapshotContext<E> {
 }
 
 impl<E: Application> SnapshotContext<E> {
-    /// Create snapshot extension context from the active deployment and
+    /// Create snapshot artifact provider context from the active deployment and
     /// clients.
     #[must_use]
     pub fn new(deployment: E::Deployment, node_clients: NodeClients<E>) -> Self {
@@ -256,26 +256,26 @@ impl<E: Application> SnapshotContext<E> {
     }
 }
 
-/// Application-specific snapshot extension.
+/// Application-specific snapshot artifact provider.
 ///
-/// Extensions save and load artifacts that are not owned by the deployer/node
+/// Providers save and load artifacts that are not owned by the deployer/node
 /// runtime itself, such as test harness wallet state. Implementations should be
 /// deterministic and treat `spec` as a filter for optional sub-parts they own.
 #[async_trait]
-pub trait SnapshotExtension<E: Application>: Send + Sync {
-    /// Stable id used as the key in [`SnapshotManifest::extensions`].
+pub trait SnapshotArtifactProvider<E: Application>: Send + Sync {
+    /// Stable id used as the key in [`SnapshotManifest::providers`].
     fn id(&self) -> &'static str;
 
-    /// Save this extension's artifact for the active snapshot operation.
+    /// Save this provider's artifact for the active snapshot operation.
     ///
-    /// Returning `Ok(None)` means this extension has no state to write.
+    /// Returning `Ok(None)` means this provider has no state to write.
     async fn save(
         &self,
         context: &SnapshotContext<E>,
         spec: &SnapshotSpec,
     ) -> Result<Option<SnapshotArtifact>, DynError>;
 
-    /// Load this extension's artifact from the active snapshot operation.
+    /// Load this provider's artifact from the active snapshot operation.
     async fn load(
         &self,
         context: &SnapshotContext<E>,
@@ -327,44 +327,45 @@ pub trait SnapshotNodeStateAdapter<E: Application>: Send + Sync {
     async fn read_manifest(&self, snapshot: &str) -> Result<SnapshotManifest, DynError>;
 }
 
-/// Prepared snapshot runtime extension for an active scenario.
+/// Prepared snapshot handle for an active scenario.
 pub struct SnapshotHandle<E: Application> {
     node_state: Arc<dyn SnapshotNodeStateAdapter<E>>,
     context: SnapshotContext<E>,
-    extensions: Vec<Arc<dyn SnapshotExtension<E>>>,
+    providers: Vec<Arc<dyn SnapshotArtifactProvider<E>>>,
     _phantom: PhantomData<E>,
 }
 
 /// Factory that installs snapshot support into a scenario runtime.
 pub struct SnapshotFactory<E: Application> {
     node_state: Arc<dyn SnapshotNodeStateAdapter<E>>,
-    extensions: Vec<Arc<dyn SnapshotExtension<E>>>,
+    providers: Vec<Arc<dyn SnapshotArtifactProvider<E>>>,
 }
 
 impl<E: Application> SnapshotFactory<E> {
-    /// Create a snapshot factory with a node-state adapter and no extensions.
+    /// Create a snapshot factory with a node-state adapter and no artifact
+    /// providers.
     #[must_use]
     pub fn new(node_state: Arc<dyn SnapshotNodeStateAdapter<E>>) -> Self {
         Self {
             node_state,
-            extensions: Vec::new(),
+            providers: Vec::new(),
         }
     }
 
-    /// Register one application-specific snapshot extension.
+    /// Register one application-specific snapshot artifact provider.
     #[must_use]
-    pub fn with_extension(mut self, extension: Arc<dyn SnapshotExtension<E>>) -> Self {
-        self.extensions.push(extension);
+    pub fn with_provider(mut self, provider: Arc<dyn SnapshotArtifactProvider<E>>) -> Self {
+        self.providers.push(provider);
         self
     }
 
-    /// Register multiple application-specific snapshot extensions.
+    /// Register multiple application-specific snapshot artifact providers.
     #[must_use]
-    pub fn with_extensions(
+    pub fn with_providers(
         mut self,
-        extensions: impl IntoIterator<Item = Arc<dyn SnapshotExtension<E>>>,
+        providers: impl IntoIterator<Item = Arc<dyn SnapshotArtifactProvider<E>>>,
     ) -> Self {
-        self.extensions.extend(extensions);
+        self.providers.extend(providers);
         self
     }
 }
@@ -379,7 +380,7 @@ impl<E: Application> RuntimeExtensionFactory<E> for SnapshotFactory<E> {
         Ok(PreparedRuntimeExtension::new(SnapshotHandle::new(
             Arc::clone(&self.node_state),
             SnapshotContext::new(deployment.clone(), node_clients),
-            self.extensions.clone(),
+            self.providers.clone(),
         )))
     }
 }
@@ -389,7 +390,7 @@ impl<E: Application> Clone for SnapshotHandle<E> {
         Self {
             node_state: Arc::clone(&self.node_state),
             context: self.context.clone(),
-            extensions: self.extensions.clone(),
+            providers: self.providers.clone(),
             _phantom: PhantomData,
         }
     }
@@ -401,12 +402,12 @@ impl<E: Application> SnapshotHandle<E> {
     pub fn new(
         node_state: Arc<dyn SnapshotNodeStateAdapter<E>>,
         context: SnapshotContext<E>,
-        extensions: Vec<Arc<dyn SnapshotExtension<E>>>,
+        providers: Vec<Arc<dyn SnapshotArtifactProvider<E>>>,
     ) -> Self {
         Self {
             node_state,
             context,
-            extensions,
+            providers,
             _phantom: PhantomData,
         }
     }
@@ -414,8 +415,9 @@ impl<E: Application> SnapshotHandle<E> {
     /// Save a named snapshot according to `spec`.
     ///
     /// This writes a new manifest containing the requested node-state and
-    /// extension artifacts. Lifecycle concerns such as stopping nodes before
-    /// saving are intentionally owned by the caller/deployer, not this method.
+    /// provider-owned artifacts. Lifecycle concerns such as stopping nodes
+    /// before saving are intentionally owned by the caller/deployer, not
+    /// this method.
     pub async fn save(
         &self,
         name: impl Into<SnapshotName>,
@@ -428,15 +430,15 @@ impl<E: Application> SnapshotHandle<E> {
             manifest.node_state = self.node_state.save_node_state(&snapshot, &spec).await?;
         }
 
-        for extension in &self.extensions {
-            if !spec.includes_extension(extension.id()) {
+        for provider in &self.providers {
+            if !spec.includes_provider(provider.id()) {
                 continue;
             }
 
-            if let Some(artifact) = extension.save(&self.context, &spec).await? {
+            if let Some(artifact) = provider.save(&self.context, &spec).await? {
                 manifest
-                    .extensions
-                    .insert(extension.id().to_owned(), artifact);
+                    .providers
+                    .insert(provider.id().to_owned(), artifact);
             }
         }
 
@@ -464,20 +466,20 @@ impl<E: Application> SnapshotHandle<E> {
                 .await?;
         }
 
-        for extension in &self.extensions {
-            if !spec.includes_extension(extension.id()) {
+        for provider in &self.providers {
+            if !spec.includes_provider(provider.id()) {
                 continue;
             }
 
-            let Some(artifact) = manifest.extensions.get(extension.id()) else {
+            let Some(artifact) = manifest.providers.get(provider.id()) else {
                 return Err(format!(
-                    "snapshot '{snapshot}' does not contain extension '{}'",
-                    extension.id()
+                    "snapshot '{snapshot}' does not contain provider '{}'",
+                    provider.id()
                 )
                 .into());
             };
 
-            extension.load(&self.context, artifact, &spec).await?;
+            provider.load(&self.context, artifact, &spec).await?;
         }
 
         Ok(())
@@ -486,7 +488,7 @@ impl<E: Application> SnapshotHandle<E> {
     /// Resolve one node's saved state to a local startup directory.
     ///
     /// This is used when a node process should be started from existing local
-    /// state. It does not load extension artifacts.
+    /// state. It does not load provider-owned artifacts.
     pub async fn prepare_node_state_source_dir(
         &self,
         source: NodeStateSource,

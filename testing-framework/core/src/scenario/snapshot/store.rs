@@ -121,62 +121,72 @@ impl SnapshotStore {
         Ok(())
     }
 
-    /// Save or replace one extension artifact in a named snapshot manifest.
+    /// Save or replace one provider artifact in a named snapshot manifest.
     ///
     /// If the snapshot manifest does not exist it is created. Invalid existing
     /// manifests fail the save instead of being overwritten.
-    pub fn save_extension_artifact(
+    pub fn save_provider_artifact(
         &self,
         snapshot_name: &str,
-        extension_id: &str,
+        provider_id: &str,
         artifact: SnapshotArtifact,
     ) -> Result<String, DynError> {
         validate_path_component(snapshot_name, "Snapshot name")?;
-        validate_path_component(extension_id, "Snapshot extension id")?;
+        validate_path_component(provider_id, "Snapshot provider id")?;
 
         let mut manifest = self.read_manifest_or_new(snapshot_name)?;
 
-        manifest
-            .extensions
-            .insert(extension_id.to_owned(), artifact);
+        manifest.providers.insert(provider_id.to_owned(), artifact);
         self.write_manifest(&manifest)?;
 
         Ok(snapshot_name.to_owned())
     }
 
-    /// Load one extension artifact from a named snapshot manifest.
-    pub fn load_extension_artifact(
+    /// Load one provider artifact from a named snapshot manifest.
+    pub fn load_provider_artifact(
         &self,
         snapshot_name: &str,
-        extension_id: &str,
+        provider_id: &str,
     ) -> Result<SnapshotArtifact, DynError> {
         validate_path_component(snapshot_name, "Snapshot name")?;
-        validate_path_component(extension_id, "Snapshot extension id")?;
+        validate_path_component(provider_id, "Snapshot provider id")?;
 
         let manifest = self.read_manifest(snapshot_name)?;
-        manifest
-            .extensions
-            .get(extension_id)
-            .cloned()
-            .ok_or_else(|| {
-                format!("snapshot '{snapshot_name}' does not contain extension '{extension_id}'")
-                    .into()
-            })
+        manifest.providers.get(provider_id).cloned().ok_or_else(|| {
+            format!("snapshot '{snapshot_name}' does not contain provider '{provider_id}'").into()
+        })
     }
 
     /// Read a snapshot manifest by snapshot name.
     pub fn read_manifest(&self, snapshot: &str) -> Result<SnapshotManifest, DynError> {
-        let bytes = fs::read(self.manifest_path(snapshot))?;
-        Ok(serde_json::from_slice(&bytes)?)
+        let path = self.manifest_path(snapshot);
+        let bytes = fs::read(&path).map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                format!(
+                    "failed to read snapshot manifest at '{}': {error}",
+                    path.display()
+                ),
+            )
+        })?;
+        parse_manifest(&path, &bytes)
     }
 
     fn read_manifest_or_new(&self, snapshot: &str) -> Result<SnapshotManifest, DynError> {
-        match fs::read(self.manifest_path(snapshot)) {
-            Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
+        let path = self.manifest_path(snapshot);
+        match fs::read(&path) {
+            Ok(bytes) => parse_manifest(&path, &bytes),
             Err(error) if error.kind() == ErrorKind::NotFound => {
                 Ok(SnapshotManifest::new(snapshot))
             }
-            Err(error) => Err(error.into()),
+            Err(error) => Err(io::Error::new(
+                error.kind(),
+                format!(
+                    "failed to read snapshot manifest at '{}': {error}",
+                    path.display()
+                ),
+            )
+            .into()),
         }
     }
 
@@ -236,6 +246,16 @@ fn ensure_subdirs(path: &Path, required_subdirs: &[&str]) -> Result<(), DynError
     Ok(())
 }
 
+fn parse_manifest(path: &Path, bytes: &[u8]) -> Result<SnapshotManifest, DynError> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        format!(
+            "failed to parse snapshot manifest at '{}': {error}",
+            path.display()
+        )
+        .into()
+    })
+}
+
 fn clear_dir(path: &Path) -> io::Result<()> {
     if path.exists() {
         if !path.is_dir() {
@@ -292,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn node_state_and_extension_artifacts_share_manifest() {
+    fn node_state_and_provider_artifacts_share_manifest() {
         let root = TempDir::new().expect("snapshot root should be created");
         let runtime = TempDir::new().expect("runtime dir should be created");
         let store = SnapshotStore::new(root.path());
@@ -300,7 +320,7 @@ mod tests {
         write_file(&runtime.path().join("db").join("state.txt"), "db");
 
         store
-            .save_extension_artifact(
+            .save_provider_artifact(
                 "snapshot",
                 "wallet",
                 SnapshotArtifact::new(
@@ -309,7 +329,7 @@ mod tests {
                     serde_json::json!({ "wallets": ["WALLET_1A"] }),
                 ),
             )
-            .expect("extension artifact should save");
+            .expect("provider artifact should save");
 
         store
             .save_node_dirs("snapshot", "NODE_1", runtime.path(), &["db"])
@@ -322,7 +342,7 @@ mod tests {
         assert!(manifest.node_state.contains_key("NODE_1"));
         assert_eq!(
             manifest
-                .extensions
+                .providers
                 .get("wallet")
                 .expect("wallet artifact should remain in manifest")
                 .metadata,
@@ -338,6 +358,40 @@ mod tests {
     }
 
     #[test]
+    fn external_directory_node_state_source_resolves_existing_state() {
+        let root = TempDir::new().expect("snapshot root should be created");
+        let external = TempDir::new().expect("external dir should be created");
+        let store = SnapshotStore::new(root.path());
+
+        fs::create_dir_all(external.path().join("db")).expect("db dir should be created");
+        fs::create_dir_all(external.path().join("recovery"))
+            .expect("recovery dir should be created");
+
+        let source = NodeStateSource::external_directory(external.path());
+        let resolved = store
+            .prepare_node_dir(&source, &["db", "recovery"])
+            .expect("external source should resolve");
+
+        assert_eq!(resolved, external.path());
+    }
+
+    #[test]
+    fn external_directory_node_state_source_requires_state_subdirs() {
+        let root = TempDir::new().expect("snapshot root should be created");
+        let external = TempDir::new().expect("external dir should be created");
+        let store = SnapshotStore::new(root.path());
+
+        fs::create_dir_all(external.path().join("db")).expect("db dir should be created");
+
+        let source = NodeStateSource::external_directory(external.path());
+        let error = store
+            .prepare_node_dir(&source, &["db", "recovery"])
+            .expect_err("missing required state dir should fail");
+
+        assert!(error.to_string().contains("recovery"));
+    }
+
+    #[test]
     fn saving_node_state_does_not_overwrite_invalid_manifest() {
         let root = TempDir::new().expect("snapshot root should be created");
         let runtime = TempDir::new().expect("runtime dir should be created");
@@ -350,6 +404,11 @@ mod tests {
             .save_node_dirs("snapshot", "NODE_1", runtime.path(), &["db"])
             .expect_err("invalid manifest should fail the save");
 
+        assert!(
+            error
+                .to_string()
+                .contains("failed to parse snapshot manifest")
+        );
         assert!(error.to_string().contains("expected ident"));
         assert_eq!(
             fs::read_to_string(store.manifest_path("snapshot"))
