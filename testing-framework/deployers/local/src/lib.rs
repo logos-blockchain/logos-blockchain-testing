@@ -1,10 +1,12 @@
 pub mod binary;
+mod cluster;
 mod deployer;
 pub mod env;
 mod external;
 mod manual;
 mod node_control;
 pub mod process;
+mod provisioner;
 
 pub use binary::{
     BinaryProvider, BinaryProviderError, BinaryProviderRef, BuildBinaryProvider, BuildCommand,
@@ -12,6 +14,7 @@ pub use binary::{
     DownloadProcessorFn, DownloadUrl, EnvBinaryProvider, FallbackBinaryProvider,
     PathBinaryProvider,
 };
+pub use cluster::LocalCluster;
 pub use deployer::{ProcessDeployer, ProcessDeployerError};
 pub use env::{
     BuiltNodeConfig, LocalBinaryApp, LocalBuildContext, LocalConfigArgMode, LocalDeployerEnv,
@@ -26,6 +29,9 @@ pub use node_control::{NodeManager, NodeManagerError, NodeManagerSeed};
 pub use process::{
     LaunchEnvVar, LaunchFile, LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessNode,
     ProcessSpawnError, allocate_available_port,
+};
+pub use provisioner::{
+    LocalClusterProvisioner, LocalClusterProvisionerError, ProvisionedLocalCluster,
 };
 
 const KEEP_LOGS_ENV: &str = "TF_KEEP_LOGS";

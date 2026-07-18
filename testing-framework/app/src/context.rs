@@ -1,7 +1,8 @@
 use testing_framework_core::scenario::{
-    Application, DynError, NodeClients, internal::CleanupGuard,
+    Application, ClusterControlRequest, ClusterHandle, ClusterProvisioner, ClusterRequest,
+    DynError, NodeClients, internal::CleanupGuard,
 };
-use testing_framework_runner_local::LocalDeployerEnv;
+use testing_framework_runner_local::{LocalClusterProvisioner, LocalDeployerEnv};
 
 use crate::{
     AppDeployError, AppDeployment, AppHandle, HandleRegistry, LocalAppCluster,
@@ -14,22 +15,39 @@ use crate::{
 /// outer scenario deployment and node clients while collecting application
 /// handles for later use by workloads. Exposed handles are dropped in reverse
 /// exposure order when the scenario runtime is released.
-pub struct DeployContext<E: Application> {
+pub struct DeployContext<E: Application, P = LocalClusterProvisioner> {
     deployment: E::Deployment,
     node_clients: NodeClients<E>,
+    provisioner: P,
     handles: HandleRegistry,
     cleanup: AppCleanupStack,
 }
 
-impl<E> DeployContext<E>
+impl<E> DeployContext<E, LocalClusterProvisioner>
 where
     E: Application,
 {
     /// Creates a context for an outer scenario deployment and its node clients.
     pub fn new(deployment: E::Deployment, node_clients: NodeClients<E>) -> Self {
+        Self::new_with_provisioner(deployment, node_clients, LocalClusterProvisioner)
+    }
+}
+
+impl<E, P> DeployContext<E, P>
+where
+    E: Application,
+    P: Send + Sync + 'static,
+{
+    /// Creates a context backed by an explicit cluster provisioner.
+    pub fn new_with_provisioner(
+        deployment: E::Deployment,
+        node_clients: NodeClients<E>,
+        provisioner: P,
+    ) -> Self {
         Self {
             deployment,
             node_clients,
+            provisioner,
             handles: HandleRegistry::new(),
             cleanup: AppCleanupStack::default(),
         }
@@ -41,7 +59,7 @@ where
     /// higher-level application handle.
     pub async fn deploy<A>(&mut self, app: A) -> Result<A::Handle, DynError>
     where
-        A: AppDeployment<E>,
+        A: AppDeployment<E, P>,
     {
         app.deploy(self).await
     }
@@ -53,7 +71,7 @@ where
     /// scenario cleanup.
     pub async fn deploy_and_expose<A>(&mut self, app: A) -> Result<A::Handle, DynError>
     where
-        A: AppDeployment<E>,
+        A: AppDeployment<E, P>,
     {
         let handle = self.deploy(app).await?;
 
@@ -132,6 +150,26 @@ where
         &self.handles
     }
 
+    /// Provisions a cluster through the active local backend.
+    pub async fn deploy_cluster<App>(
+        &mut self,
+        request: ClusterRequest<App>,
+    ) -> Result<ClusterHandle<App>, DynError>
+    where
+        App: Application,
+        P: ClusterProvisioner<App>,
+    {
+        let mut unit = self
+            .provisioner
+            .provision_cluster(request.with_control(ClusterControlRequest::Full))
+            .await?;
+        let handle = unit.handle();
+        if let Some(cleanup) = unit.take_cleanup() {
+            self.register_cleanup(cleanup);
+        }
+        Ok(handle)
+    }
+
     /// Starts every node of an additional uniform local cluster.
     ///
     /// The cluster is registered with scenario cleanup before its handle is
@@ -142,10 +180,10 @@ where
     ) -> Result<LocalAppCluster<App>, DynError>
     where
         App: LocalDeployerEnv,
+        P: ClusterProvisioner<App>,
     {
-        let cluster = LocalAppCluster::start(deployment).await?;
-        self.register_cleanup(cluster.cleanup_guard());
-        Ok(cluster)
+        self.deploy_cluster(ClusterRequest::managed(deployment))
+            .await
     }
 
     /// Returns the outer scenario deployment descriptor.

@@ -14,6 +14,7 @@ mod deployment_policy;
 mod expectation;
 pub mod internal;
 mod observability;
+mod provisioning;
 mod runtime;
 mod snapshot;
 mod sources;
@@ -36,6 +37,10 @@ pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
 pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
+pub use provisioning::{
+    ClusterControlRequest, ClusterHandle, ClusterProvisioner, ClusterRequest, ClusterSource,
+    ClusterStartMode, ClusterUnit, ProvisionedCluster,
+};
 pub use runtime::{
     Deployer, HttpReadinessRequirement, NodeClients, PreparedRuntimeExtension, ReadinessError,
     RunContext, RunHandle, RunMetrics, Runner, RuntimeExtensionFactory, RuntimeExtensions,

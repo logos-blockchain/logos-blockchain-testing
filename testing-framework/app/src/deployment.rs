@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use testing_framework_core::scenario::{Application, DynError};
+use testing_framework_runner_local::LocalClusterProvisioner;
 
 use crate::DeployContext;
 
@@ -14,7 +15,7 @@ impl<T> AppHandle for T where T: Clone + Send + Sync + 'static {}
 
 /// Deploys one reusable application preset and returns its typed handle.
 #[async_trait]
-pub trait AppDeployment<E>: Send + 'static
+pub trait AppDeployment<E, P = LocalClusterProvisioner>: Send + 'static
 where
     E: Application,
 {
@@ -26,5 +27,5 @@ where
     /// Child deployments can be composed with [`DeployContext::deploy`] or
     /// [`DeployContext::deploy_and_expose`]. Any handle exposed through the
     /// context remains available through the scenario runtime.
-    async fn deploy(self, ctx: &mut DeployContext<E>) -> Result<Self::Handle, DynError>;
+    async fn deploy(self, ctx: &mut DeployContext<E, P>) -> Result<Self::Handle, DynError>;
 }

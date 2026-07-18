@@ -33,6 +33,10 @@ pub trait NodeControlHandle<E: Application>: Send + Sync {
         Err("stop_node not supported by this deployer".into())
     }
 
+    async fn wait_node_ready(&self, _name: &str) -> Result<(), DynError> {
+        Err("wait_node_ready not supported by this deployer".into())
+    }
+
     fn node_client(&self, _name: &str) -> Option<E::NodeClient> {
         None
     }
