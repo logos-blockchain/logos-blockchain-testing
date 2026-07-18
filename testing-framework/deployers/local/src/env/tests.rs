@@ -1,4 +1,8 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    net::TcpListener,
+    sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
+};
 
 use testing_framework_core::{
     scenario::{Application, DynError, HttpReadinessRequirement},
@@ -22,9 +26,17 @@ impl DeploymentDescriptor for DummyTopology {
 }
 
 struct DummyEnv;
+struct TcpEnv;
 
 #[async_trait::async_trait]
 impl Application for DummyEnv {
+    type Deployment = DummyTopology;
+    type NodeClient = ();
+    type NodeConfig = DummyConfig;
+}
+
+#[async_trait::async_trait]
+impl Application for TcpEnv {
     type Deployment = DummyTopology;
     type NodeClient = ();
     type NodeConfig = DummyConfig;
@@ -69,6 +81,13 @@ impl LocalDeployerEnv for DummyEnv {
     }
 }
 
+#[async_trait::async_trait]
+impl LocalDeployerEnv for TcpEnv {
+    fn readiness_probe() -> LocalReadinessProbe {
+        LocalReadinessProbe::Tcp
+    }
+}
+
 fn build_dummy_node() -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
     unreachable!("not used in this test")
 }
@@ -99,8 +118,22 @@ async fn dummy_wait_stable() -> Result<(), DynError> {
 async fn empty_cluster_still_runs_stability_hook() {
     STABLE_CALLS.store(0, Ordering::SeqCst);
     let nodes: Vec<Node<DummyEnv>> = Vec::new();
-    wait_local_http_readiness::<DummyEnv>(&nodes, HttpReadinessRequirement::AllNodesReady)
+    wait_local_readiness::<DummyEnv>(&nodes, HttpReadinessRequirement::AllNodesReady)
         .await
         .expect("empty cluster should be considered ready");
     assert_eq!(STABLE_CALLS.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn tcp_readiness_probe_accepts_bound_port() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind tcp listener");
+    let port = listener.local_addr().expect("listener addr").port();
+
+    wait_for_local_readiness_ports::<TcpEnv>(
+        &[port],
+        HttpReadinessRequirement::AllNodesReady,
+        Some(Duration::from_secs(1)),
+    )
+    .await
+    .expect("bound TCP port should be ready");
 }

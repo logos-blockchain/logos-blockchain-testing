@@ -5,6 +5,10 @@ name              = "openraft-kv-examples"
 version.workspace = true
 
 [[bin]]
+name = "openraft_kv_app_host_smoke"
+path = "src/bin/app_host_smoke.rs"
+
+[[bin]]
 name = "openraft_kv_basic_failover"
 path = "src/bin/basic_failover.rs"
 
@@ -18,9 +22,11 @@ path = "src/bin/k8s_failover.rs"
 
 [dependencies]
 anyhow                        = "1.0"
+async-trait                   = { workspace = true }
 openraft-kv-node              = { path = "../openraft-kv-node" }
 openraft-kv-runtime-ext       = { path = "../testing/integration" }
 openraft-kv-runtime-workloads = { path = "../testing/workloads" }
+testing-framework-app         = { workspace = true }
 testing-framework-core        = { workspace = true }
 testing-framework-runner-k8s  = { workspace = true }
 tokio                         = { workspace = true, features = ["full"] }

@@ -1,0 +1,22 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "multi-app-examples"
+version.workspace = true
+
+[[bin]]
+name = "multi_app_typed_stack_smoke"
+path = "src/bin/typed_stack_smoke.rs"
+
+[dependencies]
+anyhow                        = "1.0"
+async-trait                   = { workspace = true }
+kvstore-runtime-ext           = { path = "../../kvstore/testing/integration" }
+openraft-kv-runtime-ext       = { path = "../../openraft_kv/testing/integration" }
+openraft-kv-runtime-workloads = { path = "../../openraft_kv/testing/workloads" }
+serde                         = { workspace = true }
+testing-framework-app         = { workspace = true }
+testing-framework-core        = { workspace = true }
+tokio                         = { workspace = true, features = ["full"] }
+tracing                       = { workspace = true }
+tracing-subscriber            = { version = "0.3", features = ["env-filter"] }

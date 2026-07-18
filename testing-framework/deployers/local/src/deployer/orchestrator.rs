@@ -27,7 +27,7 @@ use tokio_retry::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    env::{LocalDeployerEnv, Node, wait_local_http_readiness},
+    env::{LocalDeployerEnv, Node, wait_local_readiness},
     external::build_external_client,
     keep_tempdir_from_env,
     manual::ManualCluster,
@@ -440,7 +440,7 @@ async fn run_readiness_for_attempt<E: LocalDeployerEnv>(
         return Ok(nodes);
     }
 
-    match wait_local_http_readiness::<E>(&nodes, execution.readiness_requirement).await {
+    match wait_local_readiness::<E>(&nodes, execution.readiness_requirement).await {
         Ok(()) => {
             info!(attempt, "local nodes are ready");
             Ok(nodes)
@@ -519,7 +519,7 @@ async fn run_context_for<E: Application>(
     runtime_cleanup: Option<Box<dyn CleanupGuard>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<RuntimeContext<E>, ProcessDeployerError> {
-    if node_clients.is_empty() {
+    if node_clients.is_empty() && runtime_extensions.is_empty() {
         return Err(ProcessDeployerError::RuntimePreflight);
     }
 

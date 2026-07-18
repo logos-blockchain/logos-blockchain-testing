@@ -111,9 +111,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.101"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "arc-swap"
@@ -660,9 +660,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.18"
+version = "0.9.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e"
+checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -1700,10 +1700,12 @@ name = "kvstore-examples"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "kvstore-node",
  "kvstore-runtime-ext",
  "kvstore-runtime-workloads",
  "serde",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -1735,6 +1737,7 @@ dependencies = [
  "async-trait",
  "kvstore-node",
  "serde",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -1749,6 +1752,7 @@ dependencies = [
  "kvstore-node",
  "kvstore-runtime-ext",
  "serde",
+ "testing-framework-app",
  "testing-framework-core",
  "tokio",
  "tracing",
@@ -1921,6 +1925,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-app-examples"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "kvstore-runtime-ext",
+ "openraft-kv-runtime-ext",
+ "openraft-kv-runtime-workloads",
+ "serde",
+ "testing-framework-app",
+ "testing-framework-core",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2085,9 +2106,11 @@ name = "openraft-kv-examples"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "openraft-kv-node",
  "openraft-kv-runtime-ext",
  "openraft-kv-runtime-workloads",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-k8s",
  "tokio",
@@ -2120,6 +2143,7 @@ dependencies = [
  "async-trait",
  "openraft-kv-node",
  "reqwest",
+ "testing-framework-app",
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
@@ -2134,6 +2158,7 @@ dependencies = [
  "async-trait",
  "openraft-kv-node",
  "openraft-kv-runtime-ext",
+ "testing-framework-app",
  "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",
@@ -3600,6 +3625,17 @@ dependencies = [
  "serde_json",
  "slug",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "testing-framework-app"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "testing-framework-core",
+ "testing-framework-runner-local",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

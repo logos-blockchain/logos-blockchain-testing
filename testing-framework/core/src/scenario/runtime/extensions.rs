@@ -84,6 +84,11 @@ impl RuntimeExtensions {
             .and_then(|value| value.downcast_ref::<T>())
             .cloned()
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
 }
 
 #[derive(Default)]

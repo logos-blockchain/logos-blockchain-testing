@@ -8,17 +8,18 @@ pub mod process;
 
 pub use binary::{
     BinaryProvider, BinaryProviderError, BinaryProviderRef, BuildBinaryProvider, BuildCommand,
-    DownloadBinaryProvider, DownloadChecksum, DownloadUrl, EnvBinaryProvider,
-    FallbackBinaryProvider, PathBinaryProvider,
+    DownloadBinaryProvider, DownloadChecksum, DownloadProcessor, DownloadProcessorError,
+    DownloadProcessorFn, DownloadUrl, EnvBinaryProvider, FallbackBinaryProvider,
+    PathBinaryProvider,
 };
 pub use deployer::{ProcessDeployer, ProcessDeployerError};
 pub use env::{
-    BuiltNodeConfig, LocalBinaryApp, LocalBuildContext, LocalDeployerEnv, LocalNodePorts,
-    LocalPeerNode, LocalProcessSpec, NodeConfigEntry, build_indexed_http_peers,
-    build_indexed_node_configs, build_local_cluster_node_config, build_local_peer_nodes,
-    default_yaml_launch_spec, discovered_node_access, preallocate_ports, reserve_local_node_ports,
-    single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
-    yaml_node_config,
+    BuiltNodeConfig, LocalBinaryApp, LocalBuildContext, LocalConfigArgMode, LocalDeployerEnv,
+    LocalNodePorts, LocalPeerNode, LocalProcessSpec, LocalReadinessProbe, NodeConfigEntry,
+    build_indexed_http_peers, build_indexed_node_configs, build_local_cluster_node_config,
+    build_local_peer_nodes, default_yaml_launch_spec, discovered_node_access, preallocate_ports,
+    reserve_local_node_ports, single_http_node_endpoints, text_config_launch_spec,
+    text_node_config, yaml_config_launch_spec, yaml_node_config,
 };
 pub use manual::{ManualCluster, ManualClusterError};
 pub use node_control::{NodeManager, NodeManagerError, NodeManagerSeed};

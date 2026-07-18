@@ -5,6 +5,10 @@ name              = "kvstore-examples"
 version.workspace = true
 
 [[bin]]
+name = "kvstore_app_host_convergence"
+path = "src/bin/app_host_convergence.rs"
+
+[[bin]]
 name = "kvstore_basic_convergence"
 path = "src/bin/basic_convergence.rs"
 
@@ -21,9 +25,11 @@ name = "kvstore_k8s_manual_convergence"
 path = "src/bin/k8s_manual_convergence.rs"
 
 [dependencies]
+async-trait                      = { workspace = true }
 kvstore-node                     = { path = "../kvstore-node" }
 kvstore-runtime-ext              = { path = "../testing/integration" }
 kvstore-runtime-workloads        = { path = "../testing/workloads" }
+testing-framework-app            = { workspace = true }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 testing-framework-runner-k8s     = { workspace = true }

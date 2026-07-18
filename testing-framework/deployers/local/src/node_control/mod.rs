@@ -4,8 +4,8 @@ use std::{
 };
 
 use testing_framework_core::scenario::{
-    Application, DynError, NodeClients, NodeControlHandle, NodeRuntimeOptions, ReadinessError,
-    StartNodeOptions, StartedNode, wait_for_http_ports, wait_for_http_ports_with_timeout,
+    Application, DynError, HttpReadinessRequirement, NodeClients, NodeControlHandle,
+    NodeRuntimeOptions, ReadinessError, StartNodeOptions, StartedNode,
 };
 use thiserror::Error;
 
@@ -13,7 +13,7 @@ use crate::{
     env::{
         LocalDeployerEnv, Node, build_initial_node_configs, build_launch_spec_with_args,
         build_node_from_template, initial_persist_dir, initial_snapshot_dir, node_peer_port,
-        readiness_endpoint_path, spawn_node_from_config,
+        spawn_node_from_config, wait_for_local_readiness_ports,
     },
     process::ProcessSpawnError,
 };
@@ -214,15 +214,16 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             return Ok(());
         }
 
-        wait_for_http_ports(&ports, readiness_endpoint_path::<E>()).await
+        wait_for_local_readiness_ports::<E>(&ports, HttpReadinessRequirement::AllNodesReady, None)
+            .await
     }
 
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), NodeManagerError> {
         let target = self.readiness_target(name)?;
 
-        wait_for_http_ports_with_timeout(
+        wait_for_local_readiness_ports::<E>(
             &[target.port],
-            readiness_endpoint_path::<E>(),
+            HttpReadinessRequirement::AllNodesReady,
             target.runtime.start_timeout,
         )
         .await

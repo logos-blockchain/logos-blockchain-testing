@@ -10,7 +10,7 @@ use testing_framework_core::{
 };
 
 use crate::{
-    binary::{BinaryProvider, BinaryProviderRef, EnvBinaryProvider},
+    binary::{BinaryProvider, BinaryProviderRef, EnvBinaryProvider, PathBinaryProvider},
     env::LocalBuildContext,
     process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError},
 };
@@ -63,8 +63,8 @@ impl LocalNodePorts {
     }
 }
 
-#[derive(Clone, Debug)]
 /// Peer node view used while constructing local configs.
+#[derive(Clone, Debug)]
 pub struct LocalPeerNode {
     index: usize,
     network_port: u16,
@@ -96,6 +96,16 @@ impl LocalPeerNode {
     }
 }
 
+/// How a rendered local config file path is passed to the child process.
+#[derive(Clone, Default)]
+pub enum LocalConfigArgMode {
+    /// Pass the config file as a flag pair, for example `--config config.yaml`.
+    #[default]
+    Flag,
+    /// Pass the config file path as a positional argument.
+    Positional,
+}
+
 /// Standard local process description for one node binary plus one config file.
 #[derive(Clone)]
 pub struct LocalProcessSpec {
@@ -105,6 +115,8 @@ pub struct LocalProcessSpec {
     pub config_file_name: String,
     /// CLI flag used to point the process at `config_file_name`.
     pub config_arg: String,
+    /// Controls whether `config_arg` is emitted or the file is positional.
+    pub config_arg_mode: LocalConfigArgMode,
     /// Extra CLI arguments passed after the config flag.
     pub extra_args: Vec<String>,
     /// Extra environment variables for the child process.
@@ -119,9 +131,16 @@ impl LocalProcessSpec {
             binary: Arc::new(EnvBinaryProvider::new(binary_env_var)),
             config_file_name: "config.yaml".to_owned(),
             config_arg: "--config".to_owned(),
+            config_arg_mode: LocalConfigArgMode::Flag,
             extra_args: Vec::new(),
             env: Vec::new(),
         }
+    }
+
+    /// Sets an explicit binary path for this launch.
+    #[must_use]
+    pub fn with_binary_path(self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.with_binary_provider(PathBinaryProvider::new(path))
     }
 
     /// Overrides the config file name and CLI flag used to pass it.
@@ -129,6 +148,15 @@ impl LocalProcessSpec {
     pub fn with_config_file(mut self, file_name: &str, arg: &str) -> Self {
         self.config_file_name = file_name.to_owned();
         self.config_arg = arg.to_owned();
+        self.config_arg_mode = LocalConfigArgMode::Flag;
+        self
+    }
+
+    /// Overrides the config file name and passes it as a positional argument.
+    #[must_use]
+    pub fn with_positional_config_file(mut self, file_name: &str) -> Self {
+        self.config_file_name = file_name.to_owned();
+        self.config_arg_mode = LocalConfigArgMode::Positional;
         self
     }
 
@@ -404,7 +432,7 @@ pub(crate) fn rendered_config_launch_spec(
     spec: &LocalProcessSpec,
 ) -> Result<LaunchSpec, DynError> {
     let binary = spec.binary.resolve()?;
-    let mut args = vec![spec.config_arg.clone(), spec.config_file_name.clone()];
+    let mut args = config_file_args(spec);
     args.extend(spec.extra_args.iter().cloned());
 
     Ok(LaunchSpec {
@@ -416,4 +444,40 @@ pub(crate) fn rendered_config_launch_spec(
         args,
         env: spec.env.clone(),
     })
+}
+fn config_file_args(spec: &LocalProcessSpec) -> Vec<String> {
+    match spec.config_arg_mode {
+        LocalConfigArgMode::Flag => vec![spec.config_arg.clone(), spec.config_file_name.clone()],
+        LocalConfigArgMode::Positional => vec![spec.config_file_name.clone()],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LocalProcessSpec, text_config_launch_spec};
+
+    #[test]
+    fn launch_spec_uses_flag_config_by_default() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let binary = temp.path().join("app");
+        std::fs::write(&binary, b"binary").expect("test binary");
+        let spec = LocalProcessSpec::new("APP_BIN").with_binary_path(binary);
+        let launch = text_config_launch_spec("config", &spec).expect("launch spec");
+
+        assert_eq!(launch.args, ["--config", "config.yaml"]);
+    }
+
+    #[test]
+    fn launch_spec_can_use_positional_config_path() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let binary = temp.path().join("app");
+        std::fs::write(&binary, b"binary").expect("test binary");
+        let spec = LocalProcessSpec::new("APP_BIN")
+            .with_binary_path(binary)
+            .with_positional_config_file("app.json")
+            .with_args(["--port".to_owned(), "8080".to_owned()]);
+        let launch = text_config_launch_spec("config", &spec).expect("launch spec");
+
+        assert_eq!(launch.args, ["app.json", "--port", "8080"]);
+    }
 }

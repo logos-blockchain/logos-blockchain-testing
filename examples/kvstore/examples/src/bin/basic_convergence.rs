@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use kvstore_runtime_ext::KvLocalDeployer;
 use kvstore_runtime_workloads::{
-    KvBuilderExt, KvConverges, KvScenarioBuilder, KvTopology, KvWriteWorkload,
+    KvBuilderExt, KvClusterAccessible, KvConverges, KvExistingClusterApp, KvScenarioBuilder,
+    KvWriteWorkload,
 };
 use testing_framework_core::scenario::Deployer;
 
@@ -12,8 +13,9 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let mut scenario = KvScenarioBuilder::deployment_with(|_| KvTopology::new(3))
+    let mut scenario = KvScenarioBuilder::with_existing_kvstore_app(KvExistingClusterApp::nodes(3))
         .with_run_duration(Duration::from_secs(30))
+        .with_workload(KvClusterAccessible::new(3))
         .with_workload(
             KvWriteWorkload::new()
                 .operations(300)

@@ -1,13 +1,14 @@
 use std::{
     collections::HashMap,
-    net::{Ipv4Addr, SocketAddr},
+    net::{Ipv4Addr, SocketAddr, TcpStream},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
     Application, DynError, HttpReadinessRequirement, ReadinessError, StartNodeOptions,
-    wait_for_http_ports_with_requirement,
+    wait_for_http_ports_with_requirement_and_timeout,
 };
 
 use crate::{
@@ -20,13 +21,26 @@ mod helpers;
 mod tests;
 
 pub use helpers::{
-    BuiltNodeConfig, LocalNodePorts, LocalPeerNode, LocalProcessSpec, NodeConfigEntry,
-    build_indexed_http_peers, build_indexed_node_configs, build_launch_spec_with_args,
-    build_local_cluster_node_config, build_local_peer_nodes, default_yaml_launch_spec,
-    discovered_node_access, preallocate_ports, reserve_local_node_ports,
+    BuiltNodeConfig, LocalConfigArgMode, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
+    NodeConfigEntry, build_indexed_http_peers, build_indexed_node_configs,
+    build_launch_spec_with_args, build_local_cluster_node_config, build_local_peer_nodes,
+    default_yaml_launch_spec, discovered_node_access, preallocate_ports, reserve_local_node_ports,
     single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
     yaml_node_config,
 };
+
+const TCP_READINESS_TIMEOUT: Duration = Duration::from_secs(60);
+const TCP_READINESS_POLL_INTERVAL: Duration = Duration::from_millis(200);
+const TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(100);
+
+/// Readiness probe shape used by the local process deployer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LocalReadinessProbe {
+    /// Probe `http://127.0.0.1:<api-port>/<path>` with GET.
+    HttpGet { path: &'static str },
+    /// Probe that the API port accepts TCP connections.
+    Tcp,
+}
 
 /// Context passed while building a local node config.
 pub struct LocalBuildContext<'a, E: Application> {
@@ -323,6 +337,13 @@ where
         <Self as Application>::node_readiness_path()
     }
 
+    /// Returns the readiness probe used for local process startup.
+    fn readiness_probe() -> LocalReadinessProbe {
+        LocalReadinessProbe::HttpGet {
+            path: Self::readiness_endpoint_path(),
+        }
+    }
+
     /// Waits for any additional cluster-specific stabilization after the HTTP
     /// readiness probe succeeds.
     async fn wait_readiness_stable(_nodes: &[Node<Self>]) -> Result<(), DynError> {
@@ -374,6 +395,13 @@ where
     /// Returns the readiness endpoint path used for local HTTP probes.
     fn readiness_endpoint_path() -> &'static str {
         <Self as Application>::node_readiness_path()
+    }
+
+    /// Returns the readiness probe used for local process startup.
+    fn readiness_probe() -> LocalReadinessProbe {
+        LocalReadinessProbe::HttpGet {
+            path: Self::readiness_endpoint_path(),
+        }
     }
 
     /// Waits for any additional cluster-specific stabilization after the HTTP
@@ -435,6 +463,10 @@ where
         T::readiness_endpoint_path()
     }
 
+    fn readiness_probe() -> LocalReadinessProbe {
+        T::readiness_probe()
+    }
+
     async fn wait_readiness_stable(nodes: &[Node<Self>]) -> Result<(), DynError> {
         T::wait_readiness_stable(nodes).await
     }
@@ -490,13 +522,9 @@ pub(crate) fn node_peer_port<E: LocalDeployerEnv>(node: &Node<E>) -> u16 {
     E::node_peer_port(node)
 }
 
-pub(crate) fn readiness_endpoint_path<E: LocalDeployerEnv>() -> &'static str {
-    E::readiness_endpoint_path()
-}
-
-/// Waits for local HTTP readiness across the provided nodes and then applies
+/// Waits for local readiness across the provided nodes and then applies
 /// any app-specific stabilization hook.
-pub async fn wait_local_http_readiness<E: LocalDeployerEnv>(
+pub async fn wait_local_readiness<E: LocalDeployerEnv>(
     nodes: &[Node<E>],
     requirement: HttpReadinessRequirement,
 ) -> Result<(), ReadinessError> {
@@ -505,11 +533,117 @@ pub async fn wait_local_http_readiness<E: LocalDeployerEnv>(
         .map(|node| node.endpoints().api.port())
         .collect();
 
-    wait_for_http_ports_with_requirement(&ports, E::readiness_endpoint_path(), requirement).await?;
+    wait_for_local_readiness_ports::<E>(&ports, requirement, None).await?;
 
     E::wait_readiness_stable(nodes)
         .await
         .map_err(|source| ReadinessError::ClusterStable { source })
+}
+
+/// Backward-compatible name for local readiness checks that used to be
+/// HTTP-only.
+pub async fn wait_local_http_readiness<E: LocalDeployerEnv>(
+    nodes: &[Node<E>],
+    requirement: HttpReadinessRequirement,
+) -> Result<(), ReadinessError> {
+    wait_local_readiness::<E>(nodes, requirement).await
+}
+
+pub(crate) async fn wait_for_local_readiness_ports<E: LocalDeployerEnv>(
+    ports: &[u16],
+    requirement: HttpReadinessRequirement,
+    timeout: Option<Duration>,
+) -> Result<(), ReadinessError> {
+    match E::readiness_probe() {
+        LocalReadinessProbe::HttpGet { path } => {
+            wait_for_http_ports_with_requirement_and_timeout(ports, path, requirement, timeout)
+                .await
+        }
+        LocalReadinessProbe::Tcp => {
+            wait_for_tcp_ports_with_requirement(ports, requirement, timeout).await
+        }
+    }
+}
+
+async fn wait_for_tcp_ports_with_requirement(
+    ports: &[u16],
+    requirement: HttpReadinessRequirement,
+    timeout: Option<Duration>,
+) -> Result<(), ReadinessError> {
+    if ports.is_empty() {
+        return Ok(());
+    }
+
+    let timeout = timeout.unwrap_or(TCP_READINESS_TIMEOUT);
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        let statuses = collect_tcp_statuses(ports);
+        if tcp_requirement_satisfied(&statuses, requirement) {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            return Err(ReadinessError::ProbeTimeout {
+                message: format_tcp_timeout_message(&statuses, requirement),
+            });
+        }
+
+        tokio::time::sleep(TCP_READINESS_POLL_INTERVAL).await;
+    }
+}
+
+fn collect_tcp_statuses(ports: &[u16]) -> Vec<(u16, bool)> {
+    ports
+        .iter()
+        .map(|port| (*port, tcp_port_ready(*port)))
+        .collect()
+}
+
+fn tcp_port_ready(port: u16) -> bool {
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    TcpStream::connect_timeout(&addr, TCP_CONNECT_TIMEOUT).is_ok()
+}
+
+fn tcp_requirement_satisfied(
+    statuses: &[(u16, bool)],
+    requirement: HttpReadinessRequirement,
+) -> bool {
+    let ready = tcp_ready_count(statuses);
+
+    match requirement {
+        HttpReadinessRequirement::AllNodesReady => ready == statuses.len(),
+        HttpReadinessRequirement::AnyNodeReady => ready >= 1,
+        HttpReadinessRequirement::AtLeast(min_ready) => ready >= min_ready,
+    }
+}
+
+fn tcp_ready_count(statuses: &[(u16, bool)]) -> usize {
+    statuses.iter().filter(|(_, ready)| *ready).count()
+}
+
+fn format_tcp_timeout_message(
+    statuses: &[(u16, bool)],
+    requirement: HttpReadinessRequirement,
+) -> String {
+    let ready = tcp_ready_count(statuses);
+    let failing = statuses
+        .iter()
+        .filter_map(|(port, ok)| (!ok).then_some(port.to_string()))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        "timed out waiting for TCP readiness {:?}; ready={}, total={}, failing ports: {}",
+        requirement,
+        ready,
+        statuses.len(),
+        if failing.is_empty() {
+            "<none>"
+        } else {
+            &failing
+        }
+    )
 }
 
 /// Spawns a local process node from an already prepared config value.

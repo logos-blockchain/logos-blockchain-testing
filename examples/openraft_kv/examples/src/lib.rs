@@ -1,7 +1,11 @@
 use std::time::Duration;
 
-use openraft_kv_runtime_ext::{OpenRaftKvBuilderExt, OpenRaftKvEnv, OpenRaftKvScenarioBuilder};
-use openraft_kv_runtime_workloads::{OpenRaftKvConverges, OpenRaftKvFailoverWorkload};
+use openraft_kv_runtime_ext::{
+    OpenRaftKvBuilderExt, OpenRaftKvEnv, OpenRaftKvExistingClusterApp, OpenRaftKvScenarioBuilder,
+};
+use openraft_kv_runtime_workloads::{
+    OpenRaftKvClusterAccessible, OpenRaftKvConverges, OpenRaftKvFailoverWorkload,
+};
 use testing_framework_core::scenario::{NodeControlCapability, Scenario};
 
 /// Number of writes issued before the leader restart.
@@ -19,23 +23,23 @@ pub fn build_failover_scenario(
     run_duration: Duration,
     workload_timeout: Duration,
 ) -> anyhow::Result<Scenario<OpenRaftKvEnv, NodeControlCapability>> {
-    Ok(
-        OpenRaftKvScenarioBuilder::deployment_with(|deployment| deployment)
-            .with_cluster_observer()
-            .enable_node_control()
-            .with_run_duration(run_duration)
-            .with_workload(
-                OpenRaftKvFailoverWorkload::new()
-                    .first_batch(INITIAL_WRITE_BATCH)
-                    .second_batch(SECOND_WRITE_BATCH)
-                    .timeout(workload_timeout)
-                    .key_prefix(RAFT_KEY_PREFIX),
-            )
-            .with_expectation(
-                OpenRaftKvConverges::new(TOTAL_WRITES)
-                    .timeout(run_duration)
-                    .key_prefix(RAFT_KEY_PREFIX),
-            )
-            .build()?,
+    Ok(OpenRaftKvScenarioBuilder::with_existing_openraft_kv_app(
+        OpenRaftKvExistingClusterApp::nodes(3),
     )
+    .enable_node_control()
+    .with_run_duration(run_duration)
+    .with_workload(OpenRaftKvClusterAccessible::new(3))
+    .with_workload(
+        OpenRaftKvFailoverWorkload::new()
+            .first_batch(INITIAL_WRITE_BATCH)
+            .second_batch(SECOND_WRITE_BATCH)
+            .timeout(workload_timeout)
+            .key_prefix(RAFT_KEY_PREFIX),
+    )
+    .with_expectation(
+        OpenRaftKvConverges::new(TOTAL_WRITES)
+            .timeout(run_duration)
+            .key_prefix(RAFT_KEY_PREFIX),
+    )
+    .build()?)
 }

@@ -17,7 +17,7 @@ use sha2::{Digest as _, Sha256};
 use tracing::info;
 
 use crate::binary::{
-    BinaryProvider, BinaryProviderError, DownloadBinaryProvider, DownloadUrl,
+    BinaryProvider, BinaryProviderError, DownloadBinaryProvider, DownloadChecksum, DownloadUrl,
     lock::BinaryProviderLock, optional_path_display,
 };
 
@@ -33,7 +33,7 @@ impl BinaryProvider for DownloadBinaryProvider {
 
         let bytes = self.download_bytes(&url)?;
         self.verify_checksum(&path, &bytes)?;
-        self.write_binary(&path, &bytes)?;
+        self.prepare_binary(&path, &bytes)?;
 
         Ok(Some(path))
     }
@@ -44,8 +44,14 @@ impl BinaryProvider for DownloadBinaryProvider {
 
     fn cache_key(&self) -> String {
         format!(
-            "download:{}:{}",
+            "download:{}:{}:{}:{}",
             self.url.cache_key(),
+            self.sha256
+                .as_ref()
+                .map_or_else(String::new, DownloadChecksum::cache_key),
+            self.processor
+                .as_ref()
+                .map_or("", |processor| processor.cache_key()),
             optional_path_display(&self.cache_dir)
         )
     }
@@ -55,6 +61,15 @@ impl DownloadUrl {
     fn cache_key(&self) -> String {
         match self {
             Self::Fixed(url) => url.clone(),
+            Self::Env(env_var) => format!("env:{env_var}"),
+        }
+    }
+}
+
+impl DownloadChecksum {
+    fn cache_key(&self) -> String {
+        match self {
+            Self::Fixed(checksum) => checksum.to_ascii_lowercase(),
             Self::Env(env_var) => format!("env:{env_var}"),
         }
     }
@@ -92,13 +107,76 @@ impl DownloadBinaryProvider {
             })
     }
 
-    fn write_binary(&self, path: &Path, bytes: &[u8]) -> Result<(), BinaryProviderError> {
-        fs::write(path, bytes).map_err(|source| BinaryProviderError::Io {
-            path: path.to_owned(),
+    fn prepare_binary(&self, path: &Path, bytes: &[u8]) -> Result<(), BinaryProviderError> {
+        let artifact = path.with_extension("download");
+        let output = path.with_extension("part");
+        self.remove_temporary_file(&artifact);
+        self.remove_temporary_file(&output);
+
+        let result = self
+            .materialize_output(&artifact, &output, bytes)
+            .and_then(|()| {
+                self.ensure_processed_output(&output)?;
+                self.make_executable(&output)?;
+                fs::rename(&output, path).map_err(|source| BinaryProviderError::Io {
+                    path: path.to_owned(),
+                    source,
+                })
+            });
+
+        self.remove_temporary_file(&artifact);
+        if result.is_err() {
+            self.remove_temporary_file(&output);
+        }
+
+        result
+    }
+
+    fn materialize_output(
+        &self,
+        artifact: &Path,
+        output: &Path,
+        bytes: &[u8],
+    ) -> Result<(), BinaryProviderError> {
+        let Some(processor) = &self.processor else {
+            return fs::write(output, bytes).map_err(|source| BinaryProviderError::Io {
+                path: output.to_owned(),
+                source,
+            });
+        };
+
+        fs::write(artifact, bytes).map_err(|source| BinaryProviderError::Io {
+            path: artifact.to_owned(),
             source,
         })?;
+        processor.process(artifact, output).map_err(|source| {
+            BinaryProviderError::DownloadProcessing {
+                processor: processor.cache_key().to_owned(),
+                source,
+            }
+        })
+    }
 
-        self.make_executable(path)
+    fn ensure_processed_output(&self, output: &Path) -> Result<(), BinaryProviderError> {
+        if output.is_file() {
+            return Ok(());
+        }
+
+        Err(BinaryProviderError::MissingProcessedOutput {
+            processor: self.processor.as_ref().map_or_else(
+                || "identity".to_owned(),
+                |processor| processor.cache_key().to_owned(),
+            ),
+            path: output.to_owned(),
+        })
+    }
+
+    fn remove_temporary_file(&self, path: &Path) {
+        if let Err(error) = fs::remove_file(path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(path = %path.display(), %error, "failed to remove temporary download file");
+        }
     }
 
     fn verify_checksum(&self, path: &Path, bytes: &[u8]) -> Result<(), BinaryProviderError> {
@@ -163,6 +241,14 @@ impl DownloadBinaryProvider {
     fn download_file_name(&self, url: &str) -> String {
         let mut hasher = DefaultHasher::new();
         url.hash(&mut hasher);
+        self.sha256
+            .as_ref()
+            .and_then(DownloadChecksum::resolve)
+            .hash(&mut hasher);
+        self.processor
+            .as_ref()
+            .map(|processor| processor.cache_key())
+            .hash(&mut hasher);
 
         format!("binary-{:x}", hasher.finish())
     }

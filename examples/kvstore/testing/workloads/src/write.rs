@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use kvstore_runtime_ext::KvEnv;
+use kvstore_runtime_ext::{KvEnv, KvStoreCluster};
 use serde::{Deserialize, Serialize};
+use testing_framework_app::AppRunContextExt;
 use testing_framework_core::scenario::{DynError, RunContext, Workload};
 use tracing::info;
 
@@ -68,6 +69,18 @@ impl Default for KvWriteWorkload {
     }
 }
 
+#[derive(Clone)]
+pub struct KvClusterAccessible {
+    expected_nodes: usize,
+}
+
+impl KvClusterAccessible {
+    #[must_use]
+    pub const fn new(expected_nodes: usize) -> Self {
+        Self { expected_nodes }
+    }
+}
+
 #[async_trait]
 impl Workload<KvEnv> for KvWriteWorkload {
     fn name(&self) -> &str {
@@ -121,6 +134,42 @@ impl Workload<KvEnv> for KvWriteWorkload {
                 tokio::time::sleep(delay).await;
             }
         }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Workload<KvEnv> for KvClusterAccessible {
+    fn name(&self) -> &str {
+        "kv_cluster_accessible"
+    }
+
+    async fn start(&self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<KvStoreCluster>()?;
+        let client_count = cluster.clients().len();
+
+        if cluster.node_count() != self.expected_nodes {
+            return Err(format!(
+                "kv app topology has {} nodes, expected {}",
+                cluster.node_count(),
+                self.expected_nodes
+            )
+            .into());
+        }
+
+        if client_count != self.expected_nodes {
+            return Err(format!(
+                "kv app handle has {client_count} clients, expected {}",
+                self.expected_nodes
+            )
+            .into());
+        }
+
+        info!(
+            nodes = self.expected_nodes,
+            "kv app handle is accessible from workload"
+        );
 
         Ok(())
     }
