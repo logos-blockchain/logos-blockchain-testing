@@ -8,6 +8,7 @@ version.workspace = true
 async-trait                      = { workspace = true }
 queue-node                       = { path = "../../queue-node" }
 serde                            = { workspace = true }
+testing-framework-app            = { workspace = true }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 testing-framework-runner-local   = { workspace = true }

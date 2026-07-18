@@ -1,0 +1,18 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "multi-app-fixture"
+version.workspace = true
+
+[dependencies]
+async-trait                    = { workspace = true }
+kvstore-node                   = { path = "../../kvstore/kvstore-node" }
+kvstore-runtime-ext            = { path = "../../kvstore/testing/integration" }
+queue-runtime-ext              = { path = "../../queue/testing/integration" }
+reqwest                        = { workspace = true, features = ["json"] }
+serde                          = { workspace = true }
+testing-framework-app          = { workspace = true }
+testing-framework-core         = { workspace = true }
+testing-framework-runner-local = { workspace = true }
+tokio                          = { workspace = true, features = ["full"] }
+tracing                        = { workspace = true }

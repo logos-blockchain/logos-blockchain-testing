@@ -9,8 +9,8 @@ Canonical app-layer examples:
   `AppHost`
 - `openraft_kv_app_host_smoke`: one richer local app cluster exposed through
   `AppHost`
-- `multi_app_typed_stack_smoke`: composed app stack exposing typed child and
-  stack handles
+- `multi-app-e2e`: composed queue, worker, and result-store stack exercised
+  through integration tests
 
 The older direct `ScenarioBuilder<AppEnv>` examples are still useful for
 backend-specific coverage:

@@ -1,0 +1,11 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "multi-app-e2e"
+version.workspace = true
+
+[dependencies]
+multi-app-fixture      = { path = "../fixture" }
+testing-framework-app  = { workspace = true }
+testing-framework-core = { workspace = true }
+tokio                  = { workspace = true, features = ["full"] }

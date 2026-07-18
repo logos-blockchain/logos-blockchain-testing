@@ -1,0 +1,16 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name              = "multi-app-job-worker"
+version.workspace = true
+
+[dependencies]
+anyhow             = "1.0"
+axum               = "0.7"
+kvstore-node       = { path = "../../kvstore/kvstore-node" }
+queue-node         = { path = "../../queue/queue-node" }
+reqwest            = { workspace = true, features = ["json"] }
+serde              = { workspace = true }
+tokio              = { workspace = true, features = ["full"] }
+tracing            = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

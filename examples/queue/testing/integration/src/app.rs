@@ -3,6 +3,7 @@ use std::io::Error;
 use async_trait::async_trait;
 use queue_node::QueueHttpClient;
 use serde::{Deserialize, Serialize};
+use testing_framework_app::{AppDeployment, AppHostEnv, DeployContext, LocalAppCluster};
 use testing_framework_core::scenario::{
     Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
     NodeAccess, serialize_cluster_yaml_config,
@@ -37,6 +38,34 @@ impl Application for QueueEnv {
 
     fn node_readiness_path() -> &'static str {
         "/health/ready"
+    }
+}
+
+#[derive(Clone)]
+pub struct QueueLocalApp {
+    deployment: QueueTopology,
+}
+
+impl QueueLocalApp {
+    #[must_use]
+    pub fn nodes(nodes: usize) -> Self {
+        Self {
+            deployment: QueueTopology::new(nodes),
+        }
+    }
+
+    #[must_use]
+    pub fn deployment(&self) -> QueueTopology {
+        self.deployment.clone()
+    }
+}
+
+#[async_trait]
+impl AppDeployment<AppHostEnv> for QueueLocalApp {
+    type Handle = LocalAppCluster<QueueEnv>;
+
+    async fn deploy(self, ctx: &mut DeployContext<AppHostEnv>) -> Result<Self::Handle, DynError> {
+        ctx.deploy_local_cluster::<QueueEnv>(self.deployment).await
     }
 }
 

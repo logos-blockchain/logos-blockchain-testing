@@ -16,6 +16,11 @@ impl KvHttpClient {
         }
     }
 
+    #[must_use]
+    pub const fn base_url(&self) -> &Url {
+        &self.base_url
+    }
+
     pub async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
         let url = self.base_url.join(path)?;
         let response = self.client.get(url).send().await?.error_for_status()?;

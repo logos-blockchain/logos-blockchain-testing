@@ -1,38 +1,48 @@
-# Multi-App Examples
+# Multi-App Acceptance Tests
 
-This directory shows the canonical app-layer pattern for composed systems.
+This directory provides a reusable fixture and end-to-end coverage for composed
+systems. The fixture deploys a two-node queue, a two-node result store, and a
+worker process that consumes queued jobs and records their completion:
 
-Use this shape when a scenario needs several apps or resources that should feel
-like one system to the workload:
+```text
+workload -> queue -> worker -> result store -> expectation
+```
+
+The local happy-path test drives the fixture through a scenario:
 
 ```rust
 let mut scenario = AppHost::scenario()
-    .with_app(ExampleStackApp::new())
-    .with_workload(ExampleStackWorkload::new())
+    .with_app(JobStackApp::new())
+    .with_workload(EnqueueJobs::new(10))
+    .with_expectation(AllJobsCompleted::new(10))
     .build()?;
 ```
 
-The stack app deploys child apps, exposes their typed handles, and returns a
-composed stack handle:
+`multi-app-fixture` owns the stack definition. It deploys child apps, exposes
+their typed handles, and returns a composed stack handle:
 
 ```rust
-let store = StoreHandle::new(ctx.deploy_and_expose(self.store).await?);
-let consensus = ConsensusHandle::new(ctx.deploy_and_expose(self.consensus).await?);
-let wallet = WalletHandle::new(store.clone(), consensus.clone());
-let stack = ExampleStackHandle::new(store.clone(), consensus.clone(), wallet.clone());
+let queue = ctx.deploy_and_expose(self.queue).await?;
+let results = ctx.deploy_and_expose(self.results).await?;
+let worker = ctx
+    .deploy_and_expose(JobWorkerApp::new(queue_url, results_url))
+    .await?;
 
-ctx.expose(store)?;
-ctx.expose(consensus)?;
-ctx.expose(wallet)?;
+let stack = JobStackHandle { queue, results, worker };
 ctx.expose(stack.clone())?;
 ```
 
-Workloads then request concrete handles:
+Workloads, expectations, and later lifecycle tests request the composed handle:
 
 ```rust
-let stack = ctx.require_app::<ExampleStackHandle>()?;
-let wallet = ctx.require_app::<WalletHandle>()?;
+let stack = ctx.require_app::<JobStackHandle>()?;
 ```
+
+The worker is part of the deployed system, rather than test code moving data
+between otherwise unrelated applications. It lives in the
+`multi-app-job-worker` crate, receives the queue and result-store endpoints from
+the parent deployment, and is started through `LocalProcessApp`. Reverse
+cleanup stops the worker before either dependency.
 
 Resource lifecycle comes from the TF adapter used by a child deployment:
 
@@ -54,3 +64,9 @@ second lifecycle interface.
 For a single uniform cluster, the core `ScenarioBuilder<AppEnv>` flow remains
 valid. For composed systems, prefer this app-layer shape instead of building a
 fake outer cluster or adding app-specific code to TF.
+
+Run the local end-to-end test from the workspace root:
+
+```shell
+cargo test -p multi-app-e2e --test local_happy_path
+```
