@@ -1,0 +1,822 @@
+/* Presentation-style layout for the Whirlwind Tour chapter only.
+   Every rule is scoped under .tour so the rest of the book is unaffected.
+   Colors use mdBook theme variables to stay correct in light and dark themes. */
+
+.tour {
+    font-size: 1em;
+    line-height: 1.65;
+}
+
+/* Each H2 opens a "slide" */
+.tour h2 {
+    margin-top: 2.2em;
+    padding-top: 1.2em;
+    border-top: 3px solid var(--quote-border, #d0d0d0);
+    font-size: 2em;
+    letter-spacing: -0.01em;
+}
+
+.tour .slide-kicker {
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.5em;
+    opacity: 0.6;
+    margin-bottom: 0.4em;
+}
+
+/* Big opening statement of a slide */
+.tour .lead {
+    line-height: 1.6;
+    margin: 0.8em 0 1em 0;
+}
+
+.tour .lead strong {
+    font-weight: 600;
+}
+
+/* Oversized single-line takeaway */
+.tour .takeaway {
+    font-size: 1em;
+    font-weight: 600;
+    text-align: center;
+    margin: 1.2em auto;
+    padding: 0.7em 1em;
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    border-radius: 12px;
+    max-width: 34em;
+}
+
+/* Footer of each slide: where the book goes deeper */
+.tour .goes-deeper {
+    margin-top: 1.4em;
+    font-size: 0.85em;
+    opacity: 0.75;
+}
+
+.tour .goes-deeper::before {
+    content: "Goes deeper \2192   ";
+    font-weight: 600;
+}
+
+/* Center mermaid diagrams and give them presentation margins */
+.tour pre.mermaid,
+.tour .mermaid {
+    display: flex;
+    justify-content: center;
+    margin: 1.4em auto;
+}
+
+/* Relationship edges are the point of the diagrams — keep them visible
+   against both themes (mermaid's defaults nearly vanish on dark).
+   Book-wide on purpose: every chapter's diagrams share this problem. */
+.mermaid svg path.flowchart-link,
+.mermaid svg .edgePath path,
+.mermaid svg .messageLine0,
+.mermaid svg .messageLine1 {
+    stroke: #8a9099 !important;
+    stroke-width: 1.8px !important;
+}
+
+.mermaid svg marker path {
+    fill: #8a9099 !important;
+    stroke: #8a9099 !important;
+}
+
+.mermaid svg .edgeLabel {
+    color: #8a9099;
+}
+
+/* Collapsible diagrams: tour.js turns each .fold into a toggle + body.
+   Closed folds keep layout width (height collapse, no display:none) so
+   mermaid renders correctly while hidden. */
+.tour .fold {
+    margin: 1.2em 0;
+}
+
+.tour .fold__toggle {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    color: inherit;
+    border: none;
+    border-radius: 10px;
+    padding: 0.55em 1em;
+    font-family: inherit;
+    font-size: 0.92em;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tour .fold__toggle:hover {
+    background: rgba(128, 128, 128, 0.18);
+}
+
+.tour .fold--closed .fold__body {
+    height: 0;
+    overflow: hidden;
+}
+
+/* Hiding the sidebar (the ☰ toggle) widens the reading panel on pages that
+   carry the tour deck; prose chapters keep the default 750px measure. */
+html.sidebar-hidden .content main:has(.tour) {
+    max-width: 1250px;
+}
+
+/* Slide panels. A .slide is a bordered page-colored canvas: kicker, one
+   headline sentence, a visual (nodes flow or tiles row), a small note.
+   Standalone .slide--top panels carry their own chrome; inside a .sec the
+   panel chrome sits on the .sec card instead. */
+.tour .slide--top,
+.tour .sec {
+    position: relative;
+    background: var(--bg, #fff);
+    border: 1px solid var(--quote-border, #ccc);
+    border-radius: 12px;
+    margin: 1em 0;
+    overflow: hidden;
+}
+
+.tour .slide--top {
+    padding: 1em 1.3em 0.8em;
+}
+
+.tour .slide-kick {
+    font-size: 0.82em;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    opacity: 0.55;
+    margin: 0 0 0.2em;
+}
+
+.tour .slide-line {
+    font-size: 1.14em;
+    font-weight: 600;
+    margin: 0.1em 0 0.5em;
+}
+
+.tour .slide-note {
+    font-size: 0.86em;
+    opacity: 0.75;
+    margin: 0.5em 0 0.2em;
+}
+
+/* Node flows: bordered concept chips joined by arrows */
+.tour .nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45em;
+    align-items: center;
+    justify-content: center;
+    margin: 0.9em 0;
+}
+
+.tour .nd {
+    display: inline-block;
+    border: 1.5px solid var(--quote-border, #bbb);
+    border-radius: 8px;
+    padding: 0.38em 0.95em;
+    font-size: 0.95em;
+    white-space: nowrap;
+}
+
+/* Concept-colored nodes carry a tint fill; solidity marks the concepts the
+   eye should land on. Neutral nodes stay outline. */
+.tour .nd-cluster  { color: #4a90d9; border-color: #4a90d9; background: rgba(74, 144, 217, 0.10); }
+.tour .nd-process  { color: #e08a3c; border-color: #e08a3c; background: rgba(224, 138, 60, 0.10); }
+.tour .nd-handle   { color: #4caf7d; border-color: #4caf7d; background: rgba(76, 175, 125, 0.10); }
+.tour .nd-scenario { color: #9b6dd6; border-color: #9b6dd6; background: rgba(155, 109, 214, 0.10); }
+
+/* Enumeration rows: small quiet chips, no fill — reads as a menu, not a flow */
+.tour .nodes--list {
+    gap: 0.4em;
+}
+
+.tour .nodes--list .nd {
+    font-size: 0.86em;
+    padding: 0.16em 0.55em;
+    border-width: 1px;
+    background: transparent;
+}
+
+.tour .ndw {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15em;
+}
+
+.tour .nd-tag {
+    color: #4caf7d;
+    font-size: 0.78em;
+    white-space: nowrap;
+}
+
+.tour .nd-sub {
+    font-size: 0.78em;
+    opacity: 0.65;
+    white-space: nowrap;
+}
+
+.tour .nlabel {
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.55;
+    margin: 0.9em 0 -0.4em;
+}
+
+.tour .nda {
+    opacity: 0.6;
+    font-weight: 600;
+    font-size: 1.12em;
+}
+
+.tour .nodes--list .nda {
+    font-size: 1em;
+    opacity: 0.5;
+}
+
+.tour .nd--dash {
+    border-style: dashed;
+    background: transparent;
+}
+
+/* Tile rows: bordered alternatives; border style encodes ownership */
+.tour .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.6em;
+    margin: 0.9em 0;
+}
+
+.tour .tile {
+    border: 1.5px solid var(--quote-border, #bbb);
+    border-radius: 8px;
+    padding: 0.55em 0.75em;
+    text-align: center;
+}
+
+.tour .tile b {
+    display: block;
+    font-size: 0.95em;
+}
+
+.tour .tile > span {
+    display: block;
+    font-size: 0.82em;
+    opacity: 0.75;
+    margin-top: 0.15em;
+}
+
+.tour .tile-cluster  { border-color: #4a90d9; background: rgba(74, 144, 217, 0.08); }
+.tour .tile-cluster b { color: #4a90d9; }
+.tour .tile-process  { border-color: #e08a3c; background: rgba(224, 138, 60, 0.08); }
+.tour .tile-process b { color: #e08a3c; }
+.tour .tile-handle   { border-color: #4caf7d; background: rgba(76, 175, 125, 0.08); }
+.tour .tile-handle b { color: #4caf7d; }
+.tour .tile-scenario { border-color: #9b6dd6; background: rgba(155, 109, 214, 0.08); }
+.tour .tile-scenario b { color: #9b6dd6; }
+
+/* Hollow variants: the tint drains as framework ownership decreases */
+.tour .tile--dash { border-style: dashed; background: transparent; }
+.tour .tile--dot  { border-style: dotted; background: transparent; }
+
+/* Section deck: each section is a slide card — small kicker heading, the
+   .slide summary, and the body collapsed until clicked (height:0, same
+   mermaid-width reason as .fold). */
+.tour .sec-num {
+    position: absolute;
+    top: -0.18em;
+    right: 0.3em;
+    font-size: 3.8em;
+    font-weight: 600;
+    opacity: 0.06;
+    pointer-events: none;
+}
+
+.tour .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9em;
+    padding: 0.85em 1.3em 0;
+    cursor: pointer;
+}
+
+.tour .sec-head h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 0.82em;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+    flex: 1;
+}
+
+.tour .sec-head .unpacks {
+    display: none;
+}
+
+.tour .sec-chev {
+    opacity: 0.55;
+    font-weight: 600;
+}
+
+.tour .sec-head:hover .sec-chev {
+    opacity: 1;
+}
+
+.tour .sec > .slide {
+    padding: 0 1.3em 0.7em;
+    cursor: pointer;
+}
+
+.tour .sec--closed .sec-body {
+    height: 0;
+    overflow: hidden;
+}
+
+.tour .sec-body {
+    padding: 0 1.3em 0.9em;
+}
+
+.tour .sec:not(.sec--closed) .sec-body {
+    border-top: 1px solid var(--quote-border, #d0d0d0);
+    padding-top: 0.8em;
+    margin: 0.3em 1.3em 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.tour .sec-controls {
+    text-align: right;
+    margin: 1.4em 0 0.4em;
+}
+
+.tour .sec-controls__toggle {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    font-size: 0.88em;
+    cursor: pointer;
+    padding: 0.2em 0.4em;
+}
+
+.tour .sec-controls__toggle:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+@media print {
+    .tour .sec--closed .sec-body {
+        height: auto;
+        overflow: visible;
+    }
+
+    .tour .sec-chev,
+    .tour .sec-controls {
+        display: none;
+    }
+}
+
+/* Architecture map: hand-laid SVG poster; scrolls sideways when the
+   column is narrower than its legibility floor. */
+.tour .arch-map {
+    overflow-x: auto;
+    margin: 1.6em 0;
+}
+
+.tour .arch-map svg {
+    display: block;
+    width: 100%;
+    min-width: 740px;
+    height: auto;
+    margin: 0 auto;
+}
+
+.tour .map-help {
+    margin: -0.8em 0 1.2em;
+    text-align: center;
+    font-size: 0.84em;
+    opacity: 0.68;
+}
+
+/* Zoomed overlay for the architecture map: click the map to open it large,
+   scrolled to the clicked spot; drag pans; click or Escape closes. The zoom
+   width is carried by a variable set from tour.js. */
+.arch-map-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: zoom-out;
+}
+
+.arch-map-overlay__content {
+    background: var(--bg, #fff);
+    padding: 16px;
+    max-width: 95vw;
+    max-height: 95vh;
+    overflow: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    cursor: grab;
+}
+
+.arch-map-overlay__content svg {
+    width: var(--fw-zoom-width, 1700px);
+    max-width: none;
+    height: auto;
+    display: block;
+}
+
+.arch-map-overlay__controls {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.5rem 0.6rem 0.5rem 0.8rem;
+    color: #fff;
+    background: rgba(20, 20, 20, 0.86);
+    border-radius: 8px;
+    font-size: 0.84rem;
+    cursor: default;
+}
+
+.arch-map-overlay__controls button {
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 5px;
+    padding: 0.3rem 0.6rem;
+    color: #fff;
+    background: transparent;
+    cursor: pointer;
+}
+
+.arch-map-overlay__controls button:hover,
+.arch-map-overlay__controls button:focus-visible {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Slightly larger code on tour slides */
+.tour pre > code {
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
+/* Two-column fact grid */
+.tour .duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1em;
+    margin: 1.2em 0;
+}
+
+.tour .duo > div {
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    border-radius: 12px;
+    padding: 1em 1.2em;
+}
+
+.tour .duo h4 {
+    margin: 0 0 0.5em 0;
+    font-size: 1.05em;
+}
+
+@media (max-width: 700px) {
+    .tour .duo {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Horizontal sequence strip: boxed items joined by arrows */
+.tour .seq {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45em;
+    align-items: center;
+    justify-content: center;
+    margin: 1.2em 0;
+}
+
+.tour .seq span {
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    border-radius: 8px;
+    padding: 0.35em 0.8em;
+    font-size: 0.95em;
+    white-space: nowrap;
+}
+
+.tour .seq .arr {
+    background: none;
+    padding: 0;
+    opacity: 0.55;
+    font-weight: 600;
+}
+
+/* Tight, scannable bullet lists */
+.tour ul li,
+.tour ol li {
+    margin: 0.25em 0;
+}
+
+/* ---- Concept color tokens ----------------------------------------------
+   Four hues used consistently across chips, diagrams, and code accents:
+   cluster #4a90d9 · process #e08a3c · handle #4caf7d · scenario #9b6dd6 */
+
+.tour .tk {
+    border: 1.5px solid;
+    border-radius: 6px;
+    padding: 0.05em 0.45em;
+    font-size: 0.92em;
+    white-space: nowrap;
+}
+
+.tour .tk-cluster  { color: #4a90d9; border-color: #4a90d9; }
+.tour .tk-process  { color: #e08a3c; border-color: #e08a3c; }
+.tour .tk-handle   { color: #4caf7d; border-color: #4caf7d; }
+.tour .tk-scenario { color: #9b6dd6; border-color: #9b6dd6; }
+
+/* "Unpacks line N" chip under a section heading */
+.tour .unpacks {
+    font-size: 0.85em;
+    opacity: 0.8;
+    margin: -0.4em 0 1em 0;
+}
+
+.tour .unpacks::before {
+    content: "Unpacks ";
+    font-weight: 600;
+}
+
+/* Recap strip between sections: closure + forward hook */
+.tour .recap {
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    border-left: 4px solid #9b6dd6;
+    border-radius: 0 10px 10px 0;
+    padding: 0.6em 1em;
+    font-size: 0.92em;
+    margin: 1.6em 0 0 0;
+}
+
+/* Notes list matching ①②③ markers inside a code block */
+.tour .code-notes {
+    list-style: none;
+    padding-left: 0;
+    font-size: 0.92em;
+    margin-top: 0.6em;
+}
+
+.tour .code-notes li {
+    margin: 0.3em 0;
+    padding-left: 2em;
+    text-indent: -2em;
+}
+
+/* Collapsed depth layers */
+.tour details {
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    border-radius: 10px;
+    padding: 0.5em 1em;
+    margin: 1em 0;
+}
+
+.tour details summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.tour details[open] summary {
+    margin-bottom: 0.6em;
+}
+
+/* ---- Section progress rail (built by tour.js) -------------------------- */
+.tour-rail {
+    position: fixed;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 50;
+}
+
+.tour-rail a {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
+    text-decoration: none !important;
+    color: inherit;
+    border: 1.5px solid currentColor;
+    opacity: 0.35;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.tour-rail a:hover {
+    opacity: 0.75;
+}
+
+.tour-rail a.on {
+    background: #9b6dd6;
+    border-color: #9b6dd6;
+    color: #fff;
+    opacity: 1;
+    transform: scale(1.15);
+}
+
+.tour-rail a::after {
+    content: attr(data-label);
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    font-size: 0.78rem;
+    background: var(--bg, #fff);
+    border: 1px solid var(--quote-border, #ccc);
+    border-radius: 6px;
+    padding: 0.15em 0.6em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.tour-rail a:hover::after,
+.tour-rail a:focus-visible::after {
+    opacity: 1;
+}
+
+@media (max-width: 1150px) {
+    .tour-rail {
+        display: none;
+    }
+}
+
+/* ---- Reveal-on-scroll (tour.js; disabled under reduced motion) --------- */
+.tour .reveal {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.tour .reveal.on {
+    opacity: 1;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tour .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}
+
+/* Compact label:value fact rows */
+.tour .facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35em 1em;
+    margin: 1em 0;
+}
+
+.tour .facts b {
+    white-space: nowrap;
+}
+
+/* One-sentence relation of the glossary terms; neutral chips match .tk */
+.tour .spine {
+    font-size: 1.14em;
+    line-height: 2.1;
+    text-align: center;
+    margin: 1.3em 0;
+}
+
+.tour .spine b {
+    border: 1.5px solid var(--quote-border, #ccc);
+    border-radius: 6px;
+    padding: 0.05em 0.45em;
+    font-size: 0.92em;
+    white-space: nowrap;
+}
+
+/* Glossary term cards: three pairs, icon + term + short gloss per row */
+.tour .gcards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8em;
+    margin: 1.2em 0;
+}
+
+.tour .gcard {
+    background: var(--quote-bg, rgba(128, 128, 128, 0.08));
+    border-radius: 10px;
+    padding: 0.9em 1.1em 1em;
+}
+
+.tour .gcard .gcard-label {
+    display: block;
+    font-size: 0.8em;
+    letter-spacing: 0.04em;
+    opacity: 0.6;
+    margin-bottom: 0.75em;
+}
+
+.tour .gcard .gterm {
+    display: flex;
+    gap: 0.6em;
+    align-items: flex-start;
+    margin-top: 0.6em;
+}
+
+.tour .gcard .gterm svg {
+    width: 21px;
+    height: 21px;
+    flex: none;
+    margin-top: 0.1em;
+    opacity: 0.75;
+}
+
+.tour .gcard .gterm b {
+    display: block;
+    line-height: 1.35;
+}
+
+.tour .gcard .gterm .tk {
+    display: inline-block;
+    margin-bottom: 0.15em;
+}
+
+.tour .gcard .gterm .ggloss {
+    display: block;
+    font-size: 0.9em;
+    opacity: 0.72;
+    line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+    .tour .gcards {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Glossary grid: term | short gloss | full definition, rows grouped in pairs */
+.tour .gloss {
+    display: grid;
+    grid-template-columns: max-content max-content 1fr;
+    gap: 0.45em 1.2em;
+    align-items: baseline;
+    margin: 1em 0;
+}
+
+.tour .gloss .g-term {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tour .gloss .g-gloss {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tour .gloss .g-def {
+    opacity: 0.72;
+    font-size: 0.92em;
+}
+
+.tour .gloss .brk {
+    grid-column: 1 / -1;
+    height: 0;
+    border-top: 1px solid var(--quote-border, #d0d0d0);
+    opacity: 0.45;
+}
+
+@media (max-width: 640px) {
+    .tour .gloss {
+        grid-template-columns: max-content 1fr;
+    }
+
+    .tour .gloss .g-gloss {
+        white-space: normal;
+    }
+
+    .tour .gloss .g-def {
+        grid-column: 2;
+        margin-top: -0.35em;
+    }
+}

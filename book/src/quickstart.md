@@ -1,291 +1,91 @@
 # Quickstart
 
-Get a working example running quickly.
-
-## From Scratch (Complete Setup)
-
-If you're starting from zero, here's everything you need:
-
-```bash
-# 1. Install Rust nightly
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup default nightly
-
-# 2. Clone the repository
-git clone https://github.com/logos-blockchain/logos-blockchain-testing.git
-cd logos-blockchain-testing
-
-# 3. Run your first scenario (downloads dependencies automatically)
-scripts/run/run-examples.sh -t 60 -n 1 host
-```
-
-**First run takes 5-10 minutes** (downloads ~120MB circuit assets, builds binaries).
-
-**Windows users:** Use WSL2 (Windows Subsystem for Linux). Native Windows is not supported.
+Run a complete multi-node test in one command.
 
 ---
 
 ## Prerequisites
 
-If you already have the repository cloned:
-
-- Rust toolchain (nightly)
+- Rust toolchain (the workspace pins its version via `rust-toolchain.toml`)
 - Unix-like system (tested on Linux and macOS)
-- For Docker Compose examples: Docker daemon running
-- For Docker Desktop on Apple silicon (compose/k8s): set `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/arm64` to avoid slow/fragile amd64 emulation builds
-- **`versions.env` file** at repository root (defines VERSION, LOGOS_BLOCKCHAIN_NODE_REV, LOGOS_BLOCKCHAIN_BUNDLE_VERSION)
+- For Compose examples: a running Docker daemon
+- For Kubernetes examples: a reachable cluster context
 
-**Note:** `logos-blockchain-node` binaries are built automatically on demand or can be provided via prebuilt bundles.
+No other setup. Example node binaries are resolved automatically; the kvstore example builds its node with Cargo on first run if no prebuilt binary is available.
 
-**Important:** The `versions.env` file is required by helper scripts. If missing, the scripts will fail with an error. The file should already exist in the repository root.
+---
 
 ## Your First Test
 
-The framework ships with runnable example binaries in `examples/src/bin/`.
-
-**Recommended:** Use the convenience script:
-
 ```bash
-# From the logos-blockchain-testing directory
-scripts/run/run-examples.sh -t 60 -n 1 host
+git clone <this-repository>
+cd <this-repository>
+cargo run -p kvstore-examples --bin kvstore_app_host_convergence
 ```
 
-This handles circuit setup, binary building, and runs a complete scenario: 1 node, transaction workload (5 tx/block), 60s duration.
+**First run takes a few minutes** (builds the framework and the `kvstore-node` binary).
 
-**Alternative:** Direct cargo run (requires manual setup):
+**What happens:**
 
-```bash
-# Requires circuits in place and LOGOS_BLOCKCHAIN_NODE_BIN set
-cargo run -p runner-examples --bin local_runner
-```
-
-**Core API Pattern** (simplified example):
-
-```rust,ignore
-use std::time::Duration;
-
-use anyhow::Result;
-use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
-use testing_framework_runner_local::LocalDeployer;
-use testing_framework_workflows::ScenarioBuilderExt;
-
-pub async fn run_local_demo() -> Result<()> {
-    // Define the scenario (1 node, tx workload)
-    let mut plan = ScenarioBuilder::topology_with(|t| t.network_star().nodes(1))
-        .wallets(1_000)
-        .transactions_with(|txs| {
-            txs.rate(5) // 5 transactions per block
-                .users(500) // use 500 of the seeded wallets
-        })
-        .expect_consensus_liveness()
-        .with_run_duration(Duration::from_secs(60))
-        .build();
-
-    // Deploy and run
-    let deployer = LocalDeployer::default();
-    let runner = deployer.deploy(&plan).await?;
-    let _handle = runner.run(&mut plan).await?;
-
-    Ok(())
-}
-```
-
-**Note:** The examples are binaries with `#[tokio::main]`, not test functions. If you want to write integration tests, wrap this pattern in `#[tokio::test]` functions in your own test suite.
+1. `AppHost::scenario()` builds a scenario around a composed application instead of a managed node topology.
+2. `with_app(KvLocalApp::nodes(3))` deploys a three-node kvstore cluster as local processes.
+3. The convergence workload writes a value, restarts `node-0`, waits for readiness, and writes again.
+4. The runner evaluates the outcome and tears the cluster down.
 
 **What you should see:**
-- Nodes spawn as local processes
-- Consensus starts producing blocks
-- Scenario runs for the configured duration
-- Node state/logs written under a temporary per-run directory in the current working directory (removed after the run unless `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1`)
-- To write per-node log files to a stable location: set `LOGOS_BLOCKCHAIN_LOG_DIR=/path/to/logs` (files will have prefix like `logos-blockchain-node-0*`, may include timestamps)
 
-## What Just Happened?
+- Three `kvstore-node` processes spawn with generated configs in per-run temporary directories
+- The workload logs a successful write before and after the restart
+- The command exits successfully and removes the temporary directories
 
-Let's unpack the code:
+---
 
-### 1. Topology Configuration
+## The Code Behind It
+
+The binary is short enough to read in full at `examples/kvstore/examples/src/bin/app_host_convergence.rs`. Its core is:
 
 ```rust,ignore
-use testing_framework_core::scenario::ScenarioBuilder;
+let mut scenario = AppHost::scenario()
+    .with_app(KvLocalApp::nodes(3))
+    .with_run_duration(Duration::from_secs(5))
+    .with_workload(KvAppHostConvergence::new(3))
+    .build()?;
 
-pub fn step_1_topology() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::topology_with(|t| {
-        t.network_star() // Star topology: all nodes connect to seed
-            .nodes(1) // 1 node
-    })
-}
+let deployer = AppHostLocalDeployer::default();
+let runner = deployer.deploy(&scenario).await?;
+runner.run(&mut scenario).await?;
 ```
 
-This defines **what** your test network looks like.
-
-### 2. Wallet Seeding
+The workload reaches the deployed cluster through a typed handle (`RunContext` is the object every workload receives at run time; see [Part III](part-iii.md)):
 
 ```rust,ignore
-use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::ScenarioBuilderExt;
+async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+    let cluster = ctx.require_app::<LocalAppCluster<KvEnv>>()?;
 
-pub fn step_2_wallets() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1).wallets(1_000) // Seed 1,000 funded wallet accounts
-}
-```
-
-Provides funded accounts for transaction submission.
-
-### 3. Workloads
-
-```rust,ignore
-use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::ScenarioBuilderExt;
-
-pub fn step_3_workloads() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1)
-        .wallets(1_000)
-        .transactions_with(|txs| {
-            txs.rate(5) // 5 transactions per block
-                .users(500) // Use 500 of the 1,000 wallets
-        })
-}
-```
-
-Generates transaction traffic to stress the inclusion pipeline.
-
-### 4. Expectation
-
-```rust,ignore
-use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::ScenarioBuilderExt;
-
-pub fn step_4_expectation() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1).expect_consensus_liveness() // This says what success means: blocks must be produced continuously.
-}
-```
-
-This says **what success means**: blocks must be produced continuously.
-
-### 5. Run Duration
-
-```rust,ignore
-use std::time::Duration;
-
-use testing_framework_core::scenario::ScenarioBuilder;
-
-pub fn step_5_run_duration() -> testing_framework_core::scenario::Builder<()> {
-    ScenarioBuilder::with_node_counts(1).with_run_duration(Duration::from_secs(60))
-}
-```
-
-Run for 60 seconds (~27 blocks with default 2s slots, 0.9 coefficient). Framework ensures this is at least 2× the consensus slot duration. Adjust consensus timing via `CONSENSUS_SLOT_TIME` and `CONSENSUS_ACTIVE_SLOT_COEFF`.
-
-### 6. Deploy and Execute
-
-```rust,ignore
-use anyhow::Result;
-use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
-use testing_framework_runner_local::LocalDeployer;
-
-pub async fn step_6_deploy_and_execute() -> Result<()> {
-    let mut plan = ScenarioBuilder::with_node_counts(1).build();
-
-    let deployer = LocalDeployer::default(); // Use local process deployer
-    let runner = deployer.deploy(&plan).await?; // Provision infrastructure
-    let _handle = runner.run(&mut plan).await?; // Execute workloads & expectations
-
+    put_value(&cluster, "before-restart").await?;
+    cluster.restart_node("node-0").await?;
+    cluster.wait_node_ready("node-0").await?;
+    put_value(&cluster, "after-restart").await?;
     Ok(())
 }
 ```
 
-**Deployer** provisions the infrastructure. **Runner** orchestrates execution.
-
-## Adjust the Topology
-
-**With run-examples.sh** (recommended):
+The same pattern can run in `#[tokio::test]` functions. The composition acceptance suite does this:
 
 ```bash
-# Scale up to 3 nodes, run for 2 minutes
-scripts/run/run-examples.sh -t 120 -n 3 host
+cargo test -p multi-app-e2e
 ```
 
-**With direct cargo run:**
+It uses a reusable fixture crate for the stack, workload, and expectation, then drives them from ordinary integration tests.
 
-```bash
-# Uses LOGOS_BLOCKCHAIN_DEMO_* env vars (or legacy *_DEMO_* vars)
-LOGOS_BLOCKCHAIN_DEMO_NODES=3 \
-LOGOS_BLOCKCHAIN_DEMO_RUN_SECS=120 \
-cargo run -p runner-examples --bin local_runner
-```
+---
 
-## Try Docker Compose
+## Where to Go Next
 
-Use the same API with a different deployer for reproducible containerized environment.
-
-**Recommended:** Use the convenience script (handles everything):
-
-```bash
-scripts/run/run-examples.sh -t 60 -n 1 compose
-```
-
-This automatically:
-- Fetches circuit assets (to `~/.logos-blockchain-circuits` by default)
-- Builds/uses prebuilt binaries (via `LOGOS_BLOCKCHAIN_BINARIES_TAR` if available)
-- Builds the Docker image
-- Runs the compose scenario
-
-**Alternative:** Direct cargo run with manual setup:
-
-```bash
-# Option 1: Use prebuilt bundle (recommended for compose/k8s)
-scripts/build/build-bundle.sh --platform linux  # Creates .tmp/nomos-binaries-linux-v0.3.1.tar.gz
-export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-
-# Option 2: Manual circuit/image setup (rebuilds during image build)
-scripts/setup/setup-logos-blockchain-circuits.sh v0.3.1 /tmp/logos-blockchain-circuits
-scripts/build/build_test_image.sh
-
-# Run with Compose
-LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-cargo run -p runner-examples --bin compose_runner
-```
-
-**Benefit:** Reproducible containerized environment (Dockerized nodes, repeatable deployments).
-
-**Optional: Prometheus + Grafana**
-
-The runner can integrate with external observability endpoints. For a ready-to-run local stack:
-
-```bash
-scripts/setup/setup-observability.sh compose up
-eval "$(scripts/setup/setup-observability.sh compose env)"
-```
-
-Then run your compose scenario as usual (the environment variables enable PromQL querying and node OTLP metrics export).
-
-**Note:** Compose expects circuits at `/opt/circuits` inside containers (set by the image build).
-
-**In code:** Just swap the deployer:
-
-```rust,ignore
-use anyhow::Result;
-use testing_framework_core::scenario::{Deployer, ScenarioBuilder};
-use testing_framework_runner_compose::ComposeDeployer;
-
-pub async fn run_with_compose_deployer() -> Result<()> {
-    // ... same scenario definition ...
-    let mut plan = ScenarioBuilder::with_node_counts(1).build();
-
-    let deployer = ComposeDeployer::default(); // Use Docker Compose
-    let runner = deployer.deploy(&plan).await?;
-    let _handle = runner.run(&mut plan).await?;
-
-    Ok(())
-}
-```
-
-## Next Steps
-
-Now that you have a working test:
-
-- **Understand the philosophy**: [Testing Philosophy](testing-philosophy.md)
-- **Learn the architecture**: [Architecture Overview](architecture-overview.md)
-- **See more examples**: [Examples](examples.md)
-- **API reference**: [Builder API Quick Reference](dsl-cheat-sheet.md)
-- **Debug failures**: [Troubleshooting](troubleshooting.md)
+| Goal | Read |
+|------|------|
+| Understand the abstractions you just used | [Part I — Mental Model](part-i.md) |
+| Compose your own application stack | [Part II — Composing Applications](part-ii.md) |
+| Write workloads and expectations | [Part III — Scenario Runtime](part-iii.md) |
+| Put your own node behind the framework | [Part IV — Uniform Clusters](part-iv.md) |
+| Run against Compose, Kubernetes, or a live network | [Part V — Deployers and Sources](part-v.md) |

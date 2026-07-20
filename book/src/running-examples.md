@@ -1,300 +1,103 @@
-# Running Examples
+# Running the Examples
 
-The framework provides three runner modes: **host** (local processes), **compose** (Docker Compose), and **k8s** (Kubernetes).
-
-## Quick Start (Recommended)
-
-Use `scripts/run/run-examples.sh` for all modes—it handles all setup automatically:
-
-```bash
-# Host mode (local processes)
-scripts/run/run-examples.sh -t 60 -n 3 host
-
-# Compose mode (Docker Compose)
-scripts/run/run-examples.sh -t 60 -n 3 compose
-
-# K8s mode (Kubernetes)
-scripts/run/run-examples.sh -t 60 -n 3 k8s
-```
-
-**Parameters:**
-- `-t 60` — Run duration in seconds
-- `-n 3` — Number of nodes
-- `host|compose|k8s` — Deployment mode
-
-This script handles:
-- Circuit asset setup
-- Binary building/bundling
-- Image building (compose/k8s)
-- Image loading into cluster (k8s)
-- Execution with proper environment
-
-**Note:** For `k8s` runs against non-local clusters (e.g. EKS), the cluster pulls images from a registry. In that case, build + push your image separately (see `scripts/build/build_test_image.sh`) and set `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` to the pushed reference.
-
-## Quick Smoke Matrix
-
-For a small "does everything still run?" matrix across all runners:
-
-```bash
-scripts/run/run-test-matrix.sh -t 120 -n 1
-```
-
-This runs host, compose, and k8s modes with various image-build configurations. Useful after making runner/image/script changes. Forwards `--metrics-*` options through to `scripts/run/run-examples.sh`.
-
-**Common options:**
-- `--modes host,compose,k8s` — Restrict which modes run
-- `--no-clean` — Skip `scripts/ops/clean.sh` step
-- `--no-bundles` — Skip `scripts/build/build-bundle.sh` (reuses existing `.tmp` tarballs)
-- `--no-image-build` — Skip the “rebuild image” variants in the matrix (compose/k8s)
-- `--allow-nonzero-progress` — Soft-pass expectation failures if logs show non-zero progress (local iteration only)
-- `--force-k8s-image-build` — Allow the k8s image-build variant even on non-docker-desktop clusters
-
-**Environment overrides:**
-- `VERSION=v0.3.1` — Circuit version
-- `LOGOS_BLOCKCHAIN_NODE_REV=<commit>` — logos-blockchain-node git revision
-- `LOGOS_BLOCKCHAIN_BINARIES_TAR=path/to/bundle.tar.gz` — Use prebuilt bundle
-- `LOGOS_BLOCKCHAIN_SKIP_IMAGE_BUILD=1` — Skip image rebuild inside `run-examples.sh` (compose/k8s)
-- `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/arm64|linux/amd64` — Docker platform for bundle builds (macOS/Windows)
-- `COMPOSE_CIRCUITS_PLATFORM=linux-aarch64|linux-x86_64` — Circuits platform for image builds
-- `SLOW_TEST_ENV=true` — Doubles built-in readiness timeouts (useful in CI / constrained laptops)
-- `TESTNET_PRINT_ENDPOINTS=1` — Print `TESTNET_ENDPOINTS` / `TESTNET_PPROF` lines during deploy
-
-## Dev Workflow: Updating logos-blockchain-node Revision
-
-The repo pins a `logos-blockchain-node` revision in `versions.env` for reproducible builds. To update it or point to a local checkout:
-
-```bash
-# Pin to a new git revision (updates versions.env + Cargo.toml git revs)
-scripts/ops/update-nomos-rev.sh --rev <git_sha>
-
-# Use a local logos-blockchain-node checkout instead (for development)
-scripts/ops/update-nomos-rev.sh --path /path/to/logos-blockchain-node
-
-# If Cargo.toml was marked skip-worktree, clear it
-scripts/ops/update-nomos-rev.sh --unskip-worktree
-```
-
-**Notes:**
-- Don't commit absolute `LOGOS_BLOCKCHAIN_NODE_PATH` values; prefer `--rev` for shared history/CI
-- After changing rev/path, expect `Cargo.lock` to update on the next `cargo build`/`cargo test`
-
-## Cleanup Helper
-
-If you hit Docker build failures, I/O errors, or disk space issues:
-
-```bash
-scripts/ops/clean.sh
-```
-
-For extra Docker cache cleanup:
-
-```bash
-scripts/ops/clean.sh --docker
-```
+This chapter lists every runnable example binary, the exact command to launch it, and what it needs from your machine.
 
 ---
 
-## Host Runner (Direct Cargo Run)
+## Conventions
 
-For manual control, run the `local_runner` binary directly:
+All examples are ordinary binaries run with:
 
 ```bash
-LOGOS_BLOCKCHAIN_NODE_BIN=/path/to/logos-blockchain-node \
-cargo run -p runner-examples --bin local_runner
+cargo run -p <package> --bin <bin>
 ```
 
-### Host Runner Environment Variables
+Naming encodes the backend: `*_basic_*` and `*_app_host_*` run as local processes, `*_compose_*` need a running Docker daemon, and `*_k8s_*` need a reachable Kubernetes cluster context (the k8s deployer drives Helm and the cluster API). Compose binaries exit gracefully with a warning when Docker is unavailable, and the k8s binaries skip when the cluster cannot be reached (`K8sRunnerError::ClientInit`).
 
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `LOGOS_BLOCKCHAIN_DEMO_NODES` | 1 | Number of nodes (legacy: `LOCAL_DEMO_NODES`) |
-| `LOGOS_BLOCKCHAIN_DEMO_RUN_SECS` | 60 | Run duration in seconds (legacy: `LOCAL_DEMO_RUN_SECS`) |
-| `LOGOS_BLOCKCHAIN_NODE_BIN` | — | Path to logos-blockchain-node binary (required) |
-| `LOGOS_BLOCKCHAIN_LOG_DIR` | None | Directory for per-node log files |
-| `LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS` | 0 | Keep per-run temporary directories (useful for debugging/CI) |
-| `LOGOS_BLOCKCHAIN_TESTS_TRACING` | false | Enable debug tracing preset |
-| `LOGOS_BLOCKCHAIN_LOG_LEVEL` | info | Global log level: error, warn, info, debug, trace |
-| `LOGOS_BLOCKCHAIN_LOG_FILTER` | None | Fine-grained module filtering (e.g., `cryptarchia=trace`) |
-
-**Note:** Requires circuit assets and host binaries. Use `scripts/run/run-examples.sh host` to handle setup automatically.
+Logging uses `tracing_subscriber` with an env filter; set `RUST_LOG` to adjust verbosity.
 
 ---
 
-## Compose Runner (Direct Cargo Run)
+## Summary
 
-For manual control, run the `compose_runner` binary directly. Compose requires a Docker image with embedded assets.
-
-### Option 1: Prebuilt Bundle (Recommended)
-
-```bash
-# 1. Build a Linux bundle (includes binaries + circuits)
-scripts/build/build-bundle.sh --platform linux
-# Creates .tmp/nomos-binaries-linux-v0.3.1.tar.gz
-
-# 2. Build image (embeds bundle assets)
-export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-scripts/build/build_test_image.sh
-
-# 3. Run
-LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-cargo run -p runner-examples --bin compose_runner
-```
-
-### Option 2: Manual Circuit/Image Setup
-
-```bash
-# Fetch circuits
-scripts/setup/setup-logos-blockchain-circuits.sh v0.3.1 ~/.logos-blockchain-circuits
-
-# Build image
-scripts/build/build_test_image.sh
-
-# Run
-LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local \
-cargo run -p runner-examples --bin compose_runner
-```
-
-### Platform Note (macOS / Apple Silicon)
-
-- Docker Desktop runs a `linux/arm64` engine by default
-- For native performance: `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/arm64` (recommended for local testing)
-- For amd64 targets: `LOGOS_BLOCKCHAIN_BUNDLE_DOCKER_PLATFORM=linux/amd64` (slower via emulation)
-
-### Compose Runner Environment Variables
-
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | — | Image tag (required, must match built image) |
-| `LOGOS_BLOCKCHAIN_DEMO_NODES` | 1 | Number of nodes |
-| `LOGOS_BLOCKCHAIN_DEMO_RUN_SECS` | 60 | Run duration in seconds |
-| `COMPOSE_NODE_PAIRS` | — | Alternative topology format: "nodes" (e.g., `3`) |
-| `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` | None | Prometheus-compatible base URL for runner to query |
-| `LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL` | None | Full OTLP HTTP ingest URL for node metrics export |
-| `LOGOS_BLOCKCHAIN_GRAFANA_URL` | None | Grafana base URL for printing/logging |
-| `COMPOSE_RUNNER_HOST` | 127.0.0.1 | Host address for port mappings |
-| `COMPOSE_RUNNER_PRESERVE` | 0 | Keep containers running after test |
-| `LOGOS_BLOCKCHAIN_LOG_LEVEL` | info | Node log level (stdout/stderr) |
-| `LOGOS_BLOCKCHAIN_LOG_FILTER` | None | Fine-grained module filtering |
-
-**Config file option:** `testing-framework/assets/stack/cfgsync.yaml` (`tracing_settings.logger`) — Switch node logs between stdout/stderr and file output
-
-### Compose-Specific Features
-
-- **Node control support**: Only runner that supports chaos testing (`.enable_node_control()` + chaos workloads)
-- **External observability**: Set `LOGOS_BLOCKCHAIN_METRICS_*` / `LOGOS_BLOCKCHAIN_GRAFANA_URL` to enable telemetry links and querying
-  - Quickstart: `scripts/setup/setup-observability.sh compose up` then `scripts/setup/setup-observability.sh compose env`
-
-**Important:**
-- Containers expect circuits at `/opt/circuits` (set by the image build)
-- Use `scripts/run/run-examples.sh compose` to handle all setup automatically
+| Binary | Package | Backend | Requirements |
+|---|---|---|---|
+| `kvstore_app_host_convergence` | `kvstore-examples` | local (AppHost) | none — node auto-built |
+| `kvstore_basic_convergence` | `kvstore-examples` | local | none — node auto-built |
+| `kvstore_compose_convergence` | `kvstore-examples` | compose | Docker + `kvstore-node:local` image |
+| `kvstore_k8s_convergence` | `kvstore-examples` | k8s | cluster context, Helm, image |
+| `kvstore_k8s_manual_convergence` | `kvstore-examples` | k8s (manual) | cluster context, Helm, image |
+| `openraft_kv_app_host_smoke` | `openraft-kv-examples` | local (AppHost) | none — node auto-built |
+| `openraft_kv_basic_failover` | `openraft-kv-examples` | local | none — node auto-built |
+| `openraft_kv_compose_failover` | `openraft-kv-examples` | compose | Docker + `openraft-kv-node:local` image |
+| `openraft_kv_k8s_failover` | `openraft-kv-examples` | k8s | cluster context, Helm, image |
+| `processes_queued_jobs_and_converges_results` | `multi-app-e2e` (test, not a bin) | local (AppHost) | none — nodes and worker auto-built |
+| `nats_basic_roundtrip` | `nats-examples` | local | `nats-server` binary via `NATS_SERVER_BIN` |
+| `nats_compose_roundtrip` | `nats-examples` | compose | Docker + `nats:2.10` image present |
+| `nats_parity_check` | `nats-examples` | compose + local | Docker; local leg needs `nats-server` |
+| `redis_streams_compose_roundtrip` | `redis-streams-examples` | compose | Docker + `redis:7` image present |
+| `redis_streams_compose_failover` | `redis-streams-examples` | compose | Docker + `redis:7` image present |
+| `pubsub_basic_ws_roundtrip` | `pubsub-examples` | local | `PUBSUB_NODE_BIN` |
+| `pubsub_basic_ws_reconnect` | `pubsub-examples` | local | `PUBSUB_NODE_BIN` |
+| `pubsub_compose_ws_roundtrip` | `pubsub-examples` | compose | Docker + `pubsub-node:local` image |
+| `pubsub_compose_ws_reconnect` | `pubsub-examples` | compose | Docker + `pubsub-node:local` image |
+| `pubsub_k8s_ws_roundtrip` | `pubsub-examples` | k8s | cluster context, Helm, image |
+| `pubsub_k8s_manual_ws_roundtrip` | `pubsub-examples` | k8s (manual) | cluster context, Helm, image |
+| `queue_basic_convergence` | `queue-examples` | local | `QUEUE_NODE_BIN` |
+| `queue_basic_restart_chaos` | `queue-examples` | local | `QUEUE_NODE_BIN` |
+| `queue_basic_roundtrip` | `queue-examples` | local | `QUEUE_NODE_BIN` |
+| `queue_compose_convergence` | `queue-examples` | compose | Docker + `queue-node:local` image |
+| `queue_compose_roundtrip` | `queue-examples` | compose | Docker + `queue-node:local` image |
+| `metrics_counter_compose_prometheus_expectation` | `metrics-counter-examples` | compose | Docker + `metrics-counter-node:local` image |
+| `metrics_counter_k8s_prometheus_expectation` | `metrics-counter-examples` | k8s | cluster context, Helm, image |
+| `metrics_counter_k8s_manual_prometheus` | `metrics-counter-examples` | k8s (manual) | cluster context, Helm, image |
 
 ---
 
-## K8s Runner (Direct Cargo Run)
+## Binary Resolution for Local Runs
 
-For manual control, run the `k8s_runner` binary directly. K8s requires the same image setup as Compose.
+Local examples resolve their node binary through a [Binary Provider](binary-providers.md):
 
-### Prerequisites
-
-1. **Kubernetes cluster** with `kubectl` configured
-2. **Test image built** (same as Compose, preferably with prebuilt bundle)
-3. **Image available in cluster** (loaded or pushed to registry)
-
-### Build and Load Image
+- **kvstore and openraft_kv** use a `FallbackBinaryProvider`: an explicit `KVSTORE_NODE_BIN` / `OPENRAFT_KV_NODE_BIN` override wins, otherwise a `BuildBinaryProvider` runs `cargo build -p <node-crate>` for you. No setup needed.
+- **queue, pubsub, and metrics_counter** use a plain `EnvBinaryProvider`: you must build the node and point the env var at it:
 
 ```bash
-# 1. Build image with bundle (recommended)
-scripts/build/build-bundle.sh --platform linux
-export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-scripts/build/build_test_image.sh
-
-# 2. Load into cluster (choose one)
-export LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local
-
-# For kind:
-kind load docker-image logos-blockchain-testing:local
-
-# For minikube:
-minikube image load logos-blockchain-testing:local
-
-# For remote cluster (push to registry):
-docker tag logos-blockchain-testing:local your-registry/logos-blockchain-testing:latest
-docker push your-registry/logos-blockchain-testing:latest
-export LOGOS_BLOCKCHAIN_TESTNET_IMAGE=your-registry/logos-blockchain-testing:latest
+cargo build -p queue-node
+QUEUE_NODE_BIN=target/debug/queue-node cargo run -p queue-examples --bin queue_basic_convergence
 ```
 
-### Run the Example
+- **nats** launches the upstream `nats-server` executable. Point `NATS_SERVER_BIN` at one (for example from a package manager install). `nats_parity_check` probes for it (env var or `PATH`) and skips the local leg when it is missing.
+
+---
+
+## Compose Images
+
+The compose deployer checks images with `docker image inspect` and does **not** build or pull them (`MissingImage` error otherwise; see [Troubleshooting](troubleshooting.md)):
+
+- In-repo node apps default to `<binary-name>:local` (override via `<APP>_IMAGE`). Build them from the repository root, e.g.:
 
 ```bash
-export LOGOS_BLOCKCHAIN_TESTNET_IMAGE=logos-blockchain-testing:local
-cargo run -p runner-examples --bin k8s_runner
+docker build -f examples/kvstore/Dockerfile -t kvstore-node:local .
 ```
 
-### K8s Runner Environment Variables
+Dockerfiles exist for kvstore, openraft_kv, queue, pubsub, and metrics_counter.
 
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | — | Image tag (required) |
-| `LOGOS_BLOCKCHAIN_DEMO_NODES` | 1 | Number of nodes |
-| `LOGOS_BLOCKCHAIN_DEMO_RUN_SECS` | 60 | Run duration in seconds |
-| `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` | None | Prometheus-compatible base URL for runner to query (PromQL) |
-| `LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL` | None | Full OTLP HTTP ingest URL for node metrics export |
-| `LOGOS_BLOCKCHAIN_GRAFANA_URL` | None | Grafana base URL for printing/logging |
-| `K8S_RUNNER_NAMESPACE` | Random | Kubernetes namespace (pin for debugging) |
-| `K8S_RUNNER_RELEASE` | Random | Helm release name (pin for debugging) |
-| `K8S_RUNNER_NODE_HOST` | — | NodePort host resolution for non-local clusters |
-| `K8S_RUNNER_DEBUG` | 0 | Log Helm stdout/stderr for install commands |
-| `K8S_RUNNER_PRESERVE` | 0 | Keep namespace/release after run (for debugging) |
+- **nats and redis_streams have no node crate at all**: they run the upstream images `nats:2.10` and `redis:7` (override via `NATS_IMAGE` / `REDIS_STREAMS_IMAGE`, platform via `NATS_PLATFORM` / `REDIS_STREAMS_PLATFORM`). Pull them once with `docker pull nats:2.10` / `docker pull redis:7`.
 
-### K8s + Observability (Optional)
+---
 
-```bash
-export LOGOS_BLOCKCHAIN_METRICS_QUERY_URL=http://your-prometheus:9090
-# Prometheus OTLP receiver example:
-export LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL=http://your-prometheus:9090/api/v1/otlp/v1/metrics
-# Optional: print Grafana link in TESTNET_ENDPOINTS
-export LOGOS_BLOCKCHAIN_GRAFANA_URL=http://your-grafana:3000
-cargo run -p runner-examples --bin k8s_runner
-```
+## What Each Group Exercises
 
-**Notes:**
-- `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` must be reachable from the runner process (often via `kubectl port-forward`)
-- `LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL` must be reachable from nodes (pods/containers) and is backend-specific
-  - Quickstart installer: `scripts/setup/setup-observability.sh k8s install` then `scripts/setup/setup-observability.sh k8s env`
-  - Optional dashboards: `scripts/setup/setup-observability.sh k8s dashboards`
+**kvstore** demonstrates a uniform cluster. `kvstore_app_host_convergence` deploys a local cluster through `AppHost::scenario().with_app(...)` and drives a write/restart/write convergence workload ([Quickstart](quickstart.md) walks it line by line). `kvstore_basic_convergence` is the same coverage through a direct `ScenarioBuilder`. The Compose and Kubernetes variants run the same scenario against those backends; `kvstore_k8s_manual_convergence` bypasses the scenario runner and drives the cluster imperatively via `manual_cluster_from_descriptors` ([ManualCluster](manual-cluster.md)).
 
-### Via `scripts/run/run-examples.sh` (Recommended)
+**openraft_kv** demonstrates consensus and leader failover. `openraft_kv_app_host_smoke` is the AppHost entry point. `openraft_kv_basic_failover` and `openraft_kv_compose_failover` share one scenario built with `.enable_node_control()`: write a batch, restart the Raft leader through the node-control capability, write again, and expect convergence ([Scenario Capabilities](capabilities.md)). `openraft_kv_k8s_failover` runs the same failover flow imperatively through the Kubernetes `ManualCluster`, because the Kubernetes deployer wires no node control into managed scenarios ([ManualCluster](manual-cluster.md)).
 
-```bash
-scripts/run/run-examples.sh -t 60 -n 3 k8s \
-  --metrics-query-url http://your-prometheus:9090 \
-  --metrics-otlp-ingest-url http://your-prometheus:9090/api/v1/otlp/v1/metrics
-```
+**multi_app** demonstrates application composition and runs as an acceptance test rather than a binary: `cargo test -p multi-app-e2e`. The `multi-app-fixture` crate deploys a queue cluster and a key-value result-store cluster inside one root `AppDeployment` and launches the `multi-app-job-worker` binary between them (resolved via `MULTI_APP_JOB_WORKER_BIN`, else built by Cargo); the test enqueues ten jobs and expects ten results on every store node ([Composing Heterogeneous Stacks](composing-stacks.md)).
 
-### In Code (Optional)
+**nats / redis_streams** test unmodified third-party servers. Round-trip workloads publish and consume messages; `redis_streams_compose_failover` runs a consumer-group failover where a second consumer reclaims another's pending stream entries. `nats_parity_check` runs the same scenario against Compose and local backends in one binary.
 
-```rust,ignore
-use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::ObservabilityBuilderExt as _;
+**pubsub / queue** exercise WebSocket fan-out and work-queue semantics on small in-repo nodes; `queue_basic_restart_chaos` enables node control for restart chaos under load ([Chaos and Controlled Failure](chaos.md)).
 
-let plan = ScenarioBuilder::with_node_counts(1)
-    .with_metrics_query_url_str("http://your-prometheus:9090")
-    .with_metrics_otlp_ingest_url_str("http://your-prometheus:9090/api/v1/otlp/v1/metrics")
-    .build();
-```
+**metrics_counter** is the telemetry demonstration. The compose variant deploys nodes plus a Prometheus container and asserts on scraped metrics through a Prometheus-backed expectation; it honors `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL` as a query-endpoint override ([Telemetry and External Observability](telemetry.md)).
 
-### Important K8s Notes
-
-- K8s runner uses circuits baked into the image
-- File path inside pods: `/opt/circuits`
-- **No node control support yet**: Chaos workloads (`.enable_node_control()`) will fail
-- Optimized for local clusters (Docker Desktop K8s / minikube / kind)
-  - Remote clusters require additional setup (registry push, PV/CSI for assets, etc.)
-- Use `scripts/run/run-examples.sh k8s` to handle all setup automatically
-
-## Next Steps
-
-- [CI Integration](ci-integration.md) — Automate tests in continuous integration
-- [Environment Variables](environment-variables.md) — Full variable reference
-- [Logging & Observability](logging-observability.md) — Log collection and metrics
-- [Troubleshooting](troubleshooting.md) — Common issues and fixes
+The app-layer examples (`*_app_host_*`, the `multi-app-e2e` tests) show composed systems. The direct-builder binaries provide backend-specific coverage; see `examples/README.md`.

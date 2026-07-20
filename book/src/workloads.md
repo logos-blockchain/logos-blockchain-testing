@@ -1,391 +1,161 @@
-# Core Content: Workloads & Expectations
+# Workloads and Concurrency
 
-Workloads describe the activity a scenario generates; expectations describe the signals that must hold when that activity completes. This page is the **canonical reference** for all built-in workloads and expectations, including configuration knobs, defaults, prerequisites, and debugging guidance.
-
----
-
-## Overview
-
-```mermaid
-flowchart TD
-    I[Inputs<br/>topology + wallets + rates] --> Init[Workload init]
-    Init --> Drive[Drive traffic]
-    Drive --> Collect[Collect signals]
-    Collect --> Eval[Expectations evaluate]
-```
-
-**Key concepts:**
-- **Workloads** run during the **execution phase** (generate traffic)
-- **Expectations** run during the **evaluation phase** (check health signals)
-- Each workload can attach its own expectations automatically
-- Expectations can also be added explicitly
+Workloads describe the activity a scenario generates: every workload runs as its own concurrent task against the shared `RunContext`, and the runner decides when the run window ends.
 
 ---
 
-## Built-in Workloads
+## The Workload Trait
 
-### 1. Transaction Workload
-
-Submits user-level transactions at a configurable rate to exercise transaction processing and inclusion paths.
-
-**Import:**
-```rust,ignore
-use testing_framework_workflows::workloads::transaction::Workload;
-```
-
-#### Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `rate` | `u64` | **Required** | Transactions per block (not per second!) |
-| `users` | `Option<usize>` | All wallets | Number of distinct wallet accounts to use |
-
-#### DSL Usage
+A workload is any type implementing `Workload<E>` from `testing-framework-core` (`testing-framework/core/src/scenario/workload.rs`):
 
 ```rust,ignore
-use testing_framework_workflows::ScenarioBuilderExt;
-
-ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-    .wallets(20)  // Seed 20 wallet accounts
-    .transactions_with(|tx| {
-        tx.rate(10)   // 10 transactions per block
-          .users(5)   // Use only 5 of the 20 wallets
-    })
-    .with_run_duration(Duration::from_secs(60))
-    .build();
-```
-
-#### Direct Instantiation
-
-```rust,ignore
-use testing_framework_workflows::workloads::transaction;
-
-let tx_workload = transaction::Workload::with_rate(10)
-    .expect("transaction rate must be non-zero");
-
-ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-    .wallets(20)
-    .with_workload(tx_workload)
-    .with_run_duration(Duration::from_secs(60))
-    .build();
-```
-
-#### Prerequisites
-
-1. **Wallet accounts must be seeded:**
-   ```rust,ignore
-   .wallets(N)  // Before .transactions_with()
-   ```
-   The workload will fail during `init()` if no wallets are configured.
-
-2. **Circuit artifacts must be available:**
-   - Automatically staged by `scripts/run/run-examples.sh`
-   - Or manually via `scripts/setup/setup-logos-blockchain-circuits.sh` (recommended) / `scripts/setup/setup-logos-blockchain-circuits.sh`
-
-#### Attached Expectation
-
-**TxInclusionExpectation** — Verifies that submitted transactions were included in blocks.
-
-**What it checks:**
-- At least `N` transactions were included on-chain (where N = rate × user count × expected block count)
-- Uses BlockFeed to count transactions across all observed blocks
-
-**Failure modes:**
-- "Expected >= X transactions, observed Y" (Y < X)
-- Common causes: proof generation timeouts, node crashes, insufficient duration
-
-#### What Failure Looks Like
-
-```text
-Error: Expectation failed: TxInclusionExpectation
-  Expected: >= 600 transactions (10 tx/block × 60 blocks)
-  Observed: 127 transactions
-  
-  Possible causes:
-  - Duration too short (nodes still syncing)
-  - Node crashes (check logs for panics/OOM)
-  - Wallet accounts not seeded (check topology config)
-```
-
-**How to debug:**
-1. Check logs for proof generation timing:
-   ```bash
-   grep "proof generation" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
-   ```
-2. Increase duration: `.with_run_duration(Duration::from_secs(120))`
-3. Reduce rate: `.rate(5)` instead of `.rate(10)`
-
----
-
-### 2. Chaos Workload (Random Restart)
-
-Triggers controlled node restarts to test resilience and recovery behaviors.
-
-**Import:**
-```rust,ignore
-use testing_framework_workflows::workloads::chaos::RandomRestartWorkload;
-```
-
-#### Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `min_delay` | `Duration` | **Required** | Minimum time between restart attempts |
-| `max_delay` | `Duration` | **Required** | Maximum time between restart attempts |
-| `target_cooldown` | `Duration` | **Required** | Minimum time before restarting same node again |
-| `include_nodes` | `bool` | **Required** | Whether to restart nodes |
-
-#### Usage
-
-```rust,ignore
-use std::time::Duration;
-
-use testing_framework_core::scenario::ScenarioBuilder;
-use testing_framework_workflows::{ScenarioBuilderExt, workloads::chaos::RandomRestartWorkload};
-
-let scenario = ScenarioBuilder::topology_with(|t| {
-    t.network_star().nodes(3)
-})
-.enable_node_control()  // REQUIRED for chaos
-.with_workload(RandomRestartWorkload::new(
-    Duration::from_secs(45),   // min_delay
-    Duration::from_secs(75),   // max_delay
-    Duration::from_secs(120),  // target_cooldown
-    true,                      // include_nodes
-))
-.expect_consensus_liveness()
-.with_run_duration(Duration::from_secs(180))
-.build();
-```
-
-#### Prerequisites
-
-1. **Node control must be enabled:**
-   ```rust,ignore
-   .enable_node_control()
-   ```
-   This adds `NodeControlCapability` to the scenario.
-
-2. **Runner must support node control:**
-   - **Compose runner:** Supported
-   - **Local runner:** Not supported
-   - **K8s runner:** Not yet implemented
-
-3. **Sufficient topology:**
-   - For nodes: Need >1 node (workload skips if only 1)
-
-4. **Realistic timing:**
-   - Total duration should be 2-3× the max_delay + cooldown
-   - Example: max_delay=75s, cooldown=120s → duration >= 180s
-
-#### Attached Expectation
-
-None. You must explicitly add expectations (typically `.expect_consensus_liveness()`).
-
-**Why?** Chaos workloads are about testing recovery under disruption. The appropriate expectation depends on what you're testing:
-- Consensus survives restarts → `.expect_consensus_liveness()`
-- Height converges after chaos → Custom expectation checking BlockFeed
-
-#### What Failure Looks Like
-
-```text
-Error: Workload failed: chaos_restart
-  Cause: NodeControlHandle not available
-  
-  Possible causes:
-  - Forgot .enable_node_control() in scenario builder
-  - Using local runner (doesn't support node control)
-  - Using k8s runner (doesn't support node control)
-```
-
-**Or:**
-
-```text
-Error: Expectation failed: ConsensusLiveness
-  Expected: >= 20 blocks
-  Observed: 8 blocks
-  
-  Possible causes:
-  - Restart frequency too high (nodes can't recover)
-  - Consensus timing too slow (increase duration)
-  - Too many nodes restarted simultaneously
-  - Nodes crashed after restart (check logs)
-```
-
-**How to debug:**
-1. Check restart events in logs:
-   ```bash
-   grep "restarting\|restart complete" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
-   ```
-2. Verify node control is enabled:
-   ```bash
-   grep "NodeControlHandle" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
-   ```
-3. Increase cooldown: `Duration::from_secs(180)`
-4. Increase duration: `.with_run_duration(Duration::from_secs(300))`
-
----
-
-## Built-in Expectations
-
-### 1. Consensus Liveness
-
-Verifies the system continues to produce blocks during the execution window.
-
-**Import:**
-```rust,ignore
-use testing_framework_workflows::ScenarioBuilderExt;
-```
-
-#### DSL Usage
-
-```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-    .expect_consensus_liveness()
-    .with_run_duration(Duration::from_secs(60))
-    .build();
-```
-
-#### What It Checks
-
-- At least `N` blocks were produced (where N = duration / expected_block_time)
-- Uses BlockFeed to count observed blocks
-- Compares against a minimum threshold (typically 50% of theoretical max)
-
-#### Failure Modes
-
-```text
-Error: Expectation failed: ConsensusLiveness
-  Expected: >= 30 blocks
-  Observed: 3 blocks
-  
-  Possible causes:
-  - Nodes crashed or never started (check logs)
-  - Consensus timing misconfigured (CONSENSUS_SLOT_TIME too high)
-  - Insufficient nodes (need >= 2 for BFT consensus)
-  - Duration too short (nodes still syncing)
-```
-
-#### How to Debug
-
-1. Check if nodes started:
-   ```bash
-   grep "node started\|listening on" $LOGOS_BLOCKCHAIN_LOG_DIR/*/*.log
-   ```
-2. Check block production:
-   ```bash
-   grep "block.*height" $LOGOS_BLOCKCHAIN_LOG_DIR/node-*/*.log
-   ```
-3. Check consensus participation:
-   ```bash
-   grep "consensus.*slot\|proposal" $LOGOS_BLOCKCHAIN_LOG_DIR/node-*/*.log
-   ```
-4. Increase duration: `.with_run_duration(Duration::from_secs(120))`
-5. Check env vars: `echo $CONSENSUS_SLOT_TIME $CONSENSUS_ACTIVE_SLOT_COEFF`
-
----
-
-### 2. Workload-Specific Expectations
-
-Each workload automatically attaches its own expectation:
-
-| Workload | Expectation | What It Checks |
-|----------|-------------|----------------|
-| Transaction | `TxInclusionExpectation` | Transactions were included in blocks |
-| Chaos | (None) | Add `.expect_consensus_liveness()` explicitly |
-
-These expectations are added automatically when using the DSL (`.transactions_with()`).
-
----
-
-## Configuration Quick Reference
-
-### Transaction Workload
-
-```rust,ignore
-.wallets(20)
-.transactions_with(|tx| tx.rate(10).users(5))
-```
-
-| What | Value | Unit |
-|------|-------|------|
-| Rate | 10 | tx/block |
-| Users | 5 | wallet accounts |
-| Wallets | 20 | total seeded |
-
-### Chaos Workload
-
-```rust,ignore
-.enable_node_control()
-.with_workload(RandomRestartWorkload::new(
-    Duration::from_secs(45),   // min
-    Duration::from_secs(75),   // max
-    Duration::from_secs(120),  // cooldown
-    true,  // nodes
-))
-```
-
----
-
-## Common Patterns
-
-### Pattern 1: Multiple Workloads
-
-```rust,ignore
-ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-    .wallets(20)
-    .transactions_with(|tx| tx.rate(5).users(10))
-    .expect_consensus_liveness()
-    .with_run_duration(Duration::from_secs(120))
-    .build();
-```
-
-All workloads run concurrently. Expectations for each workload run after the execution window ends.
-
-### Pattern 2: Custom Expectation
-
-```rust,ignore
-use testing_framework_core::scenario::Expectation;
-
-struct MyCustomExpectation;
+use async_trait::async_trait;
+use testing_framework_core::scenario::{DynError, Expectation, RunContext, Workload};
 
 #[async_trait]
-impl Expectation for MyCustomExpectation {
-    async fn evaluate(&self, ctx: &RunContext) -> Result<(), DynError> {
-        // Access BlockFeed, metrics, topology, etc.
-        let block_count = ctx.block_feed()?.count();
-        if block_count < 10 {
-            return Err("Not enough blocks".into());
+pub trait Workload<E: Application>: Send + Sync {
+    fn name(&self) -> &str;
+
+    fn expectations(&self) -> Vec<Box<dyn Expectation<E>>> {
+        Vec::new()
+    }
+
+    fn init(
+        &mut self,
+        _descriptors: &E::Deployment,
+        _run_metrics: &RunMetrics,
+    ) -> Result<(), DynError> {
+        Ok(())
+    }
+
+    async fn start(&self, ctx: &RunContext<E>) -> Result<(), DynError>;
+}
+```
+
+The trait methods are:
+- **`name`** identifies the workload in logs and failure reports.
+- **`expectations`** lets a workload attach its own checks. `with_workload` collects them into the scenario alongside explicitly added expectations (see [Expectations and Evaluation](expectations.md)).
+- **`init`** runs synchronously at `build()` time, before anything is deployed. It receives the resolved deployment descriptors and the `RunMetrics` (run duration). A failing `init` aborts the build with a `WorkloadInit` error.
+- **`start`** is the async body. It runs once per scenario run and must return when its work is done.
+
+The runner schedules every workload and applies the same concurrency, panic capture, and run-window behavior described below.
+
+Register workloads on any builder with `.with_workload(w)` or `.with_workload_boxed(boxed)`.
+
+---
+
+## How the Runner Executes Workloads
+
+The runner (`testing-framework/core/src/scenario/runtime/runner.rs`) drives a run in fixed phases:
+
+```mermaid
+flowchart LR
+    P[start_capture<br/>expectations]:::sc --> W[Workload window<br/>run_duration]:::sc
+    W --> C[Cooldown window]:::sc
+    C --> D[Drain remaining<br/>workloads]:::sc
+    D --> S[Settle wait]:::sc
+    S --> E[Evaluate<br/>expectations]:::sc
+
+    classDef sc stroke:#9b6dd6,stroke-width:2.5px;
+```
+
+The runner uses the following concurrency rules:
+
+- **All workloads run concurrently.** Each workload is spawned into its own Tokio task via a `JoinSet`; there is no ordering between them.
+- **Panics become errors.** A panicking workload does not abort the process; the panic is caught and reported as `workload panicked: <message>`.
+- **One failure fails the run.** The runner joins workload tasks as they finish. The first workload that returns `Err` (or panics) ends the run immediately with `ScenarioError::Workload`; expectations are not evaluated.
+- **Finishing early ends the window early.** If every workload returns `Ok` before `with_run_duration` elapses, the workload phase completes without waiting out the timer.
+- **The run duration sets the maximum workload window but does not cancel workloads.** When every workload finishes early, the window ends early and cooldown begins. When the timer expires while workloads are still running, the runner keeps driving them through the cooldown window and then *waits for them to finish* (`drain_workloads`). A workload that never returns blocks the run indefinitely.
+
+Treat `with_run_duration` as the guaranteed run window, not as a workload timeout. A long-running workload should bound its own work, either by operation count or by reading `ctx.run_duration()` and stopping at the deadline.
+
+After the workload window, managed deployments get a cooldown window (minimum 30 seconds when the framework owns the node lifecycle) plus a short settle wait so runtime extensions catch up before evaluation. Both are tuned with `with_expectation_cooldown`; see [Expectations and Evaluation](expectations.md).
+
+---
+
+## Worked Example: a Key/Value Write Workload
+
+The kvstore example ships `KvWriteWorkload` (`examples/kvstore/testing/workloads/src/write.rs`), a rate-limited writer over the node HTTP clients:
+
+```rust,ignore
+use async_trait::async_trait;
+use kvstore_runtime_ext::KvEnv;
+use testing_framework_core::scenario::{DynError, RunContext, Workload};
+
+#[async_trait]
+impl Workload<KvEnv> for KvWriteWorkload {
+    fn name(&self) -> &str {
+        "kv_write_workload"
+    }
+
+    async fn start(&self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
+        let clients = ctx.node_clients().snapshot();
+        let Some(leader) = clients.first() else {
+            return Err("no kv node clients available".into());
+        };
+
+        for idx in 0..self.operations {
+            let key = format!("{}-{}", self.key_prefix, idx % self.key_count);
+            let response: PutResponse = leader
+                .put(&format!("/kv/{key}"), &PutRequest { value: format!("value-{idx}"), expected_version: None })
+                .await?;
+
+            if !response.applied {
+                return Err(format!("leader rejected write for key {key}").into());
+            }
+
+            if let Some(delay) = interval {
+                tokio::time::sleep(delay).await;
+            }
         }
+
         Ok(())
     }
 }
-
-ScenarioBuilder::topology_with(|t| t.network_star().nodes(3))
-    .with_expectation(MyCustomExpectation)
-    .with_run_duration(Duration::from_secs(60))
-    .build();
 ```
+
+This workload takes one client snapshot, runs a bounded number of operations, controls its rate with a sleep, and returns `Err` for an unexpected response so the runner stops the run.
+
+The workload is bounded by `self.operations`, so it terminates on its own; the run duration only decides how long the scenario stays up around it.
 
 ---
 
-## Debugging Checklist
+## Accessing the RunContext
 
-When a workload or expectation fails:
+`RunContext<E>` (`testing-framework/core/src/scenario/runtime/context.rs`) gives a workload access to:
 
-1. Check logs: `$LOGOS_BLOCKCHAIN_LOG_DIR/*/` or `docker compose logs` or `kubectl logs`
-2. Check prerequisites: wallets, node control, circuits
-3. Increase duration: Double the run duration and retry
-4. Reduce rates: Half the traffic rates and retry
-5. Check metrics: Prometheus queries for block height and tx count
-6. Reproduce locally: Use local runner for faster iteration
+| Accessor | Returns | Use for |
+|----------|---------|---------|
+| `ctx.node_clients()` | `&NodeClients<E>` | Typed API clients for every node |
+| `ctx.random_node_client()` | `Option<E::NodeClient>` | Spraying traffic across nodes |
+| `ctx.cluster_client()` | `ClusterClient<'_, E>` | Fan-out queries over all clients |
+| `ctx.descriptors()` | `&E::Deployment` | The resolved deployment plan |
+| `ctx.run_duration()` | `Duration` | Bounding your own loop |
+| `ctx.extension::<T>()` / `ctx.require_extension::<T>()` | `Option<T>` / `Result<T, _>` | Typed runtime extensions |
+| `ctx.node_control()` | `Option<Arc<dyn NodeControlHandle<E>>>` | Restarting/stopping nodes |
+| `ctx.telemetry()` | `&Metrics` | PromQL queries against external telemetry |
+
+Notes on the client surface:
+
+- `node_clients().snapshot()` clones the current client vector so you can iterate across `.await` points. Use `with_clients(|clients| ...)` for synchronous reads without the clone.
+- `extension::<T>()` returns a *clone* of a value registered by a [runtime extension factory](runtime-extensions.md), for example an `ObservationHandle` from [Continuous Observation](observation.md).
+- `node_control()` is only populated when the scenario was built with the node-control capability; see [Scenario Capabilities](capabilities.md) and [Chaos and Controlled Failure](chaos.md).
+
+Workloads in app-layer scenarios additionally use `AppRunContextExt` (from `testing-framework-app`) to reach composed application handles:
+
+```rust,ignore
+use testing_framework_app::AppRunContextExt;
+
+let cluster = ctx.require_app::<KvStoreCluster>()?;
+```
+
+`OpenRaftKvClusterAccessible` (`examples/openraft_kv/testing/workloads/src/handle_access.rs`) uses only `require_app` to assert that the exposed cluster handle matches the expected topology. See [AppHost and with_app](app-host.md) for the app layer itself.
 
 ---
 
 ## See Also
 
-- **[Authoring Scenarios](authoring-scenarios.md)** — Step-by-step tutorial for building scenarios
-- **[RunContext: BlockFeed & Node Control](node-control.md)** — Learn how to use BlockFeed in expectations and access node control
-- **[Examples](examples.md)** — Concrete scenario patterns combining workloads and expectations
-- **[Extending the Framework](extending.md)** — Implement custom workloads and expectations
-- **[Troubleshooting](troubleshooting.md)** — Common failure scenarios and fixes
+- [Expectations and Evaluation](expectations.md) — the checks that run after your traffic
+- [Runtime Extensions](runtime-extensions.md) — sharing typed values with workloads
+- [Chaos and Controlled Failure](chaos.md) — workloads that restart nodes
+- [Continuous Observation](observation.md) — polling application state while workloads run

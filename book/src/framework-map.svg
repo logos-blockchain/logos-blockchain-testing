@@ -1,0 +1,313 @@
+<svg id="fw-map" viewBox="0 0 900 1478" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture map of the testing framework: define, deploy, and run phases">
+<!-- Hand-laid architecture map for the Brief. Geometry is deliberate:
+     bands top-to-bottom = time (define, deploy, run); hues = concept classes
+     (cluster blue, process orange, handle green, scenario/runtime purple);
+     solid edges = builds/owns, dashed = runtime access. -->
+<style>
+#fw-map text { font-family: inherit; fill: currentColor; }
+#fw-map .band { fill: var(--quote-bg, rgba(128,128,128,0.07)); }
+#fw-map .bl { font-size: 13px; font-weight: 700; letter-spacing: 0.09em; opacity: 0.75; }
+#fw-map .bl tspan.d { font-weight: 400; letter-spacing: 0; opacity: 0.85; font-size: 11.5px; }
+#fw-map .box { fill: var(--bg, #fff); stroke-width: 1.8; }
+#fw-map .cnt { fill: none; stroke-width: 2.2; }
+#fw-map .tint-sc { fill: #9b6dd6; fill-opacity: 0.04; stroke: none; }
+#fw-map .tint-pr { fill: #e08a3c; fill-opacity: 0.04; stroke: none; }
+#fw-map .cl { stroke: #4a90d9; }
+#fw-map .pr { stroke: #e08a3c; }
+#fw-map .hd { stroke: #4caf7d; }
+#fw-map .sc { stroke: #9b6dd6; }
+#fw-map .nt { stroke: #8a9099; }
+#fw-map .sub { fill: none; stroke: #8a9099; stroke-width: 1; stroke-opacity: 0.55; }
+#fw-map .dash { stroke-dasharray: 5 4; }
+#fw-map .t { font-size: 12px; font-weight: 600; }
+#fw-map .ts { font-size: 10.5px; font-weight: 600; }
+#fw-map .tt { font-size: 9.5px; font-weight: 600; }
+#fw-map .c { font-size: 9.5px; opacity: 0.8; }
+#fw-map .cs { font-size: 8.5px; opacity: 0.8; }
+#fw-map .lab { font-size: 11px; font-weight: 600; opacity: 0.85; }
+#fw-map .labc { font-size: 9px; opacity: 0.7; font-style: italic; }
+#fw-map .sect { font-size: 9px; font-weight: 700; fill: #8a9099; }
+#fw-map .edge { fill: none; stroke: #8a9099; stroke-width: 1.6; }
+#fw-map .e { font-size: 9px; font-style: italic; fill: #8a9099; }
+#fw-map .eb { font-size: 8.5px; font-style: italic; fill: #8a9099; }
+#fw-map .bg { fill: var(--bg, #fff); opacity: 0.88; }
+#fw-map .code { font-family: var(--mono-font, "Source Code Pro", monospace); font-size: 9px; }
+#fw-map .sw { stroke-width: 2; }
+#fw-map a { cursor: pointer; }
+#fw-map a:hover text, #fw-map a:hover tspan { fill: #9b6dd6; text-decoration: underline; }
+</style>
+<defs>
+<marker id="fw-arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0 0.8 L9 5 L0 9.2 z" fill="#8a9099"/>
+</marker>
+</defs>
+<!-- ═══════════════ BAND 1 · DEFINE ═══════════════ -->
+<rect class="band" x="14" y="14" width="872" height="486" rx="10"/>
+<text class="bl" x="30" y="40">1 · DEFINE<tspan class="d"> — you write this; the builder assembles it into one artifact</tspan></text>
+<!-- authoring rail -->
+<rect class="box sc" x="28" y="62" width="160" height="72" rx="8"/>
+<text class="ts" x="36" y="80">Verb DSL</text>
+<text class="c" x="36" y="96">one verb per line — each<tspan x="36" dy="12">expands to builder calls and</tspan><tspan x="36" dy="12">enables what it needs</tspan></text>
+<path class="edge" d="M108 134 V154" marker-end="url(#fw-arr)"/>
+<text class="e" x="116" y="149">expands to</text>
+<rect class="box sc" x="28" y="158" width="160" height="72" rx="8"/>
+<text class="ts" x="36" y="176">Builder</text>
+<text class="c" x="36" y="192">the with_*() chain —<tspan x="36" dy="12">validates and assembles</tspan><tspan x="36" dy="12">the whole test</tspan></text>
+<path class="edge" d="M188 194 H226" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="186" y="177" width="44" height="12"/>
+<text class="e code" x="207" y="187" text-anchor="middle">build()?</text>
+<rect class="box hd" x="28" y="286" width="160" height="86" rx="8"/>
+<a href="#3--composed-applications-the-job-stack"><text class="sect" x="164" y="302">§3</text></a>
+<text class="ts" x="36" y="306">impl AppDeployment</text>
+<text class="c" x="36" y="322">your composition code —<tspan x="36" dy="12">deploys children in order,</tspan><tspan x="36" dy="12">exposes typed handles</tspan></text>
+<path class="edge" d="M188 320 H258" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="186" y="294" width="74" height="22"/>
+<text class="e" x="222" y="303" text-anchor="middle">becomes the</text>
+<text class="e" x="222" y="313" text-anchor="middle">root of</text>
+<!-- Scenario container -->
+<rect class="tint-sc" x="232" y="56" width="640" height="430" rx="12"/>
+<rect class="cnt sc" x="232" y="56" width="640" height="430" rx="12"/>
+<text class="lab" x="248" y="80">Scenario <a href="#1--mental-model"><tspan class="sect">§1</tspan></a><tspan class="labc"> — the whole test, described as data</tspan></text>
+<rect class="sub dash" x="702" y="64" width="158" height="20" rx="10"/>
+<text class="cs" x="781" y="77" text-anchor="middle">only one with_app per scenario</text>
+<!-- system under test -->
+<rect class="sub" x="248" y="100" width="330" height="368" rx="10"/>
+<text class="ts" x="258" y="118">system under test <a href="#2--entry-patterns"><tspan class="sect">§2</tspan></a></text>
+<text class="cs" x="258" y="131">what to deploy — one of three shapes</text>
+<rect class="box cl" x="262" y="142" width="302" height="50" rx="8"/>
+<text class="ts" x="270" y="160">Uniform cluster</text>
+<text class="c" x="270" y="176">N identical nodes of one binary</text>
+<rect class="box hd" x="262" y="204" width="302" height="158" rx="8"/>
+<a href="#3--composed-applications-the-job-stack"><text class="sect" x="540" y="220">§3</text></a>
+<text class="ts" x="270" y="222">Composed stack — root AppDeployment</text>
+<rect class="box cl" x="274" y="236" width="86" height="42" rx="6"/>
+<text class="tt" x="317" y="253" text-anchor="middle">queue</text>
+<text class="cs" x="317" y="266" text-anchor="middle">cluster</text>
+<rect class="box pr" x="368" y="236" width="86" height="42" rx="6"/>
+<text class="tt" x="411" y="253" text-anchor="middle">worker</text>
+<text class="cs" x="411" y="266" text-anchor="middle">process</text>
+<rect class="box nt" x="462" y="236" width="92" height="42" rx="6"/>
+<text class="tt" x="508" y="253" text-anchor="middle">custom</text>
+<text class="cs" x="508" y="266" text-anchor="middle">component</text>
+<path class="edge" d="M317 278 V286"/>
+<path class="edge" d="M411 278 V286"/>
+<path class="edge" d="M508 278 V286"/>
+<rect class="box hd" x="286" y="286" width="62" height="16" rx="8"/>
+<text class="cs" x="317" y="298" text-anchor="middle">handle</text>
+<rect class="box hd" x="380" y="286" width="62" height="16" rx="8"/>
+<text class="cs" x="411" y="298" text-anchor="middle">handle</text>
+<rect class="box hd" x="477" y="286" width="62" height="16" rx="8"/>
+<text class="cs" x="508" y="298" text-anchor="middle">handle</text>
+<text class="c" x="270" y="320">children start in dependency order,<tspan x="270" dy="12">readiness-gated; each exposes a typed</tspan><tspan x="270" dy="12">handle that test code fetches later</tspan></text>
+<rect class="box cl dash" x="262" y="374" width="302" height="44" rx="8"/>
+<a href="#8--sources-and-ownership"><text class="sect" x="540" y="390">§8</text></a>
+<text class="ts" x="270" y="391">Attached / external sources</text>
+<text class="c" x="270" y="407">already running — never deployed by the framework</text>
+<text class="cs" x="262" y="431">ownership mode — decides available operations and teardown <a href="#8--sources-and-ownership"><tspan class="sect">§8</tspan></a></text>
+<rect class="sub" x="262" y="436" width="98" height="26" rx="6"/>
+<text class="tt" x="311" y="447" text-anchor="middle">managed</text>
+<text class="cs" x="311" y="458" text-anchor="middle">full ops · torn down</text>
+<rect class="sub" x="364" y="436" width="98" height="26" rx="6"/>
+<text class="tt" x="413" y="447" text-anchor="middle">attached</text>
+<text class="cs" x="413" y="458" text-anchor="middle">partial ops · kept</text>
+<rect class="sub" x="466" y="436" width="98" height="26" rx="6"/>
+<text class="tt" x="515" y="447" text-anchor="middle">external</text>
+<text class="cs" x="515" y="458" text-anchor="middle">clients only · kept</text>
+<!-- test behavior -->
+<rect class="sub" x="594" y="100" width="264" height="172" rx="10"/>
+<text class="ts" x="604" y="118">test behavior <a href="#4--test-behavior"><tspan class="sect">§4</tspan></a></text>
+<text class="cs" x="604" y="131">what the run does, and how it is judged</text>
+<rect class="box sc" x="608" y="142" width="236" height="60" rx="8"/>
+<text class="ts" x="616" y="160">Workloads</text>
+<text class="c" x="616" y="176">create activity through handles —<tspan x="616" dy="12">send jobs · restart nodes · cut the net</tspan></text>
+<rect class="box sc" x="608" y="212" width="236" height="50" rx="8"/>
+<text class="ts" x="616" y="230">Expectations</text>
+<text class="c" x="616" y="246">verify outcomes; failures aggregate</text>
+<!-- runtime policy -->
+<rect class="sub" x="594" y="284" width="264" height="184" rx="10"/>
+<text class="ts" x="604" y="302">runtime policy <a href="#6--configuration-and-deployment-policy"><tspan class="sect">§6</tspan></a></text>
+<text class="c" x="606" y="324"><tspan class="tt">duration</tspan> — the run window; a maximum,</text>
+<text class="c" x="606" y="337">not a timer to fill <a href="#4--test-behavior"><tspan class="sect">§4</tspan></a></text>
+<text class="c" x="606" y="357"><tspan class="tt">readiness</tspan> — all / quorum + HTTP or TCP probe</text>
+<text class="c" x="606" y="377"><tspan class="tt">retry</tspan> — managed spawns retry with backoff</text>
+<text class="c" x="606" y="401">capabilities the test requests up front:</text>
+<text class="c code" x="616" y="418">with_node_control() <a href="#5--runtime-control"><tspan class="sect">§5</tspan></a></text>
+<text class="c code" x="616" y="434">with_network_control() <a href="#5--runtime-control"><tspan class="sect">§5</tspan></a></text>
+<!-- attached passthrough note + long edge to the running system -->
+<path class="edge dash" d="M262 396 H22 V1163 H36" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="30" y="380" width="222" height="24"/>
+<text class="eb" x="140" y="389" text-anchor="middle">connected straight through to the run —</text>
+<text class="eb" x="140" y="399" text-anchor="middle">never deployed, never torn down</text>
+<!-- scenario → deployer -->
+<path class="edge" d="M452 486 V552" marker-end="url(#fw-arr)"/>
+<text class="e" x="462" y="528">deploy(&amp;scenario) — provision</text>
+<text class="e" x="462" y="540">the system on one backend <a href="#10--deployment-backends"><tspan class="sect">§10</tspan></a></text>
+<!-- ═══════════════ BAND 2 · DEPLOY ═══════════════ -->
+<rect class="band" x="14" y="514" width="872" height="324" rx="10"/>
+<text class="bl" x="30" y="540">2 · DEPLOY<tspan class="d"> — the framework starts the system for real</tspan></text>
+<rect class="box pr" x="28" y="556" width="180" height="96" rx="8"/>
+<a href="#9--binary-resolution"><text class="sect" x="184" y="572">§9</text></a>
+<text class="ts" x="36" y="576">Binary providers</text>
+<text class="c" x="36" y="592">every launched executable —<tspan x="36" dy="12">path · env var · cargo build ·</tspan><tspan x="36" dy="12">download; chained fallbacks,</tspan><tspan x="36" dy="12">cached, cross-process locked</tspan></text>
+<path class="edge" d="M208 600 H248" marker-end="url(#fw-arr)"/>
+<text class="e" x="228" y="592" text-anchor="middle">supply</text>
+<rect class="box nt" x="28" y="676" width="180" height="84" rx="8"/>
+<a href="#7--state-and-reproducibility"><text class="sect" x="184" y="692">§7</text></a>
+<text class="ts" x="36" y="696">cfgsync</text>
+<text class="c" x="36" y="712">typed app config rendered<tspan x="36" dy="12">into per-node artifacts for</tspan><tspan x="36" dy="12">the container backends</tspan></text>
+<path class="edge" d="M208 712 H262" marker-end="url(#fw-arr)"/>
+<text class="eb" x="231" y="728" text-anchor="middle">delivers</text>
+<text class="eb" x="231" y="739" text-anchor="middle">configs</text>
+<!-- Deployer -->
+<rect class="tint-pr" x="252" y="556" width="400" height="274" rx="12"/>
+<rect class="cnt pr" x="252" y="556" width="400" height="274" rx="12"/>
+<text class="lab" x="266" y="578">Deployer <a href="#10--deployment-backends"><tspan class="sect">§10</tspan></a><tspan class="labc"> — one scenario model, three substrates</tspan></text>
+<rect class="box pr" x="266" y="594" width="372" height="66" rx="8"/>
+<text class="ts" x="274" y="612">local — processes in temp dirs</text>
+<text class="c" x="274" y="628">full node control · the only backend running<tspan x="274" dy="12">app composition today <a href="#10--deployment-backends"><tspan class="sect">§10</tspan></a></tspan></text>
+<rect class="box pr" x="266" y="672" width="372" height="66" rx="8"/>
+<text class="ts" x="274" y="690">compose — generated project</text>
+<text class="c" x="274" y="706">containers; configs via cfgsync ·<tspan x="274" dy="12">restart-level node control</tspan></text>
+<rect class="box pr" x="266" y="750" width="372" height="66" rx="8"/>
+<text class="ts" x="274" y="768">kubernetes — Helm chart + values</text>
+<text class="c" x="274" y="784">configs via cfgsync · node control only in<tspan x="274" dy="12">manual mode <a href="#10--deployment-backends"><tspan class="sect">§10</tspan></a></tspan></text>
+<!-- per-node dirs -->
+<rect class="box nt" x="672" y="556" width="200" height="136" rx="8"/>
+<a href="#7--state-and-reproducibility"><text class="sect" x="848" y="572">§7</text></a>
+<text class="ts" x="680" y="576">Per-node working dirs</text>
+<text class="c" x="680" y="592">ports · peer view · typed config,<tspan x="680" dy="12">written before launch <a href="#6--configuration-and-deployment-policy"><tspan class="sect">§6</tspan></a></tspan><tspan x="680" dy="14"><tspan class="code">persist_dir</tspan> — pin and reuse</tspan><tspan x="680" dy="13"><tspan class="code">snapshot_dir</tspan> — seed saved state</tspan><tspan x="680" dy="13">kept on panic / TF_KEEP_LOGS</tspan></text>
+<path class="edge" d="M652 600 H668" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="642" y="585" width="30" height="11"/>
+<text class="eb" x="657" y="594" text-anchor="middle">writes</text>
+<!-- ManualCluster -->
+<rect class="box cl" x="672" y="712" width="200" height="118" rx="8"/>
+<a href="#5--runtime-control"><text class="sect" x="848" y="728">§5</text></a>
+<text class="ts" x="680" y="732">ManualCluster</text>
+<text class="c" x="680" y="748">same provisioning, no Runner —<tspan x="680" dy="12">your code sequences start_node ·</tspan><tspan x="680" dy="12">stop_node · restart_node ·</tspan><tspan x="680" dy="12">wait_node_ready; nodes still</tspan><tspan x="680" dy="12">framework-managed and torn down</tspan></text>
+<path class="edge" d="M652 760 H668" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="628" y="745" width="44" height="11"/>
+<text class="eb" x="650" y="754" text-anchor="middle">provisions</text>
+<!-- deploy → run lanes -->
+<path class="edge" d="M320 830 V870 H204 V946" marker-end="url(#fw-arr)"/>
+<text class="e" x="262" y="864" text-anchor="middle">starts nodes and processes</text>
+<path class="edge" d="M600 830 V862 H750 V946" marker-end="url(#fw-arr)"/>
+<text class="e" x="612" y="856">returns a Runner</text>
+<path class="edge dash" d="M772 830 V846 H340 V946" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="380" y="838" width="256" height="14"/>
+<text class="eb" x="508" y="848" text-anchor="middle">drives nodes step-by-step — no Runner, no lifecycle §5</text>
+<!-- ═══════════════ BAND 3 · RUN ═══════════════ -->
+<rect class="band" x="14" y="878" width="872" height="532" rx="10"/>
+<text class="bl" x="30" y="904">3 · RUN<tspan class="d"> — a fixed lifecycle; test code reaches the system only through the RunContext</tspan></text>
+<!-- running system -->
+<rect class="sub" x="28" y="950" width="340" height="260" rx="10"/>
+<text class="ts" x="40" y="970">The running system</text>
+<text class="cs" x="40" y="984">started by the deployer — reached via the surfaces on the right</text>
+<rect class="box cl" x="42" y="994" width="312" height="124" rx="8"/>
+<text class="tt" x="50" y="1010">managed — framework-owned <a href="#8--sources-and-ownership"><tspan class="sect">§8</tspan></a></text>
+<rect class="box cl" x="54" y="1024" width="64" height="46" rx="6"/>
+<text class="tt" x="86" y="1043" text-anchor="middle">node-0</text>
+<text class="cs" x="86" y="1056" text-anchor="middle">app state</text>
+<rect class="box cl" x="124" y="1024" width="64" height="46" rx="6"/>
+<text class="tt" x="156" y="1043" text-anchor="middle">node-1</text>
+<text class="cs" x="156" y="1056" text-anchor="middle">app state</text>
+<path class="edge dash" d="M196 1022 V1041"/>
+<path class="edge dash" d="M196 1059 V1076"/>
+<text class="e" x="196" y="1054" text-anchor="middle">✂</text>
+<rect class="box cl" x="204" y="1024" width="64" height="46" rx="6"/>
+<text class="tt" x="236" y="1043" text-anchor="middle">node-2</text>
+<text class="cs" x="236" y="1056" text-anchor="middle">app state</text>
+<rect class="box pr" x="276" y="1024" width="66" height="46" rx="6"/>
+<text class="tt" x="309" y="1043" text-anchor="middle">worker</text>
+<text class="cs" x="309" y="1056" text-anchor="middle">process</text>
+<text class="c" x="50" y="1092">each node: own working dir · ports · typed config <a href="#6--configuration-and-deployment-policy"><tspan class="sect">§6</tspan></a> <a href="#7--state-and-reproducibility"><tspan class="sect">§7</tspan></a></text>
+<text class="c" x="50" y="1105">✂ = a partition cut point (network control)</text>
+<rect class="box cl dash" x="42" y="1128" width="312" height="70" rx="8"/>
+<text class="tt" x="50" y="1144">attached / external — yours <a href="#8--sources-and-ownership"><tspan class="sect">§8</tspan></a></text>
+<text class="c" x="50" y="1160">left running at teardown · attached = partial<tspan x="50" dy="12">control, external = clients only</tspan></text>
+<!-- telemetry -->
+<rect class="box nt dash" x="200" y="1224" width="168" height="56" rx="8"/>
+<a href="#11--observability"><text class="sect" x="344" y="1240">§11</text></a>
+<text class="ts" x="208" y="1244">Telemetry</text>
+<text class="c" x="208" y="1260">Grafana / OTLP — external<tspan x="208" dy="12">monitoring, not test logic</tspan></text>
+<path class="edge dash" d="M284 1210 V1220" marker-end="url(#fw-arr)"/>
+<text class="e" x="292" y="1219">emits metrics · logs · traces</text>
+<!-- RunContext -->
+<rect class="box hd cnt sw" x="415" y="950" width="203" height="300" rx="10"/>
+<text class="lab" x="427" y="972">RunContext</text>
+<text class="cs" x="427" y="986">handed to every workload and</text>
+<text class="cs" x="427" y="997">expectation — the only door in</text>
+<rect class="box hd" x="427" y="1010" width="179" height="44" rx="7"/>
+<text class="tt" x="435" y="1027">node clients</text>
+<text class="cs" x="435" y="1042">typed HTTP client per node</text>
+<rect class="box hd" x="427" y="1058" width="179" height="44" rx="7"/>
+<text class="tt" x="435" y="1075">app handles <a href="#3--composed-applications-the-job-stack"><tspan class="sect">§3</tspan></a></text>
+<text class="cs code" x="435" y="1090">require_app::&lt;T&gt;()</text>
+<rect class="box hd" x="427" y="1106" width="179" height="44" rx="7"/>
+<text class="tt" x="435" y="1123">node control <a href="#5--runtime-control"><tspan class="sect">§5</tspan></a></text>
+<text class="cs" x="435" y="1138">start · stop · restart a node</text>
+<rect class="box hd" x="427" y="1154" width="179" height="44" rx="7"/>
+<text class="tt" x="435" y="1171">network control <a href="#5--runtime-control"><tspan class="sect">§5</tspan></a></text>
+<text class="cs" x="435" y="1186">partition · heal + reconnect assist</text>
+<rect class="box hd" x="427" y="1202" width="179" height="44" rx="7"/>
+<text class="tt" x="435" y="1219">observer <a href="#11--observability"><tspan class="sect">§11</tspan></a></text>
+<text class="cs" x="435" y="1234">polls app state on a cadence</text>
+<!-- runtime access arrows into the system -->
+<path class="edge dash" d="M415 1032 L372 1030" marker-end="url(#fw-arr)"/>
+<text class="eb" x="392" y="1024" text-anchor="middle">call</text>
+<path class="edge dash" d="M415 1080 L372 1060" marker-end="url(#fw-arr)"/>
+<text class="eb" x="392" y="1064" text-anchor="middle">drive</text>
+<path class="edge dash" d="M415 1128 L372 1090" marker-end="url(#fw-arr)"/>
+<text class="eb" x="394" y="1102" text-anchor="middle">restart</text>
+<path class="edge dash" d="M415 1176 L372 1120" marker-end="url(#fw-arr)"/>
+<text class="eb" x="397" y="1146" text-anchor="middle">cut · heal</text>
+<path class="edge dash" d="M415 1224 L372 1150" marker-end="url(#fw-arr)"/>
+<text class="eb" x="398" y="1190" text-anchor="middle">poll</text>
+<!-- Runner -->
+<rect class="tint-sc" x="664" y="950" width="208" height="404" rx="12"/>
+<rect class="cnt sc" x="664" y="950" width="208" height="404" rx="12"/>
+<text class="lab" x="676" y="972">Runner <a href="#1--mental-model"><tspan class="sect">§1</tspan></a></text>
+<text class="cs code" x="676" y="988">runner.run(&amp;mut scenario)</text>
+<rect class="box sc" x="678" y="1012" width="180" height="56" rx="7"/>
+<text class="ts" x="686" y="1030">1 · wait until ready</text>
+<text class="cs" x="686" y="1045">probe per readiness policy —<tspan x="686" dy="11">all nodes or quorum <a href="#6--configuration-and-deployment-policy"><tspan class="sect">§6</tspan></a></tspan></text>
+<path class="edge" d="M768 1068 V1078" marker-end="url(#fw-arr)"/>
+<rect class="box sc" x="678" y="1080" width="180" height="56" rx="7"/>
+<text class="ts" x="686" y="1098">2 · run workloads</text>
+<text class="cs" x="686" y="1113">all start concurrently <a href="#4--test-behavior"><tspan class="sect">§4</tspan></a> —<tspan x="686" dy="11">a panic becomes a clean failure</tspan></text>
+<path class="edge" d="M768 1136 V1146" marker-end="url(#fw-arr)"/>
+<rect class="box sc" x="678" y="1148" width="180" height="56" rx="7"/>
+<text class="ts" x="686" y="1166">3 · cooldown</text>
+<text class="cs" x="686" y="1181">settle window — starts early<tspan x="686" dy="11">when workloads finish early</tspan></text>
+<path class="edge" d="M768 1204 V1214" marker-end="url(#fw-arr)"/>
+<rect class="box sc" x="678" y="1216" width="180" height="56" rx="7"/>
+<text class="ts" x="686" y="1234">4 · evaluate expectations</text>
+<text class="cs" x="686" y="1249">every one runs — failures<tspan x="686" dy="11">aggregate, no short-circuit</tspan></text>
+<path class="edge" d="M768 1272 V1282" marker-end="url(#fw-arr)"/>
+<rect class="box sc" x="678" y="1284" width="180" height="56" rx="7"/>
+<text class="ts" x="686" y="1302">5 · tear down</text>
+<text class="cs" x="686" y="1317">managed only, in reverse<tspan x="686" dy="11">acquisition order <a href="#3--composed-applications-the-job-stack"><tspan class="sect">§3</tspan></a></tspan></text>
+<!-- runner edges -->
+<path class="edge" d="M664 1000 H622" marker-end="url(#fw-arr)"/>
+<text class="eb" x="641" y="993" text-anchor="middle">builds &amp;</text>
+<text class="eb" x="641" y="1014" text-anchor="middle">hands over</text>
+<path class="edge dash" d="M858 1108 H886 V190 H862" marker-end="url(#fw-arr)"/>
+<path class="edge dash" d="M858 1244 H886"/>
+<text class="e" transform="rotate(-90 893 760)" x="893" y="760" text-anchor="middle">steps 2 and 4 run the workloads and expectations you defined above §4</text>
+<path class="edge" d="M678 1312 H100 V1214" marker-end="url(#fw-arr)"/>
+<rect class="bg" x="140" y="1322" width="420" height="14"/>
+<text class="eb" x="350" y="1332" text-anchor="middle">releases managed resources in reverse acquisition order — attached / external left running</text>
+<!-- ═══════════════ KEY ═══════════════ -->
+<rect class="sub" x="14" y="1424" width="872" height="46" rx="8"/>
+<text class="tt" x="30" y="1442">READING THE MAP</text>
+<text class="cs" x="150" y="1442">top → bottom = time (define → deploy → run) · solid arrow = builds / owns · dashed arrow = runtime access · §N = the section of this page that unpacks it</text>
+<rect x="30" y="1450" width="10" height="10" rx="2" fill="none" stroke="#4a90d9" stroke-width="2"/>
+<text class="cs" x="46" y="1459">cluster of nodes</text>
+<rect x="130" y="1450" width="10" height="10" rx="2" fill="none" stroke="#e08a3c" stroke-width="2"/>
+<text class="cs" x="146" y="1459">single process</text>
+<rect x="222" y="1450" width="10" height="10" rx="2" fill="none" stroke="#4caf7d" stroke-width="2"/>
+<text class="cs" x="238" y="1459">typed handle / access</text>
+<rect x="350" y="1450" width="10" height="10" rx="2" fill="none" stroke="#9b6dd6" stroke-width="2"/>
+<text class="cs" x="366" y="1459">scenario and runtime machinery</text>
+<rect x="530" y="1450" width="10" height="10" rx="2" fill="none" stroke="#8a9099" stroke-width="1.5" stroke-dasharray="3 2"/>
+<text class="cs" x="546" y="1459">dashed box = not owned by the framework</text>
+</svg>

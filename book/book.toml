@@ -2,12 +2,13 @@
 authors  = ["Logos Testing"]
 language = "en"
 src      = "src"
-title    = "Logos Blockchain Testing Framework Book"
+title    = "Testing Framework Book"
 
 [build]
 # Keep book output in target/ to avoid polluting the workspace root.
 build-dir = "../target/book"
 
 [output.html]
-additional-js = ["theme/mermaid-init.js"]
-default-theme = "light"
+additional-css = ["theme/tour-v2.css"]
+additional-js  = ["theme/mermaid-init.js", "theme/tour-v2.js"]
+default-theme  = "light"

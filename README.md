@@ -1,155 +1,184 @@
-# Logos Blockchain Testing Framework
+# Logos Testing Framework
 
-A comprehensive testing framework for the Logos blockchain implementation, providing declarative scenario definitions, multiple deployment backends, and production-grade observability.
+A Rust framework for system-level tests of networked applications. It can start
+local processes and node clusters, deploy uniform clusters with Docker Compose
+or Kubernetes, connect to existing deployments, run test activity, evaluate
+outcomes, and clean up the resources it started.
 
-## Overview
+The framework is application-agnostic. Application repositories provide their
+node configuration, clients, readiness checks, and backend-specific launch
+settings.
 
-This framework enables you to define, deploy, and execute integration tests for Logos blockchain scenarios across different environments—from local processes to containerized Kubernetes deployments—using a unified API.
+## Start Here
 
-**Key capabilities:**
-- **Declarative scenario model** — Define topology, workloads, and success criteria using a fluent builder API
-- **Multiple deployment backends** — Local processes, Docker Compose, or Kubernetes
-- **Built-in workloads** — Transaction injection, DA (Data Availability) traffic, and restart-based chaos (requires node control; compose runner supported)
-- **Observability-first** — Integrated Prometheus metrics, structured logging, and OpenTelemetry support
-- **Production-ready** — Used in CI/CD pipelines with reproducible containerized environments
-
-## Quick Start
-
-### Prerequisites
-
-- Rust toolchain (nightly)
-- `versions.env` file at repository root (included)
-- For Docker Compose: Docker daemon
-- For Kubernetes: Cluster access, `kubectl`, and `helm`
-
-### Run Your First Test
+The workspace pins its Rust toolchain in `rust-toolchain.toml`. The local
+kvstore example needs no additional setup; its node binary is built on first
+use:
 
 ```bash
-# Host mode (local processes) - fastest iteration
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 host
-
-# Compose mode (Docker containers) - reproducible environment
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 compose
-
-# K8s mode (Kubernetes cluster) - production-like fidelity
-scripts/run/run-examples.sh -t 60 -v 1 -e 1 k8s
+cargo run -p kvstore-examples --bin kvstore_app_host_convergence
 ```
 
-The script handles circuit setup, binary building, image preparation, and scenario execution automatically.
+This starts three local node processes, writes data, restarts a node, checks
+the result, and removes the processes and temporary directories.
+
+The composed-application example runs as integration tests:
+
+```bash
+cargo test -p multi-app-e2e
+```
+
+It covers a queue cluster, worker process, and result-store cluster through a
+runner-driven scenario and direct imperative tests.
+
+For Compose examples, run a Docker daemon and prepare the image named by the
+example; the Compose deployer checks that it exists locally but does not build
+or pull it. Kubernetes examples require a reachable cluster, `kubectl`, Helm,
+and a node image available to that cluster.
+
+See [Quickstart](book/src/quickstart.md) and
+[Running the Examples](book/src/running-examples.md) for the complete commands
+and requirements.
+
+## Ways to Write Tests
+
+### Scenarios
+
+A scenario records the system to deploy, workloads to run, expectations to
+evaluate, runtime limits, and enabled capabilities. The runner performs
+deployment, readiness checks, concurrent workloads, cooldown, expectation
+evaluation, and cleanup.
+
+```rust
+let mut scenario = AppHost::scenario()
+    .with_app(KvLocalApp::nodes(3))
+    .with_workload(KvAppHostConvergence::new(3))
+    .with_run_duration(Duration::from_secs(5))
+    .build()?;
+
+let runner = AppHostLocalDeployer::default()
+    .deploy(&scenario)
+    .await?;
+
+runner.run(&mut scenario).await?;
+```
+
+### Imperative Tests
+
+`ManualCluster` gives ordinary Rust or a BDD harness direct control of one
+uniform cluster. Tests can start, stop, restart, and wait for nodes without
+using workloads or expectations.
+
+A composed application can also be deployed directly through `DeployContext`
+when test code needs to control the complete stack step by step.
+
+### Composed Applications
+
+`AppDeployment` describes how application components are started and connected.
+`AppHost` runs one root deployment as part of a scenario. Child deployments can
+start uniform clusters through `LocalAppCluster` and standalone binaries through
+`LocalProcessApp`, then expose typed handles to workloads and expectations.
+
+App composition currently runs only with the local process deployer. Compose
+and Kubernetes support uniform application clusters, not an `AppDeployment`
+tree containing several application types.
+
+### Existing Deployments
+
+Scenarios can use managed nodes, attach to an existing Compose project or
+Kubernetes deployment, or construct clients for external endpoints. Available
+node control depends on the selected source and backend.
+
+## Deployment Backends
+
+Uniform scenarios use the same scenario runtime on all three backends. Each
+application supplies a thin backend adapter containing details such as the
+binary or image, config location, and service ports.
+
+| Capability | Local | Compose | Kubernetes |
+|---|---|---|---|
+| Uniform managed scenarios | Yes | Yes | Yes |
+| Managed node control | Start, stop, restart | Restart | Use Kubernetes `ManualCluster` |
+| Existing clusters | No | Compose project or services | Label selector and namespace |
+| External endpoints | Yes | Yes | Yes |
+| `AppHost` composition | Yes | No | No |
+| Config delivery | Files in node working directories | cfgsync | cfgsync |
+
+The local deployer resolves executable paths through path, environment, build,
+or download providers. Compose generates a project and services. Kubernetes
+installs a Helm release in a per-run namespace. Container backends deliver
+generated per-node configuration and other static files through cfgsync.
+
+See the [Capability Matrix](book/src/capability-matrix.md),
+[Local Deployer](book/src/deployer-local.md),
+[Compose Deployer](book/src/deployer-compose.md), and
+[Kubernetes Deployer](book/src/deployer-k8s.md).
+
+## Repository Layout
+
+```text
+testing-framework/
+├── core/                 scenario runtime, topology, provisioning, control
+├── app/                  AppHost, AppDeployment, typed handles, composition
+└── deployers/
+    ├── local/            local processes and binary providers
+    ├── compose/          generated Docker Compose projects
+    └── k8s/              Helm and Kubernetes deployment
+
+cfgsync/
+├── artifacts/            backend-neutral per-node files
+├── core/                 protocol, server, client, and rendering
+├── adapter/              application config materialization
+└── runtime/              cfgsync server and client binaries
+
+examples/                 self-contained example applications and tests
+book/                     mdBook source and presentation theme
+scripts/                  checks, cleanup, and observability helpers
+```
+
+The example applications include uniform clusters, composed stacks, consensus
+failover, queues, WebSocket pub/sub, metrics, and unmodified NATS and Redis
+servers. See [examples/README.md](examples/README.md) for the recommended entry
+points.
 
 ## Documentation
 
-**Complete documentation available at:** https://logos-blockchain.github.io/logos-blockchain-testing/
+- [The Framework in Brief](book/src/framework-in-brief.md)
+- [Quickstart](book/src/quickstart.md)
+- [Application and Environment Model](book/src/application-model.md)
+- [Composing Applications](book/src/part-ii.md)
+- [Scenario Runtime](book/src/part-iii.md)
+- [Uniform Clusters and Configuration](book/src/part-iv.md)
+- [Deployers and Sources](book/src/part-v.md)
+- [Environment Variables](book/src/environment-variables.md)
+- [Troubleshooting](book/src/troubleshooting.md)
 
-### Essential Guides
+Published book: <https://logos-blockchain.github.io/logos-blockchain-testing/>
 
-| Topic | Link |
-|-------|------|
-| **Getting Started** | [Quickstart Guide](https://logos-blockchain.github.io/logos-blockchain-testing/quickstart.html) |
-| **Core Concepts** | [Testing Philosophy](https://logos-blockchain.github.io/logos-blockchain-testing/testing-philosophy.html) |
-| **Examples** | [Basic](https://logos-blockchain.github.io/logos-blockchain-testing/examples.html) \| [Advanced](https://logos-blockchain.github.io/logos-blockchain-testing/examples-advanced.html) |
-| **Deployment Options** | [Runners Overview](https://logos-blockchain.github.io/logos-blockchain-testing/runners.html) |
-| **API Reference** | [Builder API](https://logos-blockchain.github.io/logos-blockchain-testing/dsl-cheat-sheet.html) |
-| **Operations** | [Setup & Configuration](https://logos-blockchain.github.io/logos-blockchain-testing/operations.html) |
-| **Troubleshooting** | [Common Issues](https://logos-blockchain.github.io/logos-blockchain-testing/troubleshooting.html) |
+Build and test it locally with:
 
-## Repository Structure
-
-```
-logos-blockchain-testing/
-├── testing-framework/     # Core library crates
-│   ├── core/             # Scenario model, runtime orchestration
-│   ├── workflows/        # Workloads (tx, DA, chaos) and expectations
-│   ├── configs/          # Node configuration builders
-│   ├── runners/          # Deployment backends (local, compose, k8s)
-│   └── assets/stack/     # Docker/K8s deployment assets
-├── examples/             # Runnable demo binaries
-│   └── src/bin/          # local_runner, compose_runner, k8s_runner
-├── scripts/              # Helper utilities (run-examples.sh, build-bundle.sh)
-└── book/                 # Documentation sources (mdBook)
+```bash
+mdbook build book
+mdbook test book
 ```
 
-## Architecture
-
-The framework follows a clear separation of concerns:
-
-**Scenario Definition** → **Topology Builder** → **Deployer** → **Runner** → **Workloads** → **Expectations**
-
-- **Scenario**: Declarative description of test intent (topology + workloads + success criteria)
-- **Deployer**: Provisions infrastructure on chosen backend (host/compose/k8s)
-- **Runner**: Orchestrates execution, manages lifecycle, collects observability
-- **Workloads**: Generate traffic and conditions (transactions, DA blobs, chaos)
-- **Expectations**: Evaluate success/failure based on observed behavior
+Install `mdbook` first if it is not already available.
 
 ## Development
 
-### Building the Documentation
+Useful focused checks from the workspace root:
 
 ```bash
-# Install mdBook
-cargo install mdbook mdbook-mermaid
-
-# Build and serve locally
-cd book && mdbook serve
-# Open http://localhost:3000
+cargo fmt --all -- --check
+cargo test -p testing-framework-core
+cargo test -p testing-framework-app
+cargo test -p multi-app-e2e
+cargo clippy --all --all-targets --all-features -- -D warnings
 ```
 
-### Running Tests
-
-```bash
-# Run framework unit tests
-cargo test
-
-# Run integration examples
-scripts/run/run-examples.sh -t 60 -v 2 -e 1 host
-```
-
-### Creating Prebuilt Bundles
-
-For compose/k8s deployments, you can create prebuilt bundles to speed up image builds:
-
-```bash
-# Build Linux bundle (required for compose/k8s)
-scripts/build/build-bundle.sh --platform linux
-
-# Use the bundle when building images
-export LOGOS_BLOCKCHAIN_BINARIES_TAR=.tmp/nomos-binaries-linux-v0.3.1.tar.gz
-scripts/build/build_test_image.sh
-```
-
-## Environment Variables
-
-Key environment variables for customization:
-
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `LOGOS_BLOCKCHAIN_TESTNET_IMAGE` | Docker image tag for compose/k8s | `logos-blockchain-testing:local` |
-| `LOGOS_BLOCKCHAIN_DEMO_NODES` | Number of nodes | Varies by example |
-| `LOGOS_BLOCKCHAIN_LOG_DIR` | Directory for persistent log files | (temporary) |
-| `LOGOS_BLOCKCHAIN_LOG_LEVEL` | Logging verbosity | `info` |
-
-See [Operations Guide](https://logos-blockchain.github.io/logos-blockchain-testing/operations.html) for complete configuration reference.
-
-## CI/CD Integration
-
-The framework is designed for CI/CD pipelines:
-
-- **Host runner**: Fast smoke tests with minimal overhead
-- **Compose runner**: Reproducible containerized environment with Prometheus
-- **K8s runner**: Production-like cluster validation
-
-Example CI workflow: `.github/workflows/lint.yml` (see `compose_smoke` job)
+The lint workflow also checks dependency policy with `cargo-deny`, unused
+dependencies with `cargo-machete`, and TOML formatting with Taplo.
 
 ## License
 
-This project is part of the Logos blockchain implementation.
-
-## Links
-
-- **Documentation**: https://logos-blockchain.github.io/logos-blockchain-testing/
-- **Logos Project**: https://github.com/logos-co
-- **Logos Node (repo: logos-blockchain-node)**: https://github.com/logos-co/logos-blockchain-node
-
-## Support
-
-For issues, questions, or contributions, please refer to the [Troubleshooting Guide](https://logos-blockchain.github.io/logos-blockchain-testing/troubleshooting.html) or file an issue in this repository.
+MIT OR Apache-2.0.

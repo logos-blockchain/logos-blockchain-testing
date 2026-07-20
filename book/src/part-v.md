@@ -1,28 +1,14 @@
-# Part V — Appendix
+# Part V — Deployers and Sources
 
-Quick reference materials, troubleshooting guides, and supplementary information.
+This part covers where scenarios run and where their nodes come from.
 
-## Contents
+Uniform scenarios deploy to local processes, Docker Compose, or Kubernetes; scenarios can also attach to clusters you already operate. The app layer uses the same cluster request and handle model, with local as its implemented provisioning backend today.
 
-- **Builder API Quick Reference**: Cheat sheet for DSL methods
-- **Troubleshooting Scenarios**: Common issues and their solutions, including "What Failure Looks Like" with realistic examples
-- **FAQ**: Frequently asked questions
-- **Glossary**: Terminology reference
-
-## When to Use This Section
-
-- **Quick lookups**: Find DSL method signatures without reading full guides
-- **Debugging failures**: Match symptoms to known issues and fixes
-- **Clarifying concepts**: Look up unfamiliar terms in the glossary
-- **Common questions**: Check FAQ before asking for help
-
-This section complements the main documentation with practical reference materials that you'll return to frequently during development and operations.
-
----
-
-Jump to:
-- [Builder API Quick Reference](dsl-cheat-sheet.md)
-- [Troubleshooting Scenarios](troubleshooting.md)
-- [FAQ](faq.md)
-- [Glossary](glossary.md)
-
+- [Capability Matrix](capability-matrix.md) — feature support per deployer
+- [Local Deployer](deployer-local.md) — processes on your machine
+- [Compose Deployer](deployer-compose.md) — containerized clusters
+- [Kubernetes Deployer](deployer-k8s.md) — Helm releases in isolated namespaces
+- [Shared Cluster Provisioning](cluster-provisioning.md) — one request and handle model across cluster sources
+- [Existing and External Clusters](external-clusters.md) — attaching to live systems
+- [Binary Providers](binary-providers.md) — resolving node binaries: path, env, build, download
+- [Readiness, Retry, and Artifact Preservation](deployment-policies.md) — deployment policy

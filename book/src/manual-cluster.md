@@ -1,397 +1,116 @@
-# Manual Clusters: Imperative Control
+# ManualCluster: Imperative Node Control
 
-**When should I read this?** You're integrating external test drivers (like Cucumber/BDD frameworks) that need imperative node orchestration. This is an escape hatch for when the test orchestration must live outside the framework—most tests should use the standard scenario approach.
+`ManualCluster` provides imperative node lifecycle control. Your code starts, stops, and restarts nodes directly without using the scenario runner.
 
 ---
 
-## Overview
+## When to Use It
 
-**Manual clusters** provide imperative, on-demand node control for scenarios that don't fit the declarative `ScenarioBuilder` pattern:
+Use `ManualCluster` when orchestration lives outside the scenario runtime. Scenarios can also start and restart nodes from workloads by requesting `with_node_control()`; see [Scenario Capabilities](capabilities.md) and [Chaos and Controlled Failure](chaos.md).
 
-```rust
-use testing_framework_core::topology::config::TopologyConfig;
-use testing_framework_core::scenario::{PeerSelection, StartNodeOptions};
-use testing_framework_runner_local::LocalDeployer;
+- **Step-driven flows**: an external driver decides when each node starts and what happens next.
+- **BDD harnesses**: Gherkin steps map naturally onto imperative start/stop/wait calls.
+- **Exploratory debugging**: poke at a live cluster from a `main` function without writing workloads or expectations.
 
-let config = TopologyConfig::with_node_numbers(3);
-let deployer = LocalDeployer::new();
-let cluster = deployer.manual_cluster(config)?;
+There are no workloads, expectations, or `RunContext`; you call methods and assert with your own code.
 
-// Start nodes on demand with explicit peer selection
-let node_a = cluster.start_node_with(
-    "a",
-    StartNodeOptions {
-        peers: PeerSelection::None, // Start isolated
-    }
-).await?.api;
+---
 
-let node_b = cluster.start_node_with(
-    "b",
-    StartNodeOptions {
-        peers: PeerSelection::Named(vec!["node-a".to_owned()]), // Connect to A
-    }
-).await?.api;
+## Creating a Cluster
 
-// Wait for network readiness
+Two equivalent entry points on the local backend (`testing-framework/deployers/local/src/manual/mod.rs`):
+
+```rust,ignore
+use testing_framework_runner_local::{ManualCluster, ProcessDeployer};
+
+// Directly from a deployment descriptor…
+let cluster = ManualCluster::<KvEnv>::from_topology(KvTopology::new(3));
+
+// …or via the deployer
+let deployer = ProcessDeployer::<KvEnv>::new();
+let cluster = deployer.manual_cluster_from_descriptors(KvTopology::new(3));
+```
+
+The descriptor defines capacity and indexing, not initial state: no processes exist until you call `start_node`. `E` must implement `LocalDeployerEnv` (see [Implementing Application](implementing-application.md)).
+
+**Naming:** requested names are normalized to a `node-` prefix: `start_node("a")` registers `node-a`; names already starting with `node-` pass through; an empty name becomes `node-<index>`. Each started node needs a fresh name; reusing a registered name is an error.
+
+---
+
+## API
+
+| Method | What it does |
+|---|---|
+| `start_node(name)` | Start a node with default options |
+| `start_node_with(name, options)` | Start with `StartNodeOptions` (below); returns `StartedNode { name, client }` |
+| `stop_node(name)` | Kill the process; the node stays registered |
+| `stop_all()` | Stop every node and reset registration state (also runs on drop) |
+| `restart_node(name)` | Stop and respawn in the same working directory |
+| `restart_node_with(name, options)` | Restart with extra `args` / `runtime`; other overrides rejected |
+| `wait_network_ready()` | Poll every started node's readiness endpoint (`AllNodesReady`) |
+| `wait_node_ready(name)` | Poll one node, honoring its `start_timeout` |
+| `node_client(name)` / `node_clients()` | Look up one client / the shared `NodeClients<E>` collection |
+| `node_pid(name)` | OS pid, `None` if the process is not running |
+| `add_external_sources(sources)` | Build clients for `ExternalNodeSource`s and add them to the client set |
+| `add_external_clients(clients)` | Add prebuilt clients to the client set |
+
+`ManualCluster` also implements the core `NodeControlHandle<E>` and `ClusterWaitHandle<E>` traits, so it can stand behind code written against those abstractions. An app-layer child cluster exposes the same common operations through `ClusterHandle<E>`, without exposing the backend-specific `ManualCluster` object.
+
+---
+
+## StartNodeOptions
+
+The full options struct (`core/src/scenario/capabilities.rs`):
+
+| Field | Type | Builder | Meaning |
+|---|---|---|---|
+| `peers` | `Option<PeerSelection>` | `with_peers(sel)` | `DefaultLayout`, `None`, or `Named(names)` — see [node-config.md](node-config.md) for where each path honors it |
+| `config_override` | `Option<E::NodeConfig>` | `with_config_override(cfg)` | Replace the generated config wholesale |
+| `config_patch` | patch closure | `create_patch(fn)` | Transform the generated config before spawn |
+| `persist_dir` | `Option<PathBuf>` | `with_persist_dir(path)` | Place the working directory predictably — see [Persistence](persistence.md) |
+| `snapshot_dir` | `Option<PathBuf>` | `with_snapshot_dir(path)` | Seed the working directory from saved state — see [Persistence](persistence.md) |
+| `args` | `Vec<String>` | `with_args(args)` | Extra CLI args appended on launch |
+| `runtime` | `NodeRuntimeOptions` | `with_runtime(opts)` / `with_start_timeout(dur)` | Per-node readiness timeout |
+
+`restart_node_with` accepts only `args` and `runtime`. Passing `peers`, `config_override`, `config_patch`, `persist_dir`, or `snapshot_dir` to a restart returns an `InvalidArgument` error, because a restart reuses the node's existing config and working directory. To change those, stop the node and start a new one.
+
+---
+
+## Example: Convergence Under Restart
+
+Adapted from the in-repo example `cargo run -p kvstore-examples --bin kvstore_k8s_manual_convergence` (`examples/kvstore/examples/src/bin/k8s_manual_convergence.rs`):
+
+```rust,ignore
+let deployer = KvK8sDeployer::new();
+let cluster = deployer
+    .manual_cluster_from_descriptors(KvTopology::new(3))
+    .await?;
+
+let node0 = cluster.start_node("node-0").await?.client;
+let node1 = cluster.start_node("node-1").await?.client;
+let node2 = cluster.start_node("node-2").await?.client;
 cluster.wait_network_ready().await?;
 
-// Custom validation logic
-let info_a = node_a.consensus_info().await?;
-let info_b = node_b.consensus_info().await?;
-assert!(info_a.height.abs_diff(info_b.height) <= 5);
-```
+write_keys(&node0, "kv-manual", 12).await?;
+wait_for_convergence(&[node0.clone(), node1.clone(), node2.clone()], "kv-manual", 12).await?;
 
-**Key difference from scenarios:**
-- **External orchestration:** Your code (or an external driver like Cucumber) controls the execution flow step-by-step
-- **Imperative model:** You call `start_node()`, `sleep()`, poll APIs directly in test logic
-- **No framework execution:** The scenario runner doesn't drive workloads—you do
-
-Note: Scenarios with node control can also start nodes dynamically, control peer selection, and orchestrate timing—but via **workloads** within the framework's execution model. Use manual clusters only when the orchestration must be external (e.g., Cucumber steps).
-
----
-
-## When to Use Manual Clusters
-
-**Manual clusters are an escape hatch for when orchestration must live outside the framework.**
-
-Prefer workloads for scenario logic; use manual clusters only when an external system needs to control node lifecycle—for example:
-
-**Cucumber/BDD integration**  
-Gherkin steps control when nodes start, which peers they connect to, and when to verify state. The test driver (Cucumber) orchestrates the scenario step-by-step.
-
-**Custom test harnesses**  
-External scripts or tools that need programmatic control over node lifecycle as part of a larger testing pipeline.
-
----
-
-## Core API
-
-### Starting the Cluster
-
-```rust
-use testing_framework_core::topology::config::TopologyConfig;
-use testing_framework_runner_local::LocalDeployer;
-
-// Define capacity (preallocates ports/configs for N nodes)
-let config = TopologyConfig::with_node_numbers(5);
-
-let deployer = LocalDeployer::new();
-let cluster = deployer.manual_cluster(config)?;
-// Nodes are stopped automatically when cluster is dropped
-```
-
-**Important:** The `TopologyConfig` defines the **maximum capacity**, not the initial state. Nodes are started on-demand via API calls.
-
-### Starting Nodes
-
-**Default peers (topology layout):**
-
-```rust
-let node = cluster.start_node("seed").await?;
-```
-
-**No peers (isolated):**
-
-```rust
-use testing_framework_core::scenario::{PeerSelection, StartNodeOptions};
-
-let node = cluster.start_node_with(
-    "isolated",
-    StartNodeOptions {
-        peers: PeerSelection::None,
-    }
-).await?;
-```
-
-**Explicit peers (named):**
-
-```rust
-let node = cluster.start_node_with(
-    "follower",
-    StartNodeOptions {
-        peers: PeerSelection::Named(vec![
-            "node-seed".to_owned(),
-            "node-isolated".to_owned(),
-        ]),
-    }
-).await?;
-```
-
-**Note:** Node names are prefixed with `node-` internally. If you start a node with name `"a"`, reference it as `"node-a"` in peer lists.
-
-### Getting Node Clients
-
-```rust
-// From start result
-let started = cluster.start_node("my-node").await?;
-let client = started.api;
-
-// Or lookup by name
-if let Some(client) = cluster.node_client("node-my-node") {
-    let info = client.consensus_info().await?;
-    println!("Height: {}", info.height);
-}
-```
-
-### Waiting for Readiness
-
-```rust
-// Waits until all started nodes have connected to their expected peers
+cluster.restart_node("node-2").await?;
 cluster.wait_network_ready().await?;
+
+let node2 = cluster.node_client("node-2").expect("client after restart");
+wait_for_convergence(&[node0, node1, node2], "kv-manual", 12).await?;
+
+cluster.stop_all();
 ```
 
-**Behavior:**
-- Single-node clusters always ready (no peers to verify)
-- Multi-node clusters wait for peer counts to match expectations
-- Timeout after 60 seconds (120 seconds if `SLOW_TEST_ENV=true`) with diagnostic message
+The driver determines which nodes exist, when writes happen, what convergence means, and when to inject the restart. `write_keys` and `wait_for_convergence` are plain functions over the application's HTTP client.
+
+That example runs on Kubernetes: the Kubernetes deployer supplies a manual cluster with the same method surface (`manual_cluster_from_descriptors` there is `async` and fallible because it must install the stack first). The local `ManualCluster` documented in this chapter starts processes directly and needs no external infrastructure.
 
 ---
 
-## Complete Example: External Test Driver Pattern
+## Lifecycle and Cleanup
 
-This shows how an external test driver (like Cucumber) might use manual clusters to control node lifecycle:
+Dropping the `ManualCluster` calls `stop_all()`: every child process is killed and waited on. Node working directories are temporary and removed with the processes unless retained. Set `TF_KEEP_LOGS=1` (or `true`/`yes`) to keep them for inspection, and see [Persistence](persistence.md) for deliberate state retention.
 
-```rust
-use std::time::Duration;
-use anyhow::Result;
-use testing_framework_core::{
-    scenario::{PeerSelection, StartNodeOptions},
-    topology::config::TopologyConfig,
-};
-use testing_framework_runner_local::LocalDeployer;
-use tokio::time::sleep;
-
-#[tokio::test]
-async fn external_driver_example() -> Result<()> {
-    // Step 1: Create cluster with capacity for 3 nodes
-    let config = TopologyConfig::with_node_numbers(3);
-    let deployer = LocalDeployer::new();
-    let cluster = deployer.manual_cluster(config)?;
-
-    // Step 2: External driver decides to start 2 nodes initially
-    println!("Starting initial topology...");
-    let node_a = cluster.start_node("a").await?.api;
-    let node_b = cluster
-        .start_node_with(
-            "b",
-            StartNodeOptions {
-                peers: PeerSelection::Named(vec!["node-a".to_owned()]),
-            },
-        )
-        .await?
-        .api;
-
-    cluster.wait_network_ready().await?;
-
-    // Step 3: External driver runs some protocol operations
-    let info = node_a.consensus_info().await?;
-    println!("Initial cluster height: {}", info.height);
-
-    // Step 4: Later, external driver decides to add third node
-    println!("External driver adding third node...");
-    let node_c = cluster
-        .start_node_with(
-            "c",
-            StartNodeOptions {
-                peers: PeerSelection::Named(vec!["node-a".to_owned()]),
-            },
-        )
-        .await?
-        .api;
-
-    cluster.wait_network_ready().await?;
-
-    // Step 5: External driver validates final state
-    let heights = vec![
-        node_a.consensus_info().await?.height,
-        node_b.consensus_info().await?.height,
-        node_c.consensus_info().await?.height,
-    ];
-    println!("Final heights: {:?}", heights);
-
-    Ok(())
-}
-```
-
-**Key pattern:**
-The external driver controls **when** nodes start and **which peers** they connect to, allowing test frameworks like Cucumber to orchestrate scenarios step-by-step based on Gherkin steps or other external logic.
-
----
-
-## Peer Selection Strategies
-
-**`PeerSelection::DefaultLayout`**  
-Uses the topology's network layout (star/chain/full). Default behavior.
-
-```rust
-let node = cluster.start_node_with(
-    "normal",
-    StartNodeOptions {
-        peers: PeerSelection::DefaultLayout,
-    }
-).await?;
-```
-
-**`PeerSelection::None`**  
-Node starts with no initial peers. Use when an external driver needs to build topology incrementally.
-
-```rust
-let isolated = cluster.start_node_with(
-    "isolated",
-    StartNodeOptions {
-        peers: PeerSelection::None,
-    }
-).await?;
-```
-
-**`PeerSelection::Named(vec!["node-a", "node-b"])`**  
-Explicit peer list. Use when an external driver needs to construct specific peer relationships.
-
-```rust
-let follower = cluster.start_node_with(
-    "follower",
-    StartNodeOptions {
-        peers: PeerSelection::Named(vec![
-            "node-seed".to_owned(),
-            "node-seed".to_owned(),
-        ]),
-    }
-).await?;
-```
-
-**Remember:** Node names are automatically prefixed with `node-`. If you call `start_node("a")`, reference it as `"node-a"` in peer lists.
-
----
-
-## Custom Validation Patterns
-
-Manual clusters don't have built-in expectations—you write validation logic directly:
-
-### Height Convergence
-
-```rust
-use tokio::time::{sleep, Duration};
-
-let start = tokio::time::Instant::now();
-loop {
-    let heights: Vec<u64> = vec![
-        node_a.consensus_info().await?.height,
-        node_b.consensus_info().await?.height,
-        node_c.consensus_info().await?.height,
-    ];
-
-    let max_diff = heights.iter().max().unwrap() - heights.iter().min().unwrap();
-    if max_diff <= 5 {
-        println!("Converged: heights={:?}", heights);
-        break;
-    }
-
-    if start.elapsed() > Duration::from_secs(60) {
-        return Err(anyhow::anyhow!("Convergence timeout: heights={:?}", heights));
-    }
-
-    sleep(Duration::from_secs(2)).await;
-}
-```
-
-### Peer Count Verification
-
-```rust
-let info = node.network_info().await?;
-assert_eq!(
-    info.n_peers, 3,
-    "Expected 3 peers, found {}",
-    info.n_peers
-);
-```
-
-### Block Production
-
-```rust
-// Verify node is producing blocks
-let initial_height = node_a.consensus_info().await?.height;
-
-sleep(Duration::from_secs(10)).await;
-
-let current_height = node_a.consensus_info().await?.height;
-assert!(
-    current_height > initial_height,
-    "Node should have produced blocks: initial={}, current={}",
-    initial_height,
-    current_height
-);
-```
-
----
-
-## Limitations
-
-**Local deployer only**  
-Manual clusters currently only work with `LocalDeployer`. Compose and K8s support is not available.
-
-**No built-in workloads**  
-You must manually submit transactions via node API clients. The framework's transaction workloads are scenario-specific.
-
-**No automatic expectations**  
-You wire validation yourself. The `.expect_*()` methods from scenarios are not automatically attached—you write custom validation loops.
-
-**No RunContext**  
-Manual clusters don't provide `RunContext`, so features like `BlockFeed` and metrics queries require manual setup.
-
----
-
-## Relationship to Node Control
-
-Manual clusters and [node control](node-control.md) share the same underlying infrastructure (`LocalDynamicNodes`), but serve different purposes:
-
-| Feature | Manual Cluster | Node Control (Scenario) |
-|---------|---------------|-------------------------|
-| **Orchestration** | External (your code/Cucumber) | Framework (workloads) |
-| **Programming model** | Imperative (step-by-step) | Declarative (plan + execute) |
-| **Node lifecycle** | Manual `start_node()` calls | Automatic + workload-driven |
-| **Traffic generation** | Manual API calls | Built-in workloads (tx, chaos) |
-| **Validation** | Manual polling loops | Built-in expectations + custom |
-| **Use case** | Cucumber/BDD integration | Standard testing & chaos |
-
-**When to use which:**
-- **Scenarios with node control** → Standard testing (built-in workloads drive node control)
-- **Manual clusters** → External drivers (Cucumber/BDD where external logic drives node control)
-
----
-
-## Running Manual Cluster Tests
-
-Manual cluster tests are typically marked with `#[ignore]` to prevent accidental runs:
-
-```rust
-#[tokio::test]
-#[ignore = "run manually with: cargo test -- --ignored external_driver_example"]
-async fn external_driver_example() -> Result<()> {
-    // ...
-}
-```
-
-**To run:**
-
-```bash
-# Required: dev mode for fast proofs
-cargo test -p runner-examples -- --ignored external_driver_example
-```
-
-**Logs:**
-
-```bash
-# Preserve logs after test
-LOGOS_BLOCKCHAIN_TESTS_KEEP_LOGS=1 \
-RUST_LOG=info \
-cargo test -p runner-examples -- --ignored external_driver_example
-```
-
----
-
-## See Also
-
-- [Testing Philosophy](testing-philosophy.md) — Why the framework is declarative by default
-- [RunContext: BlockFeed & Node Control](node-control.md) — Node control within scenarios
-- [Chaos Testing](chaos.md) — Restart-based chaos (scenario approach)
-- [Scenario Builder Extensions](scenario-builder-ext-patterns.md) — Extending the declarative model
+> **External example:** logos-blockchain's cucumber suite drives `ManualCluster` from Gherkin steps in its own repository, including dependency-ordered starts, targeted restarts, snapshot-on-stop, and restore-from-snapshot.
