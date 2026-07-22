@@ -1,12 +1,17 @@
-use std::{collections::HashMap, mem::swap, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    mem::swap,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use rand::{Rng as _, seq::SliceRandom as _, thread_rng};
-use tokio::time::{Instant, sleep};
+use tokio::time::{Instant, sleep, sleep_until, timeout_at};
 
 use crate::{
     scenario::{
-        Application, DynError, NodeControlCapability, RunContext, Workload, internal::CoreBuilder,
+        Application, DynError, NodeControlCapability, RunContext, ScenarioBuilder, Workload,
+        internal::{CoreBuilder, CoreBuilderAccess, NodeControlScenarioBuilder},
     },
     topology::DeploymentDescriptor,
 };
@@ -37,6 +42,122 @@ impl<E: Application> ChaosBuilderExt<E> for CoreBuilder<E, NodeControlCapability
         f: impl FnOnce(ChaosBuilder<E>) -> CoreBuilder<E, NodeControlCapability>,
     ) -> CoreBuilder<E, NodeControlCapability> {
         f(self.chaos())
+    }
+}
+
+/// Direct random-restart verb that requests node control when necessary.
+pub trait RestartChaosBuilderExt: Sized {
+    type Target: CoreBuilderAccess;
+
+    #[must_use]
+    fn restart_nodes_randomly(self) -> RestartBuilder<Self::Target>;
+}
+
+impl<E: Application> RestartChaosBuilderExt for ScenarioBuilder<E> {
+    type Target = NodeControlScenarioBuilder<E>;
+
+    fn restart_nodes_randomly(self) -> RestartBuilder<Self::Target> {
+        RestartBuilder::new(self.with_node_control())
+    }
+}
+
+impl<E: Application> RestartChaosBuilderExt for NodeControlScenarioBuilder<E> {
+    type Target = Self;
+
+    fn restart_nodes_randomly(self) -> RestartBuilder<Self::Target> {
+        RestartBuilder::new(self)
+    }
+}
+
+impl<E: Application> RestartChaosBuilderExt for CoreBuilder<E, ()> {
+    type Target = CoreBuilder<E, NodeControlCapability>;
+
+    fn restart_nodes_randomly(self) -> RestartBuilder<Self::Target> {
+        RestartBuilder::new(self.with_node_control())
+    }
+}
+
+impl<E: Application> RestartChaosBuilderExt for CoreBuilder<E, NodeControlCapability> {
+    type Target = Self;
+
+    fn restart_nodes_randomly(self) -> RestartBuilder<Self::Target> {
+        RestartBuilder::new(self)
+    }
+}
+
+pub struct RestartBuilder<B: CoreBuilderAccess> {
+    builder: B,
+    min_delay: Duration,
+    max_delay: Duration,
+    target_cooldown: Duration,
+    excluded_nodes: HashSet<String>,
+}
+
+impl<B: CoreBuilderAccess> RestartBuilder<B> {
+    fn new(builder: B) -> Self {
+        Self {
+            builder,
+            min_delay: DEFAULT_CHAOS_MIN_DELAY,
+            max_delay: DEFAULT_CHAOS_MAX_DELAY,
+            target_cooldown: DEFAULT_CHAOS_TARGET_COOLDOWN,
+            excluded_nodes: HashSet::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn every_secs(self, min: u64, max: u64) -> Self {
+        self.every(Duration::from_secs(min), Duration::from_secs(max))
+    }
+
+    #[must_use]
+    pub const fn every(mut self, min: Duration, max: Duration) -> Self {
+        self.min_delay = min;
+        self.max_delay = max;
+        self
+    }
+
+    #[must_use]
+    pub fn cooldown_secs(self, secs: u64) -> Self {
+        self.cooldown(Duration::from_secs(secs))
+    }
+
+    #[must_use]
+    pub const fn cooldown(mut self, cooldown: Duration) -> Self {
+        self.target_cooldown = cooldown;
+        self
+    }
+
+    #[must_use]
+    pub fn excluding_nodes(mut self, nodes: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.excluded_nodes
+            .extend(nodes.into_iter().map(Into::into));
+        self
+    }
+
+    #[must_use]
+    pub fn done(self) -> B {
+        let Self {
+            builder,
+            mut min_delay,
+            mut max_delay,
+            mut target_cooldown,
+            excluded_nodes,
+        } = self;
+
+        if min_delay > max_delay {
+            swap(&mut min_delay, &mut max_delay);
+        }
+
+        if target_cooldown < min_delay {
+            target_cooldown = min_delay;
+        }
+
+        builder.map_core_builder(|inner| {
+            inner.with_workload(
+                RandomRestartWorkload::new(min_delay, max_delay, target_cooldown)
+                    .excluding_nodes(excluded_nodes),
+            )
+        })
     }
 }
 
@@ -116,16 +237,25 @@ pub struct RandomRestartWorkload {
     min_delay: Duration,
     max_delay: Duration,
     target_cooldown: Duration,
+    excluded_nodes: HashSet<String>,
 }
 
 impl RandomRestartWorkload {
     #[must_use]
-    pub const fn new(min_delay: Duration, max_delay: Duration, target_cooldown: Duration) -> Self {
+    pub fn new(min_delay: Duration, max_delay: Duration, target_cooldown: Duration) -> Self {
         Self {
             min_delay,
             max_delay,
             target_cooldown,
+            excluded_nodes: HashSet::new(),
         }
+    }
+
+    #[must_use]
+    pub fn excluding_nodes(mut self, nodes: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.excluded_nodes
+            .extend(nodes.into_iter().map(Into::into));
+        self
     }
 
     fn random_delay(&self) -> Duration {
@@ -165,7 +295,12 @@ impl RandomRestartWorkload {
             return Vec::new();
         }
 
-        (0..node_count).map(node_target).collect()
+        (0..node_count)
+            .map(node_target)
+            .filter(|target| match target {
+                Target::Node(name) => !self.excluded_nodes.contains(name),
+            })
+            .collect()
     }
 
     async fn pick_target(
@@ -253,9 +388,16 @@ impl<E: Application> Workload<E> for RandomRestartWorkload {
 
         let mut cooldowns = self.initialize_cooldowns(&targets);
 
-        loop {
-            sleep(self.random_delay()).await;
-            let target = self.pick_target(&targets, &cooldowns).await?;
+        let deadline = Instant::now() + ctx.run_duration();
+        while Instant::now() < deadline {
+            sleep_until((Instant::now() + self.random_delay()).min(deadline)).await;
+            if Instant::now() >= deadline {
+                break;
+            }
+            let target = match timeout_at(deadline, self.pick_target(&targets, &cooldowns)).await {
+                Ok(target) => target?,
+                Err(_) => break,
+            };
 
             match target {
                 Target::Node(ref name) => handle
@@ -266,6 +408,8 @@ impl<E: Application> Workload<E> for RandomRestartWorkload {
 
             cooldowns.insert(target, Instant::now() + self.target_cooldown);
         }
+
+        Ok(())
     }
 }
 

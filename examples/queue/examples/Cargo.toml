@@ -24,6 +24,10 @@ path = "src/bin/compose_convergence.rs"
 name = "queue_compose_roundtrip"
 path = "src/bin/compose_roundtrip.rs"
 
+[[bin]]
+name = "queue_dsl_demo"
+path = "src/bin/dsl_demo.rs"
+
 [dependencies]
 anyhow                           = "1.0"
 async-trait                      = { workspace = true }
