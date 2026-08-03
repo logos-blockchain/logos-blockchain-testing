@@ -123,7 +123,7 @@ where
         let mut process = ProcessNode::spawn(
             &label,
             (),
-            move |(), _working_dir, _label| Ok(launch),
+            move |(), _working_dir, _label| Box::pin(async move { Ok(launch) }),
             move |()| Ok(endpoints),
             keep_tempdir,
             persist_dir.as_deref(),

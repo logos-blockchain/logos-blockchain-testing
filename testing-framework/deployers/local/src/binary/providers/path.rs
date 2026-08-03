@@ -6,12 +6,14 @@
 
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use tracing::info;
 
 use crate::binary::{BinaryProvider, BinaryProviderError, PathBinaryProvider};
 
+#[async_trait]
 impl BinaryProvider for PathBinaryProvider {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         if !self.path.is_absolute() {
             return Err(BinaryProviderError::RelativePath {
                 path: self.path.clone(),

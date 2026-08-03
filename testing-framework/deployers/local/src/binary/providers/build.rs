@@ -8,10 +8,11 @@
 use std::{
     env,
     path::{Path, PathBuf},
-    process::Command,
 };
 
+use async_trait::async_trait;
 use sha2::{Digest as _, Sha256};
+use tokio::process::Command;
 use tracing::info;
 
 use crate::binary::{
@@ -19,12 +20,13 @@ use crate::binary::{
     optional_path_display,
 };
 
+#[async_trait]
 impl BinaryProvider for BuildBinaryProvider {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         let output_path = self.output_path();
-        let _lock = BinaryProviderLock::acquire(&self.lock_path())?;
+        let _lock = BinaryProviderLock::acquire(&self.lock_path()).await?;
 
-        self.run_build()?;
+        self.run_build().await?;
         self.ensure_output_exists(&output_path)?;
 
         Ok(Some(output_path))
@@ -45,7 +47,7 @@ impl BinaryProvider for BuildBinaryProvider {
 }
 
 impl BuildBinaryProvider {
-    fn run_build(&self) -> Result<(), BinaryProviderError> {
+    async fn run_build(&self) -> Result<(), BinaryProviderError> {
         info!(
             command = self.command.display(),
             workspace = %self.workspace_dir().display(),
@@ -55,6 +57,7 @@ impl BuildBinaryProvider {
         let status = self
             .command()
             .status()
+            .await
             .map_err(|source| BinaryProviderError::Io {
                 path: self.workspace_dir(),
                 source,

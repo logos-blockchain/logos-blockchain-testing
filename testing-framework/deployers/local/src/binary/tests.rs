@@ -19,30 +19,32 @@ use super::{
     PathBinaryProvider,
 };
 
-#[test]
-fn resolves_configured_absolute_path() {
+#[tokio::test]
+async fn resolves_configured_absolute_path() {
     let temp = TempDir::new().expect("temp dir");
     let binary = temp.path().join("node");
     write_file(&binary, b"binary");
 
     let path = PathBinaryProvider::new(&binary)
         .resolve()
+        .await
         .expect("path provider resolves");
 
     assert_eq!(path, binary);
 }
 
-#[test]
-fn rejects_relative_configured_path() {
+#[tokio::test]
+async fn rejects_relative_configured_path() {
     let error = PathBinaryProvider::new("relative-node")
         .resolve()
+        .await
         .expect_err("relative path is rejected");
 
     assert!(matches!(error, BinaryProviderError::RelativePath { .. }));
 }
 
-#[test]
-fn resolves_first_available_fallback_provider() {
+#[tokio::test]
+async fn resolves_first_available_fallback_provider() {
     let temp = TempDir::new().expect("temp dir");
     let binary = temp.path().join("node");
     write_file(&binary, b"binary");
@@ -52,13 +54,16 @@ fn resolves_first_available_fallback_provider() {
         Arc::new(PathBinaryProvider::new(&binary)),
     ];
     let provider = FallbackBinaryProvider::new(providers);
-    let path = provider.resolve().expect("fallback provider resolves");
+    let path = provider
+        .resolve()
+        .await
+        .expect("fallback provider resolves");
 
     assert_eq!(path, binary);
 }
 
-#[test]
-fn fallback_reuses_inner_provider_cache() {
+#[tokio::test]
+async fn fallback_reuses_inner_provider_cache() {
     let temp = TempDir::new().expect("temp dir");
     let binary = temp.path().join("node");
     write_file(&binary, b"binary");
@@ -77,13 +82,19 @@ fn fallback_reuses_inner_provider_cache() {
         cached_provider,
     ]);
 
-    assert_eq!(first.resolve().expect("first fallback resolves"), binary);
-    assert_eq!(second.resolve().expect("second fallback resolves"), binary);
+    assert_eq!(
+        first.resolve().await.expect("first fallback resolves"),
+        binary
+    );
+    assert_eq!(
+        second.resolve().await.expect("second fallback resolves"),
+        binary
+    );
     assert_eq!(resolve_count.load(Ordering::SeqCst), 1);
 }
 
-#[test]
-fn runs_build_command_and_returns_output_path() {
+#[tokio::test]
+async fn runs_build_command_and_returns_output_path() {
     let temp = TempDir::new().expect("temp dir");
     let output = temp.path().join("built-node");
     let script = temp.path().join("build.sh");
@@ -98,14 +109,14 @@ fn runs_build_command_and_returns_output_path() {
         working_dir: Some(temp.path().to_owned()),
         lock_dir: Some(temp.path().join("locks")),
     };
-    let path = provider.resolve().expect("build provider resolves");
+    let path = provider.resolve().await.expect("build provider resolves");
 
     assert_eq!(path, output);
     assert_eq!(fs::read(path).expect("built file"), b"built");
 }
 
-#[test]
-fn build_provider_runs_even_when_output_exists() {
+#[tokio::test]
+async fn build_provider_runs_even_when_output_exists() {
     let temp = TempDir::new().expect("temp dir");
     let output = temp.path().join("built-node");
     let script = temp.path().join("build.sh");
@@ -121,14 +132,14 @@ fn build_provider_runs_even_when_output_exists() {
         working_dir: Some(temp.path().to_owned()),
         lock_dir: Some(temp.path().join("locks")),
     };
-    let path = provider.resolve().expect("build provider resolves");
+    let path = provider.resolve().await.expect("build provider resolves");
 
     assert_eq!(path, output);
     assert_eq!(fs::read(path).expect("built file"), b"new");
 }
 
-#[test]
-fn fails_when_build_command_does_not_create_output() {
+#[tokio::test]
+async fn fails_when_build_command_does_not_create_output() {
     let temp = TempDir::new().expect("temp dir");
     let output = temp.path().join("missing-node");
     let provider = BuildBinaryProvider {
@@ -140,6 +151,7 @@ fn fails_when_build_command_does_not_create_output() {
 
     let error = provider
         .resolve()
+        .await
         .expect_err("missing build output is rejected");
 
     assert!(matches!(
@@ -148,8 +160,8 @@ fn fails_when_build_command_does_not_create_output() {
     ));
 }
 
-#[test]
-fn downloads_binary_from_minimal_http_server() {
+#[tokio::test]
+async fn downloads_binary_from_minimal_http_server() {
     let temp = TempDir::new().expect("temp dir");
     let body = b"downloaded-node";
     let server = SingleResponseServer::start(body);
@@ -160,13 +172,16 @@ fn downloads_binary_from_minimal_http_server() {
         cache_dir: Some(temp.path().join("cache")),
         processor: None,
     };
-    let path = provider.resolve().expect("download provider resolves");
+    let path = provider
+        .resolve()
+        .await
+        .expect("download provider resolves");
 
     assert_eq!(fs::read(path).expect("downloaded file"), body);
 }
 
-#[test]
-fn rejects_download_checksum_mismatch() {
+#[tokio::test]
+async fn rejects_download_checksum_mismatch() {
     let temp = TempDir::new().expect("temp dir");
     let server = SingleResponseServer::start(b"downloaded-node");
     let provider = DownloadBinaryProvider {
@@ -178,6 +193,7 @@ fn rejects_download_checksum_mismatch() {
 
     let error = provider
         .resolve()
+        .await
         .expect_err("checksum mismatch is rejected");
 
     assert!(matches!(
@@ -186,8 +202,8 @@ fn rejects_download_checksum_mismatch() {
     ));
 }
 
-#[test]
-fn processes_downloaded_artifact_before_publishing_binary() {
+#[tokio::test]
+async fn processes_downloaded_artifact_before_publishing_binary() {
     let temp = TempDir::new().expect("temp dir");
     let body = b"archive:downloaded-node";
     let server = SingleResponseServer::start(body);
@@ -209,7 +225,10 @@ fn processes_downloaded_artifact_before_publishing_binary() {
         Ok(())
     });
 
-    let path = provider.resolve().expect("processed download resolves");
+    let path = provider
+        .resolve()
+        .await
+        .expect("processed download resolves");
 
     assert_eq!(
         fs::read(path).expect("processed binary"),
@@ -218,8 +237,8 @@ fn processes_downloaded_artifact_before_publishing_binary() {
     assert_eq!(process_count.load(Ordering::SeqCst), 1);
 }
 
-#[test]
-fn rejects_processor_that_does_not_create_output() {
+#[tokio::test]
+async fn rejects_processor_that_does_not_create_output() {
     let temp = TempDir::new().expect("temp dir");
     let body = b"archive";
     let server = SingleResponseServer::start(body);
@@ -233,6 +252,7 @@ fn rejects_processor_that_does_not_create_output() {
 
     let error = provider
         .resolve()
+        .await
         .expect_err("missing processed output is rejected");
 
     assert!(matches!(
@@ -263,8 +283,9 @@ impl CountingBinaryProvider {
     }
 }
 
+#[async_trait::async_trait]
 impl BinaryProvider for CountingBinaryProvider {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         self.resolve_count.fetch_add(1, Ordering::SeqCst);
 
         Ok(Some(self.path.clone()))

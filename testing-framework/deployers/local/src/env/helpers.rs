@@ -375,15 +375,15 @@ where
 }
 
 /// Serializes a config as YAML and builds a launch spec for `spec`.
-pub fn yaml_config_launch_spec<T: Serialize>(
+pub async fn yaml_config_launch_spec<T: Serialize>(
     config: &T,
     spec: &LocalProcessSpec,
 ) -> Result<LaunchSpec, DynError> {
     let config_yaml = serde_yaml::to_string(config)?;
-    rendered_config_launch_spec(config_yaml.into_bytes(), spec)
+    rendered_config_launch_spec(config_yaml.into_bytes(), spec).await
 }
 
-pub fn build_launch_spec_with_args<E>(
+pub async fn build_launch_spec_with_args<E>(
     config: &<E as Application>::NodeConfig,
     dir: &std::path::Path,
     label: &str,
@@ -392,21 +392,21 @@ pub fn build_launch_spec_with_args<E>(
 where
     E: crate::env::LocalDeployerEnv,
 {
-    let mut launch = E::build_launch_spec(config, dir, label)?;
+    let mut launch = E::build_launch_spec(config, dir, label).await?;
     launch.args.extend(extra_args.iter().cloned());
     Ok(launch)
 }
 
 /// Uses an already rendered text config to build a launch spec for `spec`.
-pub fn text_config_launch_spec(
+pub async fn text_config_launch_spec(
     rendered_config: impl Into<Vec<u8>>,
     spec: &LocalProcessSpec,
 ) -> Result<LaunchSpec, DynError> {
-    rendered_config_launch_spec(rendered_config.into(), spec)
+    rendered_config_launch_spec(rendered_config.into(), spec).await
 }
 
 /// Uses the standard binary+config launch shape for a YAML-rendered config.
-pub fn default_yaml_launch_spec<T: Serialize>(
+pub async fn default_yaml_launch_spec<T: Serialize>(
     config: &T,
     binary_env_var: &str,
     rust_log: &str,
@@ -415,6 +415,7 @@ pub fn default_yaml_launch_spec<T: Serialize>(
         config,
         &LocalProcessSpec::new(binary_env_var).with_rust_log(rust_log),
     )
+    .await
 }
 
 /// Serializes a node config as YAML bytes.
@@ -427,11 +428,11 @@ pub fn text_node_config(rendered_config: impl Into<Vec<u8>>) -> Vec<u8> {
     rendered_config.into()
 }
 
-pub(crate) fn rendered_config_launch_spec(
+pub(crate) async fn rendered_config_launch_spec(
     rendered_config: Vec<u8>,
     spec: &LocalProcessSpec,
 ) -> Result<LaunchSpec, DynError> {
-    let binary = spec.binary.resolve()?;
+    let binary = spec.binary.resolve().await?;
     let mut args = config_file_args(spec);
     args.extend(spec.extra_args.iter().cloned());
 
@@ -456,19 +457,21 @@ fn config_file_args(spec: &LocalProcessSpec) -> Vec<String> {
 mod tests {
     use super::{LocalProcessSpec, text_config_launch_spec};
 
-    #[test]
-    fn launch_spec_uses_flag_config_by_default() {
+    #[tokio::test]
+    async fn launch_spec_uses_flag_config_by_default() {
         let temp = tempfile::tempdir().expect("temp dir");
         let binary = temp.path().join("app");
         std::fs::write(&binary, b"binary").expect("test binary");
         let spec = LocalProcessSpec::new("APP_BIN").with_binary_path(binary);
-        let launch = text_config_launch_spec("config", &spec).expect("launch spec");
+        let launch = text_config_launch_spec("config", &spec)
+            .await
+            .expect("launch spec");
 
         assert_eq!(launch.args, ["--config", "config.yaml"]);
     }
 
-    #[test]
-    fn launch_spec_can_use_positional_config_path() {
+    #[tokio::test]
+    async fn launch_spec_can_use_positional_config_path() {
         let temp = tempfile::tempdir().expect("temp dir");
         let binary = temp.path().join("app");
         std::fs::write(&binary, b"binary").expect("test binary");
@@ -476,7 +479,9 @@ mod tests {
             .with_binary_path(binary)
             .with_positional_config_file("app.json")
             .with_args(["--port".to_owned(), "8080".to_owned()]);
-        let launch = text_config_launch_spec("config", &spec).expect("launch spec");
+        let launch = text_config_launch_spec("config", &spec)
+            .await
+            .expect("launch spec");
 
         assert_eq!(launch.args, ["app.json", "--port", "8080"]);
     }

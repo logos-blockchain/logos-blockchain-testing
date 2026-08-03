@@ -6,12 +6,14 @@
 
 use std::{env, path::PathBuf};
 
+use async_trait::async_trait;
 use tracing::{debug, info};
 
 use crate::binary::{BinaryProvider, BinaryProviderError, EnvBinaryProvider};
 
+#[async_trait]
 impl BinaryProvider for EnvBinaryProvider {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         let Some(path) = env::var_os(&self.env_var).map(PathBuf::from) else {
             return Ok(None);
         };

@@ -292,6 +292,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             name,
             &options.args,
         )
+        .await
         .map_err(|source| NodeManagerError::Config { source })?;
 
         if let Err(source) = node.restart_with_launch(launch).await {

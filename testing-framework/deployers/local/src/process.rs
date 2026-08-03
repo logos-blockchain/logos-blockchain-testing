@@ -1,10 +1,12 @@
 use std::{
     collections::HashMap,
     env, fs,
+    future::Future,
     io::{self, Error, ErrorKind},
     mem,
     net::{Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
+    pin::Pin,
     process::Stdio,
     thread,
     time::{Duration, Instant},
@@ -231,7 +233,13 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
     pub async fn spawn(
         label: &str,
         config: Config,
-        build_launch_spec: impl FnOnce(&Config, &Path, &str) -> Result<LaunchSpec, DynError>,
+        build_launch_spec: impl for<'a> FnOnce(
+            &'a Config,
+            &'a Path,
+            &'a str,
+        ) -> Pin<
+            Box<dyn Future<Output = Result<LaunchSpec, DynError>> + Send + 'a>,
+        >,
         endpoints_from_config: impl FnOnce(&Config) -> Result<NodeEndpoints, DynError>,
         keep_tempdir: bool,
         persist_dir: Option<&Path>,
@@ -245,6 +253,7 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         }
 
         let launch = build_launch_spec(&config, tempdir.path(), label)
+            .await
             .map_err(|source| ProcessSpawnError::Config { source })?;
         let endpoints = endpoints_from_config(&config)
             .map_err(|source| ProcessSpawnError::Config { source })?;
@@ -481,10 +490,12 @@ mod tests {
             "node",
             (),
             |_, _, _| {
-                Ok(LaunchSpec {
-                    binary: "/bin/sleep".into(),
-                    args: vec!["60".into()],
-                    ..LaunchSpec::default()
+                Box::pin(async {
+                    Ok(LaunchSpec {
+                        binary: "/bin/sleep".into(),
+                        args: vec!["60".into()],
+                        ..LaunchSpec::default()
+                    })
                 })
             },
             |_| Ok(NodeEndpoints::default()),

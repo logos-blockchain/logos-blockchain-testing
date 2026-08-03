@@ -6,12 +6,15 @@
 
 use std::path::PathBuf;
 
+use async_trait::async_trait;
+
 use crate::binary::{BinaryProvider, BinaryProviderError, FallbackBinaryProvider};
 
+#[async_trait]
 impl BinaryProvider for FallbackBinaryProvider {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         for provider in &self.providers {
-            match provider.resolve() {
+            match provider.resolve().await {
                 Ok(path) => return Ok(Some(path)),
                 Err(BinaryProviderError::NotFound { .. }) => continue,
                 Err(error) => return Err(error),

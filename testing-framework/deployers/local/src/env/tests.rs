@@ -60,7 +60,7 @@ impl LocalDeployerEnv for DummyEnv {
         build_dummy_initial_nodes()
     }
 
-    fn build_launch_spec(
+    async fn build_launch_spec(
         config: &DummyConfig,
         dir: &std::path::Path,
         label: &str,
