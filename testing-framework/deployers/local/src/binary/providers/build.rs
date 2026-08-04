@@ -86,7 +86,8 @@ impl BuildBinaryProvider {
         let mut command = Command::new(&self.command.program);
         command
             .current_dir(self.workspace_dir())
-            .args(&self.command.args);
+            .args(&self.command.args)
+            .kill_on_drop(true);
         command
     }
 
