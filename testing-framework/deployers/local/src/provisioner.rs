@@ -271,7 +271,10 @@ mod tests {
     use std::{
         collections::HashMap,
         path::Path,
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     use testing_framework_core::{
@@ -282,14 +285,22 @@ mod tests {
         topology::DeploymentDescriptor,
     };
 
-    use super::LocalClusterProvisioner;
+    use super::{LocalClusterProvisioner, LocalClusterProvisionerError};
     use crate::{
         BuiltNodeConfig, LaunchSpec, LocalDeployerEnv, NodeConfigEntry, NodeEndpoints,
         ProcessSpawnError,
     };
 
-    #[derive(Clone)]
-    struct EmptyDeployment;
+    #[derive(Default)]
+    struct LifecycleCalls {
+        prepare: AtomicUsize,
+        cleanup: AtomicUsize,
+    }
+
+    #[derive(Clone, Default)]
+    struct EmptyDeployment {
+        lifecycle: Arc<LifecycleCalls>,
+    }
 
     impl DeploymentDescriptor for EmptyDeployment {
         fn node_count(&self) -> usize {
@@ -302,9 +313,6 @@ mod tests {
 
     struct TestEnv;
 
-    static PREPARE_CALLS: AtomicUsize = AtomicUsize::new(0);
-    static CLEANUP_CALLS: AtomicUsize = AtomicUsize::new(0);
-
     #[async_trait::async_trait]
     impl Application for TestEnv {
         type Deployment = EmptyDeployment;
@@ -312,18 +320,21 @@ mod tests {
         type NodeConfig = EmptyConfig;
 
         fn external_node_client(source: &ExternalNodeSource) -> Result<Self::NodeClient, DynError> {
+            if source.endpoint().is_empty() {
+                return Err("empty test endpoint".into());
+            }
             Ok(source.endpoint().to_owned())
         }
     }
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for TestEnv {
-        fn prepare_local_cluster(_deployment: &Self::Deployment) {
-            PREPARE_CALLS.fetch_add(1, Ordering::Relaxed);
+        fn prepare_local_cluster(deployment: &Self::Deployment) {
+            deployment.lifecycle.prepare.fetch_add(1, Ordering::Relaxed);
         }
 
-        fn cleanup_local_cluster(_deployment: &Self::Deployment) {
-            CLEANUP_CALLS.fetch_add(1, Ordering::Relaxed);
+        fn cleanup_local_cluster(deployment: &Self::Deployment) {
+            deployment.lifecycle.cleanup.fetch_add(1, Ordering::Relaxed);
         }
 
         fn build_node_config(
@@ -361,9 +372,9 @@ mod tests {
 
     #[tokio::test]
     async fn on_demand_managed_unit_exposes_shared_control_and_cleanup() {
-        PREPARE_CALLS.store(0, Ordering::Relaxed);
-        CLEANUP_CALLS.store(0, Ordering::Relaxed);
-        let request = ClusterRequest::managed(EmptyDeployment)
+        let deployment = EmptyDeployment::default();
+        let lifecycle = Arc::clone(&deployment.lifecycle);
+        let request = ClusterRequest::managed(deployment)
             .with_start_mode(ClusterStartMode::OnDemand)
             .with_control(ClusterControlRequest::Full);
         let provisioned = LocalClusterProvisioner
@@ -373,7 +384,7 @@ mod tests {
         let (cluster, mut unit) = provisioned.into_parts();
         let cluster = cluster.expect("managed unit should expose its concrete local handle");
 
-        assert_eq!(PREPARE_CALLS.load(Ordering::Relaxed), 1);
+        assert_eq!(lifecycle.prepare.load(Ordering::Relaxed), 1);
         assert_eq!(
             unit.control_profile(),
             ClusterControlProfile::ManualControlled
@@ -384,10 +395,30 @@ mod tests {
         unit.take_cleanup()
             .expect("managed unit should own cleanup")
             .cleanup();
-        assert_eq!(CLEANUP_CALLS.load(Ordering::Relaxed), 1);
+        assert_eq!(lifecycle.cleanup.load(Ordering::Relaxed), 1);
         assert!(cluster.stop_all().is_err(), "cleanup must lock out clones");
         drop(cluster);
-        assert_eq!(CLEANUP_CALLS.load(Ordering::Relaxed), 1);
+        assert_eq!(lifecycle.cleanup.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn provisioning_failure_cleans_up_prepared_cluster_once() {
+        let deployment = EmptyDeployment::default();
+        let lifecycle = Arc::clone(&deployment.lifecycle);
+        let invalid_source = ExternalNodeSource::new("invalid".into(), String::new());
+        let request = ClusterRequest::managed(deployment)
+            .with_start_mode(ClusterStartMode::OnDemand)
+            .with_external_nodes(vec![invalid_source]);
+
+        let error = LocalClusterProvisioner
+            .provision::<TestEnv>(request, true)
+            .await
+            .err()
+            .expect("invalid external source should fail provisioning");
+
+        assert!(matches!(error, LocalClusterProvisionerError::Source { .. }));
+        assert_eq!(lifecycle.prepare.load(Ordering::Relaxed), 1);
+        assert_eq!(lifecycle.cleanup.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]
