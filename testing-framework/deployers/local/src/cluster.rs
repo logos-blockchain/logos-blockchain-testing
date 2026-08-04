@@ -29,6 +29,7 @@ impl<E: LocalDeployerEnv> LocalClusterOwner<E> {
     fn close(&self) {
         if !self.closed.swap(true, Ordering::AcqRel) {
             self.nodes.stop_all();
+            E::cleanup_local_cluster(self.nodes.deployment());
         }
     }
 
@@ -68,6 +69,7 @@ impl<E: LocalDeployerEnv> Clone for LocalCluster<E> {
 
 impl<E: LocalDeployerEnv> LocalCluster<E> {
     pub(crate) fn empty(deployment: E::Deployment, keep_tempdir: bool) -> Self {
+        E::prepare_local_cluster(&deployment);
         let nodes = NodeManager::new_with_seed(
             deployment.clone(),
             NodeClients::default(),
