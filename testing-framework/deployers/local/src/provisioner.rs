@@ -268,7 +268,11 @@ async fn run_retry_attempt<E: LocalDeployerEnv>(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::Path};
+    use std::{
+        collections::HashMap,
+        path::Path,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use testing_framework_core::{
         scenario::{
@@ -298,6 +302,9 @@ mod tests {
 
     struct TestEnv;
 
+    static PREPARE_CALLS: AtomicUsize = AtomicUsize::new(0);
+    static CLEANUP_CALLS: AtomicUsize = AtomicUsize::new(0);
+
     #[async_trait::async_trait]
     impl Application for TestEnv {
         type Deployment = EmptyDeployment;
@@ -311,6 +318,14 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for TestEnv {
+        fn prepare_local_cluster(_deployment: &Self::Deployment) {
+            PREPARE_CALLS.fetch_add(1, Ordering::Relaxed);
+        }
+
+        fn cleanup_local_cluster(_deployment: &Self::Deployment) {
+            CLEANUP_CALLS.fetch_add(1, Ordering::Relaxed);
+        }
+
         fn build_node_config(
             _topology: &Self::Deployment,
             _index: usize,
@@ -346,6 +361,8 @@ mod tests {
 
     #[tokio::test]
     async fn on_demand_managed_unit_exposes_shared_control_and_cleanup() {
+        PREPARE_CALLS.store(0, Ordering::Relaxed);
+        CLEANUP_CALLS.store(0, Ordering::Relaxed);
         let request = ClusterRequest::managed(EmptyDeployment)
             .with_start_mode(ClusterStartMode::OnDemand)
             .with_control(ClusterControlRequest::Full);
@@ -356,6 +373,7 @@ mod tests {
         let (cluster, mut unit) = provisioned.into_parts();
         let cluster = cluster.expect("managed unit should expose its concrete local handle");
 
+        assert_eq!(PREPARE_CALLS.load(Ordering::Relaxed), 1);
         assert_eq!(
             unit.control_profile(),
             ClusterControlProfile::ManualControlled
@@ -366,7 +384,10 @@ mod tests {
         unit.take_cleanup()
             .expect("managed unit should own cleanup")
             .cleanup();
+        assert_eq!(CLEANUP_CALLS.load(Ordering::Relaxed), 1);
         assert!(cluster.stop_all().is_err(), "cleanup must lock out clones");
+        drop(cluster);
+        assert_eq!(CLEANUP_CALLS.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]

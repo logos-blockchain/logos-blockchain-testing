@@ -75,6 +75,12 @@ pub trait LocalDeployerEnv: Application + Sized
 where
     <Self as Application>::NodeConfig: Clone + Send + Sync + 'static,
 {
+    /// Prepares application-specific resources associated with a local cluster.
+    fn prepare_local_cluster(_deployment: &Self::Deployment) {}
+
+    /// Releases application-specific resources associated with a local cluster.
+    fn cleanup_local_cluster(_deployment: &Self::Deployment) {}
+
     /// Returns named ports that should be reserved in addition to the main
     /// network port for each node.
     fn local_port_names() -> &'static [&'static str] {

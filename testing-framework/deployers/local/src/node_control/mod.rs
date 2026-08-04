@@ -85,6 +85,10 @@ pub struct NodeManagerSeed {
 }
 
 impl<E: LocalDeployerEnv> NodeManager<E> {
+    pub(crate) const fn deployment(&self) -> &E::Deployment {
+        &self.descriptors
+    }
+
     pub async fn spawn_initial_nodes(
         descriptors: &E::Deployment,
         keep_tempdir: bool,
