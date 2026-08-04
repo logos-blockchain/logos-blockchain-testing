@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use reqwest::blocking;
+use async_trait::async_trait;
 use sha2::{Digest as _, Sha256};
 use tracing::info;
 
@@ -21,17 +21,18 @@ use crate::binary::{
     lock::BinaryProviderLock, optional_path_display,
 };
 
+#[async_trait]
 impl BinaryProvider for DownloadBinaryProvider {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError> {
         let url = self.url.resolve()?;
         let path = self.cached_binary_path(&url)?;
-        let _lock = BinaryProviderLock::acquire(&self.lock_path(&url))?;
+        let _lock = BinaryProviderLock::acquire(&self.lock_path(&url)).await?;
 
         if path.is_file() {
             return Ok(Some(path));
         }
 
-        let bytes = self.download_bytes(&url)?;
+        let bytes = self.download_bytes(&url).await?;
         self.verify_checksum(&path, &bytes)?;
         self.prepare_binary(&path, &bytes)?;
 
@@ -86,10 +87,11 @@ impl DownloadBinaryProvider {
         Ok(cache_dir.join(self.download_file_name(url)))
     }
 
-    fn download_bytes(&self, url: &str) -> Result<Vec<u8>, BinaryProviderError> {
+    async fn download_bytes(&self, url: &str) -> Result<Vec<u8>, BinaryProviderError> {
         info!(url, "downloading binary");
 
-        blocking::get(url)
+        reqwest::get(url)
+            .await
             .map_err(|source| BinaryProviderError::Download {
                 url: url.to_owned(),
                 source,
@@ -100,6 +102,7 @@ impl DownloadBinaryProvider {
                 source,
             })?
             .bytes()
+            .await
             .map(|bytes| bytes.to_vec())
             .map_err(|source| BinaryProviderError::Download {
                 url: url.to_owned(),

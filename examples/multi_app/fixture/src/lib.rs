@@ -123,7 +123,7 @@ impl AppDeployment<AppHostEnv> for JobWorkerApp {
         let health_port = allocate_available_port()?;
         let client = WorkerClient::new(health_port)?;
         let launch = LaunchSpec {
-            binary: worker_binary_provider().resolve()?,
+            binary: worker_binary_provider().resolve().await?,
             args: vec![
                 "--queue-url".to_owned(),
                 self.queue_url.to_string(),

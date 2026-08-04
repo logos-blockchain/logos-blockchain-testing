@@ -274,7 +274,7 @@ where
     }
 
     /// Builds the full launch spec for a local node process.
-    fn build_launch_spec(
+    async fn build_launch_spec(
         config: &<Self as Application>::NodeConfig,
         _dir: &Path,
         label: &str,
@@ -283,7 +283,7 @@ where
             std::io::Error::other("build_launch_spec is not implemented for this app")
         })?;
         let rendered = Self::render_local_config(config)?;
-        helpers::rendered_config_launch_spec(rendered, &spec)
+        helpers::rendered_config_launch_spec(rendered, &spec).await
     }
 
     /// Returns the main HTTP API port from a node config when the app follows
@@ -660,7 +660,12 @@ pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
     ProcessNode::spawn(
         &label,
         config,
-        move |config, dir, label| build_launch_spec_with_args::<E>(config, dir, label, &extra_args),
+        move |config, dir, label| {
+            let extra_args = extra_args.clone();
+            Box::pin(async move {
+                build_launch_spec_with_args::<E>(config, dir, label, &extra_args).await
+            })
+        },
         E::node_endpoints,
         keep_tempdir,
         persist_dir,

@@ -7,9 +7,10 @@
 use std::{
     fs, io,
     path::{Path, PathBuf},
-    thread,
     time::{Duration, Instant},
 };
+
+use tokio::time::sleep;
 
 use super::types::BinaryProviderError;
 
@@ -23,7 +24,7 @@ pub(super) struct BinaryProviderLock {
 }
 
 impl BinaryProviderLock {
-    pub(super) fn acquire(path: &Path) -> Result<Self, BinaryProviderError> {
+    pub(super) async fn acquire(path: &Path) -> Result<Self, BinaryProviderError> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|source| BinaryProviderError::Io {
                 path: parent.to_owned(),
@@ -50,7 +51,7 @@ impl BinaryProviderLock {
                         });
                     }
 
-                    thread::sleep(LOCK_RETRY_DELAY);
+                    sleep(LOCK_RETRY_DELAY).await;
                 }
                 Err(source) => {
                     return Err(BinaryProviderError::Io {

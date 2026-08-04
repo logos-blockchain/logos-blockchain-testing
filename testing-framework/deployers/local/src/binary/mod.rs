@@ -13,6 +13,7 @@ mod types;
 
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use cache::BinaryCache;
 pub(super) use types::optional_path_display;
 pub use types::{
@@ -28,8 +29,9 @@ pub use types::{
 /// binary in the current environment. The default [`resolve`](Self::resolve)
 /// method turns that into a launch error, while [`FallbackBinaryProvider`] uses
 /// it to try several providers in order.
+#[async_trait]
 pub trait BinaryProvider: Send + Sync {
-    fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError>;
+    async fn try_resolve(&self) -> Result<Option<PathBuf>, BinaryProviderError>;
 
     fn display(&self) -> String;
 
@@ -40,21 +42,21 @@ pub trait BinaryProvider: Send + Sync {
     /// Resolution is cached per process so repeated node starts using the same
     /// provider config do not rebuild, redownload, or rediscover the same
     /// binary.
-    fn resolve(&self) -> Result<PathBuf, BinaryProviderError> {
+    async fn resolve(&self) -> Result<PathBuf, BinaryProviderError> {
         let cache_key = self.cache_key();
 
         if let Some(path) = BinaryCache::get(&cache_key) {
             return Ok(path);
         }
 
-        let path = self.resolve_uncached()?;
+        let path = self.resolve_uncached().await?;
         BinaryCache::insert(cache_key, path.clone());
 
         Ok(path)
     }
 
-    fn resolve_uncached(&self) -> Result<PathBuf, BinaryProviderError> {
-        if let Some(path) = self.try_resolve()? {
+    async fn resolve_uncached(&self) -> Result<PathBuf, BinaryProviderError> {
+        if let Some(path) = self.try_resolve().await? {
             return Ok(path);
         }
 

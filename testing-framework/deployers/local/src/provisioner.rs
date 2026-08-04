@@ -327,7 +327,7 @@ mod tests {
             Ok(Vec::new())
         }
 
-        fn build_launch_spec(
+        async fn build_launch_spec(
             _config: &EmptyConfig,
             _dir: &Path,
             _label: &str,
