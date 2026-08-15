@@ -126,3 +126,70 @@ impl<'a, E: Application> ClusterClient<'a, E> {
         Err("cluster client exhausted all nodes".into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use async_trait::async_trait;
+
+    use super::NodeClients;
+    use crate::{scenario::Application, topology::NodeCountTopology};
+
+    struct TestApp;
+
+    #[async_trait]
+    impl Application for TestApp {
+        type Deployment = NodeCountTopology;
+        type NodeClient = u8;
+        type NodeConfig = ();
+    }
+
+    #[test]
+    fn cloned_client_sets_share_live_inventory() {
+        let clients = NodeClients::<TestApp>::new(vec![1, 2]);
+        let clone = clients.clone();
+
+        clone.add_node(3);
+        assert_eq!(clients.snapshot(), vec![1, 2, 3]);
+        assert_eq!(clients.len(), 3);
+
+        clients.clear();
+        assert!(clone.is_empty());
+    }
+
+    #[tokio::test]
+    async fn cluster_client_tries_nodes_until_one_succeeds() {
+        let clients = NodeClients::<TestApp>::new(vec![1, 2, 3]);
+
+        let result = clients
+            .cluster_client()
+            .try_all_clients(|client| {
+                let client = *client;
+                async move {
+                    if client == 2 {
+                        Ok(client)
+                    } else {
+                        Err(io::Error::other(format!("node {client} unavailable")))
+                    }
+                }
+            })
+            .await
+            .expect("one client should succeed");
+
+        assert_eq!(result, 2);
+    }
+
+    #[tokio::test]
+    async fn cluster_client_rejects_an_empty_inventory() {
+        let clients = NodeClients::<TestApp>::default();
+
+        let error = clients
+            .cluster_client()
+            .try_all_clients(|_| async { Ok::<_, io::Error>(()) })
+            .await
+            .expect_err("empty inventory must fail");
+
+        assert_eq!(error.to_string(), "cluster client has no api clients");
+    }
+}

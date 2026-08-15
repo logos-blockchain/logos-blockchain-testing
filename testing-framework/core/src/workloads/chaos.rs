@@ -417,3 +417,70 @@ impl<E: Application> Workload<E> for RandomRestartWorkload {
 enum Target {
     Node(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, time::Duration};
+
+    use tokio::time::Instant;
+
+    use super::{
+        NO_ELIGIBLE_TARGETS, RandomRestartWorkload, Target, ensure_targets_exist, next_target_wait,
+        node_target, select_target,
+    };
+
+    #[test]
+    fn fixed_restart_delay_is_deterministic() {
+        let workload = RandomRestartWorkload::new(
+            Duration::from_secs(3),
+            Duration::from_secs(3),
+            Duration::from_secs(5),
+        );
+
+        assert_eq!(workload.random_delay(), Duration::from_secs(3));
+    }
+
+    #[test]
+    fn random_restart_delay_stays_inside_configured_bounds() {
+        let min = Duration::from_millis(10);
+        let max = Duration::from_millis(20);
+        let workload = RandomRestartWorkload::new(min, max, Duration::from_secs(1));
+
+        for _ in 0..100 {
+            let delay = workload.random_delay();
+            assert!(delay >= min);
+            assert!(delay <= max);
+        }
+    }
+
+    #[test]
+    fn empty_target_set_is_rejected() {
+        let error = ensure_targets_exist(&[]).expect_err("empty target set must fail");
+
+        assert_eq!(error.to_string(), NO_ELIGIBLE_TARGETS);
+    }
+
+    #[test]
+    fn target_selection_ignores_nodes_still_in_cooldown() {
+        let now = Instant::now();
+        let ready = node_target(0);
+        let cooling_down = node_target(1);
+        let targets = vec![ready.clone(), cooling_down.clone()];
+        let cooldowns = HashMap::from([
+            (
+                ready.clone(),
+                now.checked_sub(Duration::from_secs(1)).unwrap_or(now),
+            ),
+            (cooling_down, now + Duration::from_secs(5)),
+        ]);
+
+        assert_eq!(
+            select_target(&targets, &cooldowns, now).expect("one target is ready"),
+            ready
+        );
+        assert_eq!(
+            next_target_wait(now, &HashMap::from([(Target::Node("node-0".into()), now)])),
+            None
+        );
+    }
+}

@@ -6,7 +6,7 @@ This chapter covers how this repository checks itself, and patterns for running 
 
 ## Workflows in This Repository
 
-Two GitHub Actions workflows live in `.github/workflows/`.
+Three GitHub Actions workflows live in `.github/workflows/`.
 
 ### `lint.yml`
 
@@ -20,11 +20,19 @@ Runs on every push and pull request, with per-ref concurrency cancellation. All 
 | `taplo` | `taplo fmt --check` and `taplo lint` | TOML formatting and lints |
 | `machete` | `cargo machete` | unused dependencies |
 
+### `tests.yml`
+
+Runs tests on every push and pull request. The first step runs all workspace
+library tests without requiring Docker or Kubernetes. The second step runs a
+real two-node Local kvstore scenario through deployment, readiness, workloads,
+expectations, and cleanup.
+
 ### `deploy-pages.yml`
 
 Builds this book with `mdbook build book` and publishes `target/book` to GitHub Pages. It triggers on pushes to `master` that touch `book/**`, or manually via `workflow_dispatch`.
 
-**Note:** CI currently covers linting and the book. The unit tests and example scenarios run via `cargo test` / `cargo run` on developer machines; there is no test workflow yet.
+The Compose and Kubernetes integration tests are intentionally added in later
+increments because they require backend-specific CI setup and images.
 
 ---
 

@@ -670,3 +670,170 @@ impl<E: Application> Builder<E, ()> {
         self.with_observability()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+
+    use async_trait::async_trait;
+
+    use super::ScenarioBuilder;
+    use crate::{
+        scenario::{
+            Application, CleanupPolicy, DeploymentPolicy, DynError, Expectation,
+            HttpReadinessRequirement, RunContext, RunMetrics, ScenarioBuildError, Workload,
+        },
+        topology::NodeCountTopology,
+    };
+
+    struct TestApp;
+
+    #[async_trait]
+    impl Application for TestApp {
+        type Deployment = NodeCountTopology;
+        type NodeClient = ();
+        type NodeConfig = ();
+    }
+
+    struct InitializedExpectation {
+        init_calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Expectation<TestApp> for InitializedExpectation {
+        fn name(&self) -> &str {
+            "derived_expectation"
+        }
+
+        fn init(
+            &mut self,
+            deployment: &NodeCountTopology,
+            metrics: &RunMetrics,
+        ) -> Result<(), DynError> {
+            assert_eq!(deployment.node_count, 2);
+            assert_eq!(metrics.run_duration(), Duration::from_secs(10));
+            self.init_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn evaluate(&mut self, _ctx: &RunContext<TestApp>) -> Result<(), DynError> {
+            Ok(())
+        }
+    }
+
+    struct InitializedWorkload {
+        init_calls: Arc<AtomicUsize>,
+        expectation_init_calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Workload<TestApp> for InitializedWorkload {
+        fn name(&self) -> &str {
+            "initialized_workload"
+        }
+
+        fn expectations(&self) -> Vec<Box<dyn Expectation<TestApp>>> {
+            vec![Box::new(InitializedExpectation {
+                init_calls: Arc::clone(&self.expectation_init_calls),
+            })]
+        }
+
+        fn init(
+            &mut self,
+            deployment: &NodeCountTopology,
+            metrics: &RunMetrics,
+        ) -> Result<(), DynError> {
+            assert_eq!(deployment.node_count, 2);
+            assert_eq!(metrics.run_duration(), Duration::from_secs(10));
+            self.init_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn start(&self, _ctx: &RunContext<TestApp>) -> Result<(), DynError> {
+            Ok(())
+        }
+    }
+
+    struct FailingInitWorkload;
+
+    #[async_trait]
+    impl Workload<TestApp> for FailingInitWorkload {
+        fn name(&self) -> &str {
+            "failing_init"
+        }
+
+        fn init(
+            &mut self,
+            _deployment: &NodeCountTopology,
+            _metrics: &RunMetrics,
+        ) -> Result<(), DynError> {
+            Err(io::Error::other("init failed").into())
+        }
+
+        async fn start(&self, _ctx: &RunContext<TestApp>) -> Result<(), DynError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn build_initializes_workloads_and_their_expectations() {
+        let workload_init_calls = Arc::new(AtomicUsize::new(0));
+        let expectation_init_calls = Arc::new(AtomicUsize::new(0));
+        let policy = DeploymentPolicy {
+            cleanup_policy: CleanupPolicy::new(true),
+            ..DeploymentPolicy::default()
+        };
+
+        let scenario = ScenarioBuilder::<TestApp>::with_deployment(NodeCountTopology::new(2))
+            .with_run_duration(Duration::from_secs(3))
+            .with_expectation_cooldown(Duration::from_secs(2))
+            .with_deployment_policy(policy)
+            .with_http_readiness_requirement(HttpReadinessRequirement::AtLeast(1))
+            .with_workload(InitializedWorkload {
+                init_calls: Arc::clone(&workload_init_calls),
+                expectation_init_calls: Arc::clone(&expectation_init_calls),
+            })
+            .build()
+            .expect("scenario should build");
+
+        assert_eq!(scenario.duration(), Duration::from_secs(10));
+        assert_eq!(scenario.expectation_cooldown(), Duration::from_secs(2));
+        assert_eq!(
+            scenario.http_readiness_requirement(),
+            HttpReadinessRequirement::AtLeast(1)
+        );
+        assert_eq!(
+            scenario.deployment_policy(),
+            DeploymentPolicy {
+                readiness_requirement: HttpReadinessRequirement::AtLeast(1),
+                ..policy
+            }
+        );
+        assert_eq!(scenario.workloads().len(), 1);
+        assert_eq!(scenario.expectations().len(), 1);
+        assert_eq!(workload_init_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(expectation_init_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn build_reports_the_component_that_failed_initialization() {
+        let error = ScenarioBuilder::<TestApp>::with_deployment(NodeCountTopology::new(1))
+            .with_workload(FailingInitWorkload)
+            .build()
+            .err()
+            .expect("workload initialization must fail");
+
+        assert!(matches!(error, ScenarioBuildError::WorkloadInit { .. }));
+        assert_eq!(
+            error.to_string(),
+            "workload 'failing_init' failed to initialize"
+        );
+    }
+}
