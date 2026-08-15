@@ -1,6 +1,8 @@
 mod attach_provider;
+mod node_control;
 mod orchestrator;
 
+pub use node_control::{K8sNodeControl, K8sNodeControlError};
 pub use orchestrator::{K8sDeployer, K8sRunnerError};
 use testing_framework_core::scenario::{DynError, ExistingCluster, IntoExistingCluster};
 

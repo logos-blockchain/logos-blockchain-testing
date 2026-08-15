@@ -1,13 +1,13 @@
 use kube::Client;
+use tracing::warn;
 
 use super::{ClusterPorts, ClusterReady, ClusterWaitError, NodeConfigPorts, NodePortAllocation};
 use crate::{
     env::{K8sDeployEnv, node_deployment_name, node_role, node_service_name},
     lifecycle::wait::{
+        ForwardSpec,
         deployment::wait_for_deployment_ready,
-        forwarding::{
-            PortForwardHandle, PortForwardSpawn, kill_port_forwards, port_forward_service,
-        },
+        forwarding::{PortForwardRegistry, PortForwardSpawn, port_forward_service},
         http_probe::{wait_for_node_http_nodeport, wait_for_node_http_port_forward},
         ports::discover_node_ports,
     },
@@ -41,7 +41,7 @@ pub async fn wait_for_cluster_ready<E: K8sDeployEnv>(
 
 struct ReadinessResolution {
     node_host: String,
-    port_forwards: Vec<PortForwardHandle>,
+    port_forwards: PortForwardRegistry,
 }
 
 async fn needs_port_forward_fallback<E: K8sDeployEnv>(
@@ -50,9 +50,16 @@ async fn needs_port_forward_fallback<E: K8sDeployEnv>(
 ) -> bool {
     let ports = api_ports(allocations);
 
-    wait_for_node_http_nodeport::<E>(&ports, role)
-        .await
-        .is_err()
+    match wait_for_node_http_nodeport::<E>(&ports, role).await {
+        Ok(()) => false,
+        Err(error) => {
+            warn!(
+                %error,
+                "NodePort readiness probe failed; falling back to kubectl port-forward"
+            );
+            true
+        }
+    }
 }
 
 async fn resolve_with_port_forwards<E: K8sDeployEnv>(
@@ -60,8 +67,8 @@ async fn resolve_with_port_forwards<E: K8sDeployEnv>(
     release: &str,
     node_ports: &[NodeConfigPorts],
     role: &'static str,
-) -> Result<(Vec<PortForwardHandle>, Vec<NodePortAllocation>), ClusterWaitError> {
-    let (mut port_forwards, node_allocations) = spawn_port_forwards::<E>(
+) -> Result<(PortForwardRegistry, Vec<NodePortAllocation>), ClusterWaitError> {
+    let (port_forwards, node_allocations) = spawn_port_forwards::<E>(
         namespace.to_owned(),
         release.to_owned(),
         node_ports.to_vec(),
@@ -71,7 +78,7 @@ async fn resolve_with_port_forwards<E: K8sDeployEnv>(
     if let Err(error) =
         wait_for_node_http_port_forward::<E>(&api_ports(&node_allocations), role).await
     {
-        kill_port_forwards(&mut port_forwards);
+        port_forwards.shutdown_all_async().await;
         return Err(error);
     }
 
@@ -99,7 +106,7 @@ async fn fallback_readiness<E: K8sDeployEnv>(
 fn direct_nodeport_readiness() -> ReadinessResolution {
     ReadinessResolution {
         node_host: crate::host::node_host(),
-        port_forwards: Vec::new(),
+        port_forwards: PortForwardRegistry::default(),
     }
 }
 
@@ -125,18 +132,21 @@ async fn spawn_port_forwards<E: K8sDeployEnv>(
     namespace: String,
     release: String,
     node_ports: Vec<NodeConfigPorts>,
-) -> Result<(Vec<PortForwardHandle>, Vec<NodePortAllocation>), ClusterWaitError> {
+) -> Result<(PortForwardRegistry, Vec<NodePortAllocation>), ClusterWaitError> {
     tokio::task::spawn_blocking(move || {
         let mut allocations = Vec::with_capacity(node_ports.len());
-        let mut forwards = Vec::new();
+        let forwards = PortForwardRegistry::default();
 
         for (index, ports) in node_ports.iter().enumerate() {
             let service = node_service_name::<E>(&release, index);
             let api_forward = port_forward_service(&namespace, &service, ports.api)?;
             let auxiliary_forward = port_forward_service(&namespace, &service, ports.auxiliary)?;
             register_forward_pair(
+                &namespace,
+                &service,
+                *ports,
                 &mut allocations,
-                &mut forwards,
+                &forwards,
                 api_forward,
                 auxiliary_forward,
             );
@@ -168,8 +178,11 @@ fn cluster_ready(
 }
 
 fn register_forward_pair(
+    namespace: &str,
+    service: &str,
+    ports: NodeConfigPorts,
     allocations: &mut Vec<NodePortAllocation>,
-    forwards: &mut Vec<PortForwardHandle>,
+    forwards: &PortForwardRegistry,
     api_forward: PortForwardSpawn,
     auxiliary_forward: PortForwardSpawn,
 ) {
@@ -177,6 +190,20 @@ fn register_forward_pair(
         api: api_forward.local_port,
         auxiliary: auxiliary_forward.local_port,
     });
-    forwards.push(api_forward.handle);
-    forwards.push(auxiliary_forward.handle);
+    forwards.register_node(
+        ForwardSpec {
+            namespace: namespace.to_owned(),
+            service: service.to_owned(),
+            local_port: api_forward.local_port,
+            remote_port: ports.api,
+        },
+        api_forward.handle,
+        ForwardSpec {
+            namespace: namespace.to_owned(),
+            service: service.to_owned(),
+            local_port: auxiliary_forward.local_port,
+            remote_port: ports.auxiliary,
+        },
+        auxiliary_forward.handle,
+    );
 }

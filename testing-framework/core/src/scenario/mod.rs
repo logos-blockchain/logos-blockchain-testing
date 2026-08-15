@@ -49,7 +49,7 @@ pub use runtime::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
         PrometheusEndpoint, PrometheusInstantSample,
     },
-    wait_for_http_ports, wait_for_http_ports_with_host,
+    wait_for_http_ports, wait_for_http_ports_with_host, wait_for_http_ports_with_host_and_config,
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
     wait_for_http_ports_with_requirement_and_timeout, wait_for_http_ports_with_timeout,
     wait_http_readiness, wait_until_stable,

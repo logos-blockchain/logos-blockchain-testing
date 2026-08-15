@@ -15,7 +15,7 @@ use testing_framework_core::{
     cfgsync::StaticNodeConfigProvider,
     scenario::{
         Application, DynError, HttpReadinessRequirement, NodeAccess,
-        wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+        wait_for_http_ports_with_host_and_config, wait_http_readiness,
     },
     topology::DeploymentDescriptor,
 };
@@ -447,6 +447,10 @@ pub trait K8sDeployEnv: Application + Sized {
     }
 
     /// Waits for direct HTTP readiness against forwarded node ports.
+    ///
+    /// Enforces `timeout` as a hard deadline: against an unreachable host
+    /// (e.g. NodePorts blocked by a firewall) the probe must give up so the
+    /// deployer can fall back to `kubectl port-forward` instead of hanging.
     async fn wait_for_node_http(
         ports: &[u16],
         role: &'static str,
@@ -455,16 +459,20 @@ pub trait K8sDeployEnv: Application + Sized {
         poll_interval: Duration,
         requirement: HttpReadinessRequirement,
     ) -> Result<(), DynError> {
-        let _ = role;
-        let _ = timeout;
-        let _ = poll_interval;
-        wait_for_http_ports_with_host_and_requirement(
+        wait_for_http_ports_with_host_and_config(
             ports,
             host,
             <Self as K8sDeployEnv>::node_readiness_path(),
             requirement,
+            timeout,
+            poll_interval,
         )
-        .await?;
+        .await
+        .map_err(|source| {
+            DynError::from(format!(
+                "{role} HTTP readiness failed on {host} after {timeout:?}: {source}"
+            ))
+        })?;
         Ok(())
     }
 

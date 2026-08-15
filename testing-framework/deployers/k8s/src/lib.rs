@@ -21,7 +21,9 @@ pub(crate) fn ensure_rustls_provider_installed() {
     });
 }
 
-pub use deployer::{K8sDeployer, K8sDeploymentMetadata, K8sRunnerError};
+pub use deployer::{
+    K8sDeployer, K8sDeploymentMetadata, K8sNodeControl, K8sNodeControlError, K8sRunnerError,
+};
 pub use env::{
     BinaryConfigK8sSpec, HelmManifest, HelmReleaseAssets, K8sBinaryApp, K8sDeployEnv,
     PreparedK8sStack, RenderedHelmChartAssets, discovered_node_access,
