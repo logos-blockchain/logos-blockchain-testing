@@ -23,6 +23,27 @@ The trait has these properties:
 - **The handle is typed.** `Handle` can be any `Clone + Send + Sync + 'static` type. Managed lifetime is registered separately; see [Handle Ownership and Teardown](handles-teardown.md).
 - **`Clone` is required by the factory.** `with_app` needs `A: AppDeployment<E> + Clone + Sync` because `AppDeploymentFactory` clones the description on each `prepare`. Deployment structs should contain configuration such as node counts, ports, and paths rather than live resources.
 
+For a local in-process harness whose deployment future intentionally holds
+non-`Send` state across an await, implement `InlineAppDeployment` instead:
+
+```rust,ignore
+#[async_trait(?Send)]
+pub trait InlineAppDeployment<E: Application, P = LocalClusterProvisioner>: Send + 'static {
+    type Handle: AppHandle;
+
+    async fn deploy_inline(
+        self,
+        ctx: &mut DeployContext<E, P>,
+    ) -> Result<Self::Handle, DynError>;
+}
+```
+
+This is an explicitly inline contract. It is not accepted by `with_app`, and
+it does not pass through the `RuntimeExtensionFactory` path. Use
+`AppHost::deploy_inline` or `InlineAppDeploymentFactory::prepare_inline` from
+the caller-owned local entrypoint. The returned `InlineAppRuntime` exposes the
+same typed handles and owns deployment cleanup until it is dropped.
+
 A minimal implementation, from the kvstore example:
 
 ```rust,ignore
@@ -52,6 +73,8 @@ One context belongs to one scenario preparation. It carries the active cluster p
 |--------|---------|
 | `deploy(app)` | Runs a child deployment, returns its handle. Does **not** expose it. |
 | `deploy_and_expose(app)` | Runs a child deployment and exposes a clone of its handle. |
+| `deploy_inline(app)` | Runs an `InlineAppDeployment` child without exposing its handle. |
+| `deploy_and_expose_inline(app)` | Runs an inline child and exposes a clone of its handle. |
 | `expose(handle)` | Registers the default (unnamed) handle for its concrete type. |
 | `expose_named(name, handle)` | Registers a named handle; allows several instances of one type. |
 | `get::<T>()` / `get_named::<T>(name)` | `Option<T>` clone of an exposed handle. |

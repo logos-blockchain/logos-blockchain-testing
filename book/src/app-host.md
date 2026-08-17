@@ -46,6 +46,25 @@ cargo run -p kvstore-examples --bin kvstore_app_host_convergence
 
 `AppScenarioBuilderExt::with_app(app)` wraps your [`AppDeployment`](app-deployment.md) in an `AppDeploymentFactory` and registers it as a runtime extension factory, the same lifecycle hook covered in [Runtime Extensions](runtime-extensions.md). Going through the extension mechanism ties managed deployment cleanup to the scenario lifetime and makes exposed handles available during the run.
 
+## Inline root deployments
+
+`with_app` intentionally retains the framework's `Send` runtime-extension
+contract. A local in-process harness that needs a non-`Send` deployment future
+can use the separate root entrypoint:
+
+```rust,ignore
+let runtime = AppHost::deploy_inline(app).await?;
+let handle = runtime.require_app::<MyHandle>()?;
+// Keep `runtime` alive while using the deployed application.
+```
+
+`AppHost::deploy_inline` prepares the root through
+`InlineAppDeploymentFactory`, without registering a
+`RuntimeExtensionFactory`. The returned `InlineAppRuntime` owns the exposed
+handles and cleanup; dropping it tears down resources acquired during
+deployment. This path is local/in-process-specific and does not change
+Compose, Kubernetes, or ordinary `with_app` scenarios.
+
 ```mermaid
 flowchart LR
     B["with_app(app)"] --> F[AppDeploymentFactory]

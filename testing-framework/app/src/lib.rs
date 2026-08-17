@@ -19,17 +19,19 @@ mod deployment;
 mod error;
 mod extension;
 mod host;
+mod inline;
 mod local;
 mod process;
 mod registry;
 
 pub use context::DeployContext;
-pub use deployment::{AppDeployment, AppHandle};
+pub use deployment::{AppDeployment, AppHandle, InlineAppDeployment};
 pub use error::AppDeployError;
 pub use extension::{AppDeploymentFactory, AppRunContextExt, AppScenarioBuilderExt};
 pub use host::{
     AppHost, AppHostEnv, AppHostLocalDeployer, AppHostScenarioBuilder, AppHostTopology,
 };
+pub use inline::{InlineAppDeploymentFactory, InlineAppRuntime};
 pub use local::LocalAppCluster;
 pub use process::{LocalProcessApp, LocalProcessHandle};
 pub use registry::{AppRuntime, HandleRegistry};

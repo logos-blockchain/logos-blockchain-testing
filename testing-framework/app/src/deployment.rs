@@ -29,3 +29,21 @@ where
     /// context remains available through the scenario runtime.
     async fn deploy(self, ctx: &mut DeployContext<E, P>) -> Result<Self::Handle, DynError>;
 }
+
+/// Deploys one application directly on a caller-owned local async path.
+///
+/// Unlike [`AppDeployment`], the future returned by `deploy_inline` is not
+/// required to be `Send`. The deployment value and its handle retain the same
+/// ownership requirements as the regular deployment contract, so the
+/// difference is limited to the execution path of the deployment future.
+#[async_trait(?Send)]
+pub trait InlineAppDeployment<E, P = LocalClusterProvisioner>: Send + 'static
+where
+    E: Application,
+{
+    /// Runtime capability produced by this deployment.
+    type Handle: AppHandle;
+
+    /// Prepares the application without crossing a thread or task boundary.
+    async fn deploy_inline(self, ctx: &mut DeployContext<E, P>) -> Result<Self::Handle, DynError>;
+}

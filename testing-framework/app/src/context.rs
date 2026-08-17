@@ -5,7 +5,7 @@ use testing_framework_core::scenario::{
 use testing_framework_runner_local::{LocalClusterProvisioner, LocalDeployerEnv};
 
 use crate::{
-    AppDeployError, AppDeployment, AppHandle, HandleRegistry, LocalAppCluster,
+    AppDeployError, AppDeployment, AppHandle, HandleRegistry, InlineAppDeployment, LocalAppCluster,
     cleanup::AppCleanupStack,
 };
 
@@ -74,6 +74,31 @@ where
         A: AppDeployment<E, P>,
     {
         let handle = self.deploy(app).await?;
+
+        self.expose(handle.clone())?;
+
+        Ok(handle)
+    }
+
+    /// Deploys a child application inline without automatically exposing its
+    /// handle.
+    ///
+    /// This is the non-`Send` counterpart to [`Self::deploy`]. It is intended
+    /// for an explicitly caller-owned local async path, such as a Cucumber
+    /// world or another in-process harness.
+    pub async fn deploy_inline<A>(&mut self, app: A) -> Result<A::Handle, DynError>
+    where
+        A: InlineAppDeployment<E, P>,
+    {
+        app.deploy_inline(self).await
+    }
+
+    /// Deploys a child application inline and exposes a clone of its handle.
+    pub async fn deploy_and_expose_inline<A>(&mut self, app: A) -> Result<A::Handle, DynError>
+    where
+        A: InlineAppDeployment<E, P>,
+    {
+        let handle = self.deploy_inline(app).await?;
 
         self.expose(handle.clone())?;
 
@@ -210,6 +235,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use async_trait::async_trait;
     use testing_framework_core::{
         scenario::{Application, DynError, NodeClients},
@@ -217,7 +244,7 @@ mod tests {
     };
 
     use super::DeployContext;
-    use crate::AppDeployment;
+    use crate::{AppDeployment, InlineAppDeployment};
 
     #[derive(Clone)]
     struct TestDeployment;
@@ -250,6 +277,47 @@ mod tests {
 
         async fn deploy(self, _ctx: &mut DeployContext<TestEnv>) -> Result<Self::Handle, DynError> {
             Ok(ChildHandle { id: "child" })
+        }
+    }
+
+    struct InlineChildApp;
+
+    #[async_trait(?Send)]
+    impl InlineAppDeployment<TestEnv> for InlineChildApp {
+        type Handle = ChildHandle;
+
+        async fn deploy_inline(
+            self,
+            _ctx: &mut DeployContext<TestEnv>,
+        ) -> Result<Self::Handle, DynError> {
+            let marker = Rc::new("inline");
+            tokio::task::yield_now().await;
+            assert_eq!(*marker, "inline");
+
+            Ok(ChildHandle { id: "inline-child" })
+        }
+    }
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct InlineParentHandle {
+        child: ChildHandle,
+    }
+
+    struct InlineParentApp;
+
+    #[async_trait(?Send)]
+    impl InlineAppDeployment<TestEnv> for InlineParentApp {
+        type Handle = InlineParentHandle;
+
+        async fn deploy_inline(
+            self,
+            ctx: &mut DeployContext<TestEnv>,
+        ) -> Result<Self::Handle, DynError> {
+            let child = ctx.deploy_and_expose_inline(InlineChildApp).await?;
+            let parent = InlineParentHandle { child };
+            ctx.expose(parent.clone())?;
+
+            Ok(parent)
         }
     }
 
@@ -353,6 +421,31 @@ mod tests {
         assert!(ctx.get::<ChildHandle>().is_some());
         assert!(ctx.get::<SiblingHandle>().is_some());
         assert!(ctx.get::<StackHandle>().is_some());
+    }
+
+    #[tokio::test]
+    async fn inline_deployment_can_hold_non_send_state_across_an_await() {
+        let mut ctx = test_context();
+        let child = ctx
+            .deploy_inline(InlineChildApp)
+            .await
+            .expect("deploy inline child app");
+
+        assert_eq!(child, ChildHandle { id: "inline-child" });
+        assert!(ctx.get::<ChildHandle>().is_none());
+    }
+
+    #[tokio::test]
+    async fn inline_parent_can_compose_and_expose_child_and_parent_handles() {
+        let mut ctx = test_context();
+        let parent = ctx
+            .deploy_inline(InlineParentApp)
+            .await
+            .expect("deploy inline parent app");
+
+        assert_eq!(parent.child, ChildHandle { id: "inline-child" });
+        assert!(ctx.get::<ChildHandle>().is_some());
+        assert!(ctx.get::<InlineParentHandle>().is_some());
     }
 
     fn test_context() -> DeployContext<TestEnv> {
