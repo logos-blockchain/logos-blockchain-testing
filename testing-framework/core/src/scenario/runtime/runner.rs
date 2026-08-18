@@ -402,3 +402,268 @@ fn expectation_failure_summary(failures: Vec<(String, DynError)>) -> String {
         .collect::<Vec<String>>()
         .join("\n")
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+
+    use async_trait::async_trait;
+
+    use super::Runner;
+    use crate::{
+        scenario::{
+            Application, ClusterControlProfile, DynError, Expectation, Metrics, NodeClients,
+            RunContext, ScenarioBuilder, ScenarioError, Workload, internal::CleanupGuard,
+            runtime::RuntimeAssembly,
+        },
+        topology::NodeCountTopology,
+    };
+
+    struct TestApp;
+
+    #[async_trait]
+    impl Application for TestApp {
+        type Deployment = NodeCountTopology;
+        type NodeClient = u8;
+        type NodeConfig = ();
+    }
+
+    struct CountingCleanup(Arc<AtomicUsize>);
+
+    impl CleanupGuard for CountingCleanup {
+        fn cleanup(self: Box<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    enum WorkloadOutcome {
+        Pass,
+        Fail,
+        Panic,
+    }
+
+    struct TestWorkload {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        outcome: WorkloadOutcome,
+    }
+
+    #[async_trait]
+    impl Workload<TestApp> for TestWorkload {
+        fn name(&self) -> &str {
+            "test_workload"
+        }
+
+        async fn start(&self, _ctx: &RunContext<TestApp>) -> Result<(), DynError> {
+            self.events.lock().expect("events lock").push("workload");
+            match self.outcome {
+                WorkloadOutcome::Pass => Ok(()),
+                WorkloadOutcome::Fail => Err(io::Error::other("workload failed").into()),
+                WorkloadOutcome::Panic => panic!("workload panic"),
+            }
+        }
+    }
+
+    struct TestExpectation {
+        name: &'static str,
+        events: Arc<Mutex<Vec<&'static str>>>,
+        fail_capture: bool,
+        fail_evaluation: bool,
+    }
+
+    #[async_trait]
+    impl Expectation<TestApp> for TestExpectation {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        async fn start_capture(&mut self, _ctx: &RunContext<TestApp>) -> Result<(), DynError> {
+            self.events.lock().expect("events lock").push("capture");
+            if self.fail_capture {
+                return Err(io::Error::other("capture failed").into());
+            }
+            Ok(())
+        }
+
+        async fn evaluate(&mut self, _ctx: &RunContext<TestApp>) -> Result<(), DynError> {
+            self.events.lock().expect("events lock").push("evaluate");
+            if self.fail_evaluation {
+                return Err(io::Error::other(format!("{} failed", self.name)).into());
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn runner_executes_capture_workload_and_evaluation_then_transfers_cleanup() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        let mut scenario = scenario(
+            TestWorkload {
+                events: Arc::clone(&events),
+                outcome: WorkloadOutcome::Pass,
+            },
+            vec![expectation("passes", &events, false, false)],
+        );
+
+        let handle = runner(&cleanup_calls)
+            .run(&mut scenario)
+            .await
+            .expect("scenario should pass");
+
+        assert_eq!(
+            *events.lock().expect("events lock"),
+            vec!["capture", "workload", "evaluate"]
+        );
+        assert_eq!(cleanup_calls.load(Ordering::SeqCst), 0);
+
+        drop(handle);
+        assert_eq!(cleanup_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn workload_failure_triggers_cleanup_immediately() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        let mut scenario = scenario(
+            TestWorkload {
+                events: Arc::clone(&events),
+                outcome: WorkloadOutcome::Fail,
+            },
+            Vec::new(),
+        );
+
+        let error = runner(&cleanup_calls)
+            .run(&mut scenario)
+            .await
+            .err()
+            .expect("workload failure must fail the scenario");
+
+        assert!(matches!(error, ScenarioError::Workload(_)));
+        assert!(error.to_string().contains("workload failed"));
+        assert_eq!(cleanup_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn workload_panic_is_reported_as_a_workload_error() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        let mut scenario = scenario(
+            TestWorkload {
+                events,
+                outcome: WorkloadOutcome::Panic,
+            },
+            Vec::new(),
+        );
+
+        let error = runner(&cleanup_calls)
+            .run(&mut scenario)
+            .await
+            .err()
+            .expect("workload panic must fail the scenario");
+
+        assert!(
+            error
+                .to_string()
+                .contains("workload panicked: workload panic")
+        );
+        assert_eq!(cleanup_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn expectation_failures_are_aggregated_and_cleaned_up() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        let mut scenario = scenario(
+            TestWorkload {
+                events: Arc::clone(&events),
+                outcome: WorkloadOutcome::Pass,
+            },
+            vec![
+                expectation("first", &events, false, true),
+                expectation("second", &events, false, true),
+            ],
+        );
+
+        let error = runner(&cleanup_calls)
+            .run(&mut scenario)
+            .await
+            .err()
+            .expect("failed expectations must fail the scenario");
+        let message = error.to_string();
+
+        assert!(matches!(error, ScenarioError::Expectations(_)));
+        assert!(message.contains("first: first failed"));
+        assert!(message.contains("second: second failed"));
+        assert_eq!(cleanup_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn capture_failure_prevents_workload_start_and_cleans_up() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        let mut scenario = scenario(
+            TestWorkload {
+                events: Arc::clone(&events),
+                outcome: WorkloadOutcome::Pass,
+            },
+            vec![expectation("capture", &events, true, false)],
+        );
+
+        let error = runner(&cleanup_calls)
+            .run(&mut scenario)
+            .await
+            .err()
+            .expect("capture failure must fail the scenario");
+
+        assert!(matches!(error, ScenarioError::ExpectationCapture(_)));
+        assert_eq!(*events.lock().expect("events lock"), vec!["capture"]);
+        assert_eq!(cleanup_calls.load(Ordering::SeqCst), 1);
+    }
+
+    fn scenario(
+        workload: TestWorkload,
+        expectations: Vec<TestExpectation>,
+    ) -> crate::scenario::Scenario<TestApp> {
+        let mut builder = ScenarioBuilder::<TestApp>::with_deployment(NodeCountTopology::new(1))
+            .with_run_duration(Duration::ZERO)
+            .with_expectation_cooldown(Duration::ZERO)
+            .with_workload(workload);
+        for expectation in expectations {
+            builder = builder.with_expectation(expectation);
+        }
+        builder.build().expect("test scenario should build")
+    }
+
+    fn runner(cleanup_calls: &Arc<AtomicUsize>) -> Runner<TestApp> {
+        RuntimeAssembly::new(
+            NodeCountTopology::new(1),
+            NodeClients::new(vec![1]),
+            Duration::from_secs(10),
+            Duration::ZERO,
+            ClusterControlProfile::ExistingClusterAttached,
+            Metrics::empty(),
+        )
+        .build_runner(Some(Box::new(CountingCleanup(Arc::clone(cleanup_calls)))))
+    }
+
+    fn expectation(
+        name: &'static str,
+        events: &Arc<Mutex<Vec<&'static str>>>,
+        fail_capture: bool,
+        fail_evaluation: bool,
+    ) -> TestExpectation {
+        TestExpectation {
+            name,
+            events: Arc::clone(events),
+            fail_capture,
+            fail_evaluation,
+        }
+    }
+}

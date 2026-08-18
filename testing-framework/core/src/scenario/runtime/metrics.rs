@@ -230,3 +230,56 @@ fn scalar_sample(sample: &Sample) -> PrometheusInstantSample {
         value: sample.value(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{Metrics, PrometheusInstantSample, samples_total_or_warn};
+
+    #[test]
+    fn empty_metrics_reports_missing_prometheus() {
+        let metrics = Metrics::empty();
+
+        assert!(!metrics.is_configured());
+        assert_eq!(
+            metrics
+                .instant_values("up")
+                .expect_err("query without endpoint must fail")
+                .to_string(),
+            "prometheus endpoint unavailable"
+        );
+    }
+
+    #[test]
+    fn prometheus_url_is_validated_and_exposed() {
+        let metrics =
+            Metrics::from_prometheus_str("http://127.0.0.1:9090").expect("valid prometheus url");
+        let endpoint = metrics.prometheus().expect("prometheus endpoint");
+
+        assert!(metrics.is_configured());
+        assert_eq!(endpoint.port(), Some(9090));
+        assert_eq!(endpoint.base_url().as_str(), "http://127.0.0.1:9090/");
+
+        let error = Metrics::from_prometheus_str("not a url")
+            .err()
+            .expect("invalid prometheus url must fail");
+        assert!(error.to_string().contains("invalid prometheus url"));
+    }
+
+    #[test]
+    fn transaction_samples_are_summed() {
+        let samples = vec![sample(2.0), sample(3.5)];
+
+        assert_eq!(samples_total_or_warn(samples), Some(5.5));
+        assert_eq!(samples_total_or_warn(Vec::new()), None);
+    }
+
+    fn sample(value: f64) -> PrometheusInstantSample {
+        PrometheusInstantSample {
+            labels: HashMap::new(),
+            timestamp: 1.0,
+            value,
+        }
+    }
+}

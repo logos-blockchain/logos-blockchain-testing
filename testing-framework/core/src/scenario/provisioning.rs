@@ -396,3 +396,132 @@ impl<E: Application> ClusterUnit<E> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use async_trait::async_trait;
+
+    use super::{
+        ClusterControlRequest, ClusterRequest, ClusterSource, ClusterStartMode, ClusterUnit,
+    };
+    use crate::{
+        scenario::{
+            Application, CleanupPolicy, ClusterControlProfile, DeploymentPolicy,
+            ExternalNodeSource, NodeClients, internal::CleanupGuard,
+        },
+        topology::NodeCountTopology,
+    };
+
+    struct TestApp;
+
+    #[async_trait]
+    impl Application for TestApp {
+        type Deployment = NodeCountTopology;
+        type NodeClient = u8;
+        type NodeConfig = ();
+    }
+
+    struct CountingCleanup(Arc<AtomicUsize>);
+
+    impl CleanupGuard for CountingCleanup {
+        fn cleanup(self: Box<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn cluster_request_preserves_source_policy_and_control_options() {
+        let policy = DeploymentPolicy {
+            cleanup_policy: CleanupPolicy::new(true),
+            ..DeploymentPolicy::default()
+        };
+        let request = ClusterRequest::<TestApp>::managed(NodeCountTopology::new(2))
+            .with_external_nodes(vec![external_node("external-0")])
+            .with_policy(policy)
+            .with_start_mode(ClusterStartMode::OnDemand)
+            .with_control(ClusterControlRequest::Full);
+
+        let ClusterSource::Managed {
+            deployment,
+            external,
+        } = request.source()
+        else {
+            panic!("managed request changed source kind");
+        };
+
+        assert_eq!(deployment.node_count, 2);
+        assert_eq!(external.len(), 1);
+        assert_eq!(request.policy(), policy);
+        assert_eq!(request.start_mode(), ClusterStartMode::OnDemand);
+        assert_eq!(request.control(), ClusterControlRequest::Full);
+    }
+
+    #[test]
+    fn cluster_handle_observes_live_client_inventory() {
+        let clients = NodeClients::<TestApp>::new(vec![1, 2]);
+        let unit = ClusterUnit::new(
+            Some(NodeCountTopology::new(2)),
+            clients.clone(),
+            ClusterControlProfile::FrameworkManaged,
+        );
+        let handle = unit.handle();
+
+        clients.add_node(3);
+
+        assert_eq!(handle.node_count(), 2);
+        assert_eq!(handle.clients(), vec![1, 2, 3]);
+        assert_eq!(handle.first_client(), Some(1));
+    }
+
+    #[tokio::test]
+    async fn cluster_handle_reports_missing_runtime_capabilities() {
+        let unit = ClusterUnit::<TestApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ExternalUncontrolled,
+        );
+        let handle = unit.handle();
+
+        assert_eq!(
+            handle
+                .restart_node("node-0")
+                .await
+                .expect_err("missing node control must fail")
+                .to_string(),
+            "cluster node control is not available"
+        );
+        assert_eq!(
+            handle
+                .wait_network_ready()
+                .await
+                .expect_err("missing readiness handle must fail")
+                .to_string(),
+            "cluster readiness is not available"
+        );
+    }
+
+    #[test]
+    fn cluster_cleanup_can_only_be_taken_once() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut unit = ClusterUnit::<TestApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ExternalUncontrolled,
+        )
+        .with_cleanup(Box::new(CountingCleanup(Arc::clone(&calls))));
+
+        unit.take_cleanup().expect("cleanup guard").cleanup();
+
+        assert!(unit.take_cleanup().is_none());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    fn external_node(name: &str) -> ExternalNodeSource {
+        ExternalNodeSource::new(name.to_owned(), "http://127.0.0.1:1".to_owned())
+    }
+}

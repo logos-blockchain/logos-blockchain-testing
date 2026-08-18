@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-and-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use repository Rust toolchain
+        run: rustc --version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Core and library contracts
+        run: cargo test --workspace --lib
+      - name: Build kvstore node
+        run: cargo build -p kvstore-node --bin kvstore-node
+      - name: Local kvstore smoke test
+        run: cargo test -p kvstore-examples --test local_smoke -- --nocapture
+        env:
+          KVSTORE_NODE_BIN: ${{ github.workspace }}/target/debug/kvstore-node

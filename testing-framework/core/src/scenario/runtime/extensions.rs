@@ -182,3 +182,131 @@ impl CleanupGuard for TaskCleanupGuard {
         self.handle.abort();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use async_trait::async_trait;
+
+    use super::{PreparedRuntimeExtension, RuntimeExtensionFactory, prepare_runtime_extensions};
+    use crate::{
+        scenario::{Application, DynError, NodeClients, internal::CleanupGuard},
+        topology::NodeCountTopology,
+    };
+
+    struct TestApp;
+
+    #[async_trait]
+    impl Application for TestApp {
+        type Deployment = NodeCountTopology;
+        type NodeClient = ();
+        type NodeConfig = ();
+    }
+
+    struct RecordingCleanup {
+        label: &'static str,
+        events: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    impl CleanupGuard for RecordingCleanup {
+        fn cleanup(self: Box<Self>) {
+            self.events
+                .lock()
+                .expect("cleanup events lock")
+                .push(self.label);
+        }
+    }
+
+    struct TestFactory<T> {
+        value: T,
+        cleanup_label: &'static str,
+        cleanup_events: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    #[async_trait]
+    impl<T> RuntimeExtensionFactory<TestApp> for TestFactory<T>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        async fn prepare(
+            &self,
+            _deployment: &NodeCountTopology,
+            _node_clients: NodeClients<TestApp>,
+        ) -> Result<PreparedRuntimeExtension, DynError> {
+            Ok(PreparedRuntimeExtension::with_cleanup(
+                self.value.clone(),
+                Box::new(RecordingCleanup {
+                    label: self.cleanup_label,
+                    events: Arc::clone(&self.cleanup_events),
+                }),
+            ))
+        }
+    }
+
+    fn factory<T>(
+        value: T,
+        cleanup_label: &'static str,
+        cleanup_events: &Arc<Mutex<Vec<&'static str>>>,
+    ) -> Box<dyn RuntimeExtensionFactory<TestApp>>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        Box::new(TestFactory {
+            value,
+            cleanup_label,
+            cleanup_events: Arc::clone(cleanup_events),
+        })
+    }
+
+    #[tokio::test]
+    async fn prepared_extensions_are_typed_and_clean_up_in_reverse_order() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let factories = vec![
+            factory(7_u8, "first", &events),
+            factory(9_u16, "second", &events),
+        ];
+
+        let prepared = prepare_runtime_extensions(
+            &factories,
+            &NodeCountTopology::new(0),
+            NodeClients::default(),
+        )
+        .await
+        .expect("different extension types should prepare");
+        let (extensions, cleanup) = prepared.into_parts();
+
+        assert_eq!(extensions.get::<u8>(), Some(7));
+        assert_eq!(extensions.get::<u16>(), Some(9));
+
+        cleanup.expect("extension cleanup chain").cleanup();
+        assert_eq!(
+            *events.lock().expect("cleanup events lock"),
+            vec!["second", "first"]
+        );
+    }
+
+    #[tokio::test]
+    async fn duplicate_extension_types_are_rejected() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let factories = vec![
+            factory(1_u8, "first", &events),
+            factory(2_u8, "second", &events),
+        ];
+
+        let error = prepare_runtime_extensions(
+            &factories,
+            &NodeCountTopology::new(0),
+            NodeClients::default(),
+        )
+        .await
+        .err()
+        .expect("duplicate extension types must fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate runtime extension type")
+        );
+    }
+}
