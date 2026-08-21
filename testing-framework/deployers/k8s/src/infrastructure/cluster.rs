@@ -13,7 +13,7 @@ use crate::{
     },
     lifecycle::{cleanup::RunnerCleanup, logs::dump_namespace_logs},
     wait::{
-        ClusterPorts, ClusterReady, NodeConfigPorts, PortForwardHandle, wait_for_cluster_ready,
+        ClusterPorts, ClusterReady, NodeConfigPorts, PortForwardRegistry, wait_for_cluster_ready,
     },
 };
 
@@ -33,7 +33,7 @@ pub struct ClusterEnvironment {
     node_host: String,
     node_api_ports: Vec<u16>,
     node_auxiliary_ports: Vec<u16>,
-    port_forwards: Vec<PortForwardHandle>,
+    port_forwards: PortForwardRegistry,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -52,7 +52,7 @@ impl ClusterEnvironment {
         release: String,
         cleanup: RunnerCleanup,
         ports: &ClusterPorts,
-        port_forwards: Vec<PortForwardHandle>,
+        port_forwards: PortForwardRegistry,
     ) -> Self {
         let node_api_ports = ports.nodes.iter().map(|ports| ports.api).collect();
         let node_auxiliary_ports = ports.nodes.iter().map(|ports| ports.auxiliary).collect();
@@ -79,7 +79,7 @@ impl ClusterEnvironment {
             "k8s stack failure; collecting diagnostics"
         );
         dump_namespace_logs(&self.client, &self.namespace).await;
-        kill_port_forwards(&mut self.port_forwards);
+        self.port_forwards.shutdown_all_async().await;
         if let Some(guard) = self.cleanup.take() {
             CleanupGuard::cleanup(Box::new(guard));
         }
@@ -89,7 +89,7 @@ impl ClusterEnvironment {
     /// port-forwards.
     pub fn into_cleanup(
         self,
-    ) -> Result<(RunnerCleanup, Vec<PortForwardHandle>), ClusterEnvironmentError> {
+    ) -> Result<(RunnerCleanup, PortForwardRegistry), ClusterEnvironmentError> {
         let cleanup = self
             .cleanup
             .ok_or(ClusterEnvironmentError::MissingCleanupGuard)?;
@@ -116,6 +116,17 @@ impl ClusterEnvironment {
     /// Returns forwarded API and auxiliary node ports.
     pub fn node_ports(&self) -> (&[u16], &[u16]) {
         (&self.node_api_ports, &self.node_auxiliary_ports)
+    }
+
+    /// Returns the host on which node ports are reachable.
+    pub fn node_host(&self) -> &str {
+        &self.node_host
+    }
+
+    /// Returns the shared registry of per-node port-forwards (empty in
+    /// NodePort mode).
+    pub fn port_forward_registry(&self) -> PortForwardRegistry {
+        self.port_forwards.clone()
     }
 }
 
@@ -224,14 +235,6 @@ pub async fn wait_for_ports_or_cleanup<E: K8sDeployEnv>(
             Err(err.into())
         }
     }
-}
-
-/// Stops all active port-forwards and clears the handle list.
-pub fn kill_port_forwards(handles: &mut Vec<PortForwardHandle>) {
-    for handle in handles.iter_mut() {
-        handle.shutdown();
-    }
-    handles.clear();
 }
 
 async fn cleanup_pending(client: &Client, namespace: &str, guard: &mut Option<RunnerCleanup>) {

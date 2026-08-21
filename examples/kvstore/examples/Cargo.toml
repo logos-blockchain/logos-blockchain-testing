@@ -24,6 +24,10 @@ path = "src/bin/k8s_convergence.rs"
 name = "kvstore_k8s_manual_convergence"
 path = "src/bin/k8s_manual_convergence.rs"
 
+[[bin]]
+name = "kvstore_k8s_restart_chaos"
+path = "src/bin/k8s_restart_chaos.rs"
+
 [dependencies]
 async-trait                      = { workspace = true }
 kvstore-node                     = { path = "../kvstore-node" }

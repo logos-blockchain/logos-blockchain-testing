@@ -7,8 +7,8 @@ use testing_framework_core::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, ClusterWaitHandle, Deployer, DynError,
         ExistingCluster, HttpReadinessRequirement, Metrics, MetricsError, NodeClients,
-        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
-        Scenario,
+        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
+        RequiresNodeControl, Runner, Scenario,
         internal::{
             ApplicationExternalProvider, CleanupGuard, RuntimeAssembly, SourceOrchestrationPlan,
             SourceProviders, StaticManagedProvider, build_source_orchestration_plan,
@@ -23,6 +23,7 @@ use crate::{
     deployer::{
         K8sDeploymentMetadata,
         attach_provider::{K8sAttachProvider, K8sAttachedClusterWait},
+        node_control::maybe_managed_node_control,
     },
     env::{
         K8sDeployEnv, attach_node_service_selector, cluster_identifiers, node_base_url,
@@ -31,10 +32,10 @@ use crate::{
     infrastructure::cluster::{
         ClusterEnvironment, ClusterEnvironmentError, NodeClientError, PortSpecs,
         RemoteReadinessError, build_node_clients, collect_port_specs, ensure_cluster_readiness,
-        kill_port_forwards, wait_for_ports_or_cleanup,
+        wait_for_ports_or_cleanup,
     },
     lifecycle::cleanup::RunnerCleanup,
-    wait::{ClusterReady, ClusterWaitError, PortForwardHandle},
+    wait::{ClusterReady, ClusterWaitError, PortForwardRegistry},
 };
 
 const DISABLED_ENDPOINT: &str = "<disabled>";
@@ -125,6 +126,8 @@ pub enum K8sRunnerError {
         #[source]
         source: DynError,
     },
+    #[error("node control is unavailable for this deployment: {message}")]
+    NodeControlUnavailable { message: &'static str },
 }
 
 #[async_trait]
@@ -171,7 +174,7 @@ async fn deploy_with_observability<E, Caps>(
 ) -> Result<(Runner<E>, K8sDeploymentMetadata), K8sRunnerError>
 where
     E: K8sDeployEnv,
-    Caps: ObservabilityCapabilityProvider + Send + Sync,
+    Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
 {
     validate_supported_cluster_mode(scenario)
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
@@ -202,6 +205,7 @@ where
 
     let mut runtime = build_runtime_artifacts::<E>(&mut cluster, &observability).await?;
     let cluster_wait = managed_cluster_wait::<E>(&cluster, &metadata)?;
+    let node_control = managed_node_control::<E>(&cluster, Caps::REQUIRED)?;
 
     let source_providers = source_providers::<E>(
         client_from_cluster(&cluster)?,
@@ -214,7 +218,14 @@ where
     log_configured_observability(&observability);
     maybe_print_endpoints::<E>(&observability, &runtime.node_clients);
 
-    let parts = build_runner_parts(scenario, deployment.node_count, runtime, cluster_wait).await?;
+    let parts = build_runner_parts(
+        scenario,
+        deployment.node_count,
+        runtime,
+        cluster_wait,
+        node_control,
+    )
+    .await?;
     let runner = finalize_runner::<E>(&mut cluster, parts)?;
     Ok((runner, metadata))
 }
@@ -226,8 +237,15 @@ async fn deploy_existing_cluster<E, Caps>(
 ) -> Result<Runner<E>, K8sRunnerError>
 where
     E: K8sDeployEnv,
-    Caps: ObservabilityCapabilityProvider + Send + Sync,
+    Caps: RequiresNodeControl + ObservabilityCapabilityProvider + Send + Sync,
 {
+    if Caps::REQUIRED {
+        return Err(K8sRunnerError::NodeControlUnavailable {
+            message: "node control is not implemented for attached k8s clusters; deploy a \
+                      managed cluster or drive the nodes through a ManualCluster",
+        });
+    }
+
     let client = init_kube_client().await?;
     let source_providers = source_providers::<E>(client.clone(), Vec::new());
     let node_clients = resolve_node_clients(&source_plan, source_providers).await?;
@@ -342,6 +360,37 @@ fn managed_cluster_wait<E: K8sDeployEnv>(
         .map_err(|source| K8sRunnerError::SourceOrchestration { source })?;
 
     Ok(Arc::new(cluster_wait))
+}
+
+/// Builds the managed node control handle when the scenario capabilities
+/// require it. In port-forward mode the handle receives the shared forward
+/// registry so lifecycle operations respawn a restarted node's forwards on
+/// their original local ports.
+fn managed_node_control<E: K8sDeployEnv>(
+    cluster: &Option<ClusterEnvironment>,
+    required: bool,
+) -> Result<Option<Arc<dyn NodeControlHandle<E>>>, K8sRunnerError> {
+    if !required {
+        return Ok(None);
+    }
+
+    let environment = cluster
+        .as_ref()
+        .ok_or_else(|| K8sRunnerError::InternalInvariant {
+            message: "cluster must exist while building node control".to_owned(),
+        })?;
+
+    let (api_ports, auxiliary_ports) = environment.node_ports();
+    Ok(maybe_managed_node_control::<E>(
+        required,
+        environment.client(),
+        environment.namespace(),
+        environment.release(),
+        environment.node_host(),
+        api_ports,
+        auxiliary_ports,
+        environment.port_forward_registry(),
+    ))
 }
 
 fn client_from_cluster(cluster: &Option<ClusterEnvironment>) -> Result<Client, K8sRunnerError> {
@@ -555,24 +604,31 @@ async fn build_runner_parts<E: K8sDeployEnv, Caps>(
     node_count: usize,
     runtime: RuntimeArtifacts<E>,
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
+    node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<K8sRunnerParts<E>, K8sRunnerError> {
     let (runtime_extensions, runtime_cleanup) = scenario
         .prepare_runtime_extensions(runtime.node_clients.clone())
         .await
         .map_err(|source| K8sRunnerError::RuntimeExtensions { source })?;
 
+    let mut assembly = build_k8s_runtime_assembly(
+        scenario.deployment().clone(),
+        runtime.node_clients,
+        scenario.duration(),
+        scenario.expectation_cooldown(),
+        scenario.cluster_control_profile(),
+        runtime.telemetry,
+        cluster_wait,
+    )
+    .with_runtime_extensions(runtime_extensions)
+    .with_cleanup_guard(runtime_cleanup);
+
+    if let Some(node_control) = node_control {
+        assembly = assembly.with_node_control(node_control);
+    }
+
     Ok(K8sRunnerParts {
-        assembly: build_k8s_runtime_assembly(
-            scenario.deployment().clone(),
-            runtime.node_clients,
-            scenario.duration(),
-            scenario.expectation_cooldown(),
-            scenario.cluster_control_profile(),
-            runtime.telemetry,
-            cluster_wait,
-        )
-        .with_runtime_extensions(runtime_extensions)
-        .with_cleanup_guard(runtime_cleanup),
+        assembly,
         node_count,
         duration_secs: scenario.duration().as_secs(),
     })
@@ -763,11 +819,11 @@ fn log_k8s_deploy_start<E>(
 
 struct K8sCleanupGuard {
     cleanup: RunnerCleanup,
-    port_forwards: Vec<PortForwardHandle>,
+    port_forwards: PortForwardRegistry,
 }
 
 impl K8sCleanupGuard {
-    const fn new(cleanup: RunnerCleanup, port_forwards: Vec<PortForwardHandle>) -> Self {
+    const fn new(cleanup: RunnerCleanup, port_forwards: PortForwardRegistry) -> Self {
         Self {
             cleanup,
             port_forwards,
@@ -776,8 +832,8 @@ impl K8sCleanupGuard {
 }
 
 impl CleanupGuard for K8sCleanupGuard {
-    fn cleanup(mut self: Box<Self>) {
-        kill_port_forwards(&mut self.port_forwards);
+    fn cleanup(self: Box<Self>) {
+        self.port_forwards.shutdown_all();
         CleanupGuard::cleanup(Box::new(self.cleanup));
     }
 }

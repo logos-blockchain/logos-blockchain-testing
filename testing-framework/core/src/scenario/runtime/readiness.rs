@@ -6,11 +6,7 @@ use std::{
 use reqwest::{Client, Url};
 use thiserror::Error;
 
-use crate::{
-    adjust_timeout,
-    retry::{RetryConfig, retry_async},
-    scenario::DynError,
-};
+use crate::{adjust_timeout, scenario::DynError};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -241,39 +237,71 @@ pub async fn wait_http_readiness_with_timeout(
     requirement: HttpReadinessRequirement,
     timeout: Option<Duration>,
 ) -> Result<(), ReadinessError> {
+    wait_http_readiness_with_config(
+        endpoints,
+        requirement,
+        timeout.unwrap_or(DEFAULT_TIMEOUT),
+        DEFAULT_POLL_INTERVAL,
+    )
+    .await
+}
+
+async fn wait_http_readiness_with_config(
+    endpoints: &[Url],
+    requirement: HttpReadinessRequirement,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> Result<(), ReadinessError> {
     if endpoints.is_empty() {
         return Ok(());
     }
 
-    let (poll_interval, max_attempts) = http_retry_plan(timeout);
+    let timeout = adjust_timeout(timeout);
+    let poll_interval = poll_interval.max(Duration::from_millis(1));
+    let deadline = Instant::now() + timeout;
     let client = Client::new();
-    let retry = RetryConfig::bounded(max_attempts, poll_interval, poll_interval);
-    retry_async(retry, |_| async {
-        let statuses = collect_http_statuses(&client, endpoints).await;
-        if requirement_satisfied(&statuses, requirement) {
-            Ok(())
-        } else {
-            Err(statuses)
+    let mut last_statuses = None;
+
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(http_probe_timeout(
+                last_statuses.as_deref(),
+                requirement,
+                timeout,
+            ));
         }
-    })
-    .await
-    .map_err(|statuses| ReadinessError::ProbeTimeout {
-        message: format_http_timeout_message(&statuses, requirement),
-    })
+
+        let statuses = tokio::time::timeout(remaining, collect_http_statuses(&client, endpoints))
+            .await
+            .map_err(|_| http_probe_timeout(last_statuses.as_deref(), requirement, timeout))?;
+        if requirement_satisfied(&statuses, requirement) {
+            return Ok(());
+        }
+
+        last_statuses = Some(statuses);
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(http_probe_timeout(
+                last_statuses.as_deref(),
+                requirement,
+                timeout,
+            ));
+        }
+        tokio::time::sleep(poll_interval.min(remaining)).await;
+    }
 }
 
-fn http_retry_plan(timeout: Option<Duration>) -> (Duration, usize) {
-    let timeout_duration = adjust_timeout(timeout.unwrap_or(DEFAULT_TIMEOUT));
-    let poll_interval = DEFAULT_POLL_INTERVAL;
-    let max_attempts = retry_attempts(timeout_duration, poll_interval);
-    (poll_interval, max_attempts)
-}
-
-fn retry_attempts(timeout: Duration, interval: Duration) -> usize {
-    let timeout_ms = timeout.as_millis();
-    let interval_ms = interval.as_millis();
-
-    timeout_ms.div_ceil(interval_ms).max(1).saturating_add(1) as usize
+fn http_probe_timeout(
+    statuses: Option<&[HttpProbeStatus]>,
+    requirement: HttpReadinessRequirement,
+    timeout: Duration,
+) -> ReadinessError {
+    let message = statuses.map_or_else(
+        || format!("timed out after {timeout:?} waiting for readiness {requirement:?}"),
+        |statuses| format_http_timeout_message(statuses, requirement),
+    );
+    ReadinessError::ProbeTimeout { message }
 }
 
 pub async fn wait_for_http_ports(ports: &[u16], endpoint_path: &str) -> Result<(), ReadinessError> {
@@ -336,6 +364,56 @@ pub async fn wait_for_http_ports_with_host_and_requirement(
     wait_http_readiness(&endpoints, requirement).await
 }
 
+pub async fn wait_for_http_ports_with_host_and_config(
+    ports: &[u16],
+    host: &str,
+    endpoint_path: &str,
+    requirement: HttpReadinessRequirement,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> Result<(), ReadinessError> {
+    let endpoints = build_endpoints_with_host(ports, host, endpoint_path)?;
+    wait_http_readiness_with_config(&endpoints, requirement, timeout, poll_interval).await
+}
+
 const fn default_readiness_requirement() -> HttpReadinessRequirement {
     HttpReadinessRequirement::AllNodesReady
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::Read,
+        net::TcpListener,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn readiness_timeout_is_a_hard_deadline_for_stalled_requests() {
+        let listener = TcpListener::bind((LOCALHOST, 0)).expect("bind stalled HTTP server");
+        let port = listener.local_addr().expect("server address").port();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let mut request = [0_u8; 256];
+            let _ = stream.read(&mut request);
+            thread::sleep(Duration::from_secs(1));
+        });
+
+        let started = Instant::now();
+        let result = wait_for_http_ports_with_host_and_config(
+            &[port],
+            LOCALHOST,
+            "/ready",
+            HttpReadinessRequirement::AllNodesReady,
+            Duration::from_millis(50),
+            Duration::from_millis(5),
+        )
+        .await;
+
+        assert!(matches!(result, Err(ReadinessError::ProbeTimeout { .. })));
+        assert!(started.elapsed() < Duration::from_millis(500));
+    }
 }

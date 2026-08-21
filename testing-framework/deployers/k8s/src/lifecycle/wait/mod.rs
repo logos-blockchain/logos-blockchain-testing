@@ -9,8 +9,8 @@ mod http_probe;
 mod orchestrator;
 pub(crate) mod ports;
 
-pub use forwarding::PortForwardHandle;
-pub(crate) use forwarding::port_forward_service;
+pub(crate) use forwarding::{ForwardSpec, port_forward_service};
+pub use forwarding::{PortForwardHandle, PortForwardRegistry};
 const DEFAULT_HTTP_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const DEFAULT_NODE_HTTP_TIMEOUT: Duration = Duration::from_secs(240);
 const DEFAULT_NODE_HTTP_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -45,11 +45,11 @@ pub struct ClusterPorts {
     pub node_host: String,
 }
 
-/// Success result from waiting for the cluster: host ports and forward handles.
+/// Success result from waiting for the cluster: host ports and forwards.
 #[derive(Debug)]
 pub struct ClusterReady {
     pub ports: ClusterPorts,
-    pub port_forwards: Vec<PortForwardHandle>,
+    pub port_forwards: PortForwardRegistry,
 }
 
 #[derive(Debug, Error)]
@@ -101,6 +101,8 @@ pub enum ClusterWaitError {
         #[source]
         source: anyhow::Error,
     },
+    #[error("port-forward registry has no node at index {index} (registered nodes={nodes})")]
+    MissingPortForwardNode { index: usize, nodes: usize },
 }
 
 static DEPLOYMENT_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {

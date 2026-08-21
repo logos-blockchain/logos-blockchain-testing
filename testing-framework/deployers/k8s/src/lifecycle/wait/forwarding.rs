@@ -3,6 +3,7 @@ use std::{
     io::Read,
     net::{Ipv4Addr, TcpListener, TcpStream},
     process::{Child, Command as StdCommand, ExitStatus, Stdio},
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -42,6 +43,148 @@ pub struct PortForwardSpawn {
     pub handle: PortForwardHandle,
 }
 
+/// Everything needed to (re)spawn one service port-forward.
+#[derive(Clone, Debug)]
+pub struct ForwardSpec {
+    /// Namespace holding the forwarded service.
+    pub namespace: String,
+    /// Service name to forward to.
+    pub service: String,
+    /// Local port the forward listens on.
+    pub local_port: u16,
+    /// Service port being forwarded.
+    pub remote_port: u16,
+}
+
+/// One node's live forwards together with the specs to recreate them.
+struct NodeForwards {
+    api: ForwardEntry,
+    auxiliary: ForwardEntry,
+}
+
+struct ForwardEntry {
+    spec: ForwardSpec,
+    handle: PortForwardHandle,
+}
+
+/// Shared registry of per-node port-forwards.
+///
+/// A restarted node's pod kills the `kubectl port-forward` processes bound to
+/// it; this registry lets node lifecycle operations respawn a node's forwards
+/// on the same local ports so existing clients and probes keep working. Empty
+/// when the cluster is reached through NodePorts directly.
+#[derive(Clone, Default)]
+pub struct PortForwardRegistry {
+    nodes: Arc<Mutex<Vec<Arc<Mutex<NodeForwards>>>>>,
+}
+
+impl fmt::Debug for PortForwardRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PortForwardRegistry")
+            .field("nodes", &self.lock().len())
+            .finish()
+    }
+}
+
+impl PortForwardRegistry {
+    /// Returns whether any forwards are registered (NodePort mode has none).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
+
+    /// Registers one node's api/auxiliary forwards in node-index order.
+    pub(crate) fn register_node(
+        &self,
+        api_spec: ForwardSpec,
+        api_handle: PortForwardHandle,
+        auxiliary_spec: ForwardSpec,
+        auxiliary_handle: PortForwardHandle,
+    ) {
+        self.lock().push(Arc::new(Mutex::new(NodeForwards {
+            api: ForwardEntry {
+                spec: api_spec,
+                handle: api_handle,
+            },
+            auxiliary: ForwardEntry {
+                spec: auxiliary_spec,
+                handle: auxiliary_handle,
+            },
+        })));
+    }
+
+    /// Shuts down every registered forward and clears the registry.
+    pub fn shutdown_all(&self) {
+        let nodes = {
+            let mut nodes = self.lock();
+            std::mem::take(&mut *nodes)
+        };
+        for node in nodes {
+            let mut node = lock_node(&node);
+            node.api.handle.shutdown();
+            node.auxiliary.handle.shutdown();
+        }
+    }
+
+    /// Async-friendly wrapper that keeps process waits off runtime workers.
+    pub(crate) async fn shutdown_all_async(&self) {
+        let forwards = self.clone();
+        let _ = tokio::task::spawn_blocking(move || forwards.shutdown_all()).await;
+    }
+
+    /// Respawns the given node's forwards on their original local ports.
+    ///
+    /// No-op when the registry is empty (NodePort mode). Blocking: spawns
+    /// `kubectl` processes and polls the local ports for readiness.
+    pub(crate) fn respawn_node(&self, index: usize) -> Result<(), ClusterWaitError> {
+        let node = {
+            let nodes = self.lock();
+            if nodes.is_empty() {
+                return Ok(());
+            }
+            nodes
+                .get(index)
+                .cloned()
+                .ok_or(ClusterWaitError::MissingPortForwardNode {
+                    index,
+                    nodes: nodes.len(),
+                })?
+        };
+        let mut node = lock_node(&node);
+
+        respawn_entry(&mut node.api)?;
+        respawn_entry(&mut node.auxiliary)
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Arc<Mutex<NodeForwards>>>> {
+        self.nodes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn lock_node(node: &Mutex<NodeForwards>) -> std::sync::MutexGuard<'_, NodeForwards> {
+    node.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Kills an entry's forward and spawns a replacement on the same local port.
+fn respawn_entry(entry: &mut ForwardEntry) -> Result<(), ClusterWaitError> {
+    entry.handle.shutdown();
+
+    let spec = &entry.spec;
+    let mut child = spawn_kubectl_port_forward(
+        &spec.namespace,
+        &spec.service,
+        spec.local_port,
+        spec.remote_port,
+    )
+    .map_err(|source| port_forward_error(&spec.service, spec.remote_port, source.into()))?;
+    wait_until_port_forward_ready(&mut child, spec.local_port, &spec.service, spec.remote_port)?;
+
+    entry.handle = PortForwardHandle { child };
+    Ok(())
+}
+
 pub fn port_forward_service(
     namespace: &str,
     service: &str,
@@ -58,13 +201,6 @@ pub fn port_forward_service(
         local_port,
         handle: PortForwardHandle { child },
     })
-}
-
-pub fn kill_port_forwards(handles: &mut Vec<PortForwardHandle>) {
-    for handle in handles.iter_mut() {
-        handle.shutdown();
-    }
-    handles.clear();
 }
 
 fn allocate_local_port() -> anyhow::Result<u16> {

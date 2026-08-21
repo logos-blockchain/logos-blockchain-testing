@@ -80,6 +80,8 @@ pub enum ManualClusterError {
         #[source]
         source: kube::Error,
     },
+    #[error("node '{name}' did not reach {replicas} replicas before the scale timeout")]
+    ReplicaScaleTimeout { name: String, replicas: i32 },
     #[error("failed to delete pods for deployment {name}: {source}")]
     DeletePods {
         name: String,
@@ -524,7 +526,9 @@ async fn scale_all_nodes<E: K8sDeployEnv>(
     Ok(())
 }
 
-async fn scale_node<E: K8sDeployEnv>(
+/// Patches the per-node deployment to the requested replica count and waits
+/// for the deployment to reach it.
+pub(crate) async fn scale_node<E: K8sDeployEnv>(
     client: &Client,
     namespace: &str,
     release: &str,
@@ -532,38 +536,59 @@ async fn scale_node<E: K8sDeployEnv>(
     replicas: i32,
 ) -> Result<(), ManualClusterError> {
     let name = node_deployment_name::<E>(release, index);
+    patch_node_replicas(client, namespace, &name, replicas).await?;
+    wait_for_replicas(
+        client,
+        namespace,
+        &name,
+        &canonical_node_name(index),
+        replicas,
+    )
+    .await
+}
+
+pub(crate) async fn patch_node_replicas(
+    client: &Client,
+    namespace: &str,
+    deployment_name: &str,
+    replicas: i32,
+) -> Result<(), ManualClusterError> {
     let deployments = Api::<Deployment>::namespaced(client.clone(), namespace);
     let patch = serde_json::json!({"spec": {"replicas": replicas}});
     deployments
-        .patch(&name, &PatchParams::default(), &Patch::Merge(&patch))
+        .patch(
+            deployment_name,
+            &PatchParams::default(),
+            &Patch::Merge(&patch),
+        )
         .await
         .map_err(|source| ManualClusterError::PatchDeployment {
-            name: name.clone(),
+            name: deployment_name.to_owned(),
             source,
         })?;
-
-    wait_for_replicas(client, namespace, &name, replicas).await
+    Ok(())
 }
 
-async fn wait_for_replicas(
+pub(crate) async fn wait_for_replicas(
     client: &Client,
     namespace: &str,
-    name: &str,
+    deployment_name: &str,
+    node_name: &str,
     replicas: i32,
 ) -> Result<(), ManualClusterError> {
     if replicas > 0 {
-        return wait_for_deployment_ready(client, namespace, name)
+        return wait_for_deployment_ready(client, namespace, deployment_name)
             .await
             .map_err(Into::into);
     }
 
     let deployments = Api::<Deployment>::namespaced(client.clone(), namespace);
-    RetryIf::spawn(
+    let result = RetryIf::spawn(
         FixedInterval::from_millis(500).take(240),
         || async {
-            let deployment = deployments.get(name).await.map_err(|source| {
+            let deployment = deployments.get(deployment_name).await.map_err(|source| {
                 ManualClusterError::PatchDeployment {
-                    name: name.to_owned(),
+                    name: deployment_name.to_owned(),
                     source,
                 }
             })?;
@@ -581,13 +606,23 @@ async fn wait_for_replicas(
                 Ok(())
             } else {
                 Err(ManualClusterError::NodeAlreadyRunning {
-                    name: name.to_owned(),
+                    name: node_name.to_owned(),
                 })
             }
         },
         |error: &ManualClusterError| matches!(error, ManualClusterError::NodeAlreadyRunning { .. }),
     )
-    .await
+    .await;
+
+    match result {
+        Err(ManualClusterError::NodeAlreadyRunning { .. }) => {
+            Err(ManualClusterError::ReplicaScaleTimeout {
+                name: node_name.to_owned(),
+                replicas,
+            })
+        }
+        other => other,
+    }
 }
 
 fn validate_start_options<E: K8sDeployEnv>(
@@ -614,11 +649,13 @@ fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     })
 }
 
-fn parse_node_index(name: &str) -> Option<usize> {
+/// Parses a canonical `node-<index>` name into its index.
+pub(crate) fn parse_node_index(name: &str) -> Option<usize> {
     name.strip_prefix("node-")?.parse().ok()
 }
 
-fn canonical_node_name(index: usize) -> String {
+/// Formats the canonical `node-<index>` name for a node index.
+pub(crate) fn canonical_node_name(index: usize) -> String {
     format!("node-{index}")
 }
 
@@ -638,19 +675,20 @@ fn block_on_best_effort(fut: impl std::future::Future<Output = Result<(), Manual
     }
 }
 
+/// Minimal `K8sDeployEnv` implementation shared by unit tests in this crate.
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests_dummy_env {
     use testing_framework_core::{
         cfgsync::{StaticNodeConfigProvider, build_node_artifact_override},
-        scenario::{Application, NodeAccess, PeerSelection},
+        scenario::{Application, DynError, NodeAccess, PeerSelection, StartNodeOptions},
     };
 
-    use super::*;
     use crate::{
-        RenderedHelmChartAssets, render_single_template_chart_assets, standard_port_specs,
+        RenderedHelmChartAssets, env::K8sDeployEnv, render_single_template_chart_assets,
+        standard_port_specs,
     };
 
-    struct DummyEnv;
+    pub(crate) struct DummyEnv;
 
     #[async_trait::async_trait]
     impl Application for DummyEnv {
@@ -740,6 +778,13 @@ mod tests {
             ])))
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::PeerSelection;
+
+    use super::{tests_dummy_env::DummyEnv, *};
 
     #[test]
     fn parse_node_index_accepts_node_labels() {
