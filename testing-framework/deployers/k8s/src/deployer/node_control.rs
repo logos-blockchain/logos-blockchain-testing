@@ -235,10 +235,9 @@ impl<E: K8sDeployEnv> K8sNodeControl<E> {
     async fn restart(&self, name: &str) -> Result<(), K8sNodeControlError> {
         let index = self.require_node_index(name)?;
         let _operation = self.operations[index].lock().await;
-        if !self.running.lock().await.contains(&index) {
-            return Err(K8sNodeControlError::NodeNotRunning {
-                name: canonical_node_name(index),
-            });
+        {
+            let running = self.running.lock().await;
+            ensure_node_running(&running, index)?;
         }
 
         self.patch_replicas(index, 0).await?;
@@ -280,10 +279,9 @@ impl<E: K8sDeployEnv> K8sNodeControl<E> {
     async fn stop(&self, name: &str) -> Result<(), K8sNodeControlError> {
         let index = self.require_node_index(name)?;
         let _operation = self.operations[index].lock().await;
-        if !self.running.lock().await.contains(&index) {
-            return Err(K8sNodeControlError::NodeNotRunning {
-                name: canonical_node_name(index),
-            });
+        {
+            let running = self.running.lock().await;
+            ensure_node_running(&running, index)?;
         }
         self.patch_replicas(index, 0).await?;
         self.set_running(index, false).await;
@@ -329,6 +327,16 @@ fn ensure_default_start_options<E: K8sDeployEnv>(
     Ok(())
 }
 
+fn ensure_node_running(running: &HashSet<usize>, index: usize) -> Result<(), K8sNodeControlError> {
+    if running.contains(&index) {
+        return Ok(());
+    }
+
+    Err(K8sNodeControlError::NodeNotRunning {
+        name: canonical_node_name(index),
+    })
+}
+
 #[async_trait::async_trait]
 impl<E> NodeControlHandle<E> for K8sNodeControl<E>
 where
@@ -366,6 +374,11 @@ where
 
     async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
         let index = self.require_node_index(name)?;
+        let _operation = self.operations[index].lock().await;
+        {
+            let running = self.running.lock().await;
+            ensure_node_running(&running, index)?;
+        }
         self.wait_node_ready_by_index(index)
             .await
             .map_err(Into::into)
@@ -443,6 +456,17 @@ mod tests {
         assert!(matches!(
             ensure_default_start_options(&with_timeout),
             Err(K8sNodeControlError::UnsupportedStartOptions { .. })
+        ));
+    }
+
+    #[test]
+    fn running_state_rejects_stopped_nodes() {
+        let running = HashSet::from([0]);
+
+        assert!(ensure_node_running(&running, 0).is_ok());
+        assert!(matches!(
+            ensure_node_running(&running, 1),
+            Err(K8sNodeControlError::NodeNotRunning { name }) if name == "node-1"
         ));
     }
 }
