@@ -483,7 +483,7 @@ where
         self.stop_all();
         self.forwards.shutdown_all();
         if let Some(cleanup) = self.cleanup.take() {
-            testing_framework_core::scenario::internal::CleanupGuard::cleanup(Box::new(cleanup));
+            testing_framework_core::scenario::CleanupGuard::cleanup(Box::new(cleanup));
         }
     }
 }

@@ -42,9 +42,9 @@ pub use provisioning::{
     ClusterStartMode, ClusterUnit, ProvisionedCluster,
 };
 pub use runtime::{
-    Deployer, HttpReadinessRequirement, NodeClients, PreparedRuntimeExtension, ReadinessError,
-    RunContext, RunHandle, RunMetrics, Runner, RuntimeExtensionFactory, RuntimeExtensions,
-    ScenarioError, StabilizationConfig,
+    CleanupGuard, Deployer, HttpReadinessRequirement, NodeClients, PreparedRuntimeExtension,
+    ReadinessError, RunContext, RunHandle, RunMetrics, Runner, RuntimeExtensionFactory,
+    RuntimeExtensions, ScenarioError, StabilizationConfig,
     metrics::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
         PrometheusEndpoint, PrometheusInstantSample,

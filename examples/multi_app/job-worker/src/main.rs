@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(process_jobs(queue, results));
 
     let app = Router::new().route("/health/ready", get(|| async { StatusCode::OK }));
-    let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, args.health_port)).await?;
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, args.health_port)).await?;
     info!(port = args.health_port, "job worker ready");
     axum::serve(listener, app).await?;
 

@@ -34,6 +34,7 @@ members = [
   "examples/redis_streams/testing/integration",
   "examples/redis_streams/testing/workloads",
   "testing-framework/app",
+  "testing-framework/container",
   "testing-framework/core",
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
@@ -63,6 +64,7 @@ cfgsync-adapter                  = { default-features = false, path = "cfgsync/a
 cfgsync-artifacts                = { default-features = false, path = "cfgsync/artifacts" }
 cfgsync-core                     = { default-features = false, path = "cfgsync/core" }
 testing-framework-app            = { default-features = false, path = "testing-framework/app" }
+testing-framework-container      = { default-features = false, path = "testing-framework/container" }
 testing-framework-core           = { default-features = false, path = "testing-framework/core" }
 testing-framework-runner-compose = { default-features = false, path = "testing-framework/deployers/compose" }
 testing-framework-runner-k8s     = { default-features = false, path = "testing-framework/deployers/k8s" }

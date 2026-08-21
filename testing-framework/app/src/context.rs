@@ -1,6 +1,9 @@
+use testing_framework_container::{
+    ContainerStackHandle, ContainerStackProvisioner, ContainerStackRequest,
+};
 use testing_framework_core::scenario::{
-    Application, ClusterControlRequest, ClusterHandle, ClusterProvisioner, ClusterRequest,
-    DynError, NodeClients, internal::CleanupGuard,
+    Application, CleanupGuard, ClusterControlRequest, ClusterHandle, ClusterProvisioner,
+    ClusterRequest, DynError, NodeClients,
 };
 use testing_framework_runner_local::{LocalClusterProvisioner, LocalDeployerEnv};
 
@@ -163,6 +166,26 @@ where
             .provisioner
             .provision_cluster(request.with_control(ClusterControlRequest::Full))
             .await?;
+        let handle = unit.handle();
+        if let Some(cleanup) = unit.take_cleanup() {
+            self.register_cleanup(cleanup);
+        }
+        Ok(handle)
+    }
+
+    /// Provisions a backend-managed stack of mutually reachable containers.
+    ///
+    /// Cleanup is registered before the stack handle is returned. The
+    /// application remains responsible for turning resolved endpoints into
+    /// its typed client handles.
+    pub async fn deploy_container_stack(
+        &mut self,
+        request: ContainerStackRequest,
+    ) -> Result<ContainerStackHandle, DynError>
+    where
+        P: ContainerStackProvisioner,
+    {
+        let mut unit = self.provisioner.provision_container_stack(request).await?;
         let handle = unit.handle();
         if let Some(cleanup) = unit.take_cleanup() {
             self.register_cleanup(cleanup);

@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{path::Path, time::Duration};
 
 use testing_framework_core::{
     adjust_timeout,
@@ -16,6 +13,7 @@ use crate::{
         commands::{ComposeCommandError, run_docker_command},
     },
     errors::ComposeRunnerError,
+    infrastructure::project::ComposeProject,
 };
 
 const COMPOSE_RESTART_TIMEOUT: Duration = Duration::from_secs(120);
@@ -133,6 +131,8 @@ async fn run_docker_action(
             let compose_timeout = ComposeCommandError::Timeout {
                 command: description.to_owned(),
                 timeout: timeout_duration,
+                stdout: String::new(),
+                stderr: String::new(),
             };
 
             Err(compose_timeout.into())
@@ -142,14 +142,14 @@ async fn run_docker_action(
 
 /// Compose-specific node control handle for restarting nodes.
 pub struct ComposeNodeControl {
-    pub(crate) compose_file: PathBuf,
-    pub(crate) project_name: String,
+    pub(crate) project: ComposeProject,
 }
 
 #[async_trait::async_trait]
 impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
-        restart_compose_service(&self.compose_file, &self.project_name, name)
+        self.project
+            .restart_service(name)
             .await
             .map_err(|err| format!("node restart failed: {err}").into())
     }

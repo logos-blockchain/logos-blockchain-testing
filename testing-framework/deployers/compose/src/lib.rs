@@ -1,3 +1,4 @@
+mod container_stack;
 pub mod deployer;
 pub mod descriptor;
 pub mod docker;
@@ -6,6 +7,7 @@ pub mod errors;
 pub mod infrastructure;
 pub mod lifecycle;
 
+pub use container_stack::ComposeContainerProvisioner;
 pub use deployer::{ComposeDeployer, ComposeDeploymentMetadata};
 pub use descriptor::{
     BinaryConfigNodeSpec, ComposeDescriptor, EnvEntry, LoopbackNodeRuntimeSpec, NodeDescriptor,

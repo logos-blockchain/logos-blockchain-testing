@@ -79,14 +79,10 @@ async fn resolve_service_port(
     service: &str,
     container_port: u16,
 ) -> Result<u16, ComposeRunnerError> {
-    resolve_service_port_with(
-        environment.compose_path(),
-        environment.project_name(),
-        environment.root(),
-        service,
-        container_port,
-    )
-    .await
+    environment
+        .project()
+        .resolve_service_port(service, container_port)
+        .await
 }
 
 pub(crate) async fn resolve_service_port_with(

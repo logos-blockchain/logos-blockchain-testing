@@ -171,6 +171,7 @@ Useful focused checks from the workspace root:
 ```bash
 cargo fmt --all -- --check
 cargo test -p testing-framework-core
+cargo test -p testing-framework-container
 cargo test -p testing-framework-app
 cargo test -p multi-app-e2e
 cargo clippy --all --all-targets --all-features -- -D warnings

@@ -1,9 +1,13 @@
 use async_trait::async_trait;
 use testing_framework_core::{
-    scenario::{Application, DynError, NodeAccess, ScenarioBuilder},
+    scenario::{
+        Application, ClusterControlProfile, Deployer, DynError, Metrics, NodeAccess, NodeClients,
+        Runner, Scenario, ScenarioBuilder, internal::RuntimeAssembly,
+    },
     topology::DeploymentDescriptor,
 };
 use testing_framework_runner_local::{LocalDeployerEnv, ProcessDeployer};
+use thiserror::Error;
 
 #[derive(Clone, Default)]
 /// Empty outer topology for scenarios whose entire system is deployed as apps.
@@ -51,5 +55,74 @@ impl AppHost {
 
 /// Scenario builder for an application-hosted heterogeneous stack.
 pub type AppHostScenarioBuilder = ScenarioBuilder<AppHostEnv>;
+/// Backend-neutral deployer for scenarios whose resources come entirely from
+/// application runtime extensions.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AppHostDeployer;
+
+/// Failures while preparing an application-hosted scenario.
+#[derive(Debug, Error)]
+pub enum AppHostDeployError {
+    /// Application deployment failed before workloads started.
+    #[error("application deployment failed: {source}")]
+    RuntimeExtensions {
+        /// Underlying application deployment error.
+        #[source]
+        source: DynError,
+    },
+    /// No application runtime was installed.
+    #[error("application host requires at least one deployed application")]
+    Empty,
+}
+
+#[async_trait]
+impl Deployer<AppHostEnv> for AppHostDeployer {
+    type Error = AppHostDeployError;
+
+    async fn deploy(
+        &self,
+        scenario: &Scenario<AppHostEnv>,
+    ) -> Result<Runner<AppHostEnv>, Self::Error> {
+        let node_clients = NodeClients::default();
+        let (runtime_extensions, runtime_cleanup) = scenario
+            .prepare_runtime_extensions(node_clients.clone())
+            .await
+            .map_err(|source| AppHostDeployError::RuntimeExtensions { source })?;
+
+        if runtime_extensions.is_empty() {
+            return Err(AppHostDeployError::Empty);
+        }
+
+        let assembly = RuntimeAssembly::new(
+            scenario.deployment().clone(),
+            node_clients,
+            scenario.duration(),
+            scenario.expectation_cooldown(),
+            ClusterControlProfile::ExternalUncontrolled,
+            Metrics::empty(),
+        )
+        .with_runtime_extensions(runtime_extensions)
+        .with_cleanup_guard(runtime_cleanup);
+
+        Ok(assembly.build_runner(None))
+    }
+}
+
 /// Local process deployer used to execute an [`AppHost`] scenario.
 pub type AppHostLocalDeployer = ProcessDeployer<AppHostEnv>;
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::Deployer;
+
+    use super::{AppHost, AppHostDeployError, AppHostDeployer};
+
+    #[tokio::test]
+    async fn backend_neutral_deployer_rejects_an_empty_app_host() {
+        let scenario = AppHost::scenario().build().unwrap();
+
+        let result = AppHostDeployer.deploy(&scenario).await;
+
+        assert!(matches!(result, Err(AppHostDeployError::Empty)));
+    }
+}

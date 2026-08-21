@@ -3,11 +3,10 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, ClusterControlProfile, ClusterControlRequest, ClusterMode, ClusterRequest,
-        ClusterWaitHandle, Deployer, DeploymentPolicy, DynError, Metrics, NodeClients,
-        NodeControlCapability, NodeControlHandle, Runner, RuntimeExtensions, Scenario,
-        ScenarioError,
-        internal::{CleanupGuard, RuntimeAssembly},
+        Application, CleanupGuard, ClusterControlProfile, ClusterControlRequest, ClusterMode,
+        ClusterRequest, ClusterWaitHandle, Deployer, DeploymentPolicy, DynError, Metrics,
+        NodeClients, NodeControlCapability, NodeControlHandle, Runner, RuntimeExtensions, Scenario,
+        ScenarioError, internal::RuntimeAssembly,
     },
     topology::DeploymentDescriptor,
 };

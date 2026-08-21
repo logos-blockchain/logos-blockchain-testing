@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 async-trait                    = { workspace = true }
+testing-framework-container    = { workspace = true }
 testing-framework-core         = { workspace = true }
 testing-framework-runner-local = { workspace = true }
 thiserror                      = { workspace = true }

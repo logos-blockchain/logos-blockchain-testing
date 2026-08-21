@@ -316,6 +316,11 @@ impl RunMetrics {
     }
 }
 
+/// Owns teardown for a resource acquired while preparing a test runtime.
+///
+/// Cleanup is explicit and object-safe so provisioners can transfer resource
+/// ownership across crate boundaries without exposing backend-specific types.
 pub trait CleanupGuard: Send {
+    /// Releases the owned resource.
     fn cleanup(self: Box<Self>);
 }

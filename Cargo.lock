@@ -1918,9 +1918,12 @@ dependencies = [
 name = "multi-app-e2e"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "multi-app-fixture",
  "testing-framework-app",
+ "testing-framework-container",
  "testing-framework-core",
+ "testing-framework-runner-compose",
  "tokio",
 ]
 
@@ -1931,10 +1934,12 @@ dependencies = [
  "async-trait",
  "kvstore-node",
  "kvstore-runtime-ext",
+ "queue-node",
  "queue-runtime-ext",
  "reqwest",
  "serde",
  "testing-framework-app",
+ "testing-framework-container",
  "testing-framework-core",
  "testing-framework-runner-local",
  "tokio",
@@ -3646,10 +3651,19 @@ name = "testing-framework-app"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "testing-framework-container",
  "testing-framework-core",
  "testing-framework-runner-local",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "testing-framework-container"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "testing-framework-core",
 ]
 
 [[package]]
@@ -3681,11 +3695,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "reqwest",
  "serde",
  "serde_json",
  "tempfile",
  "tera",
+ "testing-framework-container",
  "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",

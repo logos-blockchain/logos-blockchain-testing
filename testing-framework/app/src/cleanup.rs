@@ -1,4 +1,4 @@
-use testing_framework_core::scenario::internal::CleanupGuard;
+use testing_framework_core::scenario::CleanupGuard;
 
 /// LIFO cleanup owned by one application deployment preparation.
 ///
@@ -46,7 +46,7 @@ impl Drop for AppCleanupStack {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use testing_framework_core::scenario::internal::CleanupGuard;
+    use testing_framework_core::scenario::CleanupGuard;
 
     use super::AppCleanupStack;
 

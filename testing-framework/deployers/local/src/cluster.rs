@@ -5,8 +5,8 @@ use std::sync::{
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
-    ReadinessError, StartNodeOptions, StartedNode, internal::CleanupGuard,
+    CleanupGuard, ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
+    ReadinessError, StartNodeOptions, StartedNode,
 };
 
 use crate::{

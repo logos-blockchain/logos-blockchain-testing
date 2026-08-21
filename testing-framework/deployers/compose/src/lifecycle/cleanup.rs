@@ -1,69 +1,47 @@
-use std::{
-    env, io,
-    path::{Path, PathBuf},
-    thread,
-};
+use std::{env, io, thread};
 
-use testing_framework_core::scenario::internal::CleanupGuard;
+use testing_framework_core::scenario::CleanupGuard;
 use tracing::{debug, info, warn};
 
 use crate::{
-    docker::{
-        commands::{ComposeCommandError, compose_down},
-        workspace::ComposeWorkspace,
-    },
+    docker::{commands::ComposeCommandError, workspace::ComposeWorkspace},
     env::ConfigServerHandle,
+    infrastructure::project::ComposeProject,
 };
 
 /// Cleans up a compose deployment and associated cfgsync container.
 pub struct RunnerCleanup {
-    pub compose_file: PathBuf,
-    pub project_name: String,
-    pub root: PathBuf,
+    project: ComposeProject,
     workspace: Option<ComposeWorkspace>,
     cfgsync: Option<Box<dyn ConfigServerHandle>>,
 }
 
 impl RunnerCleanup {
     /// Construct a cleanup guard for the given compose deployment.
-    pub fn new(
-        compose_file: PathBuf,
-        project_name: String,
-        root: PathBuf,
+    pub(crate) fn new(
+        project: ComposeProject,
         workspace: ComposeWorkspace,
         cfgsync: Option<Box<dyn ConfigServerHandle>>,
     ) -> Self {
         debug_assert!(
-            !compose_file.as_os_str().is_empty() && !project_name.is_empty(),
+            !project.compose_file().as_os_str().is_empty() && !project.name().is_empty(),
             "compose cleanup should receive valid identifiers"
         );
         Self {
-            compose_file,
-            project_name,
-            root,
+            project,
             workspace: Some(workspace),
             cfgsync,
         }
     }
 
     fn teardown_compose(&self) {
-        if let Err(err) =
-            run_compose_down_blocking(&self.compose_file, &self.project_name, &self.root)
-        {
+        if let Err(err) = run_compose_down_blocking(self.project.clone()) {
             warn!(error = ?err, "docker compose down failed");
         }
     }
 }
 
-fn run_compose_down_blocking(
-    compose_file: &Path,
-    project_name: &str,
-    root: &Path,
-) -> Result<(), ComposeCommandError> {
-    let compose_file = compose_file.to_path_buf();
-    let project_name = project_name.to_owned();
-    let root = root.to_path_buf();
-
+fn run_compose_down_blocking(project: ComposeProject) -> Result<(), ComposeCommandError> {
     let handle = thread::spawn(move || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -72,7 +50,21 @@ fn run_compose_down_blocking(
                 command: "docker compose down".into(),
                 source: io::Error::other(err),
             })?
-            .block_on(compose_down(&compose_file, &project_name, &root))
+            .block_on(async {
+                let _access = project.lock_mutation().await;
+                match project.down_unlocked().await {
+                    Ok(()) => Ok(()),
+                    Err(primary) => {
+                        project
+                            .down_with_fallback_unlocked()
+                            .await
+                            .map_err(|fallback| ComposeCommandError::CleanupFallback {
+                                primary: Box::new(primary),
+                                fallback: Box::new(fallback),
+                            })
+                    }
+                }
+            })
     });
 
     handle.join().map_err(|_| ComposeCommandError::Spawn {
@@ -85,9 +77,9 @@ impl CleanupGuard for RunnerCleanup {
         let preserve = self.should_preserve();
 
         debug!(
-            compose_file = %self.compose_file.display(),
-            project = %self.project_name,
-            root = %self.root.display(),
+            compose_file = %self.project.compose_file().display(),
+            project = %self.project.name(),
+            root = %self.project.root().display(),
             preserve,
             "compose cleanup started"
         );

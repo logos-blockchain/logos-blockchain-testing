@@ -314,8 +314,7 @@ where
     {
         Caps::REQUIRED.then(|| {
             Arc::new(ComposeNodeControl {
-                compose_file: environment.compose_path().to_path_buf(),
-                project_name: environment.project_name().to_owned(),
+                project: environment.project().clone(),
             }) as Arc<dyn NodeControlHandle<E>>
         })
     }

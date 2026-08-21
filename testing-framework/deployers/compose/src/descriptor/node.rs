@@ -16,6 +16,8 @@ pub struct NodeDescriptor {
     #[serde(skip)]
     container_ports: Vec<u16>,
     environment: Vec<EnvEntry>,
+    debug_capabilities: bool,
+    restart_policy: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
 }
@@ -32,6 +34,15 @@ impl EnvEntry {
         Self {
             key: key.into(),
             value: value.into(),
+        }
+    }
+
+    /// Creates an entry whose value is passed to the container literally,
+    /// without Docker Compose variable interpolation.
+    pub fn literal(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: value.into().replace('$', "$$"),
         }
     }
 
@@ -68,8 +79,20 @@ impl NodeDescriptor {
             ports,
             container_ports,
             environment,
+            debug_capabilities: true,
+            restart_policy: "on-failure".to_owned(),
             platform,
         }
+    }
+
+    pub(crate) const fn without_debug_capabilities(mut self) -> Self {
+        self.debug_capabilities = false;
+        self
+    }
+
+    pub(crate) fn with_restart_policy(mut self, policy: impl Into<String>) -> Self {
+        self.restart_policy = policy.into();
+        self
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -275,5 +298,19 @@ pub fn binary_config_node_runtime_spec(
         container_ports: spec.container_ports.clone(),
         environment: vec![EnvEntry::new("RUST_LOG", &spec.rust_log)],
         platform,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EnvEntry;
+
+    #[test]
+    fn interpolation_and_literal_environment_values_are_explicit() {
+        assert_eq!(EnvEntry::new("URL", "${HOST}:8080").value(), "${HOST}:8080");
+        assert_eq!(
+            EnvEntry::literal("URL", "${HOST}:8080").value(),
+            "$${HOST}:8080"
+        );
     }
 }
