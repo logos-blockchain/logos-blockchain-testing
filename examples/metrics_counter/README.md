@@ -45,6 +45,7 @@ cargo run -p metrics-counter-examples --bin metrics_counter_k8s_prometheus_expec
 Overrides:
 - `METRICS_COUNTER_K8S_IMAGE` (falls back to `METRICS_COUNTER_IMAGE`, then `metrics-counter-node:local`)
 - `METRICS_COUNTER_K8S_PROMETHEUS_NODE_PORT` (defaults to `30991`)
+- `K8S_RUNNER_REQUIRE_CLUSTER=1` makes an unavailable cluster fail the run instead of skipping it
 
 ## Run with Kubernetes manual cluster
 

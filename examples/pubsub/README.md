@@ -52,6 +52,7 @@ Prerequisites:
 
 Optional image override:
 - `PUBSUB_K8S_IMAGE` (falls back to `PUBSUB_IMAGE`, then `pubsub-node:local`)
+- `K8S_RUNNER_REQUIRE_CLUSTER=1` makes an unavailable cluster fail the run instead of skipping it
 
 ## Run with Kubernetes manual cluster
 

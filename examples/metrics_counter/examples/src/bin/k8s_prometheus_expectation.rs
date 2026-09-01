@@ -39,12 +39,12 @@ async fn main() -> Result<()> {
     let deployer = MetricsCounterK8sDeployer::new();
     let runner = match deployer.deploy(&scenario).await {
         Ok(runner) => runner,
-        Err(K8sRunnerError::ClientInit { source }) => {
+        Err(K8sRunnerError::ClientInit { source }) if cluster_may_be_skipped() => {
             warn!("k8s unavailable ({source}); skipping metrics-counter k8s run");
             return Ok(());
         }
         Err(K8sRunnerError::InstallStack { source })
-            if k8s_cluster_unavailable(&source.to_string()) =>
+            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
         {
             warn!("k8s unavailable ({source}); skipping metrics-counter k8s run");
             return Ok(());
@@ -64,6 +64,10 @@ async fn main() -> Result<()> {
         .context("running metrics-counter k8s scenario")?;
 
     Ok(())
+}
+
+fn cluster_may_be_skipped() -> bool {
+    env::var("K8S_RUNNER_REQUIRE_CLUSTER").as_deref() != Ok("1")
 }
 
 fn k8s_cluster_unavailable(message: &str) -> bool {

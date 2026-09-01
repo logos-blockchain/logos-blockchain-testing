@@ -55,6 +55,7 @@ Prerequisites:
 
 Optional image override:
 - `KVSTORE_K8S_IMAGE` (falls back to `KVSTORE_IMAGE`, then `kvstore-node:local`)
+- `K8S_RUNNER_REQUIRE_CLUSTER=1` makes an unavailable cluster fail the run instead of skipping it
 
 ## Run with Kubernetes manual cluster
 

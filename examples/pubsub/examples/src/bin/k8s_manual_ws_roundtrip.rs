@@ -33,12 +33,12 @@ async fn main() -> Result<()> {
         .await
     {
         Ok(cluster) => cluster,
-        Err(ManualClusterError::ClientInit { source }) => {
+        Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
             warn!("k8s unavailable ({source}); skipping pubsub k8s manual run");
             return Ok(());
         }
         Err(ManualClusterError::InstallStack { source })
-            if k8s_cluster_unavailable(&source.to_string()) =>
+            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
         {
             warn!("k8s unavailable ({source}); skipping pubsub k8s manual run");
             return Ok(());
@@ -236,6 +236,10 @@ async fn topic_converged(
     }
 
     Ok(true)
+}
+
+fn cluster_may_be_skipped() -> bool {
+    std::env::var("K8S_RUNNER_REQUIRE_CLUSTER").as_deref() != Ok("1")
 }
 
 fn k8s_cluster_unavailable(message: &str) -> bool {

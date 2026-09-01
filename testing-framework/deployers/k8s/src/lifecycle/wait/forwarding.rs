@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::anyhow;
 
-use super::ClusterWaitError;
+use super::{ClusterWaitError, NodeConfigPorts, NodePortAllocation};
 
 const PORT_FORWARD_READY_ATTEMPTS: u32 = 240;
 const PORT_FORWARD_READY_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -75,13 +75,13 @@ struct ForwardEntry {
 /// when the cluster is reached through NodePorts directly.
 #[derive(Clone, Default)]
 pub struct PortForwardRegistry {
-    nodes: Arc<Mutex<Vec<Arc<Mutex<NodeForwards>>>>>,
+    nodes: Arc<Mutex<Vec<Option<Arc<Mutex<NodeForwards>>>>>>,
 }
 
 impl fmt::Debug for PortForwardRegistry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PortForwardRegistry")
-            .field("nodes", &self.lock().len())
+            .field("nodes", &self.registered_node_count())
             .finish()
     }
 }
@@ -90,7 +90,7 @@ impl PortForwardRegistry {
     /// Returns whether any forwards are registered (NodePort mode has none).
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.lock().is_empty()
+        self.registered_node_count() == 0
     }
 
     /// Registers one node's api/auxiliary forwards in node-index order.
@@ -101,7 +101,7 @@ impl PortForwardRegistry {
         auxiliary_spec: ForwardSpec,
         auxiliary_handle: PortForwardHandle,
     ) {
-        self.lock().push(Arc::new(Mutex::new(NodeForwards {
+        self.lock().push(Some(Arc::new(Mutex::new(NodeForwards {
             api: ForwardEntry {
                 spec: api_spec,
                 handle: api_handle,
@@ -110,7 +110,49 @@ impl PortForwardRegistry {
                 spec: auxiliary_spec,
                 handle: auxiliary_handle,
             },
-        })));
+        }))));
+    }
+
+    /// Starts or recreates one node's forwards and returns its local ports.
+    ///
+    /// Manual clusters can start nodes in any order, so their registry is
+    /// sparse until each node has been started at least once.
+    pub(crate) fn forward_node(
+        &self,
+        index: usize,
+        namespace: &str,
+        service: &str,
+        ports: NodeConfigPorts,
+    ) -> Result<NodePortAllocation, ClusterWaitError> {
+        if let Some(allocation) = self.local_ports(index) {
+            self.respawn_node(index)?;
+            return Ok(allocation);
+        }
+
+        let api_forward = port_forward_service(namespace, service, ports.api)?;
+        let auxiliary_forward = port_forward_service(namespace, service, ports.auxiliary)?;
+        let allocation = NodePortAllocation {
+            api: api_forward.local_port,
+            auxiliary: auxiliary_forward.local_port,
+        };
+        self.register_node_at(
+            index,
+            ForwardSpec {
+                namespace: namespace.to_owned(),
+                service: service.to_owned(),
+                local_port: api_forward.local_port,
+                remote_port: ports.api,
+            },
+            api_forward.handle,
+            ForwardSpec {
+                namespace: namespace.to_owned(),
+                service: service.to_owned(),
+                local_port: auxiliary_forward.local_port,
+                remote_port: ports.auxiliary,
+            },
+            auxiliary_forward.handle,
+        );
+        Ok(allocation)
     }
 
     /// Shuts down every registered forward and clears the registry.
@@ -120,6 +162,9 @@ impl PortForwardRegistry {
             std::mem::take(&mut *nodes)
         };
         for node in nodes {
+            let Some(node) = node else {
+                continue;
+            };
             let mut node = lock_node(&node);
             node.api.handle.shutdown();
             node.auxiliary.handle.shutdown();
@@ -139,16 +184,12 @@ impl PortForwardRegistry {
     pub(crate) fn respawn_node(&self, index: usize) -> Result<(), ClusterWaitError> {
         let node = {
             let nodes = self.lock();
-            if nodes.is_empty() {
-                return Ok(());
-            }
-            nodes
-                .get(index)
-                .cloned()
-                .ok_or(ClusterWaitError::MissingPortForwardNode {
+            nodes.get(index).and_then(Option::as_ref).cloned().ok_or(
+                ClusterWaitError::MissingPortForwardNode {
                     index,
-                    nodes: nodes.len(),
-                })?
+                    nodes: nodes.iter().flatten().count(),
+                },
+            )?
         };
         let mut node = lock_node(&node);
 
@@ -156,7 +197,52 @@ impl PortForwardRegistry {
         respawn_entry(&mut node.auxiliary)
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Arc<Mutex<NodeForwards>>>> {
+    fn register_node_at(
+        &self,
+        index: usize,
+        api_spec: ForwardSpec,
+        api_handle: PortForwardHandle,
+        auxiliary_spec: ForwardSpec,
+        auxiliary_handle: PortForwardHandle,
+    ) {
+        let node = Arc::new(Mutex::new(NodeForwards {
+            api: ForwardEntry {
+                spec: api_spec,
+                handle: api_handle,
+            },
+            auxiliary: ForwardEntry {
+                spec: auxiliary_spec,
+                handle: auxiliary_handle,
+            },
+        }));
+        let previous = {
+            let mut nodes = self.lock();
+            if nodes.len() <= index {
+                nodes.resize_with(index + 1, || None);
+            }
+            nodes[index].replace(node)
+        };
+        if let Some(previous) = previous {
+            let mut previous = lock_node(&previous);
+            previous.api.handle.shutdown();
+            previous.auxiliary.handle.shutdown();
+        }
+    }
+
+    fn local_ports(&self, index: usize) -> Option<NodePortAllocation> {
+        let node = self.lock().get(index).and_then(Option::as_ref).cloned()?;
+        let node = lock_node(&node);
+        Some(NodePortAllocation {
+            api: node.api.spec.local_port,
+            auxiliary: node.auxiliary.spec.local_port,
+        })
+    }
+
+    fn registered_node_count(&self) -> usize {
+        self.lock().iter().flatten().count()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Option<Arc<Mutex<NodeForwards>>>>> {
         self.nodes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

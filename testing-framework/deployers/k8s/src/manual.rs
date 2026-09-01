@@ -27,15 +27,16 @@ use crate::{
         cluster_identifiers, collect_port_specs, discovered_node_access, node_deployment_name,
         node_readiness_path, node_service_name, prepare_stack,
     },
-    host::node_host,
     lifecycle::{
         cleanup::RunnerCleanup,
         wait::{
-            ClusterWaitError, NodeConfigPorts, deployment::wait_for_deployment_ready,
-            port_forward_service, ports::discover_node_ports,
+            ClusterWaitError, NodeConfigPorts, NodePortAllocation, PortForwardRegistry,
+            deployment::wait_for_deployment_ready, port_forward_service,
         },
     },
 };
+
+const LOCALHOST: &str = "127.0.0.1";
 
 #[derive(Debug, Error)]
 pub enum ManualClusterError {
@@ -111,6 +112,7 @@ struct ManualClusterState<E: K8sDeployEnv> {
     running: HashSet<usize>,
     node_clients: NodeClients<E>,
     known_clients: Vec<Option<E::NodeClient>>,
+    node_allocations: Vec<Option<NodePortAllocation>>,
 }
 
 pub struct ManualCluster<E: K8sDeployEnv> {
@@ -120,7 +122,8 @@ pub struct ManualCluster<E: K8sDeployEnv> {
     topology: E::Deployment,
     node_count: usize,
     node_host: String,
-    node_allocations: Vec<crate::wait::NodePortAllocation>,
+    node_ports: Vec<NodeConfigPorts>,
+    forwards: PortForwardRegistry,
     cleanup: Option<RunnerCleanup>,
     state: Arc<Mutex<ManualClusterState<E>>>,
 }
@@ -145,8 +148,6 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             .map_err(|source| ManualClusterError::InstallStack { source })?;
 
         let node_ports = collect_port_specs::<E>(&topology).nodes;
-        let node_allocations =
-            discover_all_node_ports::<E>(&client, &namespace, &release, &node_ports).await?;
         scale_all_nodes::<E>(&client, &namespace, &release, nodes, 0).await?;
 
         Ok(Self {
@@ -155,13 +156,15 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             release,
             topology,
             node_count: nodes,
-            node_host: node_host(),
-            node_allocations,
+            node_host: LOCALHOST.to_owned(),
+            node_ports,
+            forwards: PortForwardRegistry::default(),
             cleanup: Some(cleanup),
             state: Arc::new(Mutex::new(ManualClusterState {
                 running: HashSet::new(),
                 node_clients: NodeClients::default(),
                 known_clients: vec![None; nodes],
+                node_allocations: vec![None; nodes],
             })),
         })
     }
@@ -210,6 +213,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
 
         self.apply_cfgsync_override(index, &options).await?;
         scale_node::<E>(&self.client, &self.namespace, &self.release, index, 1).await?;
+        self.refresh_forwards(index).await?;
         self.wait_node_ready(name).await?;
         let client = self.build_client(index, name)?;
 
@@ -252,6 +256,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         let index = self.require_running_node_index(name)?;
         scale_node::<E>(&self.client, &self.namespace, &self.release, index, 0).await?;
         scale_node::<E>(&self.client, &self.namespace, &self.release, index, 1).await?;
+        self.refresh_forwards(index).await?;
         self.wait_node_ready(name).await?;
         let client = self.build_client(index, name)?;
 
@@ -285,8 +290,15 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
                 .running
                 .iter()
                 .copied()
-                .map(|index| self.node_allocations[index].api)
-                .collect::<Vec<_>>()
+                .map(|index| {
+                    state.node_allocations[index]
+                        .map(|allocation| allocation.api)
+                        .ok_or_else(|| ManualClusterError::NodeClient {
+                            name: canonical_node_name(index),
+                            source: "node has no active port-forward allocation".into(),
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
         };
 
         if running_ports.is_empty() {
@@ -308,7 +320,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
 
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), ManualClusterError> {
         let index = self.require_node_index(name)?;
-        let port = self.node_allocations[index].api;
+        let port = self.node_allocation(index)?.api;
         testing_framework_core::scenario::wait_for_http_ports_with_host_and_requirement(
             &[port],
             &self.node_host,
@@ -350,7 +362,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
     }
 
     fn build_client(&self, index: usize, name: &str) -> Result<E::NodeClient, ManualClusterError> {
-        let allocation = self.node_allocations[index];
+        let allocation = self.node_allocation(index)?;
         E::build_node_client(&discovered_node_access(
             &self.node_host,
             allocation.api,
@@ -360,6 +372,40 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             name: name.to_owned(),
             source,
         })
+    }
+
+    fn node_allocation(&self, index: usize) -> Result<NodePortAllocation, ManualClusterError> {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.node_allocations[index].ok_or_else(|| ManualClusterError::NodeClient {
+            name: canonical_node_name(index),
+            source: "node has no active port-forward allocation".into(),
+        })
+    }
+
+    async fn refresh_forwards(&self, index: usize) -> Result<(), ManualClusterError> {
+        let forwards = self.forwards.clone();
+        let namespace = self.namespace.clone();
+        let service = node_service_name::<E>(&self.release, index);
+        let ports = self.node_ports[index];
+        let allocation = tokio::task::spawn_blocking(move || {
+            forwards.forward_node(index, &namespace, &service, ports)
+        })
+        .await
+        .map_err(|source| {
+            ManualClusterError::NodePorts(ClusterWaitError::PortForwardTask {
+                source: source.into(),
+            })
+        })??;
+
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.node_allocations[index] = Some(allocation);
+        Ok(())
     }
 
     fn require_node_index(&self, name: &str) -> Result<usize, ManualClusterError> {
@@ -435,6 +481,7 @@ where
 {
     fn drop(&mut self) {
         self.stop_all();
+        self.forwards.shutdown_all();
         if let Some(cleanup) = self.cleanup.take() {
             testing_framework_core::scenario::internal::CleanupGuard::cleanup(Box::new(cleanup));
         }
@@ -497,20 +544,6 @@ where
         let _ = self;
         ManualCluster::from_topology(descriptors).await
     }
-}
-
-async fn discover_all_node_ports<E: K8sDeployEnv>(
-    client: &Client,
-    namespace: &str,
-    release: &str,
-    node_ports: &[NodeConfigPorts],
-) -> Result<Vec<crate::wait::NodePortAllocation>, ManualClusterError> {
-    let mut allocations = Vec::with_capacity(node_ports.len());
-    for (index, ports) in node_ports.iter().enumerate() {
-        let service_name = node_service_name::<E>(release, index);
-        allocations.push(discover_node_ports(client, namespace, &service_name, *ports).await?);
-    }
-    Ok(allocations)
 }
 
 async fn scale_all_nodes<E: K8sDeployEnv>(

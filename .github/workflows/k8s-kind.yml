@@ -1,0 +1,96 @@
+name: Kubernetes Kind
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  K8S_RUNNER_HTTP_PROBE_TIMEOUT_SECS: "5"
+  K8S_RUNNER_REQUIRE_CLUSTER: "1"
+  RUST_LOG: info
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: k8s-kind-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use repository Rust toolchain
+        run: rustc --version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Install Helm
+        uses: azure/setup-helm@v5.0.1
+        with:
+          version: v3.19.0
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: testing-framework
+          config: .github/kind-config.yml
+          kubectl_version: v1.37.0
+          version: v0.33.0
+          wait: 120s
+      - name: Verify Kubernetes cluster
+        run: |
+          kubectl cluster-info
+          kubectl wait --for=condition=Ready nodes --all --timeout=120s
+      - name: Build kvstore image
+        run: docker build --tag kvstore-node:local --file examples/kvstore/Dockerfile .
+      - name: Build pubsub image
+        run: docker build --tag pubsub-node:local --file examples/pubsub/Dockerfile .
+      - name: Build OpenRaft KV image
+        run: docker build --tag openraft-kv-node:local --file examples/openraft_kv/Dockerfile .
+      - name: Build metrics-counter image
+        run: docker build --tag metrics-counter-node:local --file examples/metrics_counter/Dockerfile .
+      - name: Load example images into Kind
+        run: |
+          kind load docker-image \
+            kvstore-node:local \
+            pubsub-node:local \
+            openraft-kv-node:local \
+            metrics-counter-node:local \
+            --name testing-framework
+      - name: Run K8s convergence scenario
+        run: cargo run -p kvstore-examples --bin kvstore_k8s_convergence
+      - name: Run K8s restart chaos scenario
+        run: cargo run -p kvstore-examples --bin kvstore_k8s_restart_chaos
+      - name: Run K8s manual convergence scenario
+        run: cargo run -p kvstore-examples --bin kvstore_k8s_manual_convergence
+      - name: Run K8s WebSocket roundtrip scenario
+        run: cargo run -p pubsub-examples --bin pubsub_k8s_ws_roundtrip
+      - name: Run K8s manual WebSocket roundtrip scenario
+        run: cargo run -p pubsub-examples --bin pubsub_k8s_manual_ws_roundtrip
+      - name: Run K8s OpenRaft failover scenario
+        run: cargo run -p openraft-kv-examples --bin openraft_kv_k8s_failover
+      - name: Run K8s Prometheus expectation scenario
+        run: cargo run -p metrics-counter-examples --bin metrics_counter_k8s_prometheus_expectation
+      - name: Run K8s manual Prometheus scenario
+        run: cargo run -p metrics-counter-examples --bin metrics_counter_k8s_manual_prometheus
+      - name: Export Kind diagnostics
+        if: failure()
+        run: kind export logs "${RUNNER_TEMP}/kind-logs" --name testing-framework
+      - name: Upload Kind diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs
+          path: ${{ runner.temp }}/kind-logs
+          if-no-files-found: ignore

@@ -42,12 +42,12 @@ async fn main() -> Result<()> {
         .await
     {
         Ok(cluster) => cluster,
-        Err(ManualClusterError::ClientInit { source }) => {
+        Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
             warn!("k8s unavailable ({source}); skipping kv k8s manual run");
             return Ok(());
         }
         Err(ManualClusterError::InstallStack { source })
-            if k8s_cluster_unavailable(&source.to_string()) =>
+            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
         {
             warn!("k8s unavailable ({source}); skipping kv k8s manual run");
             return Ok(());
@@ -57,9 +57,10 @@ async fn main() -> Result<()> {
         }
     };
 
+    let node2 = cluster.start_node("node-2").await?.client;
+    let node2_base_url = node2.base_url().clone();
     let node0 = cluster.start_node("node-0").await?.client;
     let node1 = cluster.start_node("node-1").await?.client;
-    let node2 = cluster.start_node("node-2").await?.client;
 
     cluster.wait_network_ready().await?;
 
@@ -78,6 +79,7 @@ async fn main() -> Result<()> {
     let node2 = cluster
         .node_client("node-2")
         .ok_or_else(|| anyhow!("node-2 client missing after restart"))?;
+    assert_eq!(node2.base_url(), &node2_base_url);
     wait_for_convergence(&[node0, node1, node2], "kv-manual", 12).await?;
 
     cluster.stop_all();
@@ -146,6 +148,10 @@ async fn read_key(client: &KvHttpClient, key: &str) -> Result<Option<ValueRecord
         .map_err(|error| anyhow!(error.to_string()))
         .with_context(|| format!("reading key {key}"))?;
     Ok(response.record)
+}
+
+fn cluster_may_be_skipped() -> bool {
+    std::env::var("K8S_RUNNER_REQUIRE_CLUSTER").as_deref() != Ok("1")
 }
 
 fn k8s_cluster_unavailable(message: &str) -> bool {
