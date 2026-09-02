@@ -85,3 +85,4 @@ cargo run -p openraft-kv-examples --bin openraft_kv_k8s_failover
 ```
 
 If no cluster is available, the example exits early and prints a skip message.
+Set `K8S_RUNNER_REQUIRE_CLUSTER=1` to fail instead, as CI does.
