@@ -8,7 +8,6 @@ use kube::{
 };
 use testing_framework_core::scenario::{
     ClusterWaitHandle, DynError, ExistingCluster, ExternalNodeSource, HttpReadinessRequirement,
-    internal::{AttachProvider, AttachProviderError, AttachedNode},
     wait_http_readiness,
 };
 use url::Url;
@@ -22,6 +21,8 @@ use crate::{
 enum K8sAttachDiscoveryError {
     #[error("k8s attach source requires a non-empty label selector")]
     EmptyLabelSelector,
+    #[error("existing cluster descriptor is not supported by this provider: {attach_source:?}")]
+    UnsupportedSource { attach_source: ExistingCluster },
     #[error("no services matched label selector '{selector}' in namespace '{namespace}'")]
     NoMatchingServices { namespace: String, selector: String },
     #[error("k8s service has no metadata.name")]
@@ -71,44 +72,36 @@ impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
     }
 }
 
-#[async_trait]
-impl<E: K8sDeployEnv> AttachProvider<E> for K8sAttachProvider<E> {
-    async fn discover(
+impl<E: K8sDeployEnv> K8sAttachProvider<E> {
+    /// Discovers node clients for the requested existing k8s cluster.
+    pub(crate) async fn discover(
         &self,
         source: &ExistingCluster,
-    ) -> Result<Vec<AttachedNode<E>>, AttachProviderError> {
+    ) -> Result<Vec<E::NodeClient>, DynError> {
         let request = k8s_attach_request(source)?;
-        let services = discover_services(&self.client, request.namespace, request.label_selector)
-            .await
-            .map_err(to_discovery_error)?;
+        let services =
+            discover_services(&self.client, request.namespace, request.label_selector).await?;
         let host = node_host();
-        let mut attached = Vec::with_capacity(services.items.len());
+        let mut clients = Vec::with_capacity(services.items.len());
 
         for service in services.items {
-            attached.push(build_attached_node::<E>(&host, service).map_err(to_discovery_error)?);
+            clients.push(build_attached_client::<E>(&host, service)?);
         }
 
-        Ok(attached)
+        Ok(clients)
     }
 }
 
-fn to_discovery_error(source: DynError) -> AttachProviderError {
-    AttachProviderError::Discovery { source }
-}
-
-fn k8s_attach_request(
-    source: &ExistingCluster,
-) -> Result<K8sAttachRequest<'_>, AttachProviderError> {
+fn k8s_attach_request(source: &ExistingCluster) -> Result<K8sAttachRequest<'_>, DynError> {
     let Some(label_selector) = source.k8s_label_selector() else {
-        return Err(AttachProviderError::UnsupportedSource {
+        return Err(K8sAttachDiscoveryError::UnsupportedSource {
             attach_source: source.clone(),
-        });
+        }
+        .into());
     };
 
     if label_selector.trim().is_empty() {
-        return Err(AttachProviderError::Discovery {
-            source: K8sAttachDiscoveryError::EmptyLabelSelector.into(),
-        });
+        return Err(K8sAttachDiscoveryError::EmptyLabelSelector.into());
     }
 
     Ok(K8sAttachRequest {
@@ -117,10 +110,10 @@ fn k8s_attach_request(
     })
 }
 
-fn build_attached_node<E: K8sDeployEnv>(
+fn build_attached_client<E: K8sDeployEnv>(
     host: &str,
     service: Service,
-) -> Result<AttachedNode<E>, DynError> {
+) -> Result<E::NodeClient, DynError> {
     let service_name = service
         .metadata
         .name
@@ -129,13 +122,9 @@ fn build_attached_node<E: K8sDeployEnv>(
 
     let api_port = extract_api_node_port(&service)?;
     let endpoint = format!("http://{host}:{api_port}/");
-    let source = ExternalNodeSource::new(service_name.clone(), endpoint);
-    let client = E::external_node_client(&source)?;
+    let source = ExternalNodeSource::new(service_name, endpoint);
 
-    Ok(AttachedNode {
-        identity_hint: Some(service_name),
-        client,
-    })
+    E::external_node_client(&source)
 }
 
 pub(super) async fn discover_services(

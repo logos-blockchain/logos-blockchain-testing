@@ -68,6 +68,8 @@ jobs:
             openraft-kv-node:local \
             metrics-counter-node:local \
             --name testing-framework
+      - name: Run app-model k8s smoke test
+        run: cargo test -p testing-framework-runner-k8s --test app_model_smoke
       - name: Run K8s convergence scenario
         run: cargo run -p kvstore-examples --bin kvstore_k8s_convergence
       - name: Run K8s restart chaos scenario

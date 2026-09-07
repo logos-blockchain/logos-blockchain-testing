@@ -630,14 +630,6 @@ pub(crate) fn cluster_identifiers<E: K8sDeployEnv>() -> (String, String) {
     E::cluster_identifiers()
 }
 
-pub(crate) fn build_node_clients<E: K8sDeployEnv>(
-    host: &str,
-    node_api_ports: &[u16],
-    node_auxiliary_ports: &[u16],
-) -> Result<Vec<E::NodeClient>, DynError> {
-    E::build_node_clients(host, node_api_ports, node_auxiliary_ports)
-}
-
 pub(crate) fn node_readiness_path<E: K8sDeployEnv>() -> &'static str {
     <E as K8sDeployEnv>::node_readiness_path()
 }
@@ -648,6 +640,18 @@ pub(crate) async fn wait_remote_readiness<E: K8sDeployEnv>(
     requirement: HttpReadinessRequirement,
 ) -> Result<(), DynError> {
     E::wait_remote_readiness(deployment, urls, requirement).await
+}
+
+pub(crate) fn build_node_clients<E: K8sDeployEnv>(
+    host: &str,
+    node_api_ports: &[u16],
+    node_auxiliary_ports: &[u16],
+) -> Result<Vec<E::NodeClient>, DynError> {
+    E::build_node_clients(host, node_api_ports, node_auxiliary_ports)
+}
+
+pub(crate) fn node_base_url<E: K8sDeployEnv>(client: &E::NodeClient) -> Option<String> {
+    E::node_base_url(client)
 }
 
 pub(crate) fn node_role<E: K8sDeployEnv>() -> &'static str {
@@ -675,10 +679,6 @@ pub(crate) async fn wait_for_node_http<E: K8sDeployEnv>(
     requirement: HttpReadinessRequirement,
 ) -> Result<(), DynError> {
     E::wait_for_node_http(ports, role, host, timeout, poll_interval, requirement).await
-}
-
-pub(crate) fn node_base_url<E: K8sDeployEnv>(client: &E::NodeClient) -> Option<String> {
-    E::node_base_url(client)
 }
 
 pub(crate) fn cfgsync_service<E: K8sDeployEnv>(release: &str) -> Option<(String, u16)> {
