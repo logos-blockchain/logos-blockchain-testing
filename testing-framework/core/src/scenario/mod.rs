@@ -2,9 +2,7 @@
 
 use std::error::Error;
 
-mod builder_ext;
 mod builder_ops;
-mod capabilities;
 mod client;
 mod common_builder_ext;
 mod config;
@@ -22,27 +20,25 @@ mod workload;
 
 pub type DynError = Box<dyn Error + Send + Sync + 'static>;
 
-pub use builder_ext::{BuilderInputError, ObservabilityBuilderExt};
-pub use capabilities::{
-    NodeControlCapability, NodeRuntimeOptions, ObservabilityCapability, PeerSelection,
-    RequiresNodeControl, StartNodeOptions, StartedNode,
-};
 pub use client::NodeAccess;
 pub use common_builder_ext::CoreBuilderExt;
 pub use config::{
     ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, serialize_cluster_yaml_config,
 };
-pub use control::{ClusterWaitHandle, NodeControlHandle};
+pub use control::{
+    ClusterWaitHandle, NodeControlHandle, NodeRuntimeOptions, PeerSelection, StartNodeOptions,
+    StartedNode,
+};
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};
 pub use expectation::Expectation;
-pub use observability::{ObservabilityCapabilityProvider, ObservabilityInputs};
+pub use observability::ObservabilityInputs;
 pub use provisioning::{
     ClusterControlRequest, ClusterHandle, ClusterProvisioner, ClusterRequest, ClusterSource,
     ClusterStartMode, ClusterUnit, ProvisionedCluster,
 };
 pub use runtime::{
-    CleanupGuard, ClusterControlSummary, Deployer, HttpReadinessRequirement, NodeClients,
+    CleanupGuard, ClusterControlSummary, HttpReadinessRequirement, NodeClients,
     PreparedRuntimeExtension, ReadinessError, RunContext, RunHandle, RunMetrics, Runner,
     RuntimeExtensionFactory, RuntimeExtensions, ScenarioError, StabilizationConfig,
     metrics::{
@@ -58,9 +54,7 @@ pub use snapshot::{
     NodeStateSource, SnapshotArtifact, SnapshotArtifactProvider, SnapshotContext, SnapshotFactory,
     SnapshotHandle, SnapshotManifest, SnapshotNodeStateAdapter, SnapshotSpec, SnapshotStore,
 };
-pub use sources::{
-    ClusterControlProfile, ClusterMode, ExistingCluster, ExternalNodeSource, IntoExistingCluster,
-};
+pub use sources::{ClusterControlProfile, ExistingCluster, ExternalNodeSource};
 pub use workload::Workload;
 
 pub use crate::env::Application;

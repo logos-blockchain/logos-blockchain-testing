@@ -7,11 +7,23 @@ use tokio::{
 };
 use tracing::{debug, info, warn};
 
-use super::deployer::ScenarioError;
 use crate::scenario::{
     Application, DynError, Expectation, Scenario, Workload,
     runtime::context::{CleanupGuard, RunContext, RunHandle},
 };
+
+/// Error returned when executing workloads or expectations.
+#[derive(Debug, thiserror::Error)]
+pub enum ScenarioError {
+    #[error("workload failure: {0}")]
+    Workload(#[source] DynError),
+    #[error("expectation capture failed: {0}")]
+    ExpectationCapture(#[source] DynError),
+    #[error("expectation failed during capture: {0}")]
+    ExpectationFailedDuringCapture(#[source] DynError),
+    #[error("expectations failed:\n{0}")]
+    Expectations(#[source] DynError),
+}
 
 type WorkloadOutcome = Result<(), DynError>;
 
@@ -66,13 +78,7 @@ impl<E: Application> Runner<E> {
     }
 
     /// Execute workloads and evaluate expectations.
-    pub async fn run<Caps>(
-        mut self,
-        scenario: &mut Scenario<E, Caps>,
-    ) -> Result<RunHandle<E>, ScenarioError>
-    where
-        Caps: Send + Sync,
-    {
+    pub async fn run(mut self, scenario: &mut Scenario<E>) -> Result<RunHandle<E>, ScenarioError> {
         let context = Arc::clone(&self.context);
         let run_duration = scenario.duration();
         let workloads = scenario.workloads().to_vec();

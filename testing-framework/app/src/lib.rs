@@ -23,7 +23,6 @@ mod deployment;
 mod error;
 mod extension;
 mod host;
-mod local;
 mod process;
 mod registry;
 
@@ -34,9 +33,8 @@ pub use deployment::{AppDeployment, AppHandle};
 pub use error::AppDeployError;
 pub use extension::{AppDeploymentFactory, AppRunContextExt, AppScenarioBuilderExt};
 pub use host::{
-    AppHost, AppHostDeployError, AppHostDeployer, AppHostEnv, AppHostLocalDeployer,
-    AppHostScenarioBuilder, AppHostTopology,
+    AppHost, AppHostDeployError, AppHostDeployer, AppHostEnv, AppHostScenarioBuilder,
+    AppHostTopology,
 };
-pub use local::LocalAppCluster;
 pub use process::{LocalProcessApp, LocalProcessHandle};
 pub use registry::{AppRuntime, HandleRegistry};

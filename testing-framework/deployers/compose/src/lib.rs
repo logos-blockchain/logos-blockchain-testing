@@ -1,5 +1,4 @@
 mod container_stack;
-pub mod deployer;
 pub mod descriptor;
 pub mod docker;
 pub mod env;
@@ -9,7 +8,6 @@ pub mod lifecycle;
 mod provisioner;
 mod session;
 
-pub use deployer::{ComposeDeployer, ComposeDeploymentMetadata};
 pub use descriptor::{
     BinaryConfigNodeSpec, ComposeDescriptor, EnvEntry, LoopbackNodeRuntimeSpec, NodeDescriptor,
     binary_config_node_runtime_spec, build_binary_config_node_descriptors,

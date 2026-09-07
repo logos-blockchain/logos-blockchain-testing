@@ -1,6 +1,5 @@
 mod attach_provider;
 mod attached_control;
-mod deployer;
 mod env;
 mod host;
 mod infrastructure;
@@ -10,9 +9,6 @@ mod provisioner;
 mod workspace;
 use std::sync::Once;
 
-pub use deployer::{
-    K8sDeployer, K8sDeploymentMetadata, K8sNodeControl, K8sNodeControlError, K8sRunnerError,
-};
 pub use k8s_openapi;
 
 pub mod wait {
