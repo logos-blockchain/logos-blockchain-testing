@@ -55,7 +55,7 @@ impl ComposeDeployEnv for OpenRaftKvEnv {
     }
 
     fn static_node_config_file_name(index: usize) -> String {
-        format!("node-{index}.yaml")
+        format!("{}.yaml", node_identifier(index))
     }
 
     fn binary_config_node_spec(

@@ -40,6 +40,10 @@ jobs:
         run: cargo test -p kvstore-examples --test local_smoke -- --nocapture
         env:
           KVSTORE_NODE_BIN: ${{ github.workspace }}/target/debug/kvstore-node
+      - name: Local multi-app happy path
+        run: cargo test -p multi-app-e2e --test local_happy_path -- --nocapture
+        env:
+          KVSTORE_NODE_BIN: ${{ github.workspace }}/target/debug/kvstore-node
 
   compose-e2e:
     runs-on: ubuntu-latest

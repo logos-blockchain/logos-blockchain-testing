@@ -1,11 +1,9 @@
 use std::time::Duration;
 
-use pubsub_runtime_ext::PubSubLocalDeployer;
 use pubsub_runtime_workloads::{
-    PubSubBuilderExt, PubSubConverges, PubSubFeedDelivers, PubSubScenarioBuilder, PubSubTopology,
-    PubSubWsRoundTripWorkload,
+    PubSubConverges, PubSubFeedDelivers, PubSubStackApp, PubSubTopology, PubSubWsRoundTripWorkload,
 };
-use testing_framework_core::scenario::Deployer;
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt as _};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,8 +14,8 @@ async fn main() -> anyhow::Result<()> {
     let topic = "demo.topic";
     let messages = 120;
 
-    let mut scenario = PubSubScenarioBuilder::deployment_with(|_| PubSubTopology::new(3))
-        .with_topic_feed(topic)
+    let mut scenario = AppHost::scenario()
+        .with_app(PubSubStackApp::new(PubSubTopology::new(3), topic))
         .with_run_duration(Duration::from_secs(30))
         .with_workload(
             PubSubWsRoundTripWorkload::new(topic)
@@ -28,8 +26,7 @@ async fn main() -> anyhow::Result<()> {
         .with_expectation(PubSubConverges::new(topic, messages).timeout(Duration::from_secs(25)))
         .build()?;
 
-    let deployer = PubSubLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await?;
+    let runner = AppHostDeployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
     Ok(())
 }

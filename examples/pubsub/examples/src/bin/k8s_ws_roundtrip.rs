@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
-use pubsub_runtime_ext::PubSubK8sDeployer;
 use pubsub_runtime_workloads::{
-    PubSubBuilderExt, PubSubConverges, PubSubFeedDelivers, PubSubScenarioBuilder, PubSubTopology,
-    PubSubWsRoundTripWorkload,
+    PubSubConverges, PubSubFeedDelivers, PubSubStackApp, PubSubTopology, PubSubWsRoundTripWorkload,
 };
-use testing_framework_core::scenario::Deployer;
-use testing_framework_runner_k8s::K8sRunnerError;
+use testing_framework_app::{
+    AppHost, AppHostDeployError, AppHostDeployer, AppScenarioBuilderExt as _,
+};
+use testing_framework_runner_k8s::{K8sClusterProvisioner, ManualClusterError};
 use tracing::{info, warn};
 
 #[tokio::main]
@@ -19,8 +19,11 @@ async fn main() -> Result<()> {
     let topic = "demo.topic";
     let messages = 120;
 
-    let mut scenario = PubSubScenarioBuilder::deployment_with(|_| PubSubTopology::new(3))
-        .with_topic_feed(topic)
+    let mut scenario = AppHost::scenario()
+        .with_app_using(
+            PubSubStackApp::new(PubSubTopology::new(3), topic),
+            K8sClusterProvisioner,
+        )
         .with_run_duration(Duration::from_secs(40))
         .with_workload(
             PubSubWsRoundTripWorkload::new(topic)
@@ -31,20 +34,15 @@ async fn main() -> Result<()> {
         .with_expectation(PubSubConverges::new(topic, messages).timeout(Duration::from_secs(35)))
         .build()?;
 
-    let deployer = PubSubK8sDeployer::new();
-    let runner = match deployer.deploy(&scenario).await {
+    let runner = match AppHostDeployer.deploy(&scenario).await {
         Ok(runner) => runner,
-        Err(K8sRunnerError::ClientInit { source }) if cluster_may_be_skipped() => {
-            warn!("k8s unavailable ({source}); skipping pubsub k8s run");
-            return Ok(());
-        }
-        Err(K8sRunnerError::InstallStack { source })
-            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
-        {
-            warn!("k8s unavailable ({source}); skipping pubsub k8s run");
-            return Ok(());
-        }
         Err(error) => {
+            if cluster_may_be_skipped()
+                && let Some(reason) = k8s_unavailable_reason(&error)
+            {
+                warn!("k8s unavailable ({reason}); skipping pubsub k8s run");
+                return Ok(());
+            }
             return Err(anyhow::Error::new(error)).context("deploying pubsub k8s stack");
         }
     };
@@ -60,6 +58,21 @@ async fn main() -> Result<()> {
 
 fn cluster_may_be_skipped() -> bool {
     std::env::var("K8S_RUNNER_REQUIRE_CLUSTER").as_deref() != Ok("1")
+}
+
+fn k8s_unavailable_reason(error: &AppHostDeployError) -> Option<String> {
+    let AppHostDeployError::RuntimeExtensions { source } = error else {
+        return None;
+    };
+    match source.downcast_ref::<ManualClusterError>() {
+        Some(ManualClusterError::ClientInit { source }) => Some(source.to_string()),
+        Some(ManualClusterError::InstallStack { source })
+            if k8s_cluster_unavailable(&source.to_string()) =>
+        {
+            Some(source.to_string())
+        }
+        _ => None,
+    }
 }
 
 fn k8s_cluster_unavailable(message: &str) -> bool {

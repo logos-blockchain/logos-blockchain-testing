@@ -3,10 +3,10 @@ use std::io::Error;
 use async_trait::async_trait;
 use queue_node::QueueHttpClient;
 use serde::{Deserialize, Serialize};
-use testing_framework_app::{AppDeployment, AppHostEnv, DeployContext, LocalAppCluster};
+use testing_framework_app::{AppDeployment, AppHostEnv, ClusterApp, DeployContext};
 use testing_framework_core::scenario::{
-    Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
-    NodeAccess, serialize_cluster_yaml_config,
+    Application, ClusterHandle, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView,
+    DynError, NodeAccess, serialize_cluster_yaml_config,
 };
 
 pub type QueueTopology = testing_framework_core::topology::ClusterTopology;
@@ -62,10 +62,11 @@ impl QueueLocalApp {
 
 #[async_trait]
 impl AppDeployment<AppHostEnv> for QueueLocalApp {
-    type Handle = LocalAppCluster<QueueEnv>;
+    type Handle = ClusterHandle<QueueEnv>;
 
     async fn deploy(self, ctx: &mut DeployContext<AppHostEnv>) -> Result<Self::Handle, DynError> {
-        ctx.deploy_local_cluster::<QueueEnv>(self.deployment).await
+        ctx.deploy(ClusterApp::<QueueEnv>::new(self.deployment))
+            .await
     }
 }
 

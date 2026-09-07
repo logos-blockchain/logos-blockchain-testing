@@ -1,9 +1,13 @@
 use std::time::Duration;
 
-use queue_runtime_ext::{QueueEnv, QueueLocalDeployer, QueueScenarioBuilder, QueueTopology};
+use queue_runtime_ext::{QueueEnv, QueueTopology};
+use testing_framework_app::{
+    AppHost, AppHostDeployer, AppHostEnv, AppHostScenarioBuilder, AppScenarioBuilderExt as _,
+    ClusterApp, ClusterRestartChaos,
+};
 use testing_framework_core::scenario::{
-    Deployer, DynError,
-    internal::{CoreBuilderAccess, NodeControlScenarioBuilder},
+    DynError,
+    internal::{CoreBuilder, CoreBuilderAccess},
 };
 
 use crate::{QueueConverges, QueueProduceWorkload};
@@ -14,15 +18,49 @@ pub struct QueueScenario;
 impl QueueScenario {
     #[must_use]
     pub fn nodes(count: usize) -> QueueScenarioBuilder {
-        QueueScenarioBuilder::with_deployment(QueueTopology::new(count))
+        QueueScenarioBuilder {
+            inner: AppHost::scenario(),
+            nodes: count,
+        }
     }
 }
 
-/// Queue domain verbs available on every scenario builder over [`QueueEnv`].
+/// App-host scenario builder that remembers the requested queue node count.
+///
+/// The queue cluster itself is attached as a [`ClusterApp`] by the
+/// [`QueueRunExt::run_secs`] finisher.
+pub struct QueueScenarioBuilder {
+    inner: AppHostScenarioBuilder,
+    nodes: usize,
+}
+
+impl CoreBuilderAccess for QueueScenarioBuilder {
+    type Env = AppHostEnv;
+    type Caps = ();
+
+    fn map_core_builder(
+        mut self,
+        f: impl FnOnce(CoreBuilder<AppHostEnv>) -> CoreBuilder<AppHostEnv>,
+    ) -> Self {
+        self.inner = self.inner.map_core_builder(f);
+        self
+    }
+
+    fn core_builder_ref(&self) -> &CoreBuilder<AppHostEnv> {
+        self.inner.core_builder_ref()
+    }
+
+    fn core_builder_mut(&mut self) -> &mut CoreBuilder<AppHostEnv> {
+        self.inner.core_builder_mut()
+    }
+}
+
+/// Queue domain verbs available on every scenario builder over
+/// [`AppHostEnv`].
 ///
 /// Verbs only expand: each sub-builder lowers to `with_workload` /
 /// `with_expectation` calls with the corresponding noun object.
-pub trait QueueDslExt: CoreBuilderAccess<Env = QueueEnv> + Sized {
+pub trait QueueDslExt: CoreBuilderAccess<Env = AppHostEnv> + Sized {
     /// Enqueue `operations` payloads through the first node.
     #[must_use]
     fn produce(self, operations: usize) -> QueueProduceBuilder<Self> {
@@ -40,16 +78,25 @@ pub trait QueueDslExt: CoreBuilderAccess<Env = QueueEnv> + Sized {
             expectation: QueueConverges::new(min_queue_len),
         }
     }
+
+    /// Randomly restart queue cluster nodes throughout the run.
+    #[must_use]
+    fn restart_nodes_randomly(self) -> QueueRestartChaosBuilder<Self> {
+        QueueRestartChaosBuilder {
+            builder: self,
+            chaos: ClusterRestartChaos::new(),
+        }
+    }
 }
 
-impl<B: CoreBuilderAccess<Env = QueueEnv>> QueueDslExt for B {}
+impl<B: CoreBuilderAccess<Env = AppHostEnv>> QueueDslExt for B {}
 
-pub struct QueueProduceBuilder<B: CoreBuilderAccess<Env = QueueEnv>> {
+pub struct QueueProduceBuilder<B: CoreBuilderAccess<Env = AppHostEnv>> {
     builder: B,
     workload: QueueProduceWorkload,
 }
 
-impl<B: CoreBuilderAccess<Env = QueueEnv>> QueueProduceBuilder<B> {
+impl<B: CoreBuilderAccess<Env = AppHostEnv>> QueueProduceBuilder<B> {
     #[must_use]
     pub fn rate_per_sec(mut self, value: usize) -> Self {
         self.workload = self.workload.rate_per_sec(value);
@@ -69,12 +116,12 @@ impl<B: CoreBuilderAccess<Env = QueueEnv>> QueueProduceBuilder<B> {
     }
 }
 
-pub struct QueueConvergedBuilder<B: CoreBuilderAccess<Env = QueueEnv>> {
+pub struct QueueConvergedBuilder<B: CoreBuilderAccess<Env = AppHostEnv>> {
     builder: B,
     expectation: QueueConverges,
 }
 
-impl<B: CoreBuilderAccess<Env = QueueEnv>> QueueConvergedBuilder<B> {
+impl<B: CoreBuilderAccess<Env = AppHostEnv>> QueueConvergedBuilder<B> {
     #[must_use]
     pub fn within_secs(self, secs: u64) -> B {
         self.within(Duration::from_secs(secs))
@@ -90,42 +137,66 @@ impl<B: CoreBuilderAccess<Env = QueueEnv>> QueueConvergedBuilder<B> {
     }
 }
 
-/// Finisher: set the run duration, build the scenario, and run it against the
-/// local process deployer.
+pub struct QueueRestartChaosBuilder<B: CoreBuilderAccess<Env = AppHostEnv>> {
+    builder: B,
+    chaos: ClusterRestartChaos<QueueEnv>,
+}
+
+impl<B: CoreBuilderAccess<Env = AppHostEnv>> QueueRestartChaosBuilder<B> {
+    #[must_use]
+    pub fn every_secs(mut self, min: u64, max: u64) -> Self {
+        self.chaos = self.chaos.every_secs(min, max);
+        self
+    }
+
+    #[must_use]
+    pub fn every(mut self, min: Duration, max: Duration) -> Self {
+        self.chaos = self.chaos.every(min, max);
+        self
+    }
+
+    #[must_use]
+    pub fn cooldown_secs(mut self, secs: u64) -> Self {
+        self.chaos = self.chaos.cooldown_secs(secs);
+        self
+    }
+
+    #[must_use]
+    pub fn cooldown(mut self, cooldown: Duration) -> Self {
+        self.chaos = self.chaos.cooldown(cooldown);
+        self
+    }
+
+    #[must_use]
+    pub fn excluding_nodes(mut self, nodes: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.chaos = self.chaos.excluding_nodes(nodes);
+        self
+    }
+
+    #[must_use]
+    pub fn done(self) -> B {
+        let Self { builder, chaos } = self;
+        builder.map_core_builder(|inner| inner.with_workload(chaos))
+    }
+}
+
+/// Finisher: attach the queue cluster app, set the run duration, build the
+/// scenario, and run it through the backend-neutral app-host deployer.
 pub trait QueueRunExt: Sized {
     fn run_secs(self, secs: u64) -> impl Future<Output = Result<(), DynError>> + Send;
 }
 
 impl QueueRunExt for QueueScenarioBuilder {
     async fn run_secs(self, secs: u64) -> Result<(), DynError> {
-        let scenario = self
+        let Self { inner, nodes } = self;
+        let mut scenario = inner
+            .with_app(ClusterApp::<QueueEnv>::new(QueueTopology::new(nodes)))
             .with_run_duration(Duration::from_secs(secs))
             .build()
             .map_err(DynError::from)?;
-        run_local(scenario).await
-    }
-}
 
-impl QueueRunExt for NodeControlScenarioBuilder<QueueEnv> {
-    async fn run_secs(self, secs: u64) -> Result<(), DynError> {
-        let scenario = self
-            .with_run_duration(Duration::from_secs(secs))
-            .build()
-            .map_err(DynError::from)?;
-        run_local(scenario).await
+        let runner = AppHostDeployer.deploy(&scenario).await?;
+        runner.run(&mut scenario).await?;
+        Ok(())
     }
-}
-
-async fn run_local<Caps>(
-    mut scenario: testing_framework_core::scenario::Scenario<QueueEnv, Caps>,
-) -> Result<(), DynError>
-where
-    Caps: Send + Sync,
-    QueueLocalDeployer: Deployer<QueueEnv, Caps>,
-    <QueueLocalDeployer as Deployer<QueueEnv, Caps>>::Error: Into<DynError>,
-{
-    let deployer = QueueLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await.map_err(Into::into)?;
-    runner.run(&mut scenario).await?;
-    Ok(())
 }

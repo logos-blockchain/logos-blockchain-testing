@@ -3,7 +3,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use kvstore_runtime_ext::KvEnv;
 use serde::Deserialize;
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 use tracing::info;
 
 #[derive(Clone)]
@@ -45,13 +46,14 @@ impl KvConverges {
 }
 
 #[async_trait]
-impl Expectation<KvEnv> for KvConverges {
+impl Expectation<AppHostEnv> for KvConverges {
     fn name(&self) -> &str {
         "kv_converges"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
+        let clients = cluster.clients();
         if clients.is_empty() {
             return Err("no kv node clients available".into());
         }

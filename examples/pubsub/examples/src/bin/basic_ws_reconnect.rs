@@ -1,11 +1,9 @@
 use std::time::Duration;
 
-use pubsub_runtime_ext::PubSubLocalDeployer;
 use pubsub_runtime_workloads::{
-    PubSubBuilderExt, PubSubConverges, PubSubScenarioBuilder, PubSubTopology,
-    PubSubWsReconnectWorkload,
+    PubSubConverges, PubSubEnv, PubSubTopology, PubSubWsReconnectWorkload,
 };
-use testing_framework_core::scenario::Deployer;
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,7 +19,8 @@ async fn main() -> anyhow::Result<()> {
         .publish_rate_per_sec(20)
         .timeout(Duration::from_secs(20));
 
-    let mut scenario = PubSubScenarioBuilder::deployment_with(|_| PubSubTopology::new(3))
+    let mut scenario = AppHost::scenario()
+        .with_app(ClusterApp::<PubSubEnv>::new(PubSubTopology::new(3)))
         .with_run_duration(Duration::from_secs(35))
         .with_workload(workload.clone())
         .with_expectation(
@@ -29,8 +28,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .build()?;
 
-    let deployer = PubSubLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await?;
+    let runner = AppHostDeployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
     Ok(())
 }

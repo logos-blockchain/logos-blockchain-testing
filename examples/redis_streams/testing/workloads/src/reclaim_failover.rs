@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use redis_streams_runtime_ext::{RedisStreamsClient, RedisStreamsEnv};
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -63,26 +64,28 @@ impl RedisStreamsReclaimFailoverWorkload {
 }
 
 #[async_trait]
-impl Workload<RedisStreamsEnv> for RedisStreamsReclaimFailoverWorkload {
+impl Workload<AppHostEnv> for RedisStreamsReclaimFailoverWorkload {
     fn name(&self) -> &str {
         "redis_streams_reclaim_failover_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<RedisStreamsEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
-        if clients.is_empty() {
-            return Err("redis streams failover workload requires at least 1 node client".into());
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<RedisStreamsEnv>>()?;
+        if cluster.node_count() == 0 {
+            return Err("redis streams failover workload requires at least 1 node".into());
         }
 
-        let driver = &clients[0];
+        let driver = cluster
+            .first_client()
+            .ok_or("redis streams failover workload has no node clients")?;
         driver.ensure_group(&self.stream, &self.group).await?;
 
         info!(messages = self.messages, stream = %self.stream, group = %self.group, "redis streams failover: produce phase");
-        produce_messages(driver, &self.stream, self.messages).await?;
+        produce_messages(&driver, &self.stream, self.messages).await?;
 
         info!(messages = self.messages, consumer = %self.producer_consumer, "redis streams failover: create pending phase");
         let pending_count = create_pending_messages(
-            driver,
+            &driver,
             &self.stream,
             &self.group,
             &self.producer_consumer,
@@ -94,7 +97,7 @@ impl Workload<RedisStreamsEnv> for RedisStreamsReclaimFailoverWorkload {
 
         info!(pending = pending_count, from = %self.producer_consumer, to = %self.failover_consumer, "redis streams failover: reclaim+ack phase");
         reclaim_and_ack_pending(
-            driver,
+            &driver,
             &self.stream,
             &self.group,
             &self.failover_consumer,

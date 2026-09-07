@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow};
 use kvstore_node::KvHttpClient;
-use kvstore_runtime_ext::{KvK8sDeployer, KvTopology};
+use kvstore_runtime_ext::{KvEnv, KvTopology};
 use serde::{Deserialize, Serialize};
-use testing_framework_runner_k8s::ManualClusterError;
+use testing_framework_runner_k8s::{ManualCluster, ManualClusterError};
 use tracing::{info, warn};
 
 #[derive(Serialize)]
@@ -36,11 +36,7 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let deployer = KvK8sDeployer::new();
-    let cluster = match deployer
-        .manual_cluster_from_descriptors(KvTopology::new(3))
-        .await
-    {
+    let cluster = match ManualCluster::<KvEnv>::from_topology(KvTopology::new(3)).await {
         Ok(cluster) => cluster,
         Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
             warn!("k8s unavailable ({source}); skipping kv k8s manual run");

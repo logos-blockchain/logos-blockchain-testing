@@ -2,10 +2,10 @@ use std::{env, time::Duration};
 
 use anyhow::{Context as _, Result, anyhow};
 use metrics_counter_node::MetricsCounterHttpClient;
-use metrics_counter_runtime_ext::{MetricsCounterK8sDeployer, MetricsCounterTopology};
+use metrics_counter_runtime_ext::{MetricsCounterEnv, MetricsCounterTopology};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use testing_framework_runner_k8s::ManualClusterError;
+use testing_framework_runner_k8s::{ManualCluster, ManualClusterError};
 use tracing::{info, warn};
 
 const DEFAULT_PROM_URL: &str = "http://127.0.0.1:30991";
@@ -44,27 +44,26 @@ async fn main() -> Result<()> {
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_PROM_URL.to_owned());
 
-    let deployer = MetricsCounterK8sDeployer::new();
-    let cluster = match deployer
-        .manual_cluster_from_descriptors(MetricsCounterTopology::new(3))
-        .await
-    {
-        Ok(cluster) => cluster,
-        Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
-            warn!("k8s unavailable ({source}); skipping metrics-counter k8s manual run");
-            return Ok(());
-        }
-        Err(ManualClusterError::InstallStack { source })
-            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
+    let cluster =
+        match ManualCluster::<MetricsCounterEnv>::from_topology(MetricsCounterTopology::new(3))
+            .await
         {
-            warn!("k8s unavailable ({source}); skipping metrics-counter k8s manual run");
-            return Ok(());
-        }
-        Err(error) => {
-            return Err(anyhow::Error::new(error))
-                .context("creating metrics-counter k8s manual cluster");
-        }
-    };
+            Ok(cluster) => cluster,
+            Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
+                warn!("k8s unavailable ({source}); skipping metrics-counter k8s manual run");
+                return Ok(());
+            }
+            Err(ManualClusterError::InstallStack { source })
+                if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
+            {
+                warn!("k8s unavailable ({source}); skipping metrics-counter k8s manual run");
+                return Ok(());
+            }
+            Err(error) => {
+                return Err(anyhow::Error::new(error))
+                    .context("creating metrics-counter k8s manual cluster");
+            }
+        };
 
     let node0 = cluster.start_node("node-0").await?.client;
     let node1 = cluster.start_node("node-1").await?.client;

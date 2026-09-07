@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use metrics_counter_runtime_ext::MetricsCounterEnv;
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 use tracing::info;
 
 #[derive(Clone)]
@@ -16,21 +17,21 @@ impl PrometheusCounterAtLeast {
 }
 
 #[async_trait]
-impl Expectation<MetricsCounterEnv> for PrometheusCounterAtLeast {
+impl Expectation<AppHostEnv> for PrometheusCounterAtLeast {
     fn name(&self) -> &str {
         "prometheus_counter_at_least"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<MetricsCounterEnv>) -> Result<(), DynError> {
-        if !ctx.telemetry().is_configured() {
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<MetricsCounterEnv>>()?;
+        let metrics = cluster.metrics()?;
+        if !metrics.is_configured() {
             return Err(
                 "prometheus endpoint unavailable; set LOGOS_BLOCKCHAIN_METRICS_QUERY_URL".into(),
             );
         }
 
-        let total = ctx
-            .telemetry()
-            .counter_value("sum(metrics_counter_increments_total)")?;
+        let total = metrics.counter_value("sum(metrics_counter_increments_total)")?;
 
         if total < self.min_total {
             return Err(format!(

@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use multi_app_fixture::{AllJobsCompleted, EnqueueJobs, JobStackApp};
-use testing_framework_app::{AppHost, AppHostLocalDeployer, AppScenarioBuilderExt};
-use testing_framework_core::scenario::{Deployer, DynError};
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt};
+use testing_framework_core::scenario::DynError;
 
 const JOB_COUNT: usize = 10;
 
@@ -15,8 +15,7 @@ async fn processes_queued_jobs_and_converges_results() -> Result<(), DynError> {
         .with_expectation(AllJobsCompleted::new(JOB_COUNT))
         .build()?;
 
-    let deployer = AppHostLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await?;
+    let runner = AppHostDeployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
 
     Ok(())

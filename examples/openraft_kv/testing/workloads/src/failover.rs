@@ -3,9 +3,10 @@ use std::time::Duration;
 use async_trait::async_trait;
 use openraft_kv_node::OpenRaftKvClient;
 use openraft_kv_runtime_ext::{OpenRaftClusterObserver, OpenRaftKvEnv};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
 use testing_framework_core::{
     observation::ObservationHandle,
-    scenario::{DynError, RunContext, Workload},
+    scenario::{ClusterHandle, DynError, RunContext, Workload},
 };
 use tracing::info;
 
@@ -73,14 +74,15 @@ impl Default for OpenRaftKvFailoverWorkload {
 }
 
 #[async_trait]
-impl Workload<OpenRaftKvEnv> for OpenRaftKvFailoverWorkload {
+impl Workload<AppHostEnv> for OpenRaftKvFailoverWorkload {
     fn name(&self) -> &str {
         "openraft_kv_failover_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<OpenRaftKvEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
-        let observer = ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()?;
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<OpenRaftKvEnv>>()?;
+        let clients = cluster.clients();
+        let observer = ctx.require_app::<ObservationHandle<OpenRaftClusterObserver>>()?;
 
         ensure_cluster_size(&clients, 3)?;
 
@@ -94,7 +96,7 @@ impl Workload<OpenRaftKvEnv> for OpenRaftKvFailoverWorkload {
         self.write_initial_batch(&clients, initial_leader).await?;
 
         let new_leader = self
-            .restart_leader_and_wait_for_failover(ctx, &observer, initial_leader)
+            .restart_leader_and_wait_for_failover(&cluster, &observer, initial_leader)
             .await?;
         self.write_second_batch(&clients, new_leader).await?;
 
@@ -159,18 +161,14 @@ impl OpenRaftKvFailoverWorkload {
 
     async fn restart_leader_and_wait_for_failover(
         &self,
-        ctx: &RunContext<OpenRaftKvEnv>,
+        cluster: &ClusterHandle<OpenRaftKvEnv>,
         observer: &ObservationHandle<OpenRaftClusterObserver>,
         leader_id: u64,
     ) -> Result<u64, DynError> {
-        let Some(control) = ctx.node_control() else {
-            return Err("openraft failover workload requires node control".into());
-        };
-
         let leader_name = format!("node-{leader_id}");
         info!(%leader_name, "restarting current leader");
 
-        control.restart_node(&leader_name).await?;
+        cluster.restart_node(&leader_name).await?;
 
         let new_leader = wait_for_observed_leader(observer, self.timeout, Some(leader_id)).await?;
 

@@ -1,14 +1,12 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use queue_runtime_ext::QueueLocalDeployer;
-use queue_runtime_workloads::{
-    QueueBuilderExt, QueueConverges, QueueProduceWorkload, QueueScenarioBuilder, QueueTopology,
+use queue_runtime_workloads::{QueueConverges, QueueEnv, QueueProduceWorkload, QueueTopology};
+use testing_framework_app::{
+    AppHost, AppHostDeployer, AppHostEnv, AppRunContextExt as _, AppScenarioBuilderExt as _,
+    ClusterApp,
 };
-use testing_framework_core::{
-    scenario::{Deployer, DynError, RunContext, Workload},
-    topology::DeploymentDescriptor,
-};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tracing::info;
 
 #[derive(Clone)]
@@ -24,20 +22,15 @@ impl FixedRestartChaosWorkload {
 }
 
 #[async_trait]
-impl Workload<queue_runtime_workloads::QueueEnv> for FixedRestartChaosWorkload {
+impl Workload<AppHostEnv> for FixedRestartChaosWorkload {
     fn name(&self) -> &str {
         "fixed_restart_chaos"
     }
 
-    async fn start(
-        &self,
-        ctx: &RunContext<queue_runtime_workloads::QueueEnv>,
-    ) -> Result<(), DynError> {
-        let Some(control) = ctx.node_control() else {
-            return Err("fixed restart chaos requires node control".into());
-        };
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<QueueEnv>>()?;
 
-        let node_count = ctx.descriptors().node_count();
+        let node_count = cluster.node_count();
         if node_count == 0 {
             return Err("fixed restart chaos requires at least one node".into());
         }
@@ -51,7 +44,7 @@ impl Workload<queue_runtime_workloads::QueueEnv> for FixedRestartChaosWorkload {
             };
             let target = format!("node-{target_index}");
             info!(step, %target, "triggering controlled chaos restart");
-            control.restart_node(&target).await?;
+            cluster.restart_node(&target).await?;
         }
 
         Ok(())
@@ -64,8 +57,8 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let mut scenario = QueueScenarioBuilder::deployment_with(|_| QueueTopology::new(3))
-        .enable_node_control()
+    let mut scenario = AppHost::scenario()
+        .with_app(ClusterApp::<QueueEnv>::new(QueueTopology::new(3)))
         .with_workload(FixedRestartChaosWorkload::new(3, Duration::from_secs(8)))
         .with_run_duration(Duration::from_secs(30))
         .with_workload(
@@ -77,8 +70,7 @@ async fn main() -> anyhow::Result<()> {
         .with_expectation(QueueConverges::new(200).timeout(Duration::from_secs(30)))
         .build()?;
 
-    let deployer = QueueLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await?;
+    let runner = AppHostDeployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
     Ok(())
 }

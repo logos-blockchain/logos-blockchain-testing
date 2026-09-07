@@ -2,14 +2,17 @@ use std::io::Error;
 
 use async_trait::async_trait;
 use openraft_kv_node::{OpenRaftKvClient, OpenRaftKvNodeConfig};
-use testing_framework_app::{AppDeployment, AppHostEnv, DeployContext, LocalAppCluster};
+use testing_framework_app::{AppDeployment, AppHostEnv, ClusterApp, DeployContext};
 use testing_framework_core::{
+    observation::ObservationRuntime,
     scenario::{
-        Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
-        NodeAccess, NodeClients, serialize_cluster_yaml_config,
+        Application, CleanupGuard, ClusterHandle, ClusterNodeConfigApplication, ClusterNodeView,
+        ClusterPeerView, ClusterProvisioner, DynError, NodeAccess, serialize_cluster_yaml_config,
     },
-    topology::DeploymentDescriptor,
 };
+use tokio::task::JoinHandle;
+
+use crate::{OpenRaftClusterObserver, OpenRaftNodeClientsSourceProvider};
 
 /// Three-node topology used by the OpenRaft example scenarios.
 pub type OpenRaftKvTopology = testing_framework_core::topology::ClusterTopology;
@@ -63,61 +66,19 @@ impl ClusterNodeConfigApplication for OpenRaftKvEnv {
     }
 }
 
-/// Runtime handle exposed by the OpenRaft app deployment.
+/// App preset that deploys an OpenRaft cluster together with its cluster
+/// observer.
+///
+/// The cluster is exposed as [`ClusterHandle<OpenRaftKvEnv>`] and the observer
+/// as `ObservationHandle<OpenRaftClusterObserver>`, both retrievable through
+/// `AppRunContextExt::require_app`.
 #[derive(Clone)]
-pub struct OpenRaftKvCluster {
-    deployment: OpenRaftKvTopology,
-    node_clients: NodeClients<OpenRaftKvEnv>,
-}
-
-impl OpenRaftKvCluster {
-    #[must_use]
-    pub const fn new(
-        deployment: OpenRaftKvTopology,
-        node_clients: NodeClients<OpenRaftKvEnv>,
-    ) -> Self {
-        Self {
-            deployment,
-            node_clients,
-        }
-    }
-
-    #[must_use]
-    pub fn topology(&self) -> &OpenRaftKvTopology {
-        &self.deployment
-    }
-
-    #[must_use]
-    pub fn node_count(&self) -> usize {
-        self.deployment.node_count()
-    }
-
-    #[must_use]
-    pub fn clients(&self) -> Vec<OpenRaftKvClient> {
-        self.node_clients.snapshot()
-    }
-
-    pub async fn states(&self) -> Result<Vec<openraft_kv_node::OpenRaftKvState>, DynError> {
-        let clients = self.clients();
-        let mut states = Vec::with_capacity(clients.len());
-
-        for client in clients {
-            states.push(client.state().await?);
-        }
-
-        states.sort_by_key(|state| state.node_id);
-
-        Ok(states)
-    }
-}
-
-/// App preset for the OpenRaft key-value example.
-#[derive(Clone)]
-pub struct OpenRaftKvExistingClusterApp {
+pub struct OpenRaftKvClusterApp {
     topology: OpenRaftKvTopology,
 }
 
-impl OpenRaftKvExistingClusterApp {
+impl OpenRaftKvClusterApp {
+    /// Creates the composed app for a cluster of the given size.
     #[must_use]
     pub fn nodes(nodes: usize) -> Self {
         Self {
@@ -125,6 +86,7 @@ impl OpenRaftKvExistingClusterApp {
         }
     }
 
+    /// Returns the requested cluster topology.
     #[must_use]
     pub fn topology(&self) -> OpenRaftKvTopology {
         self.topology.clone()
@@ -132,46 +94,44 @@ impl OpenRaftKvExistingClusterApp {
 }
 
 #[async_trait]
-impl AppDeployment<OpenRaftKvEnv> for OpenRaftKvExistingClusterApp {
-    type Handle = OpenRaftKvCluster;
+impl<P> AppDeployment<AppHostEnv, P> for OpenRaftKvClusterApp
+where
+    P: ClusterProvisioner<OpenRaftKvEnv>,
+{
+    type Handle = ClusterHandle<OpenRaftKvEnv>;
 
     async fn deploy(
         self,
-        ctx: &mut DeployContext<OpenRaftKvEnv>,
+        ctx: &mut DeployContext<AppHostEnv, P>,
     ) -> Result<Self::Handle, DynError> {
-        Ok(OpenRaftKvCluster::new(
-            ctx.deployment().clone(),
-            ctx.node_clients().clone(),
-        ))
+        let cluster = ctx
+            .deploy(ClusterApp::<OpenRaftKvEnv>::new(self.topology))
+            .await?;
+
+        ctx.expose(cluster.clone())?;
+
+        let provider = OpenRaftNodeClientsSourceProvider::new(cluster.node_clients());
+        let runtime = ObservationRuntime::start(
+            provider,
+            OpenRaftClusterObserver,
+            OpenRaftClusterObserver::config(),
+        )
+        .await?;
+        let (observer, task) = runtime.into_parts();
+
+        ctx.defer_cleanup(Box::new(ObserverTaskGuard { task }));
+        ctx.expose(observer)?;
+
+        Ok(cluster)
     }
 }
 
-/// Local app preset that starts its own OpenRaft cluster.
-#[derive(Clone)]
-pub struct OpenRaftKvLocalApp {
-    deployment: OpenRaftKvTopology,
+struct ObserverTaskGuard {
+    task: JoinHandle<()>,
 }
 
-impl OpenRaftKvLocalApp {
-    #[must_use]
-    pub fn nodes(nodes: usize) -> Self {
-        Self {
-            deployment: OpenRaftKvTopology::new(nodes),
-        }
-    }
-
-    #[must_use]
-    pub fn deployment(&self) -> OpenRaftKvTopology {
-        self.deployment.clone()
-    }
-}
-
-#[async_trait]
-impl AppDeployment<AppHostEnv> for OpenRaftKvLocalApp {
-    type Handle = LocalAppCluster<OpenRaftKvEnv>;
-
-    async fn deploy(self, ctx: &mut DeployContext<AppHostEnv>) -> Result<Self::Handle, DynError> {
-        ctx.deploy_local_cluster::<OpenRaftKvEnv>(self.deployment)
-            .await
+impl CleanupGuard for ObserverTaskGuard {
+    fn cleanup(self: Box<Self>) {
+        self.task.abort();
     }
 }

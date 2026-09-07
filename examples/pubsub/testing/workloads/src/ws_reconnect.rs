@@ -3,7 +3,8 @@ use std::{collections::HashSet, time::Duration};
 use async_trait::async_trait;
 use pubsub_node::PubSubSession;
 use pubsub_runtime_ext::PubSubEnv;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -73,13 +74,13 @@ impl Default for PubSubWsReconnectWorkload {
 }
 
 #[async_trait]
-impl Workload<PubSubEnv> for PubSubWsReconnectWorkload {
+impl Workload<AppHostEnv> for PubSubWsReconnectWorkload {
     fn name(&self) -> &str {
         "pubsub_ws_reconnect_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<PubSubEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let clients = ctx.require_app::<ClusterHandle<PubSubEnv>>()?.clients();
         if clients.len() < 2 {
             return Err("pubsub reconnect workload requires at least 2 nodes".into());
         }

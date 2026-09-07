@@ -1,10 +1,7 @@
 use std::time::Duration;
 
-use nats_runtime_ext::NatsLocalDeployer;
-use nats_runtime_workloads::{
-    NatsBuilderExt, NatsClusterHealthy, NatsRoundTripWorkload, NatsScenarioBuilder,
-};
-use testing_framework_core::scenario::Deployer;
+use nats_runtime_workloads::{NatsClusterHealthy, NatsEnv, NatsRoundTripWorkload, NatsTopology};
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -15,13 +12,14 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let mut scenario = NatsScenarioBuilder::deployment_with(|topology| topology)
+    let mut scenario = AppHost::scenario()
+        .with_app(ClusterApp::<NatsEnv>::new(NatsTopology::new(3)))
         .with_run_duration(Duration::from_secs(25))
         .with_workload(NatsRoundTripWorkload::new("tf.roundtrip").messages(200))
         .with_expectation(NatsClusterHealthy::new())
         .build()?;
 
-    let deployer = NatsLocalDeployer::default();
+    let deployer = AppHostDeployer;
     let runner = deployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
     Ok(())

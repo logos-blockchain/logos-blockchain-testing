@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use pubsub_runtime_ext::{PubSubEnv, PubSubTopicFeed};
+use pubsub_runtime_ext::PubSubTopicFeed;
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
 use testing_framework_core::scenario::{DynError, Expectation, RunContext};
 use tokio::time::Instant;
 use tracing::info;
@@ -33,13 +34,13 @@ impl PubSubFeedDelivers {
 }
 
 #[async_trait]
-impl Expectation<PubSubEnv> for PubSubFeedDelivers {
+impl Expectation<AppHostEnv> for PubSubFeedDelivers {
     fn name(&self) -> &str {
         "pubsub_feed_delivers"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<PubSubEnv>) -> Result<(), DynError> {
-        let feed = ctx.require_extension::<PubSubTopicFeed>()?;
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let feed = ctx.require_app::<PubSubTopicFeed>()?;
         if feed.topic() != self.topic {
             return Err(format!(
                 "pubsub topic feed is configured for '{}' but expectation expects '{}'",

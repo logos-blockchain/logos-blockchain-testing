@@ -3,7 +3,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use metrics_counter_runtime_ext::MetricsCounterEnv;
 use serde::Serialize;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tracing::info;
 
 #[derive(Clone)]
@@ -44,13 +45,14 @@ impl Default for CounterIncrementWorkload {
 }
 
 #[async_trait]
-impl Workload<MetricsCounterEnv> for CounterIncrementWorkload {
+impl Workload<AppHostEnv> for CounterIncrementWorkload {
     fn name(&self) -> &str {
         "counter_increment_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<MetricsCounterEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<MetricsCounterEnv>>()?;
+        let clients = cluster.clients();
         if clients.is_empty() {
             return Err("no metrics-counter node clients available".into());
         }

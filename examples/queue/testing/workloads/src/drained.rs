@@ -3,7 +3,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use queue_runtime_ext::QueueEnv;
 use serde::Deserialize;
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 use tracing::info;
 
 #[derive(Clone)]
@@ -49,13 +50,13 @@ impl Default for QueueDrained {
 }
 
 #[async_trait]
-impl Expectation<QueueEnv> for QueueDrained {
+impl Expectation<AppHostEnv> for QueueDrained {
     fn name(&self) -> &str {
         "queue_drained"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<QueueEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let clients = ctx.require_app::<ClusterHandle<QueueEnv>>()?.clients();
         if clients.is_empty() {
             return Err("no queue node clients available".into());
         }

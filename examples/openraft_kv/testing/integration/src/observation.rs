@@ -7,10 +7,8 @@ use std::{
 use async_trait::async_trait;
 use openraft_kv_node::{OpenRaftKvClient, OpenRaftKvState};
 use testing_framework_core::{
-    observation::{
-        BoxedSourceProvider, ObservationConfig, ObservedSource, Observer, StaticSourceProvider,
-    },
-    scenario::{Application, DynError, NodeClients},
+    observation::{ObservationConfig, ObservedSource, Observer, SourceProvider},
+    scenario::{DynError, NodeClients},
 };
 use testing_framework_runner_k8s::ManualCluster;
 
@@ -181,15 +179,28 @@ impl Observer for OpenRaftClusterObserver {
     }
 }
 
-/// Builds the fixed source provider used by the scenario-based OpenRaft
-/// examples.
-pub fn openraft_cluster_source_provider(
-    _deployment: &<OpenRaftKvEnv as Application>::Deployment,
+/// Source provider that snapshots the cluster node clients on every cycle.
+///
+/// The shared client inventory is refreshed by cluster node control, so the
+/// observer keeps polling the current clients after node restarts.
+#[derive(Clone)]
+pub struct OpenRaftNodeClientsSourceProvider {
     node_clients: NodeClients<OpenRaftKvEnv>,
-) -> Result<BoxedSourceProvider<OpenRaftKvClient>, DynError> {
-    Ok(Box::new(StaticSourceProvider::new(named_sources(
-        node_clients.snapshot(),
-    ))))
+}
+
+impl OpenRaftNodeClientsSourceProvider {
+    /// Builds a provider over the cluster's shared node client inventory.
+    #[must_use]
+    pub const fn new(node_clients: NodeClients<OpenRaftKvEnv>) -> Self {
+        Self { node_clients }
+    }
+}
+
+#[async_trait]
+impl SourceProvider<OpenRaftKvClient> for OpenRaftNodeClientsSourceProvider {
+    async fn sources(&self) -> Result<Vec<ObservedSource<OpenRaftKvClient>>, DynError> {
+        Ok(named_sources(self.node_clients.snapshot()))
+    }
 }
 
 /// Dynamic source provider backed by a manual cluster.

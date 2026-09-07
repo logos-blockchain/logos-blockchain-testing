@@ -1,11 +1,11 @@
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
-use queue_runtime_workloads::{
-    QueueBuilderExt, QueueConverges, QueueProduceWorkload, QueueScenarioBuilder, QueueTopology,
+use queue_runtime_workloads::{QueueConverges, QueueEnv, QueueProduceWorkload, QueueTopology};
+use testing_framework_app::{
+    AppHost, AppHostDeployError, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp,
 };
-use testing_framework_core::scenario::Deployer;
-use testing_framework_runner_compose::ComposeRunnerError;
+use testing_framework_runner_compose::{ComposeProvisioner, ComposeRunnerError};
 use tracing::{info, warn};
 
 #[tokio::main]
@@ -16,7 +16,11 @@ async fn main() -> Result<()> {
 
     let operations = 200;
 
-    let mut scenario = QueueScenarioBuilder::deployment_with(|_| QueueTopology::new(3))
+    let mut scenario = AppHost::scenario()
+        .with_app_using(
+            ClusterApp::<QueueEnv>::new(QueueTopology::new(3)),
+            ComposeProvisioner::default(),
+        )
         .with_run_duration(Duration::from_secs(30))
         .with_workload(
             QueueProduceWorkload::new()
@@ -26,10 +30,9 @@ async fn main() -> Result<()> {
         .with_expectation(QueueConverges::new(operations).timeout(Duration::from_secs(25)))
         .build()?;
 
-    let deployer = queue_runtime_ext::QueueComposeDeployer::new();
-    let runner = match deployer.deploy(&scenario).await {
+    let runner = match AppHostDeployer.deploy(&scenario).await {
         Ok(runner) => runner,
-        Err(ComposeRunnerError::DockerUnavailable) => {
+        Err(error) if is_docker_unavailable(&error) => {
             warn!("docker unavailable; skipping compose queue run");
             return Ok(());
         }
@@ -44,4 +47,14 @@ async fn main() -> Result<()> {
         .await
         .context("running queue compose scenario")?;
     Ok(())
+}
+
+fn is_docker_unavailable(error: &AppHostDeployError) -> bool {
+    let AppHostDeployError::RuntimeExtensions { source } = error else {
+        return false;
+    };
+    matches!(
+        source.downcast_ref::<ComposeRunnerError>(),
+        Some(ComposeRunnerError::DockerUnavailable)
+    )
 }

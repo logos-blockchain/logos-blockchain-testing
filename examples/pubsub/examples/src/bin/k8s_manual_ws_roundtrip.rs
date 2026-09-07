@@ -2,9 +2,9 @@ use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Context as _, Result, anyhow};
 use pubsub_node::{PubSubClient, PubSubEventId, PubSubSession};
-use pubsub_runtime_ext::{PubSubK8sDeployer, PubSubTopology};
+use pubsub_runtime_ext::{PubSubEnv, PubSubTopology};
 use serde::Deserialize;
-use testing_framework_runner_k8s::ManualClusterError;
+use testing_framework_runner_k8s::{ManualCluster, ManualClusterError};
 use tracing::{info, warn};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -27,11 +27,7 @@ async fn main() -> Result<()> {
         .init();
 
     let topic = "manual.demo";
-    let deployer = PubSubK8sDeployer::new();
-    let cluster = match deployer
-        .manual_cluster_from_descriptors(PubSubTopology::new(3))
-        .await
-    {
+    let cluster = match ManualCluster::<PubSubEnv>::from_topology(PubSubTopology::new(3)).await {
         Ok(cluster) => cluster,
         Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
             warn!("k8s unavailable ({source}); skipping pubsub k8s manual run");

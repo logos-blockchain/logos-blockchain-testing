@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use nats_runtime_ext::{NatsClient, NatsEnv};
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -35,13 +36,14 @@ impl Default for NatsClusterHealthy {
 }
 
 #[async_trait]
-impl Expectation<NatsEnv> for NatsClusterHealthy {
+impl Expectation<AppHostEnv> for NatsClusterHealthy {
     fn name(&self) -> &str {
         "nats_cluster_healthy"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<NatsEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<NatsEnv>>()?;
+        let clients = cluster.clients();
         if clients.is_empty() {
             return Err("no nats node clients available".into());
         }

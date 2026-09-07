@@ -4,7 +4,8 @@ use async_trait::async_trait;
 use queue_node::QueueHttpClient;
 use queue_runtime_ext::QueueEnv;
 use serde::{Deserialize, Serialize};
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tracing::{info, warn};
 
 const REQUEST_RETRY_INTERVAL: Duration = Duration::from_millis(250);
@@ -72,13 +73,13 @@ impl Default for QueueProduceWorkload {
 }
 
 #[async_trait]
-impl Workload<QueueEnv> for QueueProduceWorkload {
+impl Workload<AppHostEnv> for QueueProduceWorkload {
     fn name(&self) -> &str {
         "queue_produce_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<QueueEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let clients = ctx.require_app::<ClusterHandle<QueueEnv>>()?.clients();
         let Some(producer) = clients.first() else {
             return Err("no queue node clients available".into());
         };

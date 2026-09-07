@@ -31,8 +31,8 @@ path = "src/bin/dsl_demo.rs"
 [dependencies]
 anyhow                           = "1.0"
 async-trait                      = { workspace = true }
-queue-runtime-ext                = { path = "../testing/integration" }
 queue-runtime-workloads          = { path = "../testing/workloads" }
+testing-framework-app            = { workspace = true }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 tokio                            = { workspace = true, features = ["full"] }

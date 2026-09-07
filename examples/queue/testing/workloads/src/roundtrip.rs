@@ -3,7 +3,8 @@ use std::{collections::HashSet, time::Duration};
 use async_trait::async_trait;
 use queue_runtime_ext::QueueEnv;
 use serde::{Deserialize, Serialize};
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tokio::time::{Instant, sleep};
 use tracing::info;
 
@@ -85,13 +86,13 @@ impl Default for QueueRoundTripWorkload {
 }
 
 #[async_trait]
-impl Workload<QueueEnv> for QueueRoundTripWorkload {
+impl Workload<AppHostEnv> for QueueRoundTripWorkload {
     fn name(&self) -> &str {
         "queue_roundtrip_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<QueueEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let clients = ctx.require_app::<ClusterHandle<QueueEnv>>()?.clients();
         let Some(driver) = clients.first() else {
             return Err("no queue node clients available".into());
         };

@@ -2,12 +2,11 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use pubsub_node::{PubSubClient, PubSubEventId, PubSubSession};
-use testing_framework_core::scenario::{
-    Application, DynError, NodeClients, PreparedRuntimeExtension, RuntimeExtensionFactory,
-};
-use tokio::sync::Mutex;
+use testing_framework_app::{AppDeployment, AppHostEnv, ClusterApp, DeployContext};
+use testing_framework_core::scenario::{CleanupGuard, ClusterProvisioner, DynError};
+use tokio::{sync::Mutex, task::JoinHandle};
 
-use crate::PubSubEnv;
+use crate::{PubSubEnv, PubSubTopology};
 
 #[derive(Clone)]
 pub struct PubSubTopicFeed {
@@ -91,37 +90,58 @@ impl PubSubTopicFeedSnapshot {
 }
 
 #[derive(Clone)]
-pub struct PubSubTopicFeedFactory {
+pub struct PubSubStackApp {
+    deployment: PubSubTopology,
     topic: String,
 }
 
-impl PubSubTopicFeedFactory {
+impl PubSubStackApp {
     #[must_use]
-    pub fn new(topic: impl Into<String>) -> Self {
+    pub fn new(deployment: PubSubTopology, topic: impl Into<String>) -> Self {
         Self {
+            deployment,
             topic: topic.into(),
         }
     }
 }
 
 #[async_trait]
-impl RuntimeExtensionFactory<PubSubEnv> for PubSubTopicFeedFactory {
-    async fn prepare(
-        &self,
-        _deployment: &<PubSubEnv as Application>::Deployment,
-        node_clients: NodeClients<PubSubEnv>,
-    ) -> Result<PreparedRuntimeExtension, DynError> {
-        let clients = node_clients.snapshot();
+impl<P> AppDeployment<AppHostEnv, P> for PubSubStackApp
+where
+    P: ClusterProvisioner<PubSubEnv>,
+{
+    type Handle = PubSubTopicFeed;
+
+    async fn deploy(
+        self,
+        ctx: &mut DeployContext<AppHostEnv, P>,
+    ) -> Result<Self::Handle, DynError> {
+        let cluster = ctx
+            .deploy_and_expose(ClusterApp::<PubSubEnv>::new(self.deployment))
+            .await?;
+
+        let clients = cluster.clients();
         if clients.len() < 2 {
             return Err("pubsub topic feed requires at least 2 node clients".into());
         }
 
-        let topic = self.topic.clone();
-        let feed = PubSubTopicFeed::new(topic.clone(), clients.len());
-        let sessions = connect_subscribers(&clients, &topic).await?;
+        let feed = PubSubTopicFeed::new(self.topic.clone(), clients.len());
+        let sessions = connect_subscribers(&clients, &self.topic).await?;
         let collector = tokio::spawn(run_collector(feed.clone(), sessions));
+        ctx.defer_cleanup(Box::new(CollectorTaskGuard { task: collector }));
+        ctx.expose(feed.clone())?;
 
-        Ok(PreparedRuntimeExtension::from_task(feed, collector))
+        Ok(feed)
+    }
+}
+
+struct CollectorTaskGuard {
+    task: JoinHandle<()>,
+}
+
+impl CleanupGuard for CollectorTaskGuard {
+    fn cleanup(self: Box<Self>) {
+        self.task.abort();
     }
 }
 

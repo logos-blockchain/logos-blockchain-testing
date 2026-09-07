@@ -2,11 +2,12 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 use pubsub_runtime_workloads::{
-    PubSubBuilderExt, PubSubConverges, PubSubFeedDelivers, PubSubScenarioBuilder, PubSubTopology,
-    PubSubWsRoundTripWorkload,
+    PubSubConverges, PubSubFeedDelivers, PubSubStackApp, PubSubTopology, PubSubWsRoundTripWorkload,
 };
-use testing_framework_core::scenario::Deployer;
-use testing_framework_runner_compose::ComposeRunnerError;
+use testing_framework_app::{
+    AppHost, AppHostDeployError, AppHostDeployer, AppScenarioBuilderExt as _,
+};
+use testing_framework_runner_compose::{ComposeProvisioner, ComposeRunnerError};
 use tracing::{info, warn};
 
 #[tokio::main]
@@ -18,8 +19,11 @@ async fn main() -> Result<()> {
     let topic = "demo.topic";
     let messages = 120;
 
-    let mut scenario = PubSubScenarioBuilder::deployment_with(|_| PubSubTopology::new(3))
-        .with_topic_feed(topic)
+    let mut scenario = AppHost::scenario()
+        .with_app_using(
+            PubSubStackApp::new(PubSubTopology::new(3), topic),
+            ComposeProvisioner::default(),
+        )
         .with_run_duration(Duration::from_secs(30))
         .with_workload(
             PubSubWsRoundTripWorkload::new(topic)
@@ -30,10 +34,9 @@ async fn main() -> Result<()> {
         .with_expectation(PubSubConverges::new(topic, messages).timeout(Duration::from_secs(25)))
         .build()?;
 
-    let deployer = pubsub_runtime_ext::PubSubComposeDeployer::new();
-    let runner = match deployer.deploy(&scenario).await {
+    let runner = match AppHostDeployer.deploy(&scenario).await {
         Ok(runner) => runner,
-        Err(ComposeRunnerError::DockerUnavailable) => {
+        Err(error) if is_docker_unavailable(&error) => {
             warn!("docker unavailable; skipping pubsub compose run");
             return Ok(());
         }
@@ -48,4 +51,14 @@ async fn main() -> Result<()> {
         .await
         .context("running pubsub compose scenario")?;
     Ok(())
+}
+
+fn is_docker_unavailable(error: &AppHostDeployError) -> bool {
+    let AppHostDeployError::RuntimeExtensions { source } = error else {
+        return false;
+    };
+    matches!(
+        source.downcast_ref::<ComposeRunnerError>(),
+        Some(ComposeRunnerError::DockerUnavailable)
+    )
 }

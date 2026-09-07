@@ -1,10 +1,7 @@
 use std::time::Duration;
 
-use queue_runtime_ext::QueueLocalDeployer;
-use queue_runtime_workloads::{
-    QueueBuilderExt, QueueConverges, QueueProduceWorkload, QueueScenarioBuilder, QueueTopology,
-};
-use testing_framework_core::scenario::Deployer;
+use queue_runtime_workloads::{QueueConverges, QueueEnv, QueueProduceWorkload, QueueTopology};
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -14,7 +11,8 @@ async fn main() -> anyhow::Result<()> {
 
     let operations = 300;
 
-    let mut scenario = QueueScenarioBuilder::deployment_with(|_| QueueTopology::new(3))
+    let mut scenario = AppHost::scenario()
+        .with_app(ClusterApp::<QueueEnv>::new(QueueTopology::new(3)))
         .with_run_duration(Duration::from_secs(30))
         .with_workload(
             QueueProduceWorkload::new()
@@ -25,8 +23,7 @@ async fn main() -> anyhow::Result<()> {
         .with_expectation(QueueConverges::new(operations).timeout(Duration::from_secs(25)))
         .build()?;
 
-    let deployer = QueueLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await?;
+    let runner = AppHostDeployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
     Ok(())
 }

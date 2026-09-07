@@ -5,7 +5,7 @@ use testing_framework_core::{
 };
 use testing_framework_runner_compose::{
     ComposeDeployEnv, ComposeNodeConfigFileName, ComposeReadinessProbe, EnvEntry,
-    LoopbackNodeRuntimeSpec, infrastructure::ports::NodeHostPorts,
+    LoopbackNodeRuntimeSpec, infrastructure::ports::NodeHostPorts, node_identifier,
 };
 
 use crate::{RedisStreamsClient, RedisStreamsEnv};
@@ -75,7 +75,8 @@ fn build_redis_runtime(index: usize) -> LoopbackNodeRuntimeSpec {
         image,
         entrypoint: build_redis_entrypoint(),
         volumes: vec![format!(
-            "./stack/configs/node-{index}.conf:{NODE_CONFIG_PATH}:ro"
+            "./stack/configs/{}.conf:{NODE_CONFIG_PATH}:ro",
+            node_identifier(index)
         )],
         extra_hosts: vec![],
         container_ports: vec![REDIS_PORT],

@@ -9,6 +9,7 @@ async-trait            = { workspace = true }
 queue-node             = { path = "../../queue-node" }
 queue-runtime-ext      = { path = "../integration" }
 serde                  = { workspace = true }
+testing-framework-app  = { workspace = true }
 testing-framework-core = { workspace = true }
 tokio                  = { workspace = true, features = ["full"] }
 tracing                = { workspace = true }

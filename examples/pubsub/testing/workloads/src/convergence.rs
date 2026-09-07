@@ -4,7 +4,8 @@ use async_trait::async_trait;
 use pubsub_node::PubSubClient;
 use pubsub_runtime_ext::PubSubEnv;
 use serde::Deserialize;
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -48,13 +49,13 @@ impl PubSubConverges {
 }
 
 #[async_trait]
-impl Expectation<PubSubEnv> for PubSubConverges {
+impl Expectation<AppHostEnv> for PubSubConverges {
     fn name(&self) -> &str {
         "pubsub_converges"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<PubSubEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let clients = ctx.require_app::<ClusterHandle<PubSubEnv>>()?.clients();
         if clients.is_empty() {
             return Err("no pubsub node clients available".into());
         }

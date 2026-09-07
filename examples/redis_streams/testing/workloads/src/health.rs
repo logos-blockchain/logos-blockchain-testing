@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use redis_streams_runtime_ext::{RedisStreamsClient, RedisStreamsEnv};
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -35,13 +36,18 @@ impl Default for RedisStreamsClusterHealthy {
 }
 
 #[async_trait]
-impl Expectation<RedisStreamsEnv> for RedisStreamsClusterHealthy {
+impl Expectation<AppHostEnv> for RedisStreamsClusterHealthy {
     fn name(&self) -> &str {
         "redis_streams_cluster_healthy"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<RedisStreamsEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<RedisStreamsEnv>>()?;
+        if cluster.node_count() == 0 {
+            return Err("redis streams cluster has no nodes".into());
+        }
+
+        let clients = cluster.clients();
         if clients.is_empty() {
             return Err("no redis streams node clients available".into());
         }

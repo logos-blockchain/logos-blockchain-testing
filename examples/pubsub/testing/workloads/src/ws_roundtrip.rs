@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use pubsub_runtime_ext::PubSubEnv;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tracing::info;
 
 #[derive(Clone)]
@@ -36,13 +37,13 @@ impl PubSubWsRoundTripWorkload {
 }
 
 #[async_trait]
-impl Workload<PubSubEnv> for PubSubWsRoundTripWorkload {
+impl Workload<AppHostEnv> for PubSubWsRoundTripWorkload {
     fn name(&self) -> &str {
         "pubsub_ws_roundtrip_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<PubSubEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let clients = ctx.require_app::<ClusterHandle<PubSubEnv>>()?.clients();
         if clients.is_empty() {
             return Err("pubsub workload requires at least 1 node".into());
         }

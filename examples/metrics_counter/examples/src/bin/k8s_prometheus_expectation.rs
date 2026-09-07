@@ -1,13 +1,15 @@
 use std::{env, time::Duration};
 
 use anyhow::{Context as _, Result};
-use metrics_counter_runtime_ext::MetricsCounterK8sDeployer;
 use metrics_counter_runtime_workloads::{
-    CounterIncrementWorkload, MetricsCounterBuilderExt, MetricsCounterScenarioBuilder,
-    MetricsCounterTopology, PrometheusCounterAtLeast,
+    CounterIncrementWorkload, MetricsCounterEnv, MetricsCounterTopology, PrometheusCounterAtLeast,
 };
-use testing_framework_core::scenario::{Deployer, ObservabilityBuilderExt};
-use testing_framework_runner_k8s::K8sRunnerError;
+use reqwest::Url;
+use testing_framework_app::{
+    AppHost, AppHostDeployError, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp,
+};
+use testing_framework_core::scenario::ObservabilityInputs;
+use testing_framework_runner_k8s::{K8sClusterProvisioner, ManualClusterError};
 use tracing::{info, warn};
 
 const DEFAULT_PROM_URL: &str = "http://127.0.0.1:30991";
@@ -22,34 +24,35 @@ async fn main() -> Result<()> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_PROM_URL.to_owned());
+    let observability = ObservabilityInputs {
+        metrics_query_url: Some(Url::parse(&metrics_url).context("parsing metrics query url")?),
+        ..ObservabilityInputs::default()
+    };
 
-    let mut scenario =
-        MetricsCounterScenarioBuilder::deployment_with(|_| MetricsCounterTopology::new(3))
-            .enable_observability()
-            .with_metrics_query_url_str(&metrics_url)
-            .with_run_duration(Duration::from_secs(25))
-            .with_workload(
-                CounterIncrementWorkload::new()
-                    .operations(240)
-                    .rate_per_sec(20),
-            )
-            .with_expectation(PrometheusCounterAtLeast::new(240.0))
-            .build()?;
+    let mut scenario = AppHost::scenario()
+        .with_app_using(
+            ClusterApp::<MetricsCounterEnv>::new(MetricsCounterTopology::new(3))
+                .with_observability(observability),
+            K8sClusterProvisioner,
+        )
+        .with_run_duration(Duration::from_secs(25))
+        .with_workload(
+            CounterIncrementWorkload::new()
+                .operations(240)
+                .rate_per_sec(20),
+        )
+        .with_expectation(PrometheusCounterAtLeast::new(240.0))
+        .build()?;
 
-    let deployer = MetricsCounterK8sDeployer::new();
-    let runner = match deployer.deploy(&scenario).await {
+    let runner = match AppHostDeployer.deploy(&scenario).await {
         Ok(runner) => runner,
-        Err(K8sRunnerError::ClientInit { source }) if cluster_may_be_skipped() => {
-            warn!("k8s unavailable ({source}); skipping metrics-counter k8s run");
-            return Ok(());
-        }
-        Err(K8sRunnerError::InstallStack { source })
-            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
-        {
-            warn!("k8s unavailable ({source}); skipping metrics-counter k8s run");
-            return Ok(());
-        }
         Err(error) => {
+            if cluster_may_be_skipped()
+                && let Some(reason) = k8s_unavailable_reason(&error)
+            {
+                warn!("k8s unavailable ({reason}); skipping metrics-counter k8s run");
+                return Ok(());
+            }
             return Err(anyhow::Error::new(error)).context("deploying metrics-counter k8s stack");
         }
     };
@@ -68,6 +71,21 @@ async fn main() -> Result<()> {
 
 fn cluster_may_be_skipped() -> bool {
     env::var("K8S_RUNNER_REQUIRE_CLUSTER").as_deref() != Ok("1")
+}
+
+fn k8s_unavailable_reason(error: &AppHostDeployError) -> Option<String> {
+    let AppHostDeployError::RuntimeExtensions { source } = error else {
+        return None;
+    };
+    match source.downcast_ref::<ManualClusterError>() {
+        Some(ManualClusterError::ClientInit { source }) => Some(source.to_string()),
+        Some(ManualClusterError::InstallStack { source })
+            if k8s_cluster_unavailable(&source.to_string()) =>
+        {
+            Some(source.to_string())
+        }
+        _ => None,
+    }
 }
 
 fn k8s_cluster_unavailable(message: &str) -> bool {

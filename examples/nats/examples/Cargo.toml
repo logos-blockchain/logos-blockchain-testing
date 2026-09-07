@@ -18,10 +18,11 @@ path = "src/bin/parity_check.rs"
 
 [dependencies]
 anyhow                           = "1.0"
-nats-runtime-ext                 = { path = "../testing/integration" }
 nats-runtime-workloads           = { path = "../testing/workloads" }
+testing-framework-app            = { workspace = true }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
+testing-framework-runner-local   = { workspace = true }
 tokio                            = { workspace = true, features = ["full"] }
 tracing                          = { workspace = true }
 tracing-subscriber               = { version = "0.3", features = ["env-filter"] }

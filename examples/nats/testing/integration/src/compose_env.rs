@@ -5,6 +5,7 @@ use testing_framework_core::{
 };
 use testing_framework_runner_compose::{
     ComposeDeployEnv, ComposeNodeConfigFileName, ComposeReadinessProbe, LoopbackNodeRuntimeSpec,
+    node_identifier,
 };
 
 use crate::NatsEnv;
@@ -74,7 +75,8 @@ fn build_nats_runtime(index: usize) -> LoopbackNodeRuntimeSpec {
             NODE_CONFIG_PATH.to_owned(),
         ],
         volumes: vec![format!(
-            "./stack/configs/node-{index}.nats:{NODE_CONFIG_PATH}:ro"
+            "./stack/configs/{}.nats:{NODE_CONFIG_PATH}:ro",
+            node_identifier(index)
         )],
         extra_hosts: vec![],
         container_ports: vec![8222, 4222, 6222],

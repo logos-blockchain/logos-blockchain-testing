@@ -6,8 +6,7 @@ use openraft_kv_examples::{
 };
 use openraft_kv_node::OpenRaftKvClient;
 use openraft_kv_runtime_ext::{
-    OpenRaftClusterObserver, OpenRaftKvEnv, OpenRaftKvK8sDeployer, OpenRaftKvTopology,
-    OpenRaftManualClusterSourceProvider,
+    OpenRaftClusterObserver, OpenRaftKvEnv, OpenRaftKvTopology, OpenRaftManualClusterSourceProvider,
 };
 use openraft_kv_runtime_workloads::{
     OpenRaftMembership, expected_kv, wait_for_observed_leader, wait_for_observed_membership,
@@ -23,28 +22,25 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let deployer = OpenRaftKvK8sDeployer::new();
-    let cluster = match deployer
-        .manual_cluster_from_descriptors(OpenRaftKvTopology::new(3))
-        .await
-    {
-        Ok(cluster) => cluster,
-        Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
-            warn!("k8s unavailable ({source}); skipping openraft k8s run");
+    let cluster =
+        match ManualCluster::<OpenRaftKvEnv>::from_topology(OpenRaftKvTopology::new(3)).await {
+            Ok(cluster) => cluster,
+            Err(ManualClusterError::ClientInit { source }) if cluster_may_be_skipped() => {
+                warn!("k8s unavailable ({source}); skipping openraft k8s run");
 
-            return Ok(());
-        }
-        Err(ManualClusterError::InstallStack { source })
-            if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
-        {
-            warn!("k8s unavailable ({source}); skipping openraft k8s run");
+                return Ok(());
+            }
+            Err(ManualClusterError::InstallStack { source })
+                if cluster_may_be_skipped() && k8s_cluster_unavailable(&source.to_string()) =>
+            {
+                warn!("k8s unavailable ({source}); skipping openraft k8s run");
 
-            return Ok(());
-        }
-        Err(error) => {
-            return Err(anyhow::Error::new(error)).context("creating openraft k8s cluster");
-        }
-    };
+                return Ok(());
+            }
+            Err(error) => {
+                return Err(anyhow::Error::new(error)).context("creating openraft k8s cluster");
+            }
+        };
 
     run_failover(Arc::new(cluster), Duration::from_secs(40)).await
 }

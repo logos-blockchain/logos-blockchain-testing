@@ -3,7 +3,8 @@ use std::{collections::HashSet, time::Duration};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use nats_runtime_ext::NatsEnv;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tokio::time::Instant;
 use tracing::info;
 
@@ -46,13 +47,14 @@ impl NatsRoundTripWorkload {
 }
 
 #[async_trait]
-impl Workload<NatsEnv> for NatsRoundTripWorkload {
+impl Workload<AppHostEnv> for NatsRoundTripWorkload {
     fn name(&self) -> &str {
         "nats_roundtrip_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<NatsEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<NatsEnv>>()?;
+        let clients = cluster.clients();
         if clients.len() < 2 {
             return Err("nats roundtrip workload requires at least 2 nodes".into());
         }

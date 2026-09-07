@@ -1,6 +1,4 @@
-use queue_runtime_workloads::{
-    QueueDslExt as _, QueueRunExt as _, QueueScenario, RestartChaosBuilderExt as _,
-};
+use queue_runtime_workloads::{QueueDslExt as _, QueueRunExt as _, QueueScenario};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

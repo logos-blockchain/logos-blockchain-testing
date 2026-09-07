@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use kvstore_runtime_ext::{KvEnv, KvStoreCluster};
+use kvstore_runtime_ext::KvEnv;
 use serde::{Deserialize, Serialize};
-use testing_framework_app::AppRunContextExt;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tracing::info;
 
 #[derive(Clone)]
@@ -82,14 +82,14 @@ impl KvClusterAccessible {
 }
 
 #[async_trait]
-impl Workload<KvEnv> for KvWriteWorkload {
+impl Workload<AppHostEnv> for KvWriteWorkload {
     fn name(&self) -> &str {
         "kv_write_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
-        let Some(leader) = clients.first() else {
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
+        let Some(leader) = cluster.first_client() else {
             return Err("no kv node clients available".into());
         };
 
@@ -140,13 +140,13 @@ impl Workload<KvEnv> for KvWriteWorkload {
 }
 
 #[async_trait]
-impl Workload<KvEnv> for KvClusterAccessible {
+impl Workload<AppHostEnv> for KvClusterAccessible {
     fn name(&self) -> &str {
         "kv_cluster_accessible"
     }
 
-    async fn start(&self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
-        let cluster = ctx.require_app::<KvStoreCluster>()?;
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
         let client_count = cluster.clients().len();
 
         if cluster.node_count() != self.expected_nodes {

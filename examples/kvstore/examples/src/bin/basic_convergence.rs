@@ -1,11 +1,9 @@
 use std::time::Duration;
 
-use kvstore_runtime_ext::KvLocalDeployer;
 use kvstore_runtime_workloads::{
-    KvBuilderExt, KvClusterAccessible, KvConverges, KvExistingClusterApp, KvScenarioBuilder,
-    KvWriteWorkload,
+    KvClusterAccessible, KvConverges, KvEnv, KvTopology, KvWriteWorkload,
 };
-use testing_framework_core::scenario::Deployer;
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -13,7 +11,8 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let mut scenario = KvScenarioBuilder::with_existing_kvstore_app(KvExistingClusterApp::nodes(3))
+    let mut scenario = AppHost::scenario()
+        .with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
         .with_run_duration(Duration::from_secs(30))
         .with_workload(KvClusterAccessible::new(3))
         .with_workload(
@@ -26,8 +25,7 @@ async fn main() -> anyhow::Result<()> {
         .with_expectation(KvConverges::new("demo", 30).timeout(Duration::from_secs(25)))
         .build()?;
 
-    let deployer = KvLocalDeployer::default();
-    let runner = deployer.deploy(&scenario).await?;
+    let runner = AppHostDeployer.deploy(&scenario).await?;
     runner.run(&mut scenario).await?;
     Ok(())
 }

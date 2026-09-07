@@ -2,11 +2,14 @@ use std::{env, time::Duration};
 
 use anyhow::{Context as _, Result};
 use metrics_counter_runtime_workloads::{
-    CounterIncrementWorkload, MetricsCounterBuilderExt, MetricsCounterScenarioBuilder,
-    MetricsCounterTopology, PrometheusCounterAtLeast,
+    CounterIncrementWorkload, MetricsCounterEnv, MetricsCounterTopology, PrometheusCounterAtLeast,
 };
-use testing_framework_core::scenario::{Deployer, ObservabilityBuilderExt};
-use testing_framework_runner_compose::ComposeRunnerError;
+use reqwest::Url;
+use testing_framework_app::{
+    AppHost, AppHostDeployError, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp,
+};
+use testing_framework_core::scenario::ObservabilityInputs;
+use testing_framework_runner_compose::{ComposeProvisioner, ComposeRunnerError};
 use tracing::{info, warn};
 
 const DEFAULT_PROM_URL: &str = "http://127.0.0.1:19091";
@@ -21,24 +24,29 @@ async fn main() -> Result<()> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_PROM_URL.to_owned());
+    let observability = ObservabilityInputs {
+        metrics_query_url: Some(Url::parse(&metrics_url).context("parsing metrics query url")?),
+        ..ObservabilityInputs::default()
+    };
 
-    let mut scenario =
-        MetricsCounterScenarioBuilder::deployment_with(|_| MetricsCounterTopology::new(3))
-            .enable_observability()
-            .with_metrics_query_url_str(&metrics_url)
-            .with_run_duration(Duration::from_secs(20))
-            .with_workload(
-                CounterIncrementWorkload::new()
-                    .operations(300)
-                    .rate_per_sec(30),
-            )
-            .with_expectation(PrometheusCounterAtLeast::new(300.0))
-            .build()?;
+    let mut scenario = AppHost::scenario()
+        .with_app_using(
+            ClusterApp::<MetricsCounterEnv>::new(MetricsCounterTopology::new(3))
+                .with_observability(observability),
+            ComposeProvisioner::default(),
+        )
+        .with_run_duration(Duration::from_secs(20))
+        .with_workload(
+            CounterIncrementWorkload::new()
+                .operations(300)
+                .rate_per_sec(30),
+        )
+        .with_expectation(PrometheusCounterAtLeast::new(300.0))
+        .build()?;
 
-    let deployer = metrics_counter_runtime_ext::MetricsCounterComposeDeployer::new();
-    let runner = match deployer.deploy(&scenario).await {
+    let runner = match AppHostDeployer.deploy(&scenario).await {
         Ok(runner) => runner,
-        Err(ComposeRunnerError::DockerUnavailable) => {
+        Err(error) if docker_unavailable(&error) => {
             warn!("docker unavailable; skipping compose metrics-counter run");
             return Ok(());
         }
@@ -58,4 +66,14 @@ async fn main() -> Result<()> {
         .context("running metrics-counter compose scenario")?;
 
     Ok(())
+}
+
+fn docker_unavailable(error: &AppHostDeployError) -> bool {
+    let AppHostDeployError::RuntimeExtensions { source } = error else {
+        return false;
+    };
+    matches!(
+        source.downcast_ref::<ComposeRunnerError>(),
+        Some(ComposeRunnerError::DockerUnavailable)
+    )
 }

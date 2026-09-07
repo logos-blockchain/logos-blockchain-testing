@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use openraft_kv_runtime_ext::{OpenRaftClusterObserver, OpenRaftKvEnv};
+use openraft_kv_runtime_ext::OpenRaftClusterObserver;
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
 use testing_framework_core::{
     observation::ObservationHandle,
     scenario::{DynError, Expectation, RunContext},
@@ -45,14 +46,14 @@ impl OpenRaftKvConverges {
 }
 
 #[async_trait]
-impl Expectation<OpenRaftKvEnv> for OpenRaftKvConverges {
+impl Expectation<AppHostEnv> for OpenRaftKvConverges {
     fn name(&self) -> &str {
         "openraft_kv_converges"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<OpenRaftKvEnv>) -> Result<(), DynError> {
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
         let expected = expected_kv(&self.key_prefix, self.total_writes);
-        let observer = ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()?;
+        let observer = ctx.require_app::<ObservationHandle<OpenRaftClusterObserver>>()?;
 
         wait_for_observed_replication(&observer, &expected, self.timeout).await?;
 

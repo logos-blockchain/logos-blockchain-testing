@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use openraft_kv_runtime_ext::{OpenRaftKvCluster, OpenRaftKvEnv};
-use testing_framework_app::AppRunContextExt;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use openraft_kv_runtime_ext::OpenRaftKvEnv;
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 use tracing::info;
 
 #[derive(Clone)]
@@ -17,15 +17,14 @@ impl OpenRaftKvClusterAccessible {
 }
 
 #[async_trait]
-impl Workload<OpenRaftKvEnv> for OpenRaftKvClusterAccessible {
+impl Workload<AppHostEnv> for OpenRaftKvClusterAccessible {
     fn name(&self) -> &str {
         "openraft_kv_cluster_accessible"
     }
 
-    async fn start(&self, ctx: &RunContext<OpenRaftKvEnv>) -> Result<(), DynError> {
-        let cluster = ctx.require_app::<OpenRaftKvCluster>()?;
-        let states = cluster.states().await?;
-        let client_count = cluster.clients().len();
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<OpenRaftKvEnv>>()?;
+        let clients = cluster.clients();
 
         if cluster.node_count() != self.expected_nodes {
             return Err(format!(
@@ -36,12 +35,18 @@ impl Workload<OpenRaftKvEnv> for OpenRaftKvClusterAccessible {
             .into());
         }
 
-        if client_count != self.expected_nodes {
+        if clients.len() != self.expected_nodes {
             return Err(format!(
-                "openraft app handle has {client_count} clients, expected {}",
+                "openraft app handle has {} clients, expected {}",
+                clients.len(),
                 self.expected_nodes
             )
             .into());
+        }
+
+        let mut states = Vec::with_capacity(clients.len());
+        for client in &clients {
+            states.push(client.state().await?);
         }
 
         if states.len() != self.expected_nodes {

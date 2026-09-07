@@ -6,6 +6,7 @@ version.workspace = true
 
 [dependencies]
 nats-runtime-ext       = { path = "../integration" }
+testing-framework-app  = { workspace = true }
 testing-framework-core = { workspace = true }
 
 async-trait  = { workspace = true }
