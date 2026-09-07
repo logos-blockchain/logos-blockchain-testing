@@ -240,7 +240,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 )
             };
 
-            if !ports.is_empty() {
+            if restarting == 0 && !ports.is_empty() {
                 break ports;
             }
             if total_nodes == 0 {
@@ -334,8 +334,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     ) -> Result<(), NodeManagerError> {
         validate_restart_options(&options)?;
 
-        let (index, mut node) = self.take_node(name)?;
-        self.mark_node_restarting(name);
+        let (index, mut node) = self.take_node_for_restart(name)?;
 
         let launch = match build_launch_spec_with_args::<E>(
             node.config(),
@@ -420,6 +419,13 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         remove_node_from_state(&mut state, name)
     }
 
+    fn take_node_for_restart(&self, name: &str) -> Result<(usize, Node<E>), NodeManagerError> {
+        let mut state = self.lock_state();
+        let taken = remove_node_from_state(&mut state, name)?;
+        state.restarting_names.insert(name.to_string());
+        Ok(taken)
+    }
+
     fn put_node_back(&self, index: usize, node: Node<E>) {
         let mut state = self.lock_state();
         reinsert_node_at(&mut state, index, node);
@@ -440,11 +446,6 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         let mut state = self.lock_state();
         state.stopped_names.remove(name);
         state.restarting_names.remove(name);
-    }
-
-    fn mark_node_restarting(&self, name: &str) {
-        let mut state = self.lock_state();
-        state.restarting_names.insert(name.to_string());
     }
 
     fn readiness_target(&self, name: &str) -> Result<NodeReadinessTarget, NodeManagerError> {
@@ -824,10 +825,12 @@ mod tests {
         let port = live.local_addr().expect("live addr").port();
         let manager = std::sync::Arc::new(manager_with_two_nodes([port, port]).await);
 
-        let (index_0, node_0) = manager.take_node("node-0").expect("take node-0");
-        let (index_1, node_1) = manager.take_node("node-1").expect("take node-1");
-        manager.mark_node_restarting("node-0");
-        manager.mark_node_restarting("node-1");
+        let (index_0, node_0) = manager
+            .take_node_for_restart("node-0")
+            .expect("take node-0 for restart");
+        let (index_1, node_1) = manager
+            .take_node_for_restart("node-1")
+            .expect("take node-1 for restart");
 
         let restorer = std::sync::Arc::clone(&manager);
         let returner = tokio::spawn(async move {
@@ -843,6 +846,35 @@ mod tests {
             .expect("wait must complete once the restart window closes")
             .expect("restarted nodes should be awaited, not failed");
         returner.await.expect("restore task");
+    }
+
+    #[tokio::test]
+    async fn wait_network_ready_includes_restarting_node_when_sibling_is_live() {
+        let live = TcpListener::bind("127.0.0.1:0").expect("bind live port");
+        let port = live.local_addr().expect("live addr").port();
+        let manager = std::sync::Arc::new(manager_with_two_nodes([port, port]).await);
+
+        let (index, node) = manager
+            .take_node_for_restart("node-0")
+            .expect("take node-0 for restart");
+
+        let waiter_manager = std::sync::Arc::clone(&manager);
+        let waiter = tokio::spawn(async move { waiter_manager.wait_network_ready().await });
+
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            !waiter.is_finished(),
+            "readiness must wait while any active node is restarting"
+        );
+
+        manager.put_node_back(index, node);
+        manager.mark_node_running("node-0");
+
+        tokio::time::timeout(Duration::from_secs(10), waiter)
+            .await
+            .expect("wait must complete after the restarting node returns")
+            .expect("wait task must not panic")
+            .expect("the full active inventory should be ready");
     }
 
     #[tokio::test]
