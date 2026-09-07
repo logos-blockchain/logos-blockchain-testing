@@ -22,10 +22,19 @@ Runs on every push and pull request, with per-ref concurrency cancellation. All 
 
 ### `tests.yml`
 
-Runs tests on every push and pull request. The first step runs all workspace
-library tests without requiring Docker or Kubernetes. The second step runs a
-real two-node Local kvstore scenario through deployment, readiness, workloads,
-expectations, and cleanup.
+Runs one `core-and-local` job on every pull request and on pushes to `master`,
+with per-ref concurrency cancellation and the cargo registry cached on
+`Cargo.lock`:
+
+1. `cargo test --workspace --lib` — all workspace library tests, no Docker or
+   Kubernetes required.
+2. `cargo build -p kvstore-node --bin kvstore-node` — builds the example node
+   binary once.
+3. `cargo test -p kvstore-examples --test local_smoke` — a real local kvstore
+   scenario through deployment, readiness, workloads, expectations, and
+   cleanup, with `KVSTORE_NODE_BIN` pointing at the prebuilt binary.
+4. `cargo test -p multi-app-e2e --test local_happy_path` — the composed
+   queue + worker + result-store stack end to end on local processes.
 
 ### `deploy-pages.yml`
 
@@ -78,7 +87,7 @@ By default every backend tears down and deletes its working state. To retain evi
       **/.tmp*
 ```
 
-Local node directories are created under the test process's working directory; note that panicking tests preserve their node directories automatically. The equivalent in code is `CleanupPolicy { preserve_artifacts: true }` via `with_deployment_policy`. What lands in those directories and how to read them is covered in [Diagnostics and Retained Artifacts](diagnostics.md).
+Local node directories are created under the test process's working directory; note that panicking tests preserve their node directories automatically. The equivalent in code is `CleanupPolicy { preserve_artifacts: true }` in the cluster's policy via `ClusterApp::with_policy`. What lands in those directories and how to read them is covered in [Diagnostics and Retained Artifacts](diagnostics.md).
 
 ### Reproduce failures
 

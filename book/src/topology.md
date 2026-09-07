@@ -73,40 +73,32 @@ where
 | `map_deployment_provider(f)` | Transform the current provider (wrap, decorate) without losing state |
 | `with_deployment_seed(seed)` | Store a `DeploymentSeed` handed to the provider at build time |
 
-Resolution happens once, inside `build()`: the builder calls `provider.build(seed)` and bakes the resulting deployment into the `Scenario`. Deployers and workloads then see a fixed descriptor for the rest of the run.
+Resolution happens once, inside `build()`: the builder calls `provider.build(seed)` and bakes the resulting deployment into the `Scenario`. Provisioners and workloads then see a fixed descriptor for the rest of the run.
 
 ```mermaid
 graph LR
     P[DeploymentProvider] -- "build(seed)" --> D[E::Deployment]
     S[with_deployment_seed] -. optional .-> P
     D --> SC["Scenario&lt;E&gt;"]
-    SC --> R[Deployer / Runner]
+    SC --> R[Provisioner / Runner]
     D:::cl
     SC:::sc
     classDef cl stroke:#4a90d9,stroke-width:2.5px;
     classDef sc stroke:#9b6dd6,stroke-width:2.5px;
 ```
 
-The typical example flow, from kvstore (`examples/kvstore/testing/integration/src/scenario.rs`):
+In an app scenario the deployment usually enters as the `ClusterApp`'s topology instead:
 
 ```rust,ignore
-pub trait KvBuilderExt: Sized {
-    fn deployment_with(f: impl FnOnce(KvTopology) -> KvTopology) -> Self;
-}
-
-impl KvBuilderExt for KvScenarioBuilder {
-    fn deployment_with(f: impl FnOnce(KvTopology) -> KvTopology) -> Self {
-        KvScenarioBuilder::with_deployment(f(KvTopology::new(3)))
-    }
-}
+AppHost::scenario().with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
 ```
 
-`map_deployment_provider` and `with_deployment_provider` exist on all three builder forms (`ScenarioBuilder`, `NodeControlScenarioBuilder`, `ObservabilityScenarioBuilder`) and on the shared `CoreBuilderExt` used by app-specific builders. Wrapper builders can forward them through that shared extension.
+`map_deployment_provider` and `with_deployment_provider` exist on `ScenarioBuilder<E>` and on the shared `CoreBuilderExt` used by app-specific builder extensions.
 
 ---
 
 ## What the Deployment Does Downstream
 
-- The **local deployer** reads `node_count()` and asks the environment to reserve ports and build one config per index; see [Ports, Peers, Node Config, and Readiness](node-config.md).
+- The **local provisioner** reads `node_count()` and asks the environment to reserve ports and build one config per index; see [Ports, Peers, Node Config, and Readiness](node-config.md).
 - The **container backends** iterate indices to produce per-node static artifacts delivered through cfgsync; see [Static Artifacts and cfgsync](cfgsync.md).
 - **`ManualCluster`** treats the deployment as capacity: nodes are started on demand against the descriptor. See [ManualCluster](manual-cluster.md).

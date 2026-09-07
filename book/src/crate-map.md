@@ -2,7 +2,10 @@
 
 This chapter maps which crate owns which concept, what each one exports, and how they depend on each other.
 
-The workspace splits into three layers: the app-agnostic core, the deployment backends, and the cfgsync configuration pipeline. Example applications live in their own workspace layout under `examples/` and depend on the framework, never the other way around.
+The workspace splits into the app-agnostic core, portable resource contracts,
+the application-composition layer, deployment backends, and the cfgsync
+configuration pipeline. Example applications live under `examples/` and
+depend on the framework, never the other way around.
 
 ```mermaid
 graph BT
@@ -12,12 +15,15 @@ graph BT
     ca --> art
     cr[cfgsync-runtime] --> ca
     core[testing-framework-core] --> ca
+    container[testing-framework-container] --> core
     local[testing-framework-runner-local] --> core
     compose[testing-framework-runner-compose] --> core
+    compose --> container
     k8s[testing-framework-runner-k8s] --> core
     k8s --> cc
     k8s --> art
     app[testing-framework-app] --> core
+    app --> container
     app --> local
 ```
 
@@ -30,42 +36,60 @@ Path: `testing-framework/core`. The scenario engine and everything app-agnostic:
 | Module | Contents |
 |---|---|
 | `env` | The `Application` trait (re-exported from `scenario`) |
-| `scenario` | `ScenarioBuilder`, `Scenario`, `Workload`, `Expectation`, `RunContext`, `RunHandle`, `Runner`, `Deployer`, `RuntimeExtensionFactory`, `DeploymentPolicy`, cluster provisioning (`ClusterRequest`, `ClusterSource`, `ClusterHandle`, `ClusterProvisioner`), control traits, capability markers, sources, observability inputs |
+| `scenario` | `ScenarioBuilder`, `Scenario`, `Workload`, `Expectation`, `RunContext`, `RunHandle`, `Runner`, `RuntimeExtensionFactory`, `DeploymentPolicy`, cluster provisioning (`ClusterRequest`, `ClusterSource`, `ClusterHandle`, `ClusterProvisioner`, `ClusterStartMode`, `ClusterControlRequest`), control traits (`NodeControlHandle`, `ClusterWaitHandle`), sources (`ExistingCluster`, `ExternalNodeSource`), `ObservabilityInputs`, snapshots |
 | `topology` | `DeploymentDescriptor`, `DeploymentProvider`, `FixedDeploymentProvider`, `DeploymentSeed`, `DeploymentPlan`, `TopologyShapeBuilder`, `ClusterTopology`, `NodeCountTopology` |
 | `observation` | `Observer`, `SourceProvider`, `StaticSourceProvider`, `SourceProviderFactory`, `ObservationExtensionFactory`, `ObservationRuntime`, `ObservationHandle`, `ObservationConfig` |
-| `workloads` | Generic reusable workloads and verbs: `ChaosBuilderExt`, `RestartChaosBuilderExt`, `RandomRestartWorkload`, `NetworkPartitionWorkload` |
 | `runtime` | `manual` (the `ManualClusterHandle` interface), `process`, `retry` |
 | `cfgsync` | Bridges deployments to the cfgsync pipeline (re-exports `cfgsync-adapter`, rendering output types) |
 
-Key builder entry points: `ScenarioBuilder::with_deployment`, `::new(provider)`, and the capability-gated variants `with_node_control()` and `with_observability()`. `ObservabilityBuilderExt` and `CoreBuilderExt` live here too.
+Key builder entry points: `ScenarioBuilder::with_deployment` and `::new(provider)`. The shared fluent methods (`with_workload`, `with_expectation`, `with_observer`, policy setters, ...) live on `CoreBuilderExt`.
+
+---
+
+## testing-framework-container
+
+Path: `testing-framework/container`. The portable contract for containerized
+workloads. It owns `ContainerServiceSpec`, `ContainerStackRequest`,
+`ContainerStackProvisioner`, resolved endpoints, cleanup ownership, and
+per-container lifecycle handles. It contains no application composition,
+Docker commands, Compose descriptors, Helm values, Kubernetes resources, or
+Local-process implementation.
+
+The app crate consumes this contract when an `AppDeployment` provisions
+container resources. Compose implements it today; Kubernetes can implement the
+same contract without either backend depending on the app crate.
 
 ---
 
 ## testing-framework-app
 
-Path: `testing-framework/app`. The app layer for heterogeneous stacks: singleton processes, extra clusters, or several applications composed into one system. Depends on core plus the local deployer; the app layer is local-only today (see [Backend Scope](app-backend-scope.md)).
+Path: `testing-framework/app`. The composition layer for heterogeneous stacks:
+singleton processes, extra clusters, container stacks, or several applications
+composed into one system. It consumes Local and container contracts without
+owning either backend model (see [Backend Scope](app-backend-scope.md)).
 
 | Export | Role |
 |---|---|
-| `AppHost`, `AppHostEnv`, `AppHostTopology`, `AppHostScenarioBuilder`, `AppHostLocalDeployer` | Zero-node scenario entry point: `AppHost::scenario().with_app(...)` |
+| `AppHost`, `AppHostEnv`, `AppHostTopology`, `AppHostScenarioBuilder`, `AppHostDeployer` | Scenario entry point (`AppHost::scenario().with_app(...)`) and the backend-neutral deployer (`AppHostDeployer.deploy(&scenario)`) |
 | `AppDeployment`, `AppHandle` | The composition trait and its blanket handle bound |
-| `DeployContext` | Deploy children, expose typed/named handles, provision clusters through `deploy_cluster` |
-| `AppDeploymentFactory`, `AppScenarioBuilderExt`, `AppRunContextExt` | Builder registration (`with_app`) and workload-side handle lookup (`app`, `require_app`, ...) |
+| `ClusterApp` | Uniform cluster as an app: builds a managed `ClusterRequest`, exposes a `ClusterHandle` |
+| `ClusterRestartChaos` | Restart-chaos workload driving a `ClusterHandle`'s node control |
+| `DeployContext` | Deploy children, expose typed/named handles, provision clusters (`deploy_cluster`) and container stacks (`deploy_container_stack`), register cleanup (`defer_cleanup`) |
+| `AppDeploymentFactory`, `AppScenarioBuilderExt`, `AppRunContextExt` | Builder registration (`with_app`, `with_app_using`) and workload-side handle lookup (`app`, `require_app`, ...) |
 | `LocalProcessApp`, `LocalProcessHandle` | One supervised local process as an app |
-| `LocalAppCluster` | Alias for the common `ClusterHandle` used by local child clusters |
 | `AppRuntime`, `HandleRegistry`, `AppDeployError` | Runtime handle storage and errors; managed cleanup is kept separately |
 
 ---
 
 ## Deployment Backends
 
-Each backend implements `Deployer<E>` for its environment trait and returns the same core `Runner<E>`.
+Each backend implements `ClusterProvisioner<E>` for its environment trait; the provisioner is passed per app through `with_app_using` (local is the `with_app` default).
 
-**`testing-framework-runner-local`** (`testing-framework/deployers/local`) spawns nodes as local processes. Exports `ProcessDeployer`, `ManualCluster`, `NodeManager`, the `LocalDeployerEnv` / `LocalBinaryApp` environment traits with config/port helpers (`LocalProcessSpec`, `LocalNodePorts`, `build_local_cluster_node_config`, ...), process primitives (`LaunchSpec`, `NodeEndpoints`, `ProcessNode`), and the whole `binary` module (`BinaryProvider` and its implementations). Honors `TF_KEEP_LOGS` for tempdir retention.
+**`testing-framework-runner-local`** (`testing-framework/deployers/local`) spawns nodes as local processes. Exports `LocalClusterProvisioner`, `LocalCluster`, `ManualCluster`, `NodeManager`, the `LocalDeployerEnv` / `LocalBinaryApp` environment traits with config/port helpers (`LocalProcessSpec`, `LocalNodePorts`, `build_local_cluster_node_config`, ...), process primitives (`LaunchSpec`, `NodeEndpoints`, `ProcessNode`), and the whole `binary` module (`BinaryProvider` and its implementations). Honors `TF_KEEP_LOGS` for tempdir retention.
 
-**`testing-framework-runner-compose`** (`.../compose`) renders a Docker Compose stack. Exports `ComposeDeployer`, `ComposeDeployEnv`, descriptor builders (`ComposeDescriptor`, `NodeDescriptor`), compose lifecycle commands (`compose_up`, `compose_down`, `dump_compose_logs`), and the Docker config-server support used to serve cfgsync artifacts to containers.
+**`testing-framework-runner-compose`** (`.../compose`) renders Docker Compose stacks. Exports `ComposeProvisioner` (which implements both `ClusterProvisioner` and `ContainerStackProvisioner`), `ComposeDeployEnv`, descriptor builders (`ComposeDescriptor`, `NodeDescriptor`), compose lifecycle commands (`compose_up`, `compose_down`, `dump_compose_logs`), and the Docker config-server support used to serve cfgsync artifacts to containers. The cluster and container-stack roles are adapters over one internal managed-project runtime rather than independent Compose implementations.
 
-**`testing-framework-runner-k8s`** (`.../k8s`) installs a Helm release. Exports `K8sDeployer`, `K8sDeployEnv`, `ManualCluster` (K8s variant), Helm/chart-value infrastructure (`HelmInstallSpec`, `RunnerChartValues`, `render_binary_config_node_chart_assets`, ...), and wait/cleanup helpers. Depends directly on `cfgsync-core` and `cfgsync-artifacts` for artifact delivery.
+**`testing-framework-runner-k8s`** (`.../k8s`) installs a Helm release. Exports `K8sClusterProvisioner`, `K8sDeployEnv`, `ManualCluster` (K8s variant), Helm/chart-value infrastructure (`HelmInstallSpec`, `RunnerChartValues`, `render_binary_config_node_chart_assets`, ...), and wait/cleanup helpers. Depends directly on `cfgsync-core` and `cfgsync-artifacts` for artifact delivery.
 
 ---
 

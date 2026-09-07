@@ -1,25 +1,22 @@
 # Examples
 
-Use the app layer first when the test is about an application or composed
-system interface.
+Every example runs through the one app-based model:
+`AppHost::scenario().with_app(...)` (local processes by default) or
+`.with_app_using(...)` with a Compose or Kubernetes provisioner.
 
-Canonical app-layer examples:
+Canonical entry points:
 
-- `kvstore_app_host_convergence`: one local app cluster exposed through
-  `AppHost`
-- `openraft_kv_app_host_smoke`: one richer local app cluster exposed through
-  `AppHost`
+- `kvstore_basic_convergence`: one local kvstore cluster deployed as a
+  `ClusterApp`
+- `openraft_kv_basic_failover`: a richer consensus cluster with leader
+  failover through the `ClusterHandle`
 - `multi-app-e2e`: composed queue, worker, and result-store stack exercised
   through integration tests
 
-The older direct `ScenarioBuilder<AppEnv>` examples are still useful for
-backend-specific coverage:
+Backend-specific coverage lives in the per-example `compose_*` and `k8s_*`
+binaries, which run the same deployments through
+`ComposeProvisioner::default()` or `K8sClusterProvisioner`, plus the manual
+cluster examples for imperative node control.
 
-- local uniform cluster behavior
-- compose runner behavior
-- k8s runner behavior
-- manual cluster control
-
-Do not use those older examples as the pattern for new composed systems. New
-multi-app tests should define an `AppDeployment`, expose typed handles, and run
-through `AppHost::scenario().with_app(...)`.
+New multi-app tests should define an `AppDeployment`, expose typed handles,
+and run through `AppHost::scenario().with_app(...)`.

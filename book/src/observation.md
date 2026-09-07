@@ -121,24 +121,14 @@ impl Observer for OpenRaftClusterObserver {
 
 `capture_cluster_snapshot` queries each source's `/state` endpoint and records per-node errors as `OpenRaftSourceFailure` values instead of failing the cycle. A node restarting therefore appears as a named failure inside the snapshot. The snapshot type provides `agreed_leader(different_from)`, `all_voters_match(...)`, `all_kv_match(...)`, and `summary()` for timeout messages.
 
-Two source providers accompany it:
+Two source providers accompany it: `OpenRaftNodeClientsSourceProvider`, which re-reads the cluster's shared `NodeClients` every cycle so observation follows restarts inside a scenario, and `OpenRaftManualClusterSourceProvider`, which re-resolves clients from a `ManualCluster` for imperative runs.
 
-```rust,ignore
-// Fixed: scenario runs, sources from the run's node clients.
-pub fn openraft_cluster_source_provider(
-    _deployment: &<OpenRaftKvEnv as Application>::Deployment,
-    node_clients: NodeClients<OpenRaftKvEnv>,
-) -> Result<BoxedSourceProvider<OpenRaftKvClient>, DynError> {
-    Ok(Box::new(StaticSourceProvider::new(named_sources(node_clients.snapshot()))))
-}
-```
-
-and `OpenRaftManualClusterSourceProvider`, a dynamic provider that re-resolves clients from a `ManualCluster` on every cycle so observation follows manual restarts. The scenario builder wires the fixed one in via `with_observer(OpenRaftClusterObserver, openraft_cluster_source_provider, OpenRaftClusterObserver::config())`.
+The example's `OpenRaftKvClusterApp` preset (`examples/openraft_kv/testing/integration/src/app.rs`) deploys the cluster, starts `ObservationRuntime::start(provider, OpenRaftClusterObserver, config)` inside its `deploy`, registers the polling task with `ctx.defer_cleanup(...)`, and exposes the `ObservationHandle` as an app handle next to the `ClusterHandle`.
 
 The [failover scenario](chaos.md) waits on this observed state:
 
 ```rust,ignore
-let observer = ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()?;
+let observer = ctx.require_app::<ObservationHandle<OpenRaftClusterObserver>>()?;
 let leader = wait_for_observed_leader(&observer, timeout, None).await?;
 ```
 

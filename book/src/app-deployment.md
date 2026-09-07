@@ -34,10 +34,11 @@ pub struct KvLocalApp {
 
 #[async_trait]
 impl AppDeployment<AppHostEnv> for KvLocalApp {
-    type Handle = LocalAppCluster<KvEnv>;
+    type Handle = ClusterHandle<KvEnv>;
 
     async fn deploy(self, ctx: &mut DeployContext<AppHostEnv>) -> Result<Self::Handle, DynError> {
-        ctx.deploy_local_cluster::<KvEnv>(self.deployment).await
+        ctx.deploy_cluster(ClusterRequest::<KvEnv>::managed(self.deployment))
+            .await
     }
 }
 ```
@@ -60,8 +61,9 @@ One context belongs to one scenario preparation. It carries the active cluster p
 | `handles()` | Borrows the registry of handles exposed so far. |
 | `deployment()` | The outer scenario deployment descriptor (`E::Deployment`). |
 | `node_clients()` | Clients for nodes owned by the outer scenario (`NodeClients<E>`). |
-| `deploy_cluster::<App>(request)` | Provisions a managed, attached, or external cluster through the active provisioner. |
-| `deploy_local_cluster::<App>(deployment)` | Convenience for an eager managed cluster with the active provisioner. |
+| `deploy_cluster(request)` | Provisions a managed, attached, or external cluster (`ClusterRequest<App>`) through the active provisioner; returns a `ClusterHandle<App>`. |
+| `deploy_container_stack(request)` | Provisions a backend-managed stack of mutually reachable containers when the provisioner supports it. |
+| `defer_cleanup(guard)` | Registers a cleanup guard for auxiliary resources the application starts itself; guards run in reverse registration order. |
 
 `deploy` does not expose its returned handle. Use it when only the parent needs the child handle. Use `deploy_and_expose` when workloads should also be able to request the child directly. Both `expose` and `expose_named` return `AppDeployError::DuplicateHandle` if the type or type/name pair is already registered.
 
@@ -106,26 +108,23 @@ flowchart TD
 
 ---
 
-## The Outer Scenario: deployment() and node_clients()
+## Non-Managed Clusters: attached and external
 
-For `AppHost` scenarios, `deployment()` is the empty `AppHostTopology` and `node_clients()` is empty; everything lives in your handles. On a regular uniform-cluster scenario, they are how an app preset wraps the managed cluster itself:
+For `AppHost` scenarios, `deployment()` is the empty `AppHostTopology` and `node_clients()` is empty; everything lives in your handles. A deployment that should use nodes the framework does not own builds the corresponding `ClusterRequest` instead of a managed one:
 
 ```rust,ignore
-// examples/kvstore/testing/integration/src/app.rs
-#[async_trait]
-impl AppDeployment<KvEnv> for KvExistingClusterApp {
-    type Handle = KvStoreCluster;
+// attach to a live deployment described by ExistingCluster
+let cluster = ctx
+    .deploy_cluster(ClusterRequest::<KvEnv>::attached(existing))
+    .await?;
 
-    async fn deploy(self, ctx: &mut DeployContext<KvEnv>) -> Result<Self::Handle, DynError> {
-        Ok(KvStoreCluster::new(
-            ctx.deployment().clone(),
-            ctx.node_clients().clone(),
-        ))
-    }
-}
+// or build clients for plain external endpoints
+let cluster = ctx
+    .deploy_cluster(ClusterRequest::<KvEnv>::external(nodes))
+    .await?;
 ```
 
-This preset does not launch nodes. It returns typed access to the nodes already managed by the scenario.
+Neither request launches nodes; both return a `ClusterHandle` with typed access to the nodes, and cleanup does not stop resources the framework did not start. See [External and Existing Clusters](external-clusters.md).
 
 ---
 
@@ -142,4 +141,4 @@ After the root deployment returns, `AppDeploymentFactory` checks `ctx.contains::
 
 - [AppHost and with_app](app-host.md): how a deployment gets registered and prepared.
 - [Handle Ownership and Teardown](handles-teardown.md): what exposure means for resource lifetime.
-- [One Binary: LocalProcessApp](local-process-app.md), [Uniform Child Clusters: LocalAppCluster](local-app-cluster.md): ready-made deployments to compose.
+- [One Binary: LocalProcessApp](local-process-app.md), [Uniform Clusters: ClusterApp and ClusterHandle](local-app-cluster.md): ready-made deployments to compose.

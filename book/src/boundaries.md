@@ -28,7 +28,7 @@ The scenario engine never names a concrete application. Its only coupling point 
 
 ## What the Framework Owns
 
-**Process lifetime and working directories.** Deployers spawn node processes into per-run working directories, track PIDs, and stop everything on teardown. Artifact retention is policy (`CleanupPolicy::preserve_artifacts`), not something scenarios hand-roll.
+**Process lifetime and working directories.** Provisioners spawn node processes into per-run working directories, track PIDs, and stop everything on teardown. Artifact retention is policy (`CleanupPolicy::preserve_artifacts`), not something scenarios hand-roll.
 
 **Cleanup.** Teardown is guard-based and automatic: cleanup guards chain and run in reverse registration order when the `RunHandle` drops, and the same guards run on the failure path. App-layer adapters register managed resources in a LIFO cleanup stack so dependants stop before dependencies, independently of exposed handle clones ([Handle Ownership and Teardown](handles-teardown.md)).
 
@@ -46,7 +46,7 @@ The kvstore example is the template. Its integration crate supplies, in its own 
 - **Config**: `KvNodeConfig`, built per node from the framework's port/peer views and rendered to YAML.
 - **Client**: `KvHttpClient`, constructed in `Application::build_node_client`.
 - **Readiness**: `node_readiness_path()` returning `/health/ready`.
-- **Domain handles and presets**: `KvStoreCluster`, `KvLocalApp`, `KvExistingClusterApp`.
+- **Domain handles and presets**: `KvLocalApp` and the workloads' typed use of `ClusterHandle<KvEnv>`.
 - **Scenarios that mean something**: write workloads, convergence expectations, runnable bins.
 
 ```rust,ignore

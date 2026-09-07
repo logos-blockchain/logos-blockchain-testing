@@ -2,7 +2,7 @@
 
 This part covers where scenarios run and where their nodes come from.
 
-Uniform scenarios deploy to local processes, Docker Compose, or Kubernetes; scenarios can also attach to clusters you already operate. The app layer uses the same cluster request and handle model, with local as its implemented provisioning backend today.
+Clusters provision to local processes, Docker Compose, or Kubernetes through one request and handle model — the provisioner passed per app selects the backend — and scenarios can also attach to clusters you already operate.
 
 - [Capability Matrix](capability-matrix.md) — feature support per deployer
 - [Local Deployer](deployer-local.md) — processes on your machine

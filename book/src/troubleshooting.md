@@ -57,7 +57,7 @@ All variants live in `BinaryProviderError` (`deployers/local/src/binary/types.rs
 
 **`docker compose up exited with status …` / `… timed out after …`** (`ComposeCommandError`): the stack itself failed to start. Re-run with `COMPOSE_RUNNER_PRESERVE=1` and inspect the preserved workspace and `docker compose logs` for the project.
 
-For Kubernetes, an unreachable cluster surfaces as `K8sRunnerError::ClientInit` at deploy time; `scripts/run/checks.sh` diagnoses context, Helm, and image visibility (a `:local` tag is not visible inside `kind`/`minikube` without loading it).
+For Kubernetes, an unreachable cluster surfaces as `ManualClusterError::ClientInit` at deploy time; `scripts/run/checks.sh` diagnoses context, Helm, and image visibility (a `:local` tag is not visible inside `kind`/`minikube` without loading it).
 
 ---
 

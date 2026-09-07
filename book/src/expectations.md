@@ -96,7 +96,7 @@ Verified behavior (`runner.rs` and `definition/validation.rs`):
 
 - If you never call it, the cooldown defaults to **10 seconds**. (`build()` also enforces a minimum run duration of 10 seconds.)
 - After the workload window, the runner keeps the run alive for the cooldown window, still joining unfinished workloads and still running `check_during_capture` ticks.
-- When the framework owns the node lifecycle (managed clusters), the cooldown window is raised to a **minimum of 30 seconds** so restarted or freshly deployed nodes stabilize.
+- When the framework owns the node lifecycle **and** node control was granted (the `ClusterApp` default), the cooldown window is raised to a **minimum of 30 seconds** so restarted or freshly deployed nodes stabilize; managed clusters deployed without control skip the floor.
 - Before calling `evaluate`, the runner additionally sleeps a short settle wait derived from the same setting (at least 2 seconds when a cooldown is configured or node control is active) so runtime extensions such as [observers](observation.md) catch up.
 
 Set the cooldown to zero only for scenarios without managed nodes where staleness cannot matter.
@@ -110,16 +110,18 @@ The kvstore example's `KvConverges` (`examples/kvstore/testing/workloads/src/exp
 ```rust,ignore
 use async_trait::async_trait;
 use kvstore_runtime_ext::KvEnv;
-use testing_framework_core::scenario::{DynError, Expectation, RunContext};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, Expectation, RunContext};
 
 #[async_trait]
-impl Expectation<KvEnv> for KvConverges {
+impl Expectation<AppHostEnv> for KvConverges {
     fn name(&self) -> &str {
         "kv_converges"
     }
 
-    async fn evaluate(&mut self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
+    async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
+        let clients = cluster.clients();
         if clients.is_empty() {
             return Err("no kv node clients available".into());
         }
@@ -146,12 +148,12 @@ The example follows two conventions:
 - **Poll with a deadline inside `evaluate`.** Eventual consistency is the common case; a one-shot read makes flaky tests.
 - **Make the error message carry the diagnosis.** State what was expected, how long you waited, and (where available) what was last observed.
 
-The openraft_kv variant, `OpenRaftKvConverges` (`examples/openraft_kv/testing/workloads/src/convergence.rs`), reads the cluster observer registered as a runtime extension instead of querying nodes directly:
+The openraft_kv variant, `OpenRaftKvConverges` (`examples/openraft_kv/testing/workloads/src/convergence.rs`), reads the cluster observer exposed by the app preset instead of querying nodes directly:
 
 ```rust,ignore
-async fn evaluate(&mut self, ctx: &RunContext<OpenRaftKvEnv>) -> Result<(), DynError> {
+async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
     let expected = expected_kv(&self.key_prefix, self.total_writes);
-    let observer = ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()?;
+    let observer = ctx.require_app::<ObservationHandle<OpenRaftClusterObserver>>()?;
 
     wait_for_observed_replication(&observer, &expected, self.timeout).await?;
 

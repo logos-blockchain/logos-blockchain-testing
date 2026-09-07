@@ -67,8 +67,8 @@ The example establishes these relationships:
 
 ```mermaid
 flowchart TD
-    Root[JobStackApp] --> Q["queue cluster x2<br/>LocalAppCluster&lt;QueueEnv&gt;"]
-    Root --> R["result store x2<br/>LocalAppCluster&lt;KvEnv&gt;"]
+    Root[JobStackApp] --> Q["queue cluster x2<br/>ClusterHandle&lt;QueueEnv&gt;"]
+    Root --> R["result store x2<br/>ClusterHandle&lt;KvEnv&gt;"]
     Q --> W["job worker<br/>LocalProcessApp"]
     R --> W
     Q --> St[JobStackHandle]
@@ -116,8 +116,7 @@ let mut scenario = AppHost::scenario()
     .with_expectation(AllJobsCompleted::new(10))
     .build()?;
 
-let deployer = AppHostLocalDeployer::default();
-let runner = deployer.deploy(&scenario).await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 runner.run(&mut scenario).await?;
 ```
 
@@ -140,7 +139,7 @@ ctx.expose_named("primary", primary)?;
 ctx.expose_named("replica", replica)?;
 
 // in the workload:
-let primary = ctx.require_app_named::<LocalAppCluster<KvEnv>>("primary")?;
+let primary = ctx.require_app_named::<ClusterHandle<KvEnv>>("primary")?;
 ```
 
 **Expose components as well as the stack when both are used.** A workload that touches one component can request its handle directly, while stack-level workloads can request the aggregate handle.
@@ -150,5 +149,5 @@ let primary = ctx.require_app_named::<LocalAppCluster<KvEnv>>("primary")?;
 ## See Also
 
 - [AppDeployment and DeployContext](app-deployment.md): the composition API in detail.
-- [Uniform Child Clusters: LocalAppCluster](local-app-cluster.md): the child clusters used here.
-- [Backend Scope](app-backend-scope.md): where composed stacks can run today.
+- [Uniform Clusters: ClusterApp and ClusterHandle](local-app-cluster.md): the child clusters used here.
+- [Backend Scope](app-backend-scope.md): where composed stacks can run.

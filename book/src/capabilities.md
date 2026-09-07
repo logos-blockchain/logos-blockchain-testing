@@ -1,65 +1,54 @@
-# Scenario Capabilities
+# Cluster Control and Observability
 
-Capabilities record, in the type system, which deployer services a scenario requests, such as node control or external telemetry. Unsupported combinations fail during construction, compilation, or deployment rather than during a workload.
+Node control and telemetry endpoints are per-cluster request data. Each `ClusterRequest` states what the test needs from that cluster; the backend provisioner wires the matching runtime surfaces into the returned `ClusterHandle`. Operations a cluster does not have fail with a clear error at the call site instead of somewhere inside a workload.
 
 ---
 
-## The Capability Type Parameter
+## Control as Request Data
 
-The core builder is generic over a capability marker: `Builder<E, Caps>` with `Caps = ()` by default. Building a scenario produces `Scenario<E, Caps>`, and deployers are typed as `Deployer<E, Caps>`, so a deployer that cannot provide a capability does not accept scenarios that demand it.
+`ClusterControlRequest` (`testing-framework/core/src/scenario/provisioning.rs`) has two values:
 
-The public wrappers (`testing-framework/core/src/scenario/definition/builder.rs`):
+| Value | Meaning |
+|---|---|
+| `ClusterControlRequest::None` | Clients only; no lifecycle operations on the handle |
+| `ClusterControlRequest::Full` | The provisioner attaches its node-control surface to the handle |
 
-| Builder type | Capability | Entered via |
-|--------------|-----------|-------------|
-| `ScenarioBuilder<E>` | `()` | `ScenarioBuilder::with_deployment(...)` / `::new(provider)` |
-| `NodeControlScenarioBuilder<E>` | `NodeControlCapability` | `.with_node_control()` (alias `.enable_node_control()`) |
-| `ObservabilityScenarioBuilder<E>` | `ObservabilityCapability` | `.with_observability()` or any `ObservabilityBuilderExt` method |
-
-All three expose the same fluent surface (`with_workload`, `with_expectation`, `with_run_duration`, ...), so the capability switch can happen anywhere in the chain:
+A raw `ClusterRequest` defaults to `None`. `ClusterApp` defaults to `Full`, because a cluster deployed as the system under test usually wants restarts available; opt out with `.with_control(ClusterControlRequest::None)`:
 
 ```rust,ignore
-let scenario = ScenarioBuilder::with_deployment(topology)
-    .with_node_control()                 // () -> NodeControlCapability
-    .with_workload(my_restart_workload)
-    .with_run_duration(Duration::from_secs(60))
+let scenario = AppHost::scenario()
+    .with_app(
+        ClusterApp::<QueueEnv>::new(QueueTopology::new(3))
+            .with_control(ClusterControlRequest::None),   // clients only
+    )
     .build()?;
 ```
 
-`RequiresNodeControl` (`testing-framework/core/src/scenario/capabilities.rs`) is how `build()` and deployers reason about the marker:
+What `Full` buys depends on the backend: local grants the complete surface including `StartNodeOptions`, compose grants restart (plus stop for attached clusters), and k8s grants start/stop/restart by scaling per-node deployments. The [Backend Capability Matrix](capability-matrix.md) records the details.
 
-```rust,ignore
-pub trait RequiresNodeControl {
-    const REQUIRED: bool;
-}
-// (): false    NodeControlCapability: true    ObservabilityCapability: false
-```
-
-`build()` uses it to validate the source configuration: a scenario that requires node control but only has external, uncontrolled nodes fails with a `SourceConfiguration` error ("node control is not available for cluster mode 'external-only' ..."). See [Existing and External Clusters](external-clusters.md).
+Every handle also reports a `ClusterControlProfile` describing who owns the lifecycle: `FrameworkManaged` (provisioned eagerly, torn down by the framework), `ManualControlled` (provisioned on demand, your code starts nodes), `ExistingClusterAttached`, or `ExternalUncontrolled`. `framework_owns_lifecycle()` is true only for `FrameworkManaged`.
 
 ---
 
 ## Node Control Without ManualCluster
 
-Restarting nodes from a declarative workload does **not** require `ManualCluster`. The node-control capability provides access instead:
-
-1. Call `.with_node_control()` on the builder.
-2. Deploy with a deployer that supports the capability (local ships full node control, compose supports restart; the k8s deployer wires no node control handle into managed scenarios, so use its `ManualCluster` mode instead).
-3. Inside a workload, take the handle from the context:
+Restarting nodes from a declarative workload does **not** require `ManualCluster`. The handle carries the control surface:
 
 ```rust,ignore
-let Some(control) = ctx.node_control() else {
-    return Err("this workload requires node control".into());
-};
+async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+    let cluster = ctx.require_app::<ClusterHandle<QueueEnv>>()?;
 
-control.restart_node("node-1").await?;
+    cluster.restart_node("node-1").await?;
+    cluster.wait_node_ready("node-1").await?;
+    Ok(())
+}
 ```
 
-`ManualCluster` is the imperative API for tests that control the entire node lifecycle themselves; see [ManualCluster: Imperative Node Control](manual-cluster.md). The scenario form above runs workloads, expectations, and teardown through the scenario runtime. [Chaos and Controlled Failure](chaos.md) shows a full failover scenario built this way.
+When control was not requested (or the backend cannot provide an operation), the call returns an error such as `"cluster node control is not available"` — explicit partial support at run time. [Chaos and Controlled Failure](chaos.md) shows full restart scenarios built this way, including the reusable `ClusterRestartChaos` workload. `ManualCluster` remains the imperative API for tests that control the entire node lifecycle themselves; see [ManualCluster: Imperative Node Control](manual-cluster.md).
 
-### NodeControlHandle
+### The Handle's Control Surface
 
-`NodeControlHandle` (`testing-framework/core/src/scenario/control.rs`) is the deployer-agnostic control surface. Every method has a default implementation returning a "not supported by this deployer" error, so partial support is explicit at run time:
+`ClusterHandle<E>` forwards these operations to the backend's `NodeControlHandle` (`testing-framework/core/src/scenario/control.rs`):
 
 | Method | Effect |
 |--------|--------|
@@ -74,7 +63,19 @@ control.restart_node("node-1").await?;
 
 `StartedNode<E>` is a plain pair: the node `name` and a fresh `E::NodeClient`.
 
-`ClusterWaitHandle<E>` is the matching wait surface: a single `wait_network_ready()` used for readiness gates. It is exposed publicly on the runner as `Runner::wait_network_ready()` (before `run` starts) and on `ManualCluster`; inside workloads, prefer waiting on observed application state instead.
+`wait_network_ready()` is the matching cluster-wide wait, backed by the provisioner's `ClusterWaitHandle`. Inside workloads, prefer waiting on observed application state instead.
+
+### Start Modes
+
+`ClusterStartMode` selects when managed nodes start:
+
+- `Eager` (default): the provisioner starts and readiness-gates every node before the handle is returned.
+- `OnDemand`: the cluster is prepared but no node runs; the handle's profile is `ManualControlled` and your code calls `start_node` explicitly. Supported by the local and k8s provisioners; the compose provisioner rejects it.
+
+```rust,ignore
+ClusterApp::<QueueEnv>::new(QueueTopology::new(3))
+    .with_start_mode(ClusterStartMode::OnDemand)
+```
 
 ### StartNodeOptions
 
@@ -90,22 +91,43 @@ control.restart_node("node-1").await?;
 | `args: Vec<String>` | `with_args` | Extra process arguments |
 | `runtime.start_timeout` | `with_runtime` / `with_start_timeout` | Readiness timeout override |
 
+The local backend honors all of them; k8s rejects persist/snapshot dirs and routes config overrides through cfgsync where the environment supports it ([Kubernetes Backend](deployer-k8s.md)).
+
 ---
 
-## The Observability Capability
+## Observability as Request Data
 
-`ObservabilityCapability` carries optional telemetry endpoints (Prometheus query URL, OTLP ingest URL, Grafana URL). It does not require node control and is populated through `ObservabilityBuilderExt` (`testing-framework/core/src/scenario/builder_ext.rs`):
+`ObservabilityInputs` (`testing-framework/core/src/scenario/observability.rs`) carries optional telemetry endpoints:
+
+| Field | Purpose |
+|---|---|
+| `metrics_query_url` | Base URL the run uses to query Prometheus |
+| `metrics_otlp_ingest_url` | OTLP HTTP endpoint nodes export metrics to |
+| `grafana_url` | Grafana URL surfaced in logs and endpoint printouts |
+
+Set it per cluster:
 
 ```rust,ignore
-use testing_framework_core::scenario::ObservabilityBuilderExt;
+let observability = ObservabilityInputs {
+    metrics_query_url: Some(Url::parse("http://127.0.0.1:19091")?),
+    ..ObservabilityInputs::default()
+};
 
-let builder = ScenarioBuilder::with_deployment(topology)
-    .with_metrics_query_url_str("http://127.0.0.1:9090");
+let app = ClusterApp::<MetricsCounterEnv>::new(MetricsCounterTopology::new(3))
+    .with_observability(observability);
 ```
 
-Each method transitions `ScenarioBuilder<E>` into `ObservabilityScenarioBuilder<E>` (and is a plain setter if you are already there). `Url`-typed, `_str` (panicking), and `try_..._str` (fallible) variants exist for all three endpoints. Deployers merge these values with environment variables; the details, including what telemetry is and is not, are in [Telemetry and External Observability](telemetry.md).
+The compose and k8s provisioners resolve the effective inputs by reading the `LOGOS_BLOCKCHAIN_METRICS_QUERY_URL`, `LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL`, and `LOGOS_BLOCKCHAIN_GRAFANA_URL` environment variables and applying the request's values as overrides (request wins). The OTLP ingest URL flows into node config preparation; the resolved inputs are stored on the handle. The local provisioner does not populate observability, so local handles report empty metrics.
 
-Capabilities use one marker per scenario, not a set. Choosing `with_node_control()` gives the scenario node control; choosing an observability method supplies telemetry endpoints. Each deployer declares which `Caps` it supports; the [Capability Matrix](capability-matrix.md) lists the available combinations.
+Expectations read metrics through the handle:
+
+```rust,ignore
+let cluster = ctx.require_app::<ClusterHandle<MetricsCounterEnv>>()?;
+let metrics = cluster.metrics()?;             // Prometheus-backed when configured
+let total = metrics.counter_value("sum(metrics_counter_increments_total)")?;
+```
+
+`metrics()` builds a Prometheus-backed `Metrics` handle from `metrics_query_url`, or an empty handle when none is configured (`is_configured()` distinguishes the two). Details, including what telemetry is and is not, are in [Telemetry and External Observability](telemetry.md).
 
 ---
 
@@ -113,5 +135,5 @@ Capabilities use one marker per scenario, not a set. Choosing `with_node_control
 
 - [Chaos and Controlled Failure](chaos.md) — node control from workloads
 - [ManualCluster: Imperative Node Control](manual-cluster.md) — the imperative alternative
-- [Telemetry and External Observability](telemetry.md) — the observability capability in use
-- [Capability Matrix](capability-matrix.md) — deployer support by capability
+- [Telemetry and External Observability](telemetry.md) — observability inputs in use
+- [Backend Capability Matrix](capability-matrix.md) — backend support by feature

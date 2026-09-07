@@ -100,7 +100,7 @@ let mut scenario = AppHost::scenario()                // ①
     .with_expectation(AllJobsCompleted::new(10))      // ⑤
     .build()?;
 
-let runner = AppHostLocalDeployer::default()
+let runner = AppHostDeployer
     .deploy(&scenario)                                // ⑥
     .await?;
 
@@ -116,7 +116,7 @@ runner.run(&mut scenario).await?;                     // ⑦
 <li>② deploy the stack: two <span class="tk tk-cluster">clusters</span> and a <span class="tk tk-process">process</span>, wired together → section 3</li>
 <li>③ the run window (a maximum, not a timer you must fill) → section 4</li>
 <li>④ ⑤ create activity, verify outcomes → section 4</li>
-<li>⑥ where it runs: local processes here; other backends → section 10</li>
+<li>⑥ the backend-neutral deployer; each application picks its backend provisioner → section 10</li>
 <li>⑦ the runner order: readiness → workloads → cooldown → evaluate → teardown → section 1</li>
 </ul>
 
@@ -125,41 +125,36 @@ runner.run(&mut scenario).await?;                     // ⑦
 
 <div class="slide slide--top">
 <p class="slide-kick">the same builder, further</p>
-<p class="slide-line">The helper API expresses a partition, random restarts, and a convergence check in one chain. Runnable as <code>cargo run -p queue-examples --bin queue_dsl_demo</code>.</p>
-<div class="nodes"><span class="ndw"><span class="nd nd-scenario">produce</span><span class="nd-sub">400 jobs at 40/s</span></span><span class="nda">→</span><span class="ndw"><span class="nd nd-cluster">group A ✂ group B</span><span class="nd-sub">split 20 s, then heal</span></span><span class="nda">+</span><span class="ndw"><span class="nd nd-process">⚡ random restarts</span><span class="nd-sub">every 5–15 s</span></span><span class="nda">→</span><span class="ndw"><span class="nd nd-scenario">expect convergence</span><span class="nd-sub">all 5 nodes at 400</span></span></div>
+<p class="slide-line">The helper API expresses steady traffic, random restarts, and a convergence check in one chain. Runnable as <code>cargo run -p queue-examples --bin queue_dsl_demo</code>.</p>
+<div class="nodes"><span class="ndw"><span class="nd nd-scenario">produce</span><span class="nd-sub">400 jobs at 40/s</span></span><span class="nda">+</span><span class="ndw"><span class="nd nd-process">⚡ random restarts</span><span class="nd-sub">every 5–15 s</span></span><span class="nda">→</span><span class="ndw"><span class="nd nd-scenario">expect convergence</span><span class="nd-sub">all 5 nodes at 400</span></span></div>
 
 ```rust,ignore
 QueueScenario::nodes(5)
     .produce(400).rate_per_sec(40).done()
     .restart_nodes_randomly().every_secs(5, 15).done()
-    .partition(["node-0", "node-1"], ["node-2", "node-3", "node-4"]).hold_secs(20).done()
     .expect_converged(400).within_secs(60)
     .run_secs(120)
     .await?;
 ```
 
-<p class="slide-note">each helper adds ordinary workloads, expectations, and the capabilities they require. Tests can also use the explicit API</p>
+<p class="slide-note">each helper adds ordinary workloads and expectations to the same builder. Tests can also use the explicit API</p>
 
 <div class="fold" data-label="details — the system under chaos, and the explicit form">
 
-The next two blocks use a second, simpler system, because chaos reads clearest on a uniform cluster: one five-node <span class="tk tk-cluster">queue cluster</span>, no worker or store. The scenario produces jobs against it while restarting random nodes and cutting the network in two, then checks that every node still converges:
+The next two blocks use a second, simpler system, because chaos reads clearest on a uniform cluster: one five-node <span class="tk tk-cluster">queue cluster</span>, no worker or store. The scenario produces jobs against it while restarting random nodes, then checks that every node still converges:
 
 ```mermaid
 flowchart LR
-    WL["produce<br/><small>400 jobs at 40/s</small>"]:::sc --> A
-    subgraph A["partition group A"]
+    WL["produce<br/><small>400 jobs at 40/s</small>"]:::sc --> C
+    subgraph C["queue cluster"]
         N0["node-0"]:::cl
         N1["node-1"]:::cl
-    end
-    subgraph B["partition group B"]
         N2["node-2"]:::cl
         N3["node-3"]:::cl
         N4["node-4"]:::cl
     end
-    A -. "✂ split 20s, then heal" .- B
-    RR["⚡ random restarts<br/><small>every 5–15s</small>"]:::pr -.-> A
-    RR -.-> B
-    B --> EX["expect<br/><small>all 5 nodes converge at 400</small>"]:::sc
+    RR["⚡ random restarts<br/><small>every 5–15s</small>"]:::pr -.-> C
+    C --> EX["expect<br/><small>all 5 nodes converge at 400</small>"]:::sc
     classDef cl stroke:#4a90d9,stroke-width:2.5px;
     classDef pr stroke:#e08a3c,stroke-width:2.5px;
     classDef sc stroke:#9b6dd6,stroke-width:2.5px;
@@ -168,38 +163,29 @@ flowchart LR
 First in the explicit API, compile-checked:
 
 ```rust,ignore
-let mut scenario = QueueScenarioBuilder::deployment_with(|_| QueueTopology::new(5))
-    .enable_node_control()                                //  restarts allowed
-    .with_network_control()                               //  partitions allowed
+let mut scenario = AppHost::scenario()
+    .with_app(ClusterApp::<QueueEnv>::new(QueueTopology::new(5)))
     .with_workload(
         QueueProduceWorkload::new()                       //  steady traffic
             .operations(400)
             .rate_per_sec(40)
             .payload_prefix("soak"),
     )
-    .with_workload(RandomRestartWorkload::new(            //  random node restarts
-        Duration::from_secs(5),
-        Duration::from_secs(15),
-        Duration::from_secs(10),
-    ))
-    .with_workload(NetworkPartitionWorkload::new(         //  split, hold, heal
-        NetworkPartitionSpec::new(vec![
-            vec!["node-0", "node-1"],
-            vec!["node-2", "node-3", "node-4"],
-        ]),
-        Duration::from_secs(20),
-        Duration::from_secs(20),
-    ))
+    .with_workload(
+        ClusterRestartChaos::<QueueEnv>::new()            //  random node restarts
+            .every_secs(5, 15)
+            .cooldown_secs(60),
+    )
     .with_expectation(QueueConverges::new(400).timeout(Duration::from_secs(60)))
     .with_run_duration(Duration::from_secs(120))
     .build()?;
 
-let runner = QueueLocalDeployer::default().deploy(&scenario).await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 
 runner.run(&mut scenario).await?;
 ```
 
-Each helper in the shorter chain adds these same workloads, expectations, and capabilities. Tests can use the explicit API whenever the helpers do not cover what they need.
+Each helper in the shorter chain adds these same workloads and expectations; the DSL's `run_secs` finisher attaches the `ClusterApp` and runs the scenario. Tests can use the explicit API whenever the helpers do not cover what they need.
 
 The framework began with an API sketch in this style. Its current implementation separates that idea into scenarios, workloads, expectations, and deployment backends. The sections below show how those parts fit together.
 
@@ -334,12 +320,12 @@ async fn deploy(self, ctx: &mut DeployContext<AppHostEnv>) -> Result<Self::Handl
 }
 ```
 
-The aggregate returned to test code contains two uniform-cluster handles and one process handle:
+The aggregate returned to test code contains two uniform-cluster handles and one process handle (condensed — the shipped fixture stores the clusters' clients and a backend-neutral worker control so the same handle also serves the containerized variant):
 
 ```rust,ignore
 struct JobStackHandle {
-    queue: LocalAppCluster<QueueEnv>,
-    results: LocalAppCluster<KvEnv>,
+    queue: ClusterHandle<QueueEnv>,
+    results: ClusterHandle<KvEnv>,
     worker: LocalProcessHandle<WorkerClient>,
 }
 ```
@@ -354,7 +340,7 @@ The worker is the single-binary member. A `LaunchSpec` declares the process; a r
 
 ```rust,ignore
 let launch = LaunchSpec {
-    binary: worker_binary_provider().resolve()?,          // section 9
+    binary: worker_binary_provider().resolve().await?,    // section 9
     args: vec!["--queue-url".to_owned(), queue_url.to_string(), /* … */],
     ..LaunchSpec::default()
 };
@@ -408,7 +394,7 @@ let mut scenario = AppHost::scenario()
     .with_expectation(AllJobsCompleted::new(10))     // register the check
     .build()?;
 
-let runner = AppHostLocalDeployer::default().deploy(&scenario).await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 
 runner.run(&mut scenario).await?;                    // TF invokes both
 ```
@@ -431,7 +417,7 @@ impl Workload<AppHostEnv> for EnqueueJobs {
     async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
         let stack = ctx.require_app::<JobStackHandle>()?;
         let queue = stack
-            .queue()
+            .queue
             .first_client()
             .ok_or("queue cluster has no clients")?;
 
@@ -463,12 +449,12 @@ impl Expectation<AppHostEnv> for AllJobsCompleted {
 
     async fn evaluate(&mut self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
         let stack = ctx.require_app::<JobStackHandle>()?;
-        let clients = stack.results().clients();
+        let clients = stack.results.clients();
         let deadline = Instant::now() + self.timeout;
 
         while Instant::now() < deadline {
             if all_results_are_visible(&clients, self.count).await? {
-                if !stack.worker().is_running().await {
+                if !stack.worker.is_running().await {
                     return Err("job worker stopped before evaluation".into());
                 }
 
@@ -591,12 +577,12 @@ let mut deployment =
     DeployContext::<AppHostEnv>::new(AppHostTopology, NodeClients::default());
 let stack = deployment.deploy(JobStackApp::new()).await?;
 
-assert_eq!(stack.queue().node_count(), 2);
-assert_eq!(stack.results().node_count(), 2);
+assert_eq!(stack.queue.node_count(), 2);
+assert_eq!(stack.results.node_count(), 2);
 
-let queue = stack.queue().first_client().ok_or("queue has no clients")?;
-let results = stack.results().clients();
-let worker = stack.worker().clone();
+let queue = stack.queue.first_client().ok_or("queue has no clients")?;
+let results = stack.results.clients();
+let worker = stack.worker.clone();
 
 worker.restart().await?;
 enqueue(&queue, "imperative-job").await?;
@@ -616,11 +602,11 @@ In this form, `DeployContext` keeps the child `AppDeployment`s, their typed hand
 | Test behavior | Workloads and expectations | Client calls, helpers, assertions | Handle calls, helpers, assertions |
 | Cleanup owner | Scenario runtime | `ManualCluster` | `DeployContext` |
 
-Manual control is also available without abandoning a scenario. A scenario can opt into node control with `with_node_control()`, and app deployments return `ClusterHandle` / `LocalAppCluster` and `LocalProcessHandle` values with direct lifecycle methods.
+Manual control is also available without abandoning a scenario. Cluster deployments request node control on their `ClusterRequest` (`ClusterApp` asks for it by default), so the `ClusterHandle` and `LocalProcessHandle` values workloads receive carry direct lifecycle methods — and `ClusterApp::with_start_mode(ClusterStartMode::OnDemand)` prepares a cluster whose nodes a workload starts explicitly.
 
 <p class="recap"><b>Next:</b> how TF assigns ports and how applications produce node configuration.</p>
 
-<p class="goes-deeper"><a href="capabilities.html">Scenario Capabilities</a> · <a href="chaos.html">Chaos and Controlled Failure</a> · <a href="manual-cluster.html">ManualCluster: Imperative Node Control</a></p>
+<p class="goes-deeper"><a href="capabilities.html">Cluster Control and Observability</a> · <a href="chaos.html">Chaos and Controlled Failure</a> · <a href="manual-cluster.html">ManualCluster: Imperative Node Control</a></p>
 
 ---
 
@@ -760,11 +746,11 @@ let policy = DeploymentPolicy {
 };
 ```
 
-For the primary scenario cluster, set this through `.with_deployment_policy(policy)`. A child cluster created by an `AppDeployment` carries policy on its `ClusterRequest`. `deploy_local_cluster(...)` uses the default policy.
+Policy is per-cluster data: each cluster carries its policy on its `ClusterRequest`, set through `ClusterApp::with_policy(policy)` or `ClusterRequest::with_policy(policy)` inside an `AppDeployment`. Requests without an explicit policy use the default.
 
 <div class="facts">
 <b>Readiness</b><span>requirement (all nodes / quorum) + probe (HTTP path or TCP) with retry budgets; <code>SLOW_TEST_ENV</code> doubles timeouts</span>
-<b>Retry</b><span>the local backend respawns a failed cluster attempt with backoff; Compose and Kubernetes currently do not repeat deployment</span>
+<b>Retry</b><span>the local backend respawns a failed cluster attempt with backoff; Compose retries only when the policy sets a retry budget; Kubernetes does not repeat deployment</span>
 <b>Artifacts</b><span>local files live in node working directories; container backends receive rendered config through cfgsync</span>
 <b>Retention</b><span><code>preserve_artifacts</code>, <code>TF_KEEP_LOGS</code>, or a panic keep local working directories for post-mortems</span>
 </div>
@@ -832,11 +818,11 @@ let external = ctx.deploy_cluster(ClusterRequest::external(endpoints)).await?;
 | Readiness waits | ✓ | ✓ | — |
 | Torn down by the framework | ✓ | — | — |
 
-The scenario builder exposes the same modes through `with_existing_cluster`, `with_external_nodes`, and `with_external_only_nodes`. Workloads and expectations use node clients, so they do not need to change when a test moves from a locally managed cluster to an existing deployment.
+`ClusterApp` wraps the managed arm and adds external endpoints with `with_external_nodes`; attached and external clusters are the other arms of the same request. Workloads and expectations use node clients, so they do not need to change when a test moves from a locally managed cluster to an existing deployment.
 
 <p class="recap"><b>Next:</b> how TF finds the binaries it has been asked to start.</p>
 
-<p class="goes-deeper"><a href="cluster-provisioning.html">Shared Cluster Provisioning</a> · <a href="external-clusters.html">Existing and External Clusters</a></p>
+<p class="goes-deeper"><a href="cluster-provisioning.html">Cluster Provisioning</a> · <a href="external-clusters.html">Existing and External Clusters</a></p>
 
 ---
 
@@ -880,30 +866,30 @@ The available providers are explicit path, environment variable, local build, an
 <p class="unpacks">line ⑥: local, Compose, and Kubernetes deployment.</p>
 
 <div class="slide">
-<p class="slide-line">Uniform scenarios can run locally, with Compose, or on Kubernetes. Backend capabilities currently differ.</p>
+<p class="slide-line">The same cluster app runs locally, with Compose, or on Kubernetes. The application picks its backend provisioner.</p>
 <div class="tiles">
-<div class="tile"><b>local</b><span>processes · full node control · app composition</span></div>
-<div class="tile"><b>Compose</b><span>containers · cfgsync · restart</span></div>
-<div class="tile"><b>Kubernetes</b><span>Helm · cfgsync · manual mode</span></div>
+<div class="tile"><b>local</b><span>processes · full node control · the default</span></div>
+<div class="tile"><b>Compose</b><span>containers · cfgsync · container stacks</span></div>
+<div class="tile"><b>Kubernetes</b><span>Helm · cfgsync · replica-scaled control</span></div>
 </div>
-<p class="slide-note">line ⑥ picks the backend; app composition is local-only today</p>
+<p class="slide-note">line ⑥ is backend-neutral; <code>with_app</code> uses the local provisioner, <code>with_app_using</code> names another</p>
 </div>
 
-<p class="lead">Line ⑥ selects the local backend. Uniform scenarios can also use the Compose and Kubernetes deployers. The table lists the deployment and control features currently implemented by each backend.</p>
+<p class="lead">Line ⑥ deploys through the backend-neutral <code>AppHostDeployer</code>. The backend is chosen per application: <code>with_app</code> uses <code>LocalClusterProvisioner</code>, while <code>with_app_using(app, ComposeProvisioner::default())</code> or <code>with_app_using(app, K8sClusterProvisioner)</code> runs the same cluster on Compose or Kubernetes. The table lists the deployment and control features currently implemented by each backend.</p>
 
 | | Local | Compose | Kubernetes |
 |---|---|---|---|
 | Node startup | processes + temp dirs | generated compose file | Helm chart + values |
 | Config delivery | filesystem | cfgsync artifacts | cfgsync artifacts |
-| Node control | full | restart | manual mode only |
-| App composition | ✓ | — | — |
-| Attach / external | external nodes | ✓ | ✓ |
+| Node control | full | restart | start · stop · restart |
+| Container stacks | — | ✓ | — |
+| Attach / external | external nodes | ✓ | ✓ (attach: no node control) |
 
-App composition currently runs only on the local backend. Uniform scenarios run on all three. Local working directories are temporary and removed after a successful run unless `TF_KEEP_LOGS` or `preserve_artifacts` is set. They are also retained after a panic.
+Heterogeneous container stacks run on Compose (`ComposeProvisioner` serves both node clusters and container services in one project); a Kubernetes container-stack provisioner is still pending. Cluster apps run on all three. Local working directories are temporary and removed after a successful run unless `TF_KEEP_LOGS` or `preserve_artifacts` is set. They are also retained after a panic.
 
 <p class="recap"><b>Next:</b> reading changing application state during a test.</p>
 
-<p class="goes-deeper"><a href="capability-matrix.html">Capability Matrix</a> · <a href="deployer-local.html">Local</a> · <a href="deployer-compose.html">Compose</a> · <a href="deployer-k8s.html">Kubernetes</a> · <a href="diagnostics.html">Diagnostics</a></p>
+<p class="goes-deeper"><a href="capability-matrix.html">Backend Capability Matrix</a> · <a href="deployer-local.html">Local</a> · <a href="deployer-compose.html">Compose</a> · <a href="deployer-k8s.html">Kubernetes</a> · <a href="diagnostics.html">Diagnostics</a></p>
 
 ---
 
@@ -917,7 +903,7 @@ App composition currently runs only on the local backend. Uniform scenarios run 
 <div class="tile tile-handle"><b>observation</b><span>an <code>Observer</code> polls on a cadence — snapshots · history · subscriptions</span></div>
 <div class="tile"><b>telemetry</b><span>metrics · logs · tracing → Grafana / OTLP</span></div>
 </div>
-<p class="slide-note">observation is a runtime extension; telemetry is a backend capability</p>
+<p class="slide-note">observation is a runtime extension; telemetry is per-cluster observability inputs</p>
 </div>
 
 <div class="duo">
@@ -930,12 +916,12 @@ An `Observer` polls application state on a cadence; tests read `latest_snapshot(
 <div>
 <h4>Telemetry</h4>
 
-Metrics, logs, tracing, and Grafana/OTLP endpoints are configured through the observability capability and environment variables. They serve external monitoring, not test logic.
+Metrics, logs, tracing, and Grafana/OTLP endpoints are configured through per-cluster `ObservabilityInputs` and environment variables. They serve external monitoring, not test logic.
 
 </div>
 </div>
 
-Continuous observation is implemented as a **runtime extension** (section 4); telemetry is a backend capability configured on the scenario, not an extension.
+Continuous observation is implemented as a **runtime extension** (section 4); telemetry is per-cluster request data resolved by the backend provisioner, not an extension.
 
 <p class="recap"><b>Next:</b> matching common test cases to the APIs covered above.</p>
 
@@ -959,8 +945,8 @@ Continuous observation is implemented as a **runtime extension** (section 4); te
 | Convergence / consistency | traffic workload + expectation polling every node client | [Workloads](workloads.md), [Expectations](expectations.md) |
 | Recovery across a restart | `restart_node` or process `restart()`; working directories survive restarts | [Imperative Control](#5--imperative-control), [Persistence](persistence.md) |
 | Restore from saved state | `snapshot_dir` seeding + an expectation on the restored data | [Persistence](persistence.md) |
-| Role failover | find the role through observation, restart it via node control, expect a new holder | [Chaos](chaos.md), [Observation](observation.md) |
-| Chaos under load | traffic workload + `RandomRestartWorkload` / the chaos builder in one scenario | [Chaos](chaos.md) |
+| Role failover | find the role through observation, restart it via the cluster handle, expect a new holder | [Chaos](chaos.md), [Observation](observation.md) |
+| Chaos under load | traffic workload + `ClusterRestartChaos` / the restart verb in one scenario | [Chaos](chaos.md) |
 | Load / soak | bounded traffic workloads paced across the run window | [Workloads](workloads.md) |
 | Deployment and config validation | the same uniform scenario per backend, plus readiness policy | [Backends](#10--deployment-backends), [Config](#6--configuration-and-deployment-policy) |
 | Behavior of a third-party binary | `LocalProcessApp` + `LaunchSpec` around the unmodified executable | [Section 3](#3--composed-applications-the-job-stack) |

@@ -104,7 +104,7 @@ Managed applications therefore support both properties:
 
 ## Keeping Artifacts
 
-Managed cleanup normally removes generated working directories. Use `LocalProcessApp::keep_tempdir(true)` or `LocalProcessHandle::keep_tempdir()` for a process. Primary-cluster artifact retention is controlled by the deployment policy described in [Readiness, Retry, and Cleanup](deployment-policies.md).
+Managed cleanup normally removes generated working directories. Use `LocalProcessApp::keep_tempdir(true)` or `LocalProcessHandle::keep_tempdir()` for a process. Cluster artifact retention is controlled by the cluster's deployment policy described in [Readiness, Retry, and Artifact Preservation](deployment-policies.md).
 
 ---
 

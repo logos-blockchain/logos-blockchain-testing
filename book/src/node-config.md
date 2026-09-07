@@ -77,7 +77,7 @@ Where they are honored differs by path:
 - **Local dynamic starts** (`NodeManager::start_node_with`): the framework builds the config through the env hooks (which receive the full `options`) and then applies `config_patch` itself. `config_override` and `peers` are visible to your `build_local_node_config_with_peers` implementation but are not interpreted centrally by the local path.
 - **Static-artifact path** (used by the container backends through `StaticNodeConfigProvider::build_node_artifacts_for_options`, `core/src/scenario/config.rs`): the framework interprets everything: `PeerSelection` picks the peer set, then `config_override` replaces, then `config_patch` transforms, and the result is served as an override artifact.
 
-**`PeerSelection`** variants (`core/src/scenario/capabilities.rs`):
+**`PeerSelection`** variants (`core/src/scenario/control.rs`):
 
 | Variant | Effect (static-artifact path) |
 |---|---|
@@ -102,9 +102,9 @@ Where they are honored differs by path:
 | `AnyNodeReady` | At least one node answers |
 | `AtLeast(n)` | At least `n` nodes answer |
 
-Set it on the scenario with `ScenarioBuilder::with_http_readiness_requirement(requirement)`, or as part of a full `DeploymentPolicy`; see [Readiness, Retry, and Artifact Preservation](deployment-policies.md).
+Set it as part of the cluster's `DeploymentPolicy` (`ClusterApp::with_policy`); see [Readiness, Retry, and Artifact Preservation](deployment-policies.md).
 
-**Waiting imperatively.** `ManualCluster` (and `LocalAppCluster`) expose:
+**Waiting imperatively.** `ManualCluster` (and `ClusterHandle`) expose:
 
 - `wait_network_ready()`: polls every started node's API port with `AllNodesReady`.
 - `wait_node_ready(name)`: polls one node, honoring that node's `NodeRuntimeOptions::start_timeout` if one was set via `StartNodeOptions::with_start_timeout`.

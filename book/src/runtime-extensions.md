@@ -58,7 +58,7 @@ duplicate runtime extension type registered: <type name>
 
 Because `ctx.extension::<T>()` returns one value by type, each type may be registered only once. To register several values with the same underlying shape, wrap them in distinct newtypes or, in the app layer, use named handles instead (see [AppDeployment and DeployContext](app-deployment.md)).
 
-This rule is why a scenario allows only one `with_app(...)`: the app layer registers its `AppRuntime` extension per call, and a second registration collides. Compose multiple applications inside one root `AppDeployment` instead; see [AppHost and with_app](app-host.md).
+The app layer is the exception that proves the rule: its `AppRuntime` extension is registered as *mergeable*, so several `with_app(...)` calls combine into one handle registry instead of colliding — duplicate detection moves to the handle level (type plus name). See [AppHost and with_app](app-host.md).
 
 ---
 
@@ -98,11 +98,7 @@ impl RuntimeExtensionFactory<MyEnv> for FrontDoorFactory {
 let builder = builder.with_runtime_extension_factory(Box::new(FrontDoorFactory));
 ```
 
-For an extension backed by a polling loop, spawn the task in `prepare` and return `from_task(handle, join_handle)`. The runner aborts the task when the run tears down, so the loop cannot outlive the cluster. The observation runtime works this way. The pubsub example registers its feed this way (`examples/pubsub/testing/integration/src/scenario.rs`):
-
-```rust,ignore
-self.with_runtime_extension_factory(Box::new(PubSubTopicFeedFactory::new(topic)))
-```
+For an extension backed by a polling loop, spawn the task in `prepare` and return `from_task(handle, join_handle)`. The runner aborts the task when the run tears down, so the loop cannot outlive the cluster. The observation runtime works this way. Inside an `AppDeployment`, the equivalent pattern is spawning the task in `deploy` and registering a guard with `ctx.defer_cleanup(...)`, as the pubsub example's `PubSubStackApp` does for its topic feed (`examples/pubsub/testing/integration/src/feed.rs`).
 
 ---
 
@@ -115,7 +111,7 @@ The following layers use runtime extension factories:
 | App layer | `AppDeploymentFactory` (via `with_app`) | `AppRuntime` + exposed app handles |
 | Observation | `ObservationExtensionFactory` (via `with_observer`) | `ObservationHandle<O>` |
 
-So when a workload calls `ctx.require_app::<KvStoreCluster>()` or `ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()`, it is walking the same type-indexed store described above.
+So when a workload calls `ctx.require_app::<ClusterHandle<KvEnv>>()` or `ctx.require_extension::<ObservationHandle<OpenRaftClusterObserver>>()`, it is walking the same type-indexed store described above.
 
 - App layer: [AppHost and with_app](app-host.md)
 - Observation runtime: [Continuous Observation](observation.md)

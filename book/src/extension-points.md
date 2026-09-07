@@ -15,10 +15,10 @@ The framework never imports your application. It defines public traits that your
 | `SourceProvider<S>` | `testing-framework-core` (`observation`) | Supply the current observation source set | [Continuous Observation](observation.md) |
 | `SourceProviderFactory<E, S>` | `testing-framework-core` (`observation`) | Build a source provider once node clients exist | [Continuous Observation](observation.md) |
 | `AppDeployment<E, P>` | `testing-framework-app` | Prepare one composable application preset | [AppDeployment and DeployContext](app-deployment.md) |
-| `Deployer<E, Caps>` | `testing-framework-core` (`scenario::runtime`) | Provision a scenario into a target environment | [Part V](part-v.md) |
-| `NodeControlHandle<E>` | `testing-framework-core` (`scenario`) | Expose start/stop/restart of nodes at runtime | [Scenario Capabilities](capabilities.md) |
-| `ClusterWaitHandle<E>` | `testing-framework-core` (`scenario`) | Expose cluster readiness waits | [Scenario Capabilities](capabilities.md) |
-| `ObservabilityCapabilityProvider` | `testing-framework-core` (`scenario`) | Surface telemetry endpoints from capability markers | [Telemetry and External Observability](telemetry.md) |
+| `ContainerStackProvisioner` | `testing-framework-container` | Realize portable container declarations on an orchestration backend | [Backend Scope](app-backend-scope.md) |
+| `ClusterProvisioner<E>` | `testing-framework-core` (`scenario`) | Provision a cluster request on a target backend | [Part V](part-v.md) |
+| `NodeControlHandle<E>` | `testing-framework-core` (`scenario`) | Expose start/stop/restart of nodes at runtime | [Chaos and Controlled Failure](chaos.md) |
+| `ClusterWaitHandle<E>` | `testing-framework-core` (`scenario`) | Expose cluster readiness waits | [Chaos and Controlled Failure](chaos.md) |
 | `BinaryProvider` | `testing-framework-runner-local` (`binary`) | Resolve the node executable for local processes | [Binary Providers](binary-providers.md) |
 | `DownloadProcessor` | `testing-framework-runner-local` (`binary`) | Turn a downloaded artifact into an executable | [Binary Providers](binary-providers.md) |
 | `IntoExistingCluster` | `testing-framework-core` (`scenario::sources`) | Convert a value into an existing-cluster descriptor | [Existing and External Clusters](external-clusters.md) |
@@ -42,7 +42,7 @@ pub trait Application: Send + Sync + 'static {
 }
 ```
 
-Plugs in as the `E` type parameter of `ScenarioBuilder<E>`, `Workload<E>`, `Expectation<E>`, and every deployer.
+Plugs in as the `E` type parameter of `ScenarioBuilder<E>`, `Workload<E>`, `Expectation<E>`, and every cluster provisioner.
 
 **`DeploymentProvider<D>`** builds the deployment descriptor a scenario runs against, optionally driven by a `DeploymentSeed` for reproducible generation. `ScenarioBuilder::new` accepts one; `ScenarioBuilder::with_deployment` wraps a fixed value in the built-in `FixedDeploymentProvider`.
 
@@ -155,19 +155,19 @@ Registered with `AppScenarioBuilderExt::with_app`, which wraps it in an `AppDepl
 
 ## Deployment Backends
 
-**`Deployer<E, Caps>`** is the contract every backend implements: turn a built `Scenario` into a `Runner<E>`. `ProcessDeployer` (local), `ComposeDeployer`, and `K8sDeployer` are the in-repo implementations; `Caps` carries capability markers such as `NodeControlCapability`.
+**`ClusterProvisioner<E>`** is the contract every backend implements: turn a `ClusterRequest<E>` into a provisioned `ClusterUnit<E>` (clients, control, wait, cleanup). `LocalClusterProvisioner`, `ComposeProvisioner`, and `K8sClusterProvisioner` are the in-repo implementations; the provisioner is selected per app through `with_app_using` (local is the `with_app` default).
 
 ```rust,ignore
 #[async_trait]
-pub trait Deployer<E: Application, Caps = ()>: Send + Sync {
-    type Error;
-    async fn deploy(&self, scenario: &Scenario<E, Caps>) -> Result<Runner<E>, Self::Error>;
+pub trait ClusterProvisioner<E: Application>: Clone + Send + Sync + 'static {
+    async fn provision_cluster(
+        &self,
+        request: ClusterRequest<E>,
+    ) -> Result<ClusterUnit<E>, DynError>;
 }
 ```
 
-**`NodeControlHandle<E>`** is the deployer-agnostic control surface behind node-control scenarios: `start_node(_with)`, `stop_node`, `restart_node(_with)`, `wait_node_ready`, `node_client`, and `node_pid`. Every method has a default that returns a "not supported by this deployer" error, so backends implement only what they support. **`ClusterWaitHandle<E>`** provides the cluster-wide `wait_network_ready` operation. Both are combined by `ManualClusterHandle<E>` in `core::runtime::manual`, the interface behind [ManualCluster](manual-cluster.md).
-
-**`ObservabilityCapabilityProvider`** lets deployers read telemetry endpoints out of whatever capability marker a scenario was built with; it is implemented for `()`, `NodeControlCapability`, and `ObservabilityCapability`. You only implement it when defining a new capability marker type.
+**`NodeControlHandle<E>`** is the backend-agnostic control surface behind a `ClusterHandle`'s node control: `start_node(_with)`, `stop_node`, `restart_node(_with)`, `wait_node_ready`, `node_client`, and `node_pid`. Every method has a default that returns a "not supported" error, so backends implement only what they support. **`ClusterWaitHandle<E>`** provides the cluster-wide `wait_network_ready` operation. Both are combined by `ManualClusterHandle<E>` in `core::runtime::manual`, the interface behind [ManualCluster](manual-cluster.md).
 
 ---
 
@@ -197,6 +197,6 @@ pub trait DownloadProcessor: Send + Sync {
 
 ## Attaching Sources
 
-**`IntoExistingCluster`** converts a value into the typed `ExistingCluster` descriptor accepted by `with_existing_cluster_from`. It is implemented for `ExistingCluster` and `&ExistingCluster`; implement it for your own environment-selection types to keep attach logic in one place. External endpoints use `ExternalNodeSource` values directly and pair with `Application::external_node_client`.
+**`IntoExistingCluster`** converts a value into the typed `ExistingCluster` descriptor consumed by `ClusterRequest::attached`. It is implemented for `ExistingCluster` and `&ExistingCluster`; implement it for your own environment-selection types to keep attach logic in one place. External endpoints use `ExternalNodeSource` values directly and pair with `Application::external_node_client`.
 
 The required extension points depend on the entry pattern: a uniform managed cluster needs `Application` and the scenario traits, an AppHost stack adds `AppDeployment`, and attached clusters add the source traits. See [Choosing an Entry Pattern](entry-patterns.md). For where each implementation should live, see [Framework vs Application Boundaries](tf-boundaries.md) and the crate-level view in [Crate and API Map](crate-map.md).

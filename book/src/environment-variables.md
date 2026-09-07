@@ -15,7 +15,7 @@ This chapter was produced by auditing the source (`grep -rn "env::var" testing-f
 | `LOGOS_BLOCKCHAIN_METRICS_OTLP_INGEST_URL` | OTLP metrics ingest endpoint | `core/src/scenario/observability.rs` | none |
 | `LOGOS_BLOCKCHAIN_GRAFANA_URL` | Grafana base URL surfaced alongside run output | `core/src/scenario/observability.rs` | none |
 
-The three `LOGOS_BLOCKCHAIN_*` names are historical; they are only consulted when telemetry inputs come from the environment rather than from an `ObservabilityCapability`; see [Telemetry and External Observability](telemetry.md).
+The three `LOGOS_BLOCKCHAIN_*` names are historical; they form the environment base that per-cluster `ObservabilityInputs` on the `ClusterRequest` override; see [Telemetry and External Observability](telemetry.md).
 
 ---
 
@@ -43,7 +43,7 @@ See [Binary Providers](binary-providers.md).
 | `COMPOSE_RUNNER_HOST` | Host used to reach published container ports | `infrastructure/ports.rs` | `127.0.0.1` |
 | `COMPOSE_RUNNER_HOST_GATEWAY` | Explicit `extra_hosts` gateway entry; `disable` or empty removes it | `docker/platform.rs` | falls through to `DOCKER_HOST_GATEWAY` |
 | `DOCKER_HOST_GATEWAY` | Gateway IP mapped as `host.docker.internal:<ip>` | `docker/platform.rs` | `host.docker.internal:host-gateway` |
-| `TESTNET_PRINT_ENDPOINTS` | If set (any value), print discovered endpoints after deploy | `deployer/orchestrator.rs` | silent |
+| `TESTNET_PRINT_ENDPOINTS` | If set (any value), print discovered endpoints after deploy | `provisioner/mod.rs` | silent |
 | `REPO_ROOT_OVERRIDE_DIR` | Override repository-root detection for stack assets | `docker/workspace.rs` | falls through to `CARGO_WORKSPACE_DIR`, then manifest-relative detection |
 | `CARGO_WORKSPACE_DIR` | Workspace root override (also used by template rendering) | `docker/workspace.rs`, `infrastructure/template.rs` | manifest-relative detection |
 | `REL_ASSETS_STACK_DIR` | Alternative stack-assets directory (absolute, or relative to repo root) | `docker/workspace.rs` | bundled default assets |
@@ -64,7 +64,6 @@ Per-application image selection is again a mechanism with caller-derived names: 
 | `K8S_RUNNER_HTTP_TIMEOUT_SECS` | Node HTTP readiness timeout | `lifecycle/wait/mod.rs` | built-in default |
 | `K8S_RUNNER_HTTP_PROBE_TIMEOUT_SECS` | Per-probe HTTP timeout | `lifecycle/wait/mod.rs` | built-in default |
 | `K8S_RUNNER_HTTP_POLL_INTERVAL_SECS` | Readiness poll interval | `lifecycle/wait/mod.rs` | built-in default |
-| `TESTNET_PRINT_ENDPOINTS` | If set, print Prometheus/Grafana/pprof endpoints after deploy | `deployer/orchestrator.rs` | silent |
 
 Image selection mirrors compose with a k8s-specific override first: `BinaryConfigK8sSpec::conventional` reads `<PREFIX>_K8S_IMAGE`, then `<PREFIX>_IMAGE`, then the `<binary-name>:local` default (`env.rs`). `workspace.rs` additionally exposes `resolve_workspace_root` / `resolve_optional_relative_dir` helpers that read a variable **named by the caller**.
 

@@ -34,7 +34,7 @@ By default all of the above is deleted at teardown. Three mechanisms retain it:
 
 | Mechanism | Scope | How |
 |---|---|---|
-| `CleanupPolicy` | one scenario | `with_deployment_policy(DeploymentPolicy { cleanup_policy: CleanupPolicy::new(true), .. })` |
+| `CleanupPolicy` | one cluster | `ClusterApp::with_policy(DeploymentPolicy { cleanup_policy: CleanupPolicy::new(true), .. })` |
 | `keep_tempdir` | one process | `LocalProcessApp::keep_tempdir(true)` at build time, or `handle.keep_tempdir().await` at run time |
 | `TF_KEEP_LOGS` | whole process | env var, no code change |
 

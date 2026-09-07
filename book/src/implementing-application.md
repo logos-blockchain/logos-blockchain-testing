@@ -1,6 +1,6 @@
 # Implementing Application
 
-This chapter shows how to put your own node binary behind the framework so deployers can launch it as a uniform cluster.
+This chapter shows how to put your own node binary behind the framework so the cluster provisioners can launch it as a uniform cluster.
 
 ---
 
@@ -59,7 +59,7 @@ Optional overrides: `initial_local_port_names()` (extra named ports reserved per
 graph LR
     A[Application] --> B[LocalBinaryApp]
     B -- blanket impl --> C[LocalDeployerEnv]
-    C --> D["ProcessDeployer&lt;E&gt;"]
+    C --> D["LocalClusterProvisioner"]
 ```
 
 ---
@@ -133,12 +133,15 @@ impl LocalBinaryApp for KvEnv {
 
 **Launch and config rendering.** At spawn time the framework renders the config with `render_local_config`, writes it as `config.yaml` into the node's working directory, and launches `<binary> --config config.yaml` with the spec's env vars. `LocalProcessSpec` supports different file names, positional config arguments, and extra args (see [node-config.md](node-config.md)).
 
-Finally, `lib.rs` exports ready-made deployer aliases:
+With the environment in place, running kvstore on any backend is a matter of which provisioner the scenario passes:
 
 ```rust,ignore
-pub type KvLocalDeployer = testing_framework_runner_local::ProcessDeployer<KvEnv>;
-pub type KvComposeDeployer = testing_framework_runner_compose::ComposeDeployer<KvEnv>;
-pub type KvK8sDeployer = testing_framework_runner_k8s::K8sDeployer<KvEnv>;
+// local (default)
+AppHost::scenario().with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
+// compose
+    .with_app_using(ClusterApp::<KvEnv>::new(topology), ComposeProvisioner::default())
+// k8s
+    .with_app_using(ClusterApp::<KvEnv>::new(topology), K8sClusterProvisioner)
 ```
 
 ---

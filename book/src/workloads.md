@@ -80,17 +80,18 @@ The kvstore example ships `KvWriteWorkload` (`examples/kvstore/testing/workloads
 ```rust,ignore
 use async_trait::async_trait;
 use kvstore_runtime_ext::KvEnv;
-use testing_framework_core::scenario::{DynError, RunContext, Workload};
+use testing_framework_app::{AppHostEnv, AppRunContextExt as _};
+use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
 
 #[async_trait]
-impl Workload<KvEnv> for KvWriteWorkload {
+impl Workload<AppHostEnv> for KvWriteWorkload {
     fn name(&self) -> &str {
         "kv_write_workload"
     }
 
-    async fn start(&self, ctx: &RunContext<KvEnv>) -> Result<(), DynError> {
-        let clients = ctx.node_clients().snapshot();
-        let Some(leader) = clients.first() else {
+    async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
+        let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
+        let Some(leader) = cluster.first_client() else {
             return Err("no kv node clients available".into());
         };
 
@@ -114,7 +115,7 @@ impl Workload<KvEnv> for KvWriteWorkload {
 }
 ```
 
-This workload takes one client snapshot, runs a bounded number of operations, controls its rate with a sleep, and returns `Err` for an unexpected response so the runner stops the run.
+This workload fetches its cluster handle, writes through one client for a bounded number of operations, controls its rate with a sleep, and returns `Err` for an unexpected response so the runner stops the run.
 
 The workload is bounded by `self.operations`, so it terminates on its own; the run duration only decides how long the scenario stays up around it.
 
@@ -139,14 +140,14 @@ Notes on the client surface:
 
 - `node_clients().snapshot()` clones the current client vector so you can iterate across `.await` points. Use `with_clients(|clients| ...)` for synchronous reads without the clone.
 - `extension::<T>()` returns a *clone* of a value registered by a [runtime extension factory](runtime-extensions.md), for example an `ObservationHandle` from [Continuous Observation](observation.md).
-- `node_control()` is only populated when the scenario was built with the node-control capability; see [Scenario Capabilities](capabilities.md) and [Chaos and Controlled Failure](chaos.md).
+- `ctx.node_control()` covers only nodes owned by the outer scenario; in app scenarios node control lives on each cluster's `ClusterHandle` instead — see [Chaos and Controlled Failure](chaos.md).
 
-Workloads in app-layer scenarios additionally use `AppRunContextExt` (from `testing-framework-app`) to reach composed application handles:
+Workloads in app scenarios use `AppRunContextExt` (from `testing-framework-app`) to reach composed application handles:
 
 ```rust,ignore
 use testing_framework_app::AppRunContextExt;
 
-let cluster = ctx.require_app::<KvStoreCluster>()?;
+let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
 ```
 
 `OpenRaftKvClusterAccessible` (`examples/openraft_kv/testing/workloads/src/handle_access.rs`) uses only `require_app` to assert that the exposed cluster handle matches the expected topology. See [AppHost and with_app](app-host.md) for the app layer itself.

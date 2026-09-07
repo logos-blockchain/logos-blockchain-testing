@@ -78,7 +78,7 @@ Symptoms that application code has leaked into the framework:
 
 Symptoms that framework mechanics are being re-implemented in the application repo:
 
-- Hand-rolled process spawn/kill/teardown code where `LocalProcessApp` or `LocalAppCluster` would do.
+- Hand-rolled process spawn/kill/teardown code where `LocalProcessApp` or `ClusterApp` would do.
 - A custom polling loop with history and error tracking that duplicates the observation runtime; implement `Observer` instead.
 - Re-implementing binary resolution, caching, or fallback chains instead of configuring `BinaryProvider` types.
 - A bespoke "wait until cluster healthy" loop instead of readiness closures plus `DeploymentPolicy` (see [Readiness, Retry, and Artifact Preservation](deployment-policies.md)).
@@ -89,4 +89,12 @@ A framework addition should compile and make sense with a different application 
 
 ## Backend Scope of the App Layer
 
-The composition layer is local-only today, and this is visible in the dependency graph: `testing-framework-app` depends on core and `testing-framework-runner-local` only, `AppHostLocalDeployer` is an alias for `ProcessDeployer<AppHostEnv>`, and `DeployContext::deploy_local_cluster` / `LocalAppCluster` require `LocalDeployerEnv`. The compose and k8s deployers remain single-application. Do not work around this by teaching the framework about your app's containers: run composed stacks locally, and use the [Compose](deployer-compose.md) or [Kubernetes](deployer-k8s.md) deployer for uniform clusters. Details in [Backend Scope](app-backend-scope.md).
+Cluster composition is backend-explicit: local provisioning requires
+`LocalDeployerEnv`, and the Compose and Kubernetes provisioners require their
+respective environment traits — the provisioner passed to `with_app_using`
+names the backend. Container composition crosses the backend boundary through
+`ContainerStackProvisioner`: application repositories declare explicit
+container specs from `testing-framework-container`, while the Compose crate
+owns Docker realization and control. Kubernetes should implement that same
+contract rather than adding application-specific containers to TF. Details are
+in [Backend Scope](app-backend-scope.md).

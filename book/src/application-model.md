@@ -69,8 +69,8 @@ Source: `testing-framework/app/src/deployment.rs`.
 ```rust,ignore
 use testing_framework_app::{AppHost, AppScenarioBuilderExt};
 
-let builder = AppHost::scenario()      // ScenarioBuilder<AppHostEnv>, zero nodes
-    .with_app(KvLocalApp::nodes(3));   // apps provide all processes
+let builder = AppHost::scenario()                              // ScenarioBuilder<AppHostEnv>, zero nodes
+    .with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)));   // apps provide all processes
 ```
 
 The system is supplied by `with_app` deployments, and workloads access it through typed handles instead of outer node clients. See [AppHost and with_app](app-host.md).
@@ -127,7 +127,7 @@ graph TD
 | `AppDeployment` | Trait for one deployable unit returning a typed handle | "How is this piece prepared, and what can test code access?" | `KvLocalApp` |
 | Concrete environment | A type implementing `Application` | "Which system am I testing, uniform or zero-node?" | `KvEnv`, `AppHostEnv` |
 
-`Application` and `AppDeployment` are not alternatives. Every scenario has one environment type `E`, and app deployments are registered inside that scenario. A uniform kvstore cluster uses `KvEnv` directly; a heterogeneous stack uses `AppHostEnv` and supplies its components as app deployments.
+`Application` and `AppDeployment` are not alternatives. Every scenario runs over `AppHostEnv`, and app deployments are registered inside it. A cluster brings its own environment type as the `E` of `ClusterApp<E>`, `ClusterHandle<E>`, and the workloads that drive it — one `ClusterApp<KvEnv>` for a uniform kvstore cluster, several apps for a heterogeneous stack.
 
 ---
 

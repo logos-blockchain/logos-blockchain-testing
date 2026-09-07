@@ -6,7 +6,7 @@
 
 ## When to Use It
 
-Use `ManualCluster` when orchestration lives outside the scenario runtime. Scenarios can also start and restart nodes from workloads by requesting `with_node_control()`; see [Scenario Capabilities](capabilities.md) and [Chaos and Controlled Failure](chaos.md).
+Use `ManualCluster` when orchestration lives outside the scenario runtime. Scenarios can also start and restart nodes from workloads through the `ClusterHandle`; see [Chaos and Controlled Failure](chaos.md).
 
 - **Step-driven flows**: an external driver decides when each node starts and what happens next.
 - **BDD harnesses**: Gherkin steps map naturally onto imperative start/stop/wait calls.
@@ -18,20 +18,36 @@ There are no workloads, expectations, or `RunContext`; you call methods and asse
 
 ## Creating a Cluster
 
-Two equivalent entry points on the local backend (`testing-framework/deployers/local/src/manual/mod.rs`):
+On the local backend (`testing-framework/deployers/local/src/manual/mod.rs`), construct one directly from a deployment descriptor:
 
 ```rust,ignore
-use testing_framework_runner_local::{ManualCluster, ProcessDeployer};
+use testing_framework_runner_local::ManualCluster;
 
-// Directly from a deployment descriptor…
 let cluster = ManualCluster::<KvEnv>::from_topology(KvTopology::new(3));
-
-// …or via the deployer
-let deployer = ProcessDeployer::<KvEnv>::new();
-let cluster = deployer.manual_cluster_from_descriptors(KvTopology::new(3));
 ```
 
 The descriptor defines capacity and indexing, not initial state: no processes exist until you call `start_node`. `E` must implement `LocalDeployerEnv` (see [Implementing Application](implementing-application.md)).
+
+On Kubernetes, `testing_framework_runner_k8s::ManualCluster` is constructed asynchronously because it installs the Helm stack first:
+
+```rust,ignore
+use testing_framework_core::scenario::{ClusterStartMode, DeploymentPolicy, ObservabilityInputs};
+use testing_framework_runner_k8s::ManualCluster;
+
+// Install the stack with no nodes running…
+let cluster = ManualCluster::<KvEnv>::from_topology(KvTopology::new(3)).await?;
+
+// …or spell out the start mode, policy, and observability inputs
+let cluster = ManualCluster::<KvEnv>::provision(
+    KvTopology::new(3),
+    ClusterStartMode::OnDemand,
+    DeploymentPolicy::default(),
+    &ObservabilityInputs::default(),
+)
+.await?;
+```
+
+Manual clusters are the same machinery the managed path uses: a `ClusterApp` built with `.with_start_mode(ClusterStartMode::OnDemand)` provisions the identical capacity inside a scenario, leaving node starts to workloads driving the `ClusterHandle`.
 
 **Naming:** requested names are normalized to a `node-` prefix: `start_node("a")` registers `node-a`; names already starting with `node-` pass through; an empty name becomes `node-<index>`. Each started node needs a fresh name; reusing a registered name is an error.
 
@@ -60,7 +76,7 @@ The descriptor defines capacity and indexing, not initial state: no processes ex
 
 ## StartNodeOptions
 
-The full options struct (`core/src/scenario/capabilities.rs`):
+The full options struct (`core/src/scenario/control.rs`):
 
 | Field | Type | Builder | Meaning |
 |---|---|---|---|
@@ -81,10 +97,7 @@ The full options struct (`core/src/scenario/capabilities.rs`):
 Adapted from the in-repo example `cargo run -p kvstore-examples --bin kvstore_k8s_manual_convergence` (`examples/kvstore/examples/src/bin/k8s_manual_convergence.rs`):
 
 ```rust,ignore
-let deployer = KvK8sDeployer::new();
-let cluster = deployer
-    .manual_cluster_from_descriptors(KvTopology::new(3))
-    .await?;
+let cluster = ManualCluster::<KvEnv>::from_topology(KvTopology::new(3)).await?;
 
 let node0 = cluster.start_node("node-0").await?.client;
 let node1 = cluster.start_node("node-1").await?.client;
@@ -105,7 +118,7 @@ cluster.stop_all();
 
 The driver determines which nodes exist, when writes happen, what convergence means, and when to inject the restart. `write_keys` and `wait_for_convergence` are plain functions over the application's HTTP client.
 
-That example runs on Kubernetes: the Kubernetes deployer supplies a manual cluster with the same method surface (`manual_cluster_from_descriptors` there is `async` and fallible because it must install the stack first). The local `ManualCluster` documented in this chapter starts processes directly and needs no external infrastructure.
+That example runs on Kubernetes: the k8s `ManualCluster` offers the same method surface over pods in a per-run namespace. The local `ManualCluster` starts processes directly and needs no external infrastructure.
 
 ---
 

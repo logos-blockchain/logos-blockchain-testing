@@ -73,7 +73,7 @@ If you are not sure which to use, read [Choosing an Entry Pattern](entry-pattern
 - Deterministic cleanup, including on partial-deployment failure
 
 **Runtime capabilities**
-- Capability-gated node control: restart nodes from workloads, portably
+- Per-cluster node control: restart nodes from workloads, portably
 - Continuous observation: snapshots, history, and event streams of application state
 - Telemetry: metrics, logs, and tracing endpoints
 
@@ -87,19 +87,18 @@ If you are not sure which to use, read [Choosing an Entry Pattern](entry-pattern
 ## Quick Example
 
 ```rust,ignore
-use testing_framework_app::{AppHost, AppHostLocalDeployer, AppScenarioBuilderExt as _};
-use testing_framework_core::scenario::Deployer as _;
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt as _, ClusterApp};
 
 let mut scenario = AppHost::scenario()
-    .with_app(KvLocalApp::nodes(3))
-    .with_workload(KvAppHostConvergence::new(3))
+    .with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
+    .with_workload(KvClusterAccessible::new(3))
     .build()?;
 
-let runner = AppHostLocalDeployer::default().deploy(&scenario).await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 runner.run(&mut scenario).await?;
 ```
 
-This deploys a three-node key-value store cluster, runs a convergence workload against it (including a node restart), and tears everything down. The remaining chapters cover each part of this pattern in detail.
+This deploys a three-node key-value store cluster, runs a workload against it, and tears everything down. Swapping `with_app` for `with_app_using(..., ComposeProvisioner::default())` or `K8sClusterProvisioner` runs the same scenario on Docker Compose or Kubernetes. The remaining chapters cover each part of this pattern in detail.
 
 [View the example apps](running-examples.md)
 
@@ -111,7 +110,7 @@ The repository includes small applications under `examples/` that exercise the f
 
 | App | Demonstrates |
 |-----|--------------|
-| `kvstore` | Uniform clusters, app hosting, convergence testing, all three deployers |
+| `kvstore` | Uniform clusters, app hosting, convergence testing, all three backends |
 | `openraft_kv` | Node control, failover, continuous observation |
 | `multi_app` | Composing heterogeneous stacks with typed handles |
 | `nats`, `redis_streams` | Testing third-party binaries you did not write |

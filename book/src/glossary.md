@@ -16,11 +16,11 @@ This glossary gives short definitions of the terms used throughout this book, wi
 
 **Cleanup Guard**: the core runner's teardown hook (`CleanupGuard`). Guards are registered as resources are acquired and run when the scenario runtime is released; the app layer groups its managed resources in a LIFO cleanup stack. See [Handle Ownership and Teardown](handles-teardown.md).
 
-**Deployer**: the object that turns a scenario definition into running infrastructure (`deployer.deploy(&scenario)` → runner): local processes, a compose stack, or a Kubernetes namespace. See [Capability Matrix](capability-matrix.md).
+**Deployer (AppHostDeployer)**: the object that turns a built scenario into a runner (`AppHostDeployer.deploy(&scenario)` → runner) by preparing every registered application deployment; the per-backend cluster provisioners create the actual infrastructure. See [Capability Matrix](capability-matrix.md).
 
 **Deployment Plan / Topology**: the application-defined descriptor of what to deploy (node count and layout), owned by the `Application::Deployment` type and consumed by every backend. See [Topology and Deployment Plans](topology.md).
 
-**Deployment Policy**: per-scenario knobs for deploy behavior: readiness on/off and requirement, optional retry with backoff, and artifact preservation (`CleanupPolicy`). Set with `with_deployment_policy`. See [Readiness, Retry, and Artifact Preservation](deployment-policies.md).
+**Deployment Policy**: per-cluster knobs for deploy behavior: readiness on/off and requirement, optional retry with backoff, and artifact preservation (`CleanupPolicy`). Set with `ClusterApp::with_policy`. See [Readiness, Retry, and Artifact Preservation](deployment-policies.md).
 
 **Entry Pattern**: one of the three declarative ways into the scenario runtime (uniform managed cluster, AppHost composed stack, attached/external nodes), or imperative control through `ManualCluster`. See [Choosing an Entry Pattern](entry-patterns.md).
 
@@ -32,13 +32,13 @@ This glossary gives short definitions of the terms used throughout this book, wi
 
 **Cluster Provisioner**: a backend adapter that turns a managed, attached, or external `ClusterRequest<E>` into common clients, controls, readiness, and optional cleanup. See [Shared Cluster Provisioning](cluster-provisioning.md).
 
-**Verb Layer**: optional typed syntax that expands domain actions into ordinary workloads, expectations, and capability requests. See [The Verb Layer](verb-layer.md).
+**Verb Layer**: optional typed syntax that expands domain actions into ordinary workloads and expectations on the same builder. See [The Verb Layer](verb-layer.md).
 
 **ManualCluster**: imperative node orchestration that bypasses the scenario runner: start, stop, restart, and probe named nodes directly. Use it for interactive debugging and bespoke lifecycles. See [ManualCluster: Imperative Node Control](manual-cluster.md).
 
 **Observation**: the continuous observation runtime: named `ObservedSource`s polled into snapshots and history that workloads and expectations read through an `ObservationHandle`. Test-visible application state, as opposed to Telemetry. See [Continuous Observation](observation.md).
 
-**Runner**: what a deployer returns after a successful deploy; `runner.run(&mut scenario)` executes workloads, evaluates expectations, and tears the run down. See [Scenario Model and Lifecycle](scenario-model.md).
+**Runner**: what `AppHostDeployer.deploy` returns after a successful deploy; `runner.run(&mut scenario)` executes workloads, evaluates expectations, and tears the run down. See [Scenario Model and Lifecycle](scenario-model.md).
 
 **Runtime Extension**: a typed value prepared before workloads start and shared through the `RunContext` (one instance per type). The app layer's `AppRuntime` is a runtime extension. See [Runtime Extensions](runtime-extensions.md).
 

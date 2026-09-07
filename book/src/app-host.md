@@ -15,29 +15,45 @@ The core scenario engine models one `Application` and a uniform cluster of its n
 | `AppHostTopology` | Deployment descriptor with `node_count() == 0`. The outer scenario manages no nodes. |
 | `AppHostEnv` | Null environment: `NodeClient = ()`, and `build_node_client` always errors. Clients come from app handles instead. |
 | `AppHostScenarioBuilder` | Alias for `ScenarioBuilder<AppHostEnv>`. |
-| `AppHostLocalDeployer` | Alias for `ProcessDeployer<AppHostEnv>` — the local deployer that executes the scenario. |
+| `AppHostDeployer` | Backend-neutral runner assembly for app scenarios. `deploy(&scenario)` prepares every registered application and returns the `Runner`; the app provisioners own the resources. |
 
 Because the outer topology is empty, app deployments create the processes and clusters used by the run.
 
 ```rust,ignore
-use testing_framework_app::{AppHost, AppHostLocalDeployer, AppScenarioBuilderExt};
-use testing_framework_core::scenario::Deployer;
+use testing_framework_app::{AppHost, AppHostDeployer, AppScenarioBuilderExt, ClusterApp};
 
 let mut scenario = AppHost::scenario()
-    .with_app(KvLocalApp::nodes(3))
+    .with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
     .with_run_duration(Duration::from_secs(5))
-    .with_workload(KvAppHostConvergence::new(3))
+    .with_workload(KvClusterAccessible::new(3))
     .build()?;
 
-let deployer = AppHostLocalDeployer::default();
-let runner = deployer.deploy(&scenario).await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 runner.run(&mut scenario).await?;
 ```
 
-The runnable `kvstore_app_host_convergence` binary uses this structure:
+`with_app` provisions clusters on local processes by default. `with_app_using` selects a backend provisioner per app instead — the same deployment moves to Docker Compose or Kubernetes without changing the rest of the scenario:
+
+```rust,ignore
+let mut scenario = AppHost::scenario()
+    .with_app_using(
+        ClusterApp::<KvEnv>::new(KvTopology::new(3)),
+        ComposeProvisioner::default(),
+    )
+    .build()?;
+
+let runner = AppHostDeployer.deploy(&scenario).await?;
+runner.run(&mut scenario).await?;
+```
+
+The app declaration remains backend-neutral: it receives published endpoints
+for test clients, internal endpoints for service dependencies, and portable
+per-service lifecycle handles.
+
+The runnable `kvstore_basic_convergence` binary uses this structure:
 
 ```bash
-cargo run -p kvstore-examples --bin kvstore_app_host_convergence
+cargo run -p kvstore-examples --bin kvstore_basic_convergence
 ```
 
 ---
@@ -69,24 +85,7 @@ During scenario preparation the factory:
 
 If any step fails, the partially built context is dropped and every resource deployed so far is released (see [Handle Ownership and Teardown](handles-teardown.md)).
 
-A scenario accepts one `with_app` registration. Every `AppDeploymentFactory` produces the same extension type (`AppRuntime`), and the runtime rejects duplicate extension types. A second registration fails during preparation with `duplicate runtime extension type registered: AppRuntime`. Compose several applications inside one root `AppDeployment` and expose the child handles from there, as shown in [Composing Heterogeneous Stacks](composing-stacks.md).
-
----
-
-## with_app Outside AppHost
-
-`with_app` is defined for every scenario builder, not only `AppHostScenarioBuilder`. On a regular uniform-cluster scenario, an "existing cluster" preset can wrap the outer scenario's deployment and node clients in a typed handle without deploying another resource. The OpenRaft example uses this pattern:
-
-```rust,ignore
-// examples/openraft_kv/testing/integration/src/scenario.rs
-fn with_existing_openraft_kv_app(app: OpenRaftKvExistingClusterApp) -> Self {
-    OpenRaftKvScenarioBuilder::with_deployment(app.topology())
-        .with_app(app)
-        .with_cluster_observer()
-}
-```
-
-Here the scenario still manages a uniform OpenRaft cluster, and the app layer just gives workloads a typed `OpenRaftKvCluster` handle over it.
+A scenario accepts multiple `with_app` registrations: every `AppDeploymentFactory` produces the same extension type (`AppRuntime`), and the runtime merges those registrations into one handle registry, chaining their cleanups in registration order. What must stay unique are the handles themselves — two apps exposing the same handle type and name fail during preparation with a duplicate-handle error, so distinct apps either expose distinct types or use named handles. Larger stacks whose parts depend on each other are still clearest as one root `AppDeployment` that deploys children in order, as shown in [Composing Heterogeneous Stacks](composing-stacks.md).
 
 ---
 
@@ -105,7 +104,7 @@ Workloads never see the deploy context. They retrieve exposed handles through `A
 use testing_framework_app::AppRunContextExt;
 
 async fn start(&self, ctx: &RunContext<AppHostEnv>) -> Result<(), DynError> {
-    let cluster = ctx.require_app::<LocalAppCluster<KvEnv>>()?;
+    let cluster = ctx.require_app::<ClusterHandle<KvEnv>>()?;
     cluster.restart_node("node-0").await?;
     cluster.wait_node_ready("node-0").await?;
     Ok(())
@@ -121,5 +120,5 @@ Every retrieval clones the handle. Handles are normally small access values back
 ## Where to Go Next
 
 - [AppDeployment and DeployContext](app-deployment.md): implementing the deployment itself.
-- [One Binary: LocalProcessApp](local-process-app.md) and [Uniform Child Clusters: LocalAppCluster](local-app-cluster.md): the two built-in building blocks.
-- [Backend Scope](app-backend-scope.md): why AppHost scenarios run on the local deployer today.
+- [One Binary: LocalProcessApp](local-process-app.md) and [Uniform Clusters: ClusterApp and ClusterHandle](local-app-cluster.md): the two built-in building blocks.
+- [Backend Scope](app-backend-scope.md): what each backend provisioner supports.

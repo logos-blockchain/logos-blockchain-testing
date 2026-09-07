@@ -7,7 +7,7 @@ The same runtime serves all three declarative entry patterns: uniform clusters, 
 - [Workloads and Concurrency](workloads.md) — driving the system under test
 - [Expectations and Evaluation](expectations.md) — verifying outcomes
 - [The Verb Layer](verb-layer.md) — concise domain actions over the explicit builder API
-- [Scenario Capabilities](capabilities.md) — capability-gated features such as node control
+- [Scenario Capabilities](capabilities.md) — runtime features such as node control, per cluster
 - [Chaos and Controlled Failure](chaos.md) — restarts and failover from workloads
 - [Runtime Extensions](runtime-extensions.md) — typed scenario-lifetime services
 - [Continuous Observation](observation.md) — snapshots, history, and event streams for test logic

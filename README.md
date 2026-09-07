@@ -16,11 +16,11 @@ kvstore example needs no additional setup; its node binary is built on first
 use:
 
 ```bash
-cargo run -p kvstore-examples --bin kvstore_app_host_convergence
+cargo run -p kvstore-examples --bin kvstore_basic_convergence
 ```
 
-This starts three local node processes, writes data, restarts a node, checks
-the result, and removes the processes and temporary directories.
+This starts three local node processes, writes data, checks the result, and
+removes the processes and temporary directories.
 
 The composed-application example runs as integration tests:
 
@@ -45,23 +45,26 @@ and requirements.
 ### Scenarios
 
 A scenario records the system to deploy, workloads to run, expectations to
-evaluate, runtime limits, and enabled capabilities. The runner performs
+evaluate, and runtime limits. The runner performs
 deployment, readiness checks, concurrent workloads, cooldown, expectation
 evaluation, and cleanup.
 
 ```rust
 let mut scenario = AppHost::scenario()
-    .with_app(KvLocalApp::nodes(3))
-    .with_workload(KvAppHostConvergence::new(3))
+    .with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
+    .with_workload(KvClusterAccessible::new(3))
     .with_run_duration(Duration::from_secs(5))
     .build()?;
 
-let runner = AppHostLocalDeployer::default()
-    .deploy(&scenario)
-    .await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 
 runner.run(&mut scenario).await?;
 ```
+
+`with_app` provisions the cluster on local processes by default; passing a
+backend provisioner through `with_app_using` (for example
+`ComposeProvisioner::default()` or `K8sClusterProvisioner`) runs the same
+deployment on Docker Compose or Kubernetes.
 
 ### Imperative Tests
 
@@ -75,13 +78,14 @@ when test code needs to control the complete stack step by step.
 ### Composed Applications
 
 `AppDeployment` describes how application components are started and connected.
-`AppHost` runs one root deployment as part of a scenario. Child deployments can
-start uniform clusters through `LocalAppCluster` and standalone binaries through
-`LocalProcessApp`, then expose typed handles to workloads and expectations.
+`AppHost` runs one or more deployments as a scenario. Child deployments can
+start uniform clusters through `ClusterApp` and standalone binaries through
+`LocalProcessApp`, then expose typed handles (such as `ClusterHandle`) to
+workloads and expectations.
 
-App composition currently runs only with the local process deployer. Compose
-and Kubernetes support uniform application clusters, not an `AppDeployment`
-tree containing several application types.
+A `ClusterApp` runs on local processes by default; supplying a backend
+provisioner with `with_app_using` moves the same cluster to Docker Compose or
+Kubernetes. Compose deployments can also provision child container stacks.
 
 ### Existing Deployments
 
@@ -97,11 +101,11 @@ binary or image, config location, and service ports.
 
 | Capability | Local | Compose | Kubernetes |
 |---|---|---|---|
-| Uniform managed scenarios | Yes | Yes | Yes |
-| Managed node control | Start, stop, restart | Restart | Use Kubernetes `ManualCluster` |
+| Managed `ClusterApp` clusters | Yes | Yes | Yes |
+| Managed node control | Start, stop, restart | Restart | Start, stop, restart |
 | Existing clusters | No | Compose project or services | Label selector and namespace |
 | External endpoints | Yes | Yes | Yes |
-| `AppHost` composition | Yes | No | No |
+| Singleton process apps | Yes | Container stacks | No |
 | Config delivery | Files in node working directories | cfgsync | cfgsync |
 
 The local deployer resolves executable paths through path, environment, build,
@@ -171,6 +175,7 @@ Useful focused checks from the workspace root:
 ```bash
 cargo fmt --all -- --check
 cargo test -p testing-framework-core
+cargo test -p testing-framework-container
 cargo test -p testing-framework-app
 cargo test -p multi-app-e2e
 cargo clippy --all --all-targets --all-features -- -D warnings

@@ -6,16 +6,16 @@ A scenario records a topology, workloads, expectations, runtime settings, and de
 
 ## What a Scenario Is
 
-You assemble a scenario with `ScenarioBuilder<E>` and hand it to a deployer. The essential ingredients:
+You assemble a scenario with `ScenarioBuilder<E>` (usually via `AppHost::scenario()`) and hand it to `AppHostDeployer`. The essential ingredients:
 
 | Ingredient | Builder method | Meaning |
 |---|---|---|
-| Topology | `with_deployment(...)` / `new(provider)` | Which nodes exist and how they relate |
+| System under test | `with_app(...)` / `with_app_using(...)` | The application deployments, including clusters |
 | Workloads | `with_workload(...)` | Traffic and actions driven during the run |
 | Expectations | `with_expectation(...)` | What success means, checked against the run |
 | Duration | `with_run_duration(...)` | How long workloads get to run |
 | Cooldown | `with_expectation_cooldown(...)` | Extra settle window before evaluation |
-| Policy | `with_deployment_policy(...)` | Readiness gating, retries, artifact retention |
+| Policy | `ClusterApp::with_policy(...)` (per cluster) | Readiness gating, retries, artifact retention |
 
 Because the whole plan is declared up front, `build()` can validate it and fail before any process is spawned.
 
@@ -27,10 +27,10 @@ Workloads implement `Workload<E>` (`name()`, `init(...)`, `async start(&self, ct
 
 ```mermaid
 flowchart TD
-    B["build()"] --> D["deployer.deploy(&scenario)"]
-    D --> RG["spawn + readiness gating (retry per policy)"]
-    RG --> PX["prepare runtime extensions (with_app runs here)"]
-    PX --> RUN["runner.run(&mut scenario)"]
+    B["build()"] --> D["AppHostDeployer.deploy(&scenario)"]
+    D --> PX["prepare runtime extensions (with_app runs here)"]
+    PX --> RG["provision clusters: spawn + readiness gating (retry per policy)"]
+    RG --> RUN["runner.run(&mut scenario)"]
     RUN --> W["workloads start concurrently"]
     W --> CD["cooldown window"]
     CD --> EV["evaluate all expectations (aggregate failures)"]
@@ -48,13 +48,13 @@ flowchart TD
 
 ### 1. Build
 
-`build()` finalizes the plan. It resolves the deployment from the topology provider (honoring `with_deployment_seed`), validates the source configuration (for example, external-only scenarios must declare at least one external node, and node control is rejected for uncontrolled external clusters), and calls `init` on every workload and expectation. Failures surface as `ScenarioBuildError` before anything is deployed.
+`build()` finalizes the plan. It resolves the deployment from the topology provider (honoring `with_deployment_seed`) and calls `init` on every workload and expectation. Failures surface as `ScenarioBuildError` before anything is deployed.
 
 **Note:** `build()` enforces a minimum run duration of 10 seconds and defaults the expectation cooldown to 10 seconds when you have not set one.
 
 ### 2. Deploy
 
-`deployer.deploy(&scenario)` provisions the environment and returns a `Runner<E>`. For the local deployer this means spawning node processes, then **readiness gating**: each node's readiness probe (HTTP path or plain TCP, per the app) is retried until the policy's readiness requirement holds, with retry and backoff per `DeploymentPolicy`. Only after the cluster is ready are **runtime extensions** (typed services prepared once per run and handed to workloads, see [Runtime Extensions](runtime-extensions.md)) prepared; `with_app` deployments deploy at this point. Registering two extensions of the same type fails here with a "duplicate runtime extension type registered" error. Failure-path cleanup already applies at this stage through ownership: when deployment errors partway, partially deployed app resources are released as their handles drop, and spawned node processes stop when their process handles drop.
+`AppHostDeployer.deploy(&scenario)` prepares the **runtime extensions** (typed services prepared once per run and handed to workloads, see [Runtime Extensions](runtime-extensions.md)) and returns a `Runner<E>`. Registered `with_app` deployments run at this point: each cluster request is provisioned by its backend — nodes spawned, then **readiness gating**, where each node's readiness probe (HTTP path or plain TCP, per the app) is retried until the request policy's readiness requirement holds, with retry and backoff per `DeploymentPolicy`. Registering two extensions of the same type fails here with a "duplicate runtime extension type registered" error. Failure-path cleanup already applies at this stage through ownership: when deployment errors partway, partially deployed app resources are released as their handles drop, and spawned node processes stop when their process handles drop.
 
 ### 3. Run: workloads
 
@@ -64,7 +64,7 @@ A workload returning early with `Ok(())` is fine; the window keeps running while
 
 ### 4. Cooldown and settle
 
-When the duration elapses, workloads are not cut off abruptly. The runner keeps the run alive through a **cooldown window** derived from `with_expectation_cooldown`; clusters whose lifecycle the framework owns get a 30-second minimum so restarted nodes and runtime extensions observe stabilized state. Remaining workload tasks are then drained, and a short settle wait (at least 2 seconds when a cooldown or node control is in play) runs before evaluation.
+When the duration elapses, workloads are not cut off abruptly. The runner keeps the run alive through a **cooldown window** derived from `with_expectation_cooldown`; managed clusters that actually granted node control get a 30-second minimum so restarted nodes and runtime extensions observe stabilized state — a managed cluster deployed without control does not impose the floor. Remaining workload tasks are then drained, and a short settle wait (at least 2 seconds when a cooldown is configured or any cluster granted node control) runs before evaluation.
 
 ### 5. Evaluation
 
@@ -75,15 +75,15 @@ Every expectation's `evaluate` runs, including after another expectation fails. 
 A successful run returns a `RunHandle<E>`. Teardown is guard-based. When the handle drops, its `CleanupGuard` chain runs, stopping node processes, aborting extension tasks, and executing app cleanup stacks (see [Handle Ownership and Teardown](handles-teardown.md)). The same guards run **on the failure path**: any step that errors inside `run` triggers immediate cleanup before the error is returned, so failed runs do not leak managed processes or temp directories.
 
 ```rust,ignore
-let mut scenario = KvScenarioBuilder::deployment_with(|t| t)
+let mut scenario = AppHost::scenario()
+    .with_app(ClusterApp::<KvEnv>::new(KvTopology::new(3)))
     .with_run_duration(Duration::from_secs(30))
     .with_expectation_cooldown(Duration::from_secs(5))
     .with_workload(KvWriteWorkload::new().operations(300))
     .with_expectation(KvConverges::new("demo", 30))
     .build()?;
 
-let deployer = KvLocalDeployer::default();
-let runner = deployer.deploy(&scenario).await?;
+let runner = AppHostDeployer.deploy(&scenario).await?;
 let _handle = runner.run(&mut scenario).await?;
 // dropping _handle tears the cluster down
 ```
@@ -97,7 +97,7 @@ Source: `testing-framework/core/src/scenario/runtime/runner.rs` and `runtime/con
 | Phase | Error | Typical cause |
 |---|---|---|
 | Build | `ScenarioBuildError` | Bad source configuration, workload/expectation `init` failure |
-| Deploy | Deployer error | Spawn failure, readiness timeout, duplicate extension, app deploy failure |
+| Deploy | `AppHostDeployError` | Spawn failure, readiness timeout, duplicate extension, app deploy failure |
 | Run | `ScenarioError::Workload` | Workload error or panic |
 | Run | `ScenarioError::ExpectationFailedDuringCapture` | Fail-fast check tripped mid-run |
 | Run | `ScenarioError::Expectations` | Aggregated end-of-run evaluation failures |
