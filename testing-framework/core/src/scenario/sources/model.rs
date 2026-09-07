@@ -181,6 +181,31 @@ impl ClusterControlProfile {
     pub const fn framework_owns_lifecycle(self) -> bool {
         matches!(self, Self::FrameworkManaged)
     }
+
+    /// Returns the profile granting the framework more runtime control.
+    ///
+    /// Profiles are totally ordered from strongest to weakest:
+    /// `FrameworkManaged` > `ManualControlled` > `ExistingClusterAttached` >
+    /// `ExternalUncontrolled`. A scenario combining several clusters reports
+    /// the strongest profile so lifecycle-dependent behavior (such as the
+    /// post-workload stabilization cooldown) is preserved.
+    #[must_use]
+    pub const fn strongest(self, other: Self) -> Self {
+        if other.rank() > self.rank() {
+            other
+        } else {
+            self
+        }
+    }
+
+    const fn rank(self) -> u8 {
+        match self {
+            Self::FrameworkManaged => 3,
+            Self::ManualControlled => 2,
+            Self::ExistingClusterAttached => 1,
+            Self::ExternalUncontrolled => 0,
+        }
+    }
 }
 
 /// Source model that makes invalid managed+attached combinations

@@ -3,11 +3,10 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, ClusterControlProfile, ClusterControlRequest, ClusterMode, ClusterRequest,
-        ClusterWaitHandle, Deployer, DeploymentPolicy, DynError, Metrics, NodeClients,
-        NodeControlCapability, NodeControlHandle, Runner, RuntimeExtensions, Scenario,
-        ScenarioError,
-        internal::{CleanupGuard, RuntimeAssembly},
+        Application, CleanupGuard, ClusterControlProfile, ClusterControlRequest, ClusterMode,
+        ClusterRequest, ClusterWaitHandle, Deployer, DeploymentPolicy, DynError, Metrics,
+        NodeClients, NodeControlCapability, NodeControlHandle, Runner, RuntimeExtensions, Scenario,
+        ScenarioError, internal::RuntimeAssembly,
     },
     topology::DeploymentDescriptor,
 };
@@ -151,7 +150,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
         let (_cluster, mut unit) = provisioned.into_parts();
         let node_clients = unit.node_clients().clone();
 
-        let (runtime_extensions, runtime_cleanup) = scenario
+        let (runtime_extensions, runtime_cleanup, _control_profile) = scenario
             .prepare_runtime_extensions(node_clients.clone())
             .await
             .map_err(|source| ProcessDeployerError::RuntimeExtensions { source })?;
@@ -191,7 +190,7 @@ impl<E: LocalDeployerEnv> ProcessDeployer<E> {
             .await?;
         let (_cluster, mut unit) = provisioned.into_parts();
         let node_clients = unit.node_clients().clone();
-        let (runtime_extensions, runtime_cleanup) = scenario
+        let (runtime_extensions, runtime_cleanup, _control_profile) = scenario
             .prepare_runtime_extensions(node_clients.clone())
             .await
             .map_err(|source| ProcessDeployerError::RuntimeExtensions { source })?;

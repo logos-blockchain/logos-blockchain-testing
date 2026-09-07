@@ -531,7 +531,7 @@ async fn wait_for_cfgsync_ready(
     let addr = format!("{CFGSYNC_REACHABILITY_ADDR}:{port}");
     let strategy = cfgsync_retry_strategy();
 
-    let result = Retry::spawn(strategy, || async { TcpStream::connect(&addr).await }).await;
+    let result = Retry::start(strategy, || async { TcpStream::connect(&addr).await }).await;
 
     if let Err(error) = result {
         dump_cfgsync_logs(handle).await;

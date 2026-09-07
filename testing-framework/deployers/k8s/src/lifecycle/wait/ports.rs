@@ -24,7 +24,7 @@ pub async fn find_node_port(
 ) -> Result<u16, ClusterWaitError> {
     let services = Api::<Service>::namespaced(client.clone(), namespace);
     let strategy = port_lookup_retry_strategy();
-    let result = RetryIf::spawn(
+    let result = RetryIf::start(
         strategy,
         || query_node_port(&services, service_name, service_port),
         |error: &NodePortLookupError| matches!(error, NodePortLookupError::NotAvailable),

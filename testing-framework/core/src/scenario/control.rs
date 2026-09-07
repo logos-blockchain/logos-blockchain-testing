@@ -41,6 +41,15 @@ pub trait NodeControlHandle<E: Application>: Send + Sync {
         None
     }
 
+    /// Returns the real names of the nodes this handle controls.
+    ///
+    /// Backends that know their node inventory override this so consumers can
+    /// target actual service names. The default empty result makes callers
+    /// fall back to convention-based names.
+    fn node_names(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     fn node_pid(&self, _name: &str) -> Option<u32> {
         None
     }

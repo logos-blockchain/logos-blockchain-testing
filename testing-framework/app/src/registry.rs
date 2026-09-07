@@ -3,6 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use testing_framework_core::scenario::DynError;
+
 use crate::{AppDeployError, AppHandle};
 
 const DEFAULT_HANDLE_NAME: &str = "";
@@ -126,6 +128,30 @@ impl HandleRegistry {
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
+
+    /// Moves every handle from `other` into this registry.
+    ///
+    /// Entries keep their exposure order, with `other`'s handles appended
+    /// after the existing ones, so teardown still follows reverse exposure
+    /// order across both registries. Returns
+    /// [`AppDeployError::DuplicateHandle`] when both registries expose the
+    /// same handle type and name.
+    pub fn merge(&mut self, mut other: Self) -> Result<(), AppDeployError> {
+        if let Some((key, _)) = other
+            .handles
+            .iter()
+            .find(|(key, _)| self.handles.iter().any(|(existing, _)| existing == key))
+        {
+            return Err(AppDeployError::DuplicateHandle {
+                type_name: key.type_name,
+                name: key.display_name().map(ToOwned::to_owned),
+            });
+        }
+
+        self.handles.append(&mut other.handles);
+
+        Ok(())
+    }
 }
 
 impl Drop for HandleRegistry {
@@ -187,11 +213,32 @@ impl AppRuntime {
     {
         self.handles.require_named(name)
     }
+
+    /// Combines the handle registries of two prepared app runtimes.
+    ///
+    /// Used when several applications are registered on one scenario: their
+    /// prepared runtimes collapse into a single registry whose entries keep
+    /// exposure order across both, so teardown still runs in reverse exposure
+    /// order. Fails when both runtimes expose the same handle type and name,
+    /// or when either registry is already shared with other clones.
+    pub fn merge(self, other: Self) -> Result<Self, DynError> {
+        let mut left = Arc::try_unwrap(self.handles).map_err(|_| shared_registry_error())?;
+        let right = Arc::try_unwrap(other.handles).map_err(|_| shared_registry_error())?;
+
+        left.merge(right)?;
+
+        Ok(Self::new(left))
+    }
+}
+
+fn shared_registry_error() -> DynError {
+    "cannot merge app runtimes whose handle registries are already shared".into()
 }
 
 #[derive(Eq, Hash, PartialEq)]
 struct HandleKey {
     type_id: TypeId,
+    type_name: &'static str,
     name: String,
 }
 
@@ -199,6 +246,7 @@ impl HandleKey {
     fn new<T: 'static>(name: impl Into<String>) -> Self {
         Self {
             type_id: TypeId::of::<T>(),
+            type_name: type_name::<T>(),
             name: name.into(),
         }
     }
@@ -237,6 +285,80 @@ mod tests {
         let error = handles.expose(Handle(2)).unwrap_err();
         assert!(error.to_string().contains("already exposed"));
         assert_eq!(handles.get(), Some(Handle(1)));
+    }
+
+    #[test]
+    fn merged_registries_keep_exposure_order_and_reject_duplicates() {
+        let mut left = HandleRegistry::new();
+        left.expose(Handle(1)).unwrap();
+        let mut right = HandleRegistry::new();
+        right.expose_named("named", Handle(2)).unwrap();
+
+        left.merge(right).unwrap();
+
+        assert_eq!(left.get(), Some(Handle(1)));
+        assert_eq!(left.get_named("named"), Some(Handle(2)));
+
+        let mut conflicting = HandleRegistry::new();
+        conflicting.expose(Handle(3)).unwrap();
+        let error = left.merge(conflicting).unwrap_err();
+        assert!(error.to_string().contains("already exposed"));
+    }
+
+    #[test]
+    fn merged_registries_drop_in_reverse_exposure_order_across_both() {
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let mut left = HandleRegistry::new();
+        left.expose_named("first", OwnedHandle::new("first", Arc::clone(&order)))
+            .unwrap();
+        let mut right = HandleRegistry::new();
+        right
+            .expose_named("second", OwnedHandle::new("second", Arc::clone(&order)))
+            .unwrap();
+
+        left.merge(right).unwrap();
+        drop(left);
+
+        assert_eq!(*order.lock().unwrap(), ["second", "first"]);
+    }
+
+    #[test]
+    fn failed_merge_drops_unmerged_handles_in_reverse_exposure_order() {
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let mut left = HandleRegistry::new();
+        left.expose_named("dup", OwnedHandle::new("kept", Arc::clone(&order)))
+            .unwrap();
+
+        let mut right = HandleRegistry::new();
+        right
+            .expose_named("dup", OwnedHandle::new("dup", Arc::clone(&order)))
+            .unwrap();
+        right
+            .expose_named("a", OwnedHandle::new("a", Arc::clone(&order)))
+            .unwrap();
+        right
+            .expose_named("b", OwnedHandle::new("b", Arc::clone(&order)))
+            .unwrap();
+
+        left.merge(right).unwrap_err();
+
+        assert_eq!(*order.lock().unwrap(), ["b", "a", "dup"]);
+        assert!(left.contains_named::<OwnedHandle>("dup"));
+    }
+
+    #[test]
+    fn app_runtimes_merge_into_one_registry() {
+        let mut left_handles = HandleRegistry::new();
+        left_handles.expose(Handle(1)).unwrap();
+        let mut right_handles = HandleRegistry::new();
+        right_handles.expose_named("named", Handle(2)).unwrap();
+
+        let merged = super::AppRuntime::new(left_handles)
+            .merge(super::AppRuntime::new(right_handles))
+            .unwrap();
+
+        assert_eq!(merged.get(), Some(Handle(1)));
+        assert_eq!(merged.get_named("named"), Some(Handle(2)));
     }
 
     #[test]

@@ -21,6 +21,7 @@ pub struct RunContext<E: Application> {
     telemetry: Metrics,
     runtime_extensions: RuntimeExtensions,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    node_control_granted: bool,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
 
@@ -36,6 +37,7 @@ pub struct RuntimeAssembly<E: Application> {
     runtime_extensions: RuntimeExtensions,
     cleanup_guard: Option<Box<dyn CleanupGuard>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+    node_control_granted: bool,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
 }
 
@@ -51,8 +53,10 @@ impl<E: Application> RunContext<E> {
         telemetry: Metrics,
         runtime_extensions: RuntimeExtensions,
         node_control: Option<Arc<dyn NodeControlHandle<E>>>,
+        node_control_granted: bool,
     ) -> Self {
         let metrics = RunMetrics::new(run_duration);
+        let node_control_granted = node_control_granted || node_control.is_some();
 
         Self {
             descriptors,
@@ -63,6 +67,7 @@ impl<E: Application> RunContext<E> {
             telemetry,
             runtime_extensions,
             node_control,
+            node_control_granted,
             cluster_wait: None,
         }
     }
@@ -136,6 +141,16 @@ impl<E: Application> RunContext<E> {
         self.node_control.clone()
     }
 
+    /// Returns whether any cluster in this run granted node control.
+    ///
+    /// True when an environment-typed control handle is installed or when an
+    /// application-deployed cluster received a control handle exposed through
+    /// its typed cluster handle.
+    #[must_use]
+    pub const fn node_control_granted(&self) -> bool {
+        self.node_control_granted
+    }
+
     pub(crate) async fn wait_network_ready(&self) -> Result<(), DynError> {
         self.require_cluster_wait()?.wait_network_ready().await
     }
@@ -173,6 +188,7 @@ impl<E: Application> RuntimeAssembly<E> {
             runtime_extensions: RuntimeExtensions::default(),
             cleanup_guard: None,
             node_control: None,
+            node_control_granted: false,
             cluster_wait: None,
         }
     }
@@ -180,6 +196,14 @@ impl<E: Application> RuntimeAssembly<E> {
     #[must_use]
     pub fn with_node_control(mut self, node_control: Arc<dyn NodeControlHandle<E>>) -> Self {
         self.node_control = Some(node_control);
+        self
+    }
+
+    /// Marks that some deployed cluster granted node control at runtime even
+    /// though no environment-typed control handle is installed.
+    #[must_use]
+    pub const fn with_node_control_granted(mut self, granted: bool) -> Self {
+        self.node_control_granted = granted;
         self
     }
 
@@ -213,6 +237,7 @@ impl<E: Application> RuntimeAssembly<E> {
             self.telemetry,
             self.runtime_extensions,
             self.node_control,
+            self.node_control_granted,
         );
 
         match self.cluster_wait {
@@ -243,6 +268,7 @@ impl<E: Application> From<RunContext<E>> for RuntimeAssembly<E> {
             runtime_extensions: context.runtime_extensions,
             cleanup_guard: None,
             node_control: context.node_control,
+            node_control_granted: context.node_control_granted,
             cluster_wait: context.cluster_wait,
         }
     }
@@ -316,6 +342,11 @@ impl RunMetrics {
     }
 }
 
+/// Owns teardown for a resource acquired while preparing a test runtime.
+///
+/// Cleanup is explicit and object-safe so provisioners can transfer resource
+/// ownership across crate boundaries without exposing backend-specific types.
 pub trait CleanupGuard: Send {
+    /// Releases the owned resource.
     fn cleanup(self: Box<Self>);
 }

@@ -4,8 +4,8 @@ use async_trait::async_trait;
 
 use super::{
     Application, ClusterControlProfile, ClusterWaitHandle, DeploymentPolicy, DynError,
-    ExistingCluster, ExternalNodeSource, NodeClients, NodeControlHandle, StartNodeOptions,
-    StartedNode, internal::CleanupGuard,
+    ExistingCluster, ExternalNodeSource, Metrics, MetricsError, NodeClients, NodeControlHandle,
+    ObservabilityInputs, StartNodeOptions, StartedNode, internal::CleanupGuard,
 };
 use crate::topology::DeploymentDescriptor;
 
@@ -62,18 +62,22 @@ pub enum ClusterControlRequest {
 /// Backend-independent request for one cluster unit.
 pub struct ClusterRequest<E: Application> {
     source: ClusterSource<E>,
+    name: Option<String>,
     policy: DeploymentPolicy,
     start_mode: ClusterStartMode,
     control: ClusterControlRequest,
+    observability: ObservabilityInputs,
 }
 
 impl<E: Application> Clone for ClusterRequest<E> {
     fn clone(&self) -> Self {
         Self {
             source: self.source.clone(),
+            name: self.name.clone(),
             policy: self.policy,
             start_mode: self.start_mode,
             control: self.control,
+            observability: self.observability.clone(),
         }
     }
 }
@@ -86,9 +90,11 @@ impl<E: Application> ClusterRequest<E> {
                 deployment,
                 external: Vec::new(),
             },
+            name: None,
             policy: DeploymentPolicy::default(),
             start_mode: ClusterStartMode::Eager,
             control: ClusterControlRequest::None,
+            observability: ObservabilityInputs::default(),
         }
     }
 
@@ -99,9 +105,11 @@ impl<E: Application> ClusterRequest<E> {
                 cluster,
                 external: Vec::new(),
             },
+            name: None,
             policy: DeploymentPolicy::default(),
             start_mode: ClusterStartMode::Eager,
             control: ClusterControlRequest::None,
+            observability: ObservabilityInputs::default(),
         }
     }
 
@@ -109,9 +117,11 @@ impl<E: Application> ClusterRequest<E> {
     pub fn external(nodes: Vec<ExternalNodeSource>) -> Self {
         Self {
             source: ClusterSource::External { nodes },
+            name: None,
             policy: DeploymentPolicy::default(),
             start_mode: ClusterStartMode::Eager,
             control: ClusterControlRequest::None,
+            observability: ObservabilityInputs::default(),
         }
     }
 
@@ -123,6 +133,14 @@ impl<E: Application> ClusterRequest<E> {
             }
             ClusterSource::External { nodes: external } => external.extend(nodes),
         }
+        self
+    }
+
+    /// Assigns a stable name identifying this cluster within a shared
+    /// deployment session; backends namespace the cluster's services with it.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
         self
     }
 
@@ -145,8 +163,20 @@ impl<E: Application> ClusterRequest<E> {
     }
 
     #[must_use]
+    pub fn with_observability(mut self, observability: ObservabilityInputs) -> Self {
+        self.observability = observability;
+        self
+    }
+
+    #[must_use]
     pub const fn source(&self) -> &ClusterSource<E> {
         &self.source
+    }
+
+    /// Returns the stable cluster name, when one was assigned.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
     }
 
     #[must_use]
@@ -163,6 +193,11 @@ impl<E: Application> ClusterRequest<E> {
     pub const fn control(&self) -> ClusterControlRequest {
         self.control
     }
+
+    #[must_use]
+    pub const fn observability(&self) -> &ObservabilityInputs {
+        &self.observability
+    }
 }
 
 /// Runtime surfaces and lifetime returned for one provisioned cluster.
@@ -173,6 +208,8 @@ pub struct ClusterUnit<E: Application> {
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
     cleanup: Option<Box<dyn CleanupGuard>>,
+    observability: ObservabilityInputs,
+    attachment: Option<ExistingCluster>,
 }
 
 /// Backend-independent access to one managed, attached, or external cluster.
@@ -182,6 +219,8 @@ pub struct ClusterHandle<E: Application> {
     control_profile: ClusterControlProfile,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
+    observability: ObservabilityInputs,
+    attachment: Option<ExistingCluster>,
 }
 
 impl<E: Application> Clone for ClusterHandle<E> {
@@ -192,6 +231,8 @@ impl<E: Application> Clone for ClusterHandle<E> {
             control_profile: self.control_profile,
             node_control: self.node_control.clone(),
             cluster_wait: self.cluster_wait.clone(),
+            observability: self.observability.clone(),
+            attachment: self.attachment.clone(),
         }
     }
 }
@@ -230,6 +271,25 @@ impl<E: Application> ClusterHandle<E> {
         self.node_control.as_ref()?.node_client(name)
     }
 
+    /// Returns the names of the nodes in this cluster.
+    ///
+    /// Names come from the node control handle when the backend reports them;
+    /// otherwise they fall back to the `node-{index}` convention over
+    /// [`Self::node_count`].
+    #[must_use]
+    pub fn node_names(&self) -> Vec<String> {
+        if let Some(control) = &self.node_control {
+            let names = control.node_names();
+            if !names.is_empty() {
+                return names;
+            }
+        }
+
+        (0..self.node_count())
+            .map(|index| format!("node-{index}"))
+            .collect()
+    }
+
     #[must_use]
     pub fn node_pid(&self, name: &str) -> Option<u32> {
         self.node_control.as_ref()?.node_pid(name)
@@ -238,6 +298,23 @@ impl<E: Application> ClusterHandle<E> {
     #[must_use]
     pub const fn control_profile(&self) -> ClusterControlProfile {
         self.control_profile
+    }
+
+    #[must_use]
+    pub const fn observability(&self) -> &ObservabilityInputs {
+        &self.observability
+    }
+
+    /// Returns the descriptor a later [`ClusterRequest::attached`] can consume
+    /// to re-attach to this cluster, when the backend recorded one.
+    #[must_use]
+    pub const fn attachment(&self) -> Option<&ExistingCluster> {
+        self.attachment.as_ref()
+    }
+
+    /// Build the telemetry handle for this cluster's observability endpoints.
+    pub fn metrics(&self) -> Result<Metrics, MetricsError> {
+        self.observability.telemetry_handle()
     }
 
     pub async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
@@ -335,12 +412,22 @@ impl<E: Application> ClusterUnit<E> {
             node_control: None,
             cluster_wait: None,
             cleanup: None,
+            observability: ObservabilityInputs::default(),
+            attachment: None,
         }
     }
 
     #[must_use]
     pub fn with_node_control(mut self, node_control: Arc<dyn NodeControlHandle<E>>) -> Self {
         self.node_control = Some(node_control);
+        self
+    }
+
+    /// Records the descriptor a later [`ClusterRequest::attached`] can consume
+    /// to re-attach to this cluster.
+    #[must_use]
+    pub fn with_attachment(mut self, attachment: ExistingCluster) -> Self {
+        self.attachment = Some(attachment);
         self
     }
 
@@ -353,6 +440,12 @@ impl<E: Application> ClusterUnit<E> {
     #[must_use]
     pub fn with_cleanup(mut self, cleanup: Box<dyn CleanupGuard>) -> Self {
         self.cleanup = Some(cleanup);
+        self
+    }
+
+    #[must_use]
+    pub fn with_observability(mut self, observability: ObservabilityInputs) -> Self {
+        self.observability = observability;
         self
     }
 
@@ -381,6 +474,12 @@ impl<E: Application> ClusterUnit<E> {
         self.cluster_wait.clone()
     }
 
+    /// Returns the recorded re-attachment descriptor, if any.
+    #[must_use]
+    pub const fn attachment(&self) -> Option<&ExistingCluster> {
+        self.attachment.as_ref()
+    }
+
     pub fn take_cleanup(&mut self) -> Option<Box<dyn CleanupGuard>> {
         self.cleanup.take()
     }
@@ -393,6 +492,8 @@ impl<E: Application> ClusterUnit<E> {
             control_profile: self.control_profile,
             node_control: self.node_control.clone(),
             cluster_wait: self.cluster_wait.clone(),
+            observability: self.observability.clone(),
+            attachment: self.attachment.clone(),
         }
     }
 }
@@ -411,8 +512,8 @@ mod tests {
     };
     use crate::{
         scenario::{
-            Application, CleanupPolicy, ClusterControlProfile, DeploymentPolicy,
-            ExternalNodeSource, NodeClients, internal::CleanupGuard,
+            Application, CleanupPolicy, ClusterControlProfile, DeploymentPolicy, ExistingCluster,
+            ExternalNodeSource, NodeClients, NodeControlHandle, internal::CleanupGuard,
         },
         topology::NodeCountTopology,
     };
@@ -442,6 +543,7 @@ mod tests {
         };
         let request = ClusterRequest::<TestApp>::managed(NodeCountTopology::new(2))
             .with_external_nodes(vec![external_node("external-0")])
+            .with_name("alpha")
             .with_policy(policy)
             .with_start_mode(ClusterStartMode::OnDemand)
             .with_control(ClusterControlRequest::Full);
@@ -456,6 +558,8 @@ mod tests {
 
         assert_eq!(deployment.node_count, 2);
         assert_eq!(external.len(), 1);
+        assert_eq!(request.name(), Some("alpha"));
+        assert_eq!(request.clone().name(), Some("alpha"));
         assert_eq!(request.policy(), policy);
         assert_eq!(request.start_mode(), ClusterStartMode::OnDemand);
         assert_eq!(request.control(), ClusterControlRequest::Full);
@@ -503,6 +607,71 @@ mod tests {
                 .to_string(),
             "cluster readiness is not available"
         );
+    }
+
+    #[test]
+    fn cluster_handle_node_names_fall_back_to_indexed_convention() {
+        let unit = ClusterUnit::<TestApp>::new(
+            Some(NodeCountTopology::new(3)),
+            NodeClients::default(),
+            ClusterControlProfile::FrameworkManaged,
+        );
+
+        assert_eq!(
+            unit.handle().node_names(),
+            vec!["node-0", "node-1", "node-2"]
+        );
+    }
+
+    #[test]
+    fn cluster_handle_node_names_prefer_control_inventory() {
+        let unit = ClusterUnit::<TestApp>::new(
+            Some(NodeCountTopology::new(2)),
+            NodeClients::default(),
+            ClusterControlProfile::FrameworkManaged,
+        )
+        .with_node_control(Arc::new(NamedControl {
+            names: vec!["svc-a".to_owned(), "svc-b".to_owned(), "svc-c".to_owned()],
+        }));
+
+        assert_eq!(unit.handle().node_names(), vec!["svc-a", "svc-b", "svc-c"]);
+    }
+
+    #[test]
+    fn cluster_handle_node_names_fall_back_when_control_reports_none() {
+        let unit = ClusterUnit::<TestApp>::new(
+            Some(NodeCountTopology::new(2)),
+            NodeClients::default(),
+            ClusterControlProfile::FrameworkManaged,
+        )
+        .with_node_control(Arc::new(NamedControl { names: Vec::new() }));
+
+        assert_eq!(unit.handle().node_names(), vec!["node-0", "node-1"]);
+    }
+
+    #[test]
+    fn cluster_attachment_descriptor_is_exposed_on_unit_and_handle() {
+        let attachment = ExistingCluster::for_compose_project("project".to_owned());
+        let unit = ClusterUnit::<TestApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ExistingClusterAttached,
+        )
+        .with_attachment(attachment.clone());
+
+        assert_eq!(unit.attachment(), Some(&attachment));
+        assert_eq!(unit.handle().attachment(), Some(&attachment));
+    }
+
+    struct NamedControl {
+        names: Vec<String>,
+    }
+
+    #[async_trait]
+    impl NodeControlHandle<TestApp> for NamedControl {
+        fn node_names(&self) -> Vec<String> {
+            self.names.clone()
+        }
     }
 
     #[test]

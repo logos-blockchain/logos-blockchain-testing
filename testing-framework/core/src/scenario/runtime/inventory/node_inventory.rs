@@ -56,6 +56,17 @@ impl<E: Application> NodeInventory<E> {
         self.clients.write().push(client);
     }
 
+    pub(crate) fn replace_client(&self, index: usize, client: E::NodeClient) -> bool {
+        let mut clients = self.clients.write();
+        match clients.get_mut(index) {
+            Some(slot) => {
+                *slot = client;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub(crate) fn with_clients<R>(&self, f: impl FnOnce(&[E::NodeClient]) -> R) -> R {
         let clients = self.clients.read();
         f(&clients)

@@ -210,7 +210,7 @@ async fn spawn_with_readiness_retry<E: LocalDeployerEnv>(
         }
     };
 
-    RetryIf::spawn(strategy, operation, should_retry)
+    RetryIf::start(strategy, operation, should_retry)
         .await
         .map_err(Into::into)
 }

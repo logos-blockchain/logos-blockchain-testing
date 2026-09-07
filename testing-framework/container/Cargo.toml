@@ -1,0 +1,17 @@
+[package]
+categories.workspace = true
+description          = "Portable container workload contracts for the Logos testing framework"
+edition.workspace    = true
+keywords.workspace   = true
+license.workspace    = true
+name                 = "testing-framework-container"
+readme.workspace     = true
+repository.workspace = true
+version.workspace    = true
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait            = { workspace = true }
+testing-framework-core = { workspace = true }

@@ -483,7 +483,7 @@ where
         self.stop_all();
         self.forwards.shutdown_all();
         if let Some(cleanup) = self.cleanup.take() {
-            testing_framework_core::scenario::internal::CleanupGuard::cleanup(Box::new(cleanup));
+            testing_framework_core::scenario::CleanupGuard::cleanup(Box::new(cleanup));
         }
     }
 }
@@ -616,7 +616,7 @@ pub(crate) async fn wait_for_replicas(
     }
 
     let deployments = Api::<Deployment>::namespaced(client.clone(), namespace);
-    let result = RetryIf::spawn(
+    let result = RetryIf::start(
         FixedInterval::from_millis(500).take(240),
         || async {
             let deployment = deployments.get(deployment_name).await.map_err(|source| {

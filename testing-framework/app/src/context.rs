@@ -1,6 +1,9 @@
+use testing_framework_container::{
+    ContainerStackHandle, ContainerStackProvisioner, ContainerStackRequest,
+};
 use testing_framework_core::scenario::{
-    Application, ClusterControlRequest, ClusterHandle, ClusterProvisioner, ClusterRequest,
-    DynError, NodeClients, internal::CleanupGuard,
+    Application, CleanupGuard, ClusterControlProfile, ClusterHandle, ClusterProvisioner,
+    ClusterRequest, ClusterSource, DynError, NodeClients,
 };
 use testing_framework_runner_local::{LocalClusterProvisioner, LocalDeployerEnv};
 
@@ -21,6 +24,8 @@ pub struct DeployContext<E: Application, P = LocalClusterProvisioner> {
     provisioner: P,
     handles: HandleRegistry,
     cleanup: AppCleanupStack,
+    control_profile: Option<ClusterControlProfile>,
+    node_control_granted: bool,
 }
 
 impl<E> DeployContext<E, LocalClusterProvisioner>
@@ -50,6 +55,8 @@ where
             provisioner,
             handles: HandleRegistry::new(),
             cleanup: AppCleanupStack::default(),
+            control_profile: None,
+            node_control_granted: false,
         }
     }
 
@@ -150,7 +157,12 @@ where
         &self.handles
     }
 
-    /// Provisions a cluster through the active local backend.
+    /// Provisions a cluster through the active backend provisioner.
+    ///
+    /// The request is forwarded unchanged; runtime control is granted only
+    /// when the request asks for it. External requests must list at least one
+    /// node so a mis-configured external cluster fails at deploy time instead
+    /// of running expectations over an empty inventory.
     pub async fn deploy_cluster<App>(
         &mut self,
         request: ClusterRequest<App>,
@@ -159,10 +171,35 @@ where
         App: Application,
         P: ClusterProvisioner<App>,
     {
-        let mut unit = self
-            .provisioner
-            .provision_cluster(request.with_control(ClusterControlRequest::Full))
-            .await?;
+        if let ClusterSource::External { nodes } = request.source()
+            && nodes.is_empty()
+        {
+            return Err("external cluster request must list at least one node".into());
+        }
+
+        let mut unit = self.provisioner.provision_cluster(request).await?;
+        self.record_control_profile(unit.control_profile());
+        self.node_control_granted |= unit.node_control().is_some();
+        let handle = unit.handle();
+        if let Some(cleanup) = unit.take_cleanup() {
+            self.register_cleanup(cleanup);
+        }
+        Ok(handle)
+    }
+
+    /// Provisions a backend-managed stack of mutually reachable containers.
+    ///
+    /// Cleanup is registered before the stack handle is returned. The
+    /// application remains responsible for turning resolved endpoints into
+    /// its typed client handles.
+    pub async fn deploy_container_stack(
+        &mut self,
+        request: ContainerStackRequest,
+    ) -> Result<ContainerStackHandle, DynError>
+    where
+        P: ContainerStackProvisioner,
+    {
+        let mut unit = self.provisioner.provision_container_stack(request).await?;
         let handle = unit.handle();
         if let Some(cleanup) = unit.take_cleanup() {
             self.register_cleanup(cleanup);
@@ -196,15 +233,47 @@ where
         &self.node_clients
     }
 
+    /// Registers a cleanup guard released with the scenario runtime.
+    ///
+    /// Use this for auxiliary resources an application starts itself, such as
+    /// background observer or collector tasks. Guards run in reverse
+    /// registration order.
+    pub fn defer_cleanup(&mut self, guard: Box<dyn CleanupGuard>) {
+        self.register_cleanup(guard);
+    }
+
     pub(crate) fn register_cleanup(&mut self, guard: Box<dyn CleanupGuard>) {
         self.cleanup.push(guard);
     }
 
-    pub(crate) fn into_runtime_parts(self) -> (HandleRegistry, Option<Box<dyn CleanupGuard>>) {
+    fn record_control_profile(&mut self, profile: ClusterControlProfile) {
+        self.control_profile = Some(match self.control_profile {
+            Some(current) => current.strongest(profile),
+            None => profile,
+        });
+    }
+
+    pub(crate) fn into_runtime_parts(
+        self,
+    ) -> (
+        HandleRegistry,
+        Option<Box<dyn CleanupGuard>>,
+        Option<ClusterControlProfile>,
+        bool,
+    ) {
         let Self {
-            handles, cleanup, ..
+            handles,
+            cleanup,
+            control_profile,
+            node_control_granted,
+            ..
         } = self;
-        (handles, cleanup.into_guard())
+        (
+            handles,
+            cleanup.into_guard(),
+            control_profile,
+            node_control_granted,
+        )
     }
 }
 
@@ -353,6 +422,42 @@ mod tests {
         assert!(ctx.get::<ChildHandle>().is_some());
         assert!(ctx.get::<SiblingHandle>().is_some());
         assert!(ctx.get::<StackHandle>().is_some());
+    }
+
+    #[derive(Clone)]
+    struct RejectingProvisioner;
+
+    #[async_trait]
+    impl testing_framework_core::scenario::ClusterProvisioner<TestEnv> for RejectingProvisioner {
+        async fn provision_cluster(
+            &self,
+            _request: testing_framework_core::scenario::ClusterRequest<TestEnv>,
+        ) -> Result<testing_framework_core::scenario::ClusterUnit<TestEnv>, DynError> {
+            Err("provisioner must not run for empty external requests".into())
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_external_cluster_requests_are_rejected_before_provisioning() {
+        let mut ctx: DeployContext<TestEnv, RejectingProvisioner> =
+            DeployContext::new_with_provisioner(
+                TestDeployment,
+                NodeClients::default(),
+                RejectingProvisioner,
+            );
+
+        let error = ctx
+            .deploy_cluster(
+                testing_framework_core::scenario::ClusterRequest::<TestEnv>::external(Vec::new()),
+            )
+            .await
+            .err()
+            .expect("empty external request must fail");
+
+        assert_eq!(
+            error.to_string(),
+            "external cluster request must list at least one node"
+        );
     }
 
     fn test_context() -> DeployContext<TestEnv> {

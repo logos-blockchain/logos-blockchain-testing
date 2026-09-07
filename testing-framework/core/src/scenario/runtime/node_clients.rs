@@ -75,6 +75,16 @@ impl<E: Application> NodeClients<E> {
         self.inventory.add_client(client);
     }
 
+    /// Replaces the client stored at `index` in place, preserving the
+    /// inventory length.
+    ///
+    /// Deployers use this after node restarts so the shared inventory keeps
+    /// one entry per node instead of accumulating stale duplicates. Returns
+    /// `false` when no client exists at `index`.
+    pub fn replace_node(&self, index: usize, client: E::NodeClient) -> bool {
+        self.inventory.replace_client(index, client)
+    }
+
     pub fn clear(&self) {
         self.inventory.clear();
     }
@@ -156,6 +166,18 @@ mod tests {
 
         clients.clear();
         assert!(clone.is_empty());
+    }
+
+    #[test]
+    fn replace_node_swaps_in_place_and_rejects_missing_slots() {
+        let clients = NodeClients::<TestApp>::new(vec![1, 2]);
+
+        assert!(clients.replace_node(1, 9));
+        assert_eq!(clients.snapshot(), vec![1, 9]);
+        assert_eq!(clients.len(), 2);
+
+        assert!(!clients.replace_node(2, 7));
+        assert_eq!(clients.snapshot(), vec![1, 9]);
     }
 
     #[tokio::test]

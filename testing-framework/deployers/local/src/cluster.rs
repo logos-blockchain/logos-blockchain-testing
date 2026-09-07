@@ -5,8 +5,8 @@ use std::sync::{
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
-    ReadinessError, StartNodeOptions, StartedNode, internal::CleanupGuard,
+    CleanupGuard, ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
+    ReadinessError, StartNodeOptions, StartedNode,
 };
 
 use crate::{
@@ -124,6 +124,11 @@ impl<E: LocalDeployerEnv> LocalCluster<E> {
     #[must_use]
     pub fn node_pid(&self, name: &str) -> Option<u32> {
         self.owner.nodes.node_pid(name)
+    }
+
+    #[must_use]
+    pub fn node_names(&self) -> Vec<String> {
+        self.owner.nodes.node_names()
     }
 
     #[must_use]
@@ -248,6 +253,10 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for LocalCluster<E> {
 
     fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.node_client(name)
+    }
+
+    fn node_names(&self) -> Vec<String> {
+        self.node_names()
     }
 
     fn node_pid(&self, name: &str) -> Option<u32> {

@@ -10,10 +10,14 @@
 //! deployments through [`DeployContext`], and expose typed handles to workloads
 //! with [`AppRunContextExt`]. TF adapters register managed resources with the
 //! scenario cleanup path, while attached and external apps remain explicit.
+//! Containerized child resources use the portable contracts from
+//! `testing-framework-container`.
 
 #![warn(missing_docs)]
 
+mod chaos;
 mod cleanup;
+mod cluster;
 mod context;
 mod deployment;
 mod error;
@@ -23,12 +27,15 @@ mod local;
 mod process;
 mod registry;
 
+pub use chaos::ClusterRestartChaos;
+pub use cluster::ClusterApp;
 pub use context::DeployContext;
 pub use deployment::{AppDeployment, AppHandle};
 pub use error::AppDeployError;
 pub use extension::{AppDeploymentFactory, AppRunContextExt, AppScenarioBuilderExt};
 pub use host::{
-    AppHost, AppHostEnv, AppHostLocalDeployer, AppHostScenarioBuilder, AppHostTopology,
+    AppHost, AppHostDeployError, AppHostDeployer, AppHostEnv, AppHostLocalDeployer,
+    AppHostScenarioBuilder, AppHostTopology,
 };
 pub use local::LocalAppCluster;
 pub use process::{LocalProcessApp, LocalProcessHandle};

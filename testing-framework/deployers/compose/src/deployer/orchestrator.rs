@@ -168,7 +168,7 @@ where
             .await?;
 
         self.ensure_non_empty_node_clients(&node_clients)?;
-        let (runtime_extensions, runtime_cleanup) = scenario
+        let (runtime_extensions, runtime_cleanup, _control_profile) = scenario
             .prepare_runtime_extensions(node_clients.clone())
             .await
             .map_err(|source| ComposeRunnerError::RuntimeExtensions { source })?;
@@ -469,7 +469,7 @@ async fn build_compose_runtime<E: ComposeDeployEnv, Caps>(
         return Err(ComposeRunnerError::RuntimePreflight);
     }
 
-    let (runtime_extensions, runtime_cleanup) = input
+    let (runtime_extensions, runtime_cleanup, _control_profile) = input
         .scenario
         .prepare_runtime_extensions(node_clients.clone())
         .await
