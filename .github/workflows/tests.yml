@@ -40,3 +40,48 @@ jobs:
         run: cargo test -p kvstore-examples --test local_smoke -- --nocapture
         env:
           KVSTORE_NODE_BIN: ${{ github.workspace }}/target/debug/kvstore-node
+
+  compose-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use repository Rust toolchain
+        run: rustc --version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build example node binaries
+        run: cargo build --release -p queue-node -p multi-app-job-worker -p kvstore-node
+      - name: Build example node images
+        run: |
+          mkdir -p target/ci-images
+          cp target/release/queue-node target/release/multi-app-job-worker target/release/kvstore-node target/ci-images/
+          cat > target/ci-images/Dockerfile.queue-node <<'EOF'
+          FROM ubuntu:24.04
+          COPY queue-node /usr/local/bin/queue-node
+          ENTRYPOINT ["/usr/local/bin/queue-node"]
+          EOF
+          cat > target/ci-images/Dockerfile.job-worker <<'EOF'
+          FROM ubuntu:24.04
+          COPY multi-app-job-worker /usr/local/bin/multi-app-job-worker
+          WORKDIR /app
+          ENTRYPOINT ["/usr/local/bin/multi-app-job-worker"]
+          EOF
+          cat > target/ci-images/Dockerfile.kvstore-node <<'EOF'
+          FROM ubuntu:24.04
+          COPY kvstore-node /usr/local/bin/kvstore-node
+          ENTRYPOINT ["/usr/local/bin/kvstore-node"]
+          EOF
+          docker build -q -t queue-node:local -f target/ci-images/Dockerfile.queue-node target/ci-images
+          docker build -q -t multi-app-job-worker:local -f target/ci-images/Dockerfile.job-worker target/ci-images
+          docker build -q -t kvstore-node:local -f target/ci-images/Dockerfile.kvstore-node target/ci-images
+          docker pull -q python:3-alpine
+      - name: Compose container-stack happy path
+        run: cargo test -p multi-app-e2e --test compose_happy_path -- --nocapture
+      - name: Compose shared-session mixed cluster
+        run: cargo test -p multi-app-e2e --test compose_mixed_cluster -- --nocapture

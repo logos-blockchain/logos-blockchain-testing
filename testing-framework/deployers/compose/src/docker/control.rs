@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::{path::Path, time::Duration};
 
 use testing_framework_core::{
     adjust_timeout,
@@ -16,6 +13,7 @@ use crate::{
         commands::{ComposeCommandError, run_docker_command},
     },
     errors::ComposeRunnerError,
+    infrastructure::project::ComposeProject,
 };
 
 const COMPOSE_RESTART_TIMEOUT: Duration = Duration::from_secs(120);
@@ -133,6 +131,8 @@ async fn run_docker_action(
             let compose_timeout = ComposeCommandError::Timeout {
                 command: description.to_owned(),
                 timeout: timeout_duration,
+                stdout: String::new(),
+                stderr: String::new(),
             };
 
             Err(compose_timeout.into())
@@ -142,26 +142,35 @@ async fn run_docker_action(
 
 /// Compose-specific node control handle for restarting nodes.
 pub struct ComposeNodeControl {
-    pub(crate) compose_file: PathBuf,
-    pub(crate) project_name: String,
+    pub(crate) project: ComposeProject,
+    pub(crate) node_names: Vec<String>,
 }
 
 #[async_trait::async_trait]
 impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
-        restart_compose_service(&self.compose_file, &self.project_name, name)
+        self.project
+            .restart_service(name)
             .await
             .map_err(|err| format!("node restart failed: {err}").into())
+    }
+
+    fn node_names(&self) -> Vec<String> {
+        self.node_names.clone()
     }
 }
 
 /// Node control handle for compose existing-cluster mode.
 pub struct ComposeAttachedNodeControl {
     pub(crate) project_name: String,
+    pub(crate) node_names: Vec<String>,
 }
 
 impl ComposeAttachedNodeControl {
-    pub fn try_from_existing_cluster(source: &ExistingCluster) -> Result<Self, DynError> {
+    pub fn try_from_existing_cluster(
+        source: &ExistingCluster,
+        node_names: Vec<String>,
+    ) -> Result<Self, DynError> {
         let Some(project_name) = source
             .compose_project()
             .map(str::trim)
@@ -172,6 +181,7 @@ impl ComposeAttachedNodeControl {
 
         Ok(Self {
             project_name: project_name.to_owned(),
+            node_names,
         })
     }
 }
@@ -188,5 +198,9 @@ impl<E: Application> NodeControlHandle<E> for ComposeAttachedNodeControl {
         stop_attached_compose_service(&self.project_name, name)
             .await
             .map_err(|source| format!("node stop failed for service '{name}': {source}").into())
+    }
+
+    fn node_names(&self) -> Vec<String> {
+        self.node_names.clone()
     }
 }

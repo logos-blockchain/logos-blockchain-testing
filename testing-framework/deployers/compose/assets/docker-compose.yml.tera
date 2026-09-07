@@ -7,29 +7,36 @@ services:
 {% for arg in node.entrypoint %}
       - {{ arg | json_encode() }}
 {% endfor %}
-    volumes:
+{% if node.volumes | length > 0 %}    volumes:
 {% for volume in node.volumes %}
       - {{ volume | json_encode() }}
 {% endfor %}
+{% endif %}
 {% if node.extra_hosts | length > 0 %}
     extra_hosts:
 {% for host in node.extra_hosts %}
       - {{ host | json_encode() }}
 {% endfor %}
 {% endif %}
+{% if node.ports | length > 0 %}
     ports:
 {% for port in node.ports %}
       - {{ port | json_encode() }}
 {% endfor %}
+{% endif %}
+{% if node.environment | length > 0 %}
     environment:
 {% for env in node.environment %}
-      {{ env.key }}: "{{ env.value }}"
+      {{ env.key | json_encode() }}: {{ env.value | json_encode() }}
 {% endfor %}
+{% endif %}
+{% if node.debug_capabilities %}
     cap_add:
       - SYS_ADMIN
       - SYS_PTRACE
     security_opt:
       - seccomp=unconfined
-    restart: on-failure
+{% endif %}
+    restart: {{ node.restart_policy | json_encode() }}
 
 {% endfor %}
