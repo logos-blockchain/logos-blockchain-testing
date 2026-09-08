@@ -346,15 +346,13 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         {
             Ok(launch) => launch,
             Err(source) => {
-                self.put_node_back(index, node);
-                self.mark_node_stopped(name);
+                self.restore_node_after_failed_restart(name, index, node);
                 return Err(NodeManagerError::Config { source });
             }
         };
 
         if let Err(source) = node.restart_with_launch(launch).await {
-            self.put_node_back(index, node);
-            self.mark_node_stopped(name);
+            self.restore_node_after_failed_restart(name, index, node);
 
             return Err(NodeManagerError::Restart {
                 source: source.into(),
@@ -424,6 +422,19 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         let taken = remove_node_from_state(&mut state, name)?;
         state.restarting_names.insert(name.to_string());
         Ok(taken)
+    }
+
+    /// Reinstates a node whose restart failed, deriving the stopped/running
+    /// bookkeeping from the actual process state: a failure before the old
+    /// process was touched leaves it running and probed.
+    fn restore_node_after_failed_restart(&self, name: &str, index: usize, mut node: Node<E>) {
+        let still_running = node.is_running();
+        self.put_node_back(index, node);
+        if still_running {
+            self.mark_node_running(name);
+        } else {
+            self.mark_node_stopped(name);
+        }
     }
 
     fn put_node_back(&self, index: usize, node: Node<E>) {
@@ -689,7 +700,15 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
 
 #[cfg(test)]
 mod tests {
-    use std::{net::TcpListener, path::Path, time::Duration};
+    use std::{
+        net::TcpListener,
+        path::Path,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
 
     use testing_framework_core::{
         scenario::{Application, DynError, NodeClients},
@@ -779,6 +798,131 @@ mod tests {
         }
         manager.initialize_with_nodes(nodes);
         manager
+    }
+
+    #[derive(Clone)]
+    struct FlakyConfig {
+        api_port: u16,
+        fail_launch: Arc<AtomicBool>,
+    }
+
+    struct FlakySleepEnv;
+
+    #[async_trait::async_trait]
+    impl Application for FlakySleepEnv {
+        type Deployment = SleepTopology;
+        type NodeClient = ();
+        type NodeConfig = FlakyConfig;
+    }
+
+    #[async_trait::async_trait]
+    impl LocalDeployerEnv for FlakySleepEnv {
+        async fn build_launch_spec(
+            config: &FlakyConfig,
+            _dir: &Path,
+            _label: &str,
+        ) -> Result<LaunchSpec, DynError> {
+            if config.fail_launch.load(Ordering::SeqCst) {
+                return Err("forced launch-spec failure".into());
+            }
+            Ok(LaunchSpec {
+                binary: "/bin/sleep".into(),
+                files: Vec::new(),
+                args: vec!["300".into()],
+                env: Vec::new(),
+            })
+        }
+
+        fn node_endpoints(config: &FlakyConfig) -> Result<NodeEndpoints, DynError> {
+            Ok(NodeEndpoints::from_api_port(config.api_port))
+        }
+
+        fn node_client(_endpoints: &NodeEndpoints) -> Result<(), DynError> {
+            Ok(())
+        }
+
+        fn readiness_probe() -> LocalReadinessProbe {
+            LocalReadinessProbe::Tcp
+        }
+    }
+
+    async fn manager_with_flaky_node(
+        port: u16,
+        fail_launch: Arc<AtomicBool>,
+    ) -> NodeManager<FlakySleepEnv> {
+        let manager = NodeManager::new(SleepTopology, NodeClients::default());
+        let node = spawn_node_from_config::<FlakySleepEnv>(
+            "node".to_string(),
+            FlakyConfig {
+                api_port: port,
+                fail_launch,
+            },
+            false,
+            None,
+            None,
+            &[],
+        )
+        .await
+        .expect("spawn flaky sleep node");
+        manager.initialize_with_nodes(vec![node]);
+        manager
+    }
+
+    #[tokio::test]
+    async fn failed_restart_launch_keeps_a_running_node_probed() {
+        let port = reserve_unbound_port();
+        let fail_launch = Arc::new(AtomicBool::new(false));
+        let manager = manager_with_flaky_node(port, Arc::clone(&fail_launch)).await;
+
+        fail_launch.store(true, Ordering::SeqCst);
+        let error = manager
+            .restart_node("node-0")
+            .await
+            .expect_err("restart must fail when launch-spec generation fails");
+        assert!(matches!(error, super::NodeManagerError::Config { .. }));
+
+        assert!(
+            manager.node_pid("node-0").is_some(),
+            "old process must keep running after a failed launch-spec build"
+        );
+        assert_eq!(
+            manager.running_probe_ports(),
+            vec![port],
+            "node must stay in the readiness probe set"
+        );
+
+        fail_launch.store(false, Ordering::SeqCst);
+        manager
+            .restart_node("node-0")
+            .await
+            .expect("restart must recover once launch-spec generation succeeds");
+        assert!(manager.node_pid("node-0").is_some());
+    }
+
+    #[tokio::test]
+    async fn failed_restart_launch_keeps_a_stopped_node_stopped() {
+        let port = reserve_unbound_port();
+        let fail_launch = Arc::new(AtomicBool::new(false));
+        let manager = manager_with_flaky_node(port, Arc::clone(&fail_launch)).await;
+
+        manager.stop_node("node-0").await.expect("stop node-0");
+        assert!(manager.node_pid("node-0").is_none());
+
+        fail_launch.store(true, Ordering::SeqCst);
+        let error = manager
+            .restart_node("node-0")
+            .await
+            .expect_err("restart must fail when launch-spec generation fails");
+        assert!(matches!(error, super::NodeManagerError::Config { .. }));
+
+        assert!(
+            manager.node_pid("node-0").is_none(),
+            "stopped node must not be reported as running"
+        );
+        assert!(
+            manager.running_probe_ports().is_empty(),
+            "stopped node must stay out of the readiness probe set"
+        );
     }
 
     #[tokio::test]
