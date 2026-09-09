@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use testing_framework_core::scenario::NodeRuntimeOptions;
 
@@ -11,7 +11,9 @@ pub(crate) struct LocalNodeManagerState<E: LocalDeployerEnv> {
     pub(crate) clients_by_name: HashMap<String, E::NodeClient>,
     pub(crate) indices_by_name: HashMap<String, usize>,
     pub(crate) runtime_by_name: HashMap<String, NodeRuntimeOptions>,
-    pub(crate) nodes: Vec<Node<E>>,
+    pub(crate) stopped_names: HashSet<String>,
+    pub(crate) restarting_names: HashSet<String>,
+    pub(crate) nodes: Vec<Option<Node<E>>>,
     pub(crate) template_config: Option<E::NodeConfig>,
 }
 
@@ -35,7 +37,9 @@ impl<E: LocalDeployerEnv> LocalNodeManagerState<E> {
         let index = self.nodes.len();
         self.indices_by_name.insert(node_name.to_string(), index);
         self.runtime_by_name.insert(node_name.to_string(), runtime);
+        self.stopped_names.remove(node_name);
+        self.restarting_names.remove(node_name);
         self.node_count += 1;
-        self.nodes.push(node);
+        self.nodes.push(Some(node));
     }
 }

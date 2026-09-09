@@ -5,8 +5,8 @@ use thiserror::Error;
 use super::builder::Builder;
 use crate::{
     scenario::{
-        Application, ClusterControlProfile, ClusterMode, DeploymentPolicy, DynError,
-        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
+        Application, ClusterControlProfile, ClusterControlSummary, ClusterMode, DeploymentPolicy,
+        DynError, ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
         expectation::Expectation,
         runtime::{
             CleanupGuard, RuntimeExtensionFactory, RuntimeExtensions, SourceOrchestrationPlan,
@@ -159,7 +159,14 @@ impl<E: Application, Caps> Scenario<E, Caps> {
     pub async fn prepare_runtime_extensions(
         &self,
         node_clients: NodeClients<E>,
-    ) -> Result<(RuntimeExtensions, Option<Box<dyn CleanupGuard>>), DynError> {
+    ) -> Result<
+        (
+            RuntimeExtensions,
+            Option<Box<dyn CleanupGuard>>,
+            ClusterControlSummary,
+        ),
+        DynError,
+    > {
         Ok(
             prepare_runtime_extensions(&self.runtime_extensions, &self.deployment, node_clients)
                 .await?

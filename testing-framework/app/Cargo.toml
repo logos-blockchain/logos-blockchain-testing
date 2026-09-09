@@ -12,10 +12,12 @@ workspace = true
 
 [dependencies]
 async-trait                    = { workspace = true }
+rand                           = { workspace = true }
+testing-framework-container    = { workspace = true }
 testing-framework-core         = { workspace = true }
 testing-framework-runner-local = { workspace = true }
 thiserror                      = { workspace = true }
-tokio                          = { features = ["rt", "sync"], workspace = true }
+tokio                          = { features = ["rt", "sync", "time"], workspace = true }
 
 [dev-dependencies]
 tokio = { features = ["macros", "rt"], workspace = true }

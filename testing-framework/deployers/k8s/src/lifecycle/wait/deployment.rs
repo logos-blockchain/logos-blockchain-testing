@@ -23,7 +23,7 @@ pub async fn wait_for_deployment_ready(
     let timeout = deployment_timeout();
     let strategy = deployment_retry_strategy(timeout);
     let deployments = Api::<Deployment>::namespaced(client.clone(), namespace);
-    let result = RetryIf::spawn(
+    let result = RetryIf::start(
         strategy,
         || check_deployment_ready(&deployments, name),
         |error: &DeploymentWaitError| matches!(error, DeploymentWaitError::NotReady),

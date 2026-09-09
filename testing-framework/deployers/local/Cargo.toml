@@ -23,5 +23,5 @@ tempfile               = { workspace = true }
 testing-framework-core = { path = "../../core" }
 thiserror              = { workspace = true }
 tokio                  = { workspace = true }
-tokio-retry            = "0.3"
+tokio-retry            = "0.3.2"
 tracing                = { workspace = true }

@@ -38,6 +38,11 @@ impl<E: LocalDeployerEnv> ManualCluster<E> {
         self.cluster.node_pid(name)
     }
 
+    #[must_use]
+    pub fn node_names(&self) -> Vec<String> {
+        self.cluster.node_names()
+    }
+
     pub async fn start_node(&self, name: &str) -> Result<StartedNode<E>, ManualClusterError> {
         Ok(self.cluster.start_node(name).await?)
     }
@@ -134,6 +139,10 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
 
     fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.cluster.node_client(name)
+    }
+
+    fn node_names(&self) -> Vec<String> {
+        self.cluster.node_names()
     }
 
     fn node_pid(&self, name: &str) -> Option<u32> {

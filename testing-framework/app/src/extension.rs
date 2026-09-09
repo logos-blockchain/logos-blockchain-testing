@@ -57,12 +57,15 @@ where
             ctx.expose(handle)?;
         }
 
-        let (handles, cleanup) = ctx.into_runtime_parts();
+        let (handles, cleanup, control_profile, node_control_granted) = ctx.into_runtime_parts();
         let runtime = AppRuntime::new(handles);
 
-        Ok(match cleanup {
-            Some(cleanup) => PreparedRuntimeExtension::with_cleanup(runtime, cleanup),
-            None => PreparedRuntimeExtension::new(runtime),
+        let extension = PreparedRuntimeExtension::mergeable(runtime, cleanup, AppRuntime::merge)
+            .with_node_control_granted(node_control_granted);
+
+        Ok(match control_profile {
+            Some(profile) => extension.with_control_profile(profile),
+            None => extension,
         })
     }
 }

@@ -251,7 +251,7 @@ where
     let node_clients = resolve_node_clients(&source_plan, source_providers).await?;
 
     ensure_non_empty_node_clients(&node_clients)?;
-    let (runtime_extensions, runtime_cleanup) = scenario
+    let (runtime_extensions, runtime_cleanup, _control_profile) = scenario
         .prepare_runtime_extensions(node_clients.clone())
         .await
         .map_err(|source| K8sRunnerError::RuntimeExtensions { source })?;
@@ -606,7 +606,7 @@ async fn build_runner_parts<E: K8sDeployEnv, Caps>(
     cluster_wait: Arc<dyn ClusterWaitHandle<E>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
 ) -> Result<K8sRunnerParts<E>, K8sRunnerError> {
-    let (runtime_extensions, runtime_cleanup) = scenario
+    let (runtime_extensions, runtime_cleanup, _control_profile) = scenario
         .prepare_runtime_extensions(runtime.node_clients.clone())
         .await
         .map_err(|source| K8sRunnerError::RuntimeExtensions { source })?;

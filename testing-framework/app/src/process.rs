@@ -9,7 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use testing_framework_core::scenario::{Application, DynError, internal::CleanupGuard};
+use testing_framework_core::scenario::{Application, CleanupGuard, DynError};
 use testing_framework_runner_local::{LaunchSpec, NodeEndpoints, ProcessNode};
 use tokio::sync::Mutex;
 
