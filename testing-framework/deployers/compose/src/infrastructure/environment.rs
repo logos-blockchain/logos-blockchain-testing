@@ -120,30 +120,6 @@ impl StackEnvironment {
         ))
     }
 
-    /// Release the failed deployment's runtime pieces without touching the
-    /// shared Compose project: the cfgsync server is shut down (or marked
-    /// preserved) and the workspace directory is kept on disk because the
-    /// session's surviving participants still reference files inside it.
-    pub async fn release_to_session(mut self, reason: &str, preserve: bool) {
-        error!(
-            reason = reason,
-            "compose cluster failed; leaving the shared session to its other participants"
-        );
-        self.project.dump_logs().await;
-        match self.cfgsync_handle.take() {
-            Some(mut handle) if preserve => handle.mark_preserved(),
-            Some(mut handle) => handle.shutdown(),
-            None => {}
-        }
-        if let Some(workspace) = self.workspace.take() {
-            let path = workspace.into_inner().keep();
-            info!(
-                path = %path.display(),
-                "compose workspace kept for the surviving session participants"
-            );
-        }
-    }
-
     /// Dump logs and trigger cleanup after failure.
     pub async fn fail(&mut self, reason: &str) {
         error!(

@@ -37,8 +37,8 @@ use crate::{
     errors::{ComposeRunnerError, ConfigError, StackReadinessError},
     infrastructure::{
         environment::{
-            StackEnvironment, allocate_cfgsync_port, ensure_compose_images_present,
-            start_cfgsync_stage, update_cfgsync_logged,
+            allocate_cfgsync_port, ensure_compose_images_present, start_cfgsync_stage,
+            update_cfgsync_logged,
         },
         ports::{
             HostPortMapping, compose_runner_host, discover_host_ports, with_service_namespace,
@@ -47,7 +47,7 @@ use crate::{
         template::write_compose_file,
     },
     lifecycle::{
-        cleanup::{ClusterServicesCleanup, preserve_decision, preserve_requested},
+        cleanup::{ClusterServicesCleanup, preserve_requested},
         readiness::{
             build_node_clients_with_ports, ensure_nodes_ready_with_ports,
             maybe_sleep_for_disabled_readiness,
@@ -55,7 +55,7 @@ use crate::{
     },
     session::{
         ClusterKey, ClusterServices, ComposeSession, ComposeSessionCleanup, RunnerPorts,
-        SessionPreservation, session_descriptor, strip_cluster_services,
+        SessionPreservation, session_descriptor,
     },
 };
 
@@ -278,8 +278,9 @@ fn ensure_session_accepts_cluster(
 /// Establishes the shared Compose session with the cluster as its first
 /// resource; the returned cleanup guard owns whole-project teardown.
 ///
-/// The provisioner mutation lock is held while shared state is created and
-/// released before the readiness waits.
+/// The provisioner mutation lock is held for the whole attempt, readiness
+/// included, and the session is stored only once the cluster is up — so no
+/// other participant can ever observe a half-provisioned session.
 #[expect(
     clippy::too_many_arguments,
     reason = "session establishment needs the full provisioning context"
@@ -306,18 +307,8 @@ async fn start_shared_session<E: ComposeDeployEnv>(
     if policy.cleanup_policy.preserve_artifacts {
         preserve.request();
     }
-    provisioner.store_session(ComposeSession {
-        project: project.clone(),
-        services: Vec::new(),
-        runner_ports: RunnerPorts::default(),
-        clusters: BTreeMap::from([(key.clone(), cluster.clone())]),
-        poisoned: false,
-        generation,
-        epoch: generation,
-        preserve: preserve.clone(),
-    });
-    drop(mutation);
 
+    let mut environment = environment;
     let deployed = match resolve_cluster_nodes::<E>(
         &project,
         deployment,
@@ -328,29 +319,17 @@ async fn start_shared_session<E: ComposeDeployEnv>(
     {
         Ok(deployed) => deployed,
         Err(error) => {
-            handle_owner_start_failure(
-                provisioner,
-                key,
-                &cluster,
-                generation,
-                environment,
-                "compose cluster runtime resolution failed",
-            )
-            .await;
+            environment
+                .fail("compose cluster runtime resolution failed")
+                .await;
             return Err(error);
         }
     };
 
     if let Err(error) = append_external_clients::<E>(&deployed.node_clients, external) {
-        handle_owner_start_failure(
-            provisioner,
-            key,
-            &cluster,
-            generation,
-            environment,
-            "failed to build external node clients",
-        )
-        .await;
+        environment
+            .fail("failed to build external node clients")
+            .await;
         return Err(error);
     }
 
@@ -358,15 +337,20 @@ async fn start_shared_session<E: ComposeDeployEnv>(
     log_profiling_urls(&deployed.host, &deployed.host_ports);
     maybe_print_endpoints(observability, &deployed.host, &deployed.host_ports);
 
-    let cleanup = match environment.into_cleanup() {
-        Ok(cleanup) => cleanup
-            .with_preserve_artifacts(policy.cleanup_policy.preserve_artifacts)
-            .with_session_preservation(preserve),
-        Err(error) => {
-            abandon_new_session(provisioner, generation, generation).await;
-            return Err(error);
-        }
-    };
+    let cleanup = environment
+        .into_cleanup()?
+        .with_preserve_artifacts(policy.cleanup_policy.preserve_artifacts)
+        .with_session_preservation(preserve.clone());
+    provisioner.store_session(ComposeSession {
+        project: project.clone(),
+        services: Vec::new(),
+        runner_ports: RunnerPorts::default(),
+        clusters: BTreeMap::from([(key.clone(), cluster.clone())]),
+        poisoned: false,
+        generation,
+        preserve,
+    });
+    drop(mutation);
     let guard = ComposeSessionCleanup {
         inner: Arc::clone(&provisioner.inner),
         cleanup: Some(cleanup),
@@ -384,156 +368,12 @@ async fn start_shared_session<E: ComposeDeployEnv>(
         Box::new(guard),
     ))
 }
-
-/// Drops a freshly established session again after a failed start, unless a
-/// newer session has replaced it or another participant has extended it in
-/// the meantime.
-async fn abandon_new_session(provisioner: &ComposeProvisioner, generation: u64, epoch: u64) {
-    let _mutation = provisioner.inner.mutation.lock().await;
-    let mut slot = provisioner
-        .inner
-        .session
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if slot
-        .as_ref()
-        .is_some_and(|session| session.generation == generation && session.epoch == epoch)
-    {
-        *slot = None;
-    }
-}
-
-/// How a failed session owner should unwind, decided from the live session
-/// slot under the provisioner mutation lock.
-#[derive(Debug, Eq, PartialEq)]
-enum OwnerStartFailureAction {
-    /// The owner is the sole participant: clear the slot and tear the
-    /// project down.
-    TeardownSession,
-    /// Other participants joined while the owner waited for readiness:
-    /// remove only the owner's own cluster services and leave the session
-    /// live.
-    StripOwnerServices,
-    /// The slot holds a different session (or none): only fail the owner's
-    /// own deployment without touching the slot.
-    LeaveSession,
-}
-
-fn owner_start_failure_action(
-    session: Option<&ComposeSession>,
-    generation: u64,
-    key: &ClusterKey,
-) -> OwnerStartFailureAction {
-    match session {
-        Some(session) if session.generation == generation => {
-            if session.has_other_participants(key) {
-                OwnerStartFailureAction::StripOwnerServices
-            } else {
-                OwnerStartFailureAction::TeardownSession
-            }
-        }
-        _ => OwnerStartFailureAction::LeaveSession,
-    }
-}
-
-/// Unwinds a session owner whose readiness wait failed after the mutation
-/// lock was released: when other participants extended the session in the
-/// meantime, only the owner's cluster services are removed and the session
-/// stays live for them.
-async fn handle_owner_start_failure(
-    provisioner: &ComposeProvisioner,
-    key: &ClusterKey,
-    cluster: &ClusterServices,
-    generation: u64,
-    mut environment: StackEnvironment,
-    reason: &str,
-) {
-    let _mutation = provisioner.inner.mutation.lock().await;
-    let (action, preserve) = {
-        let slot = provisioner
-            .inner
-            .session
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        (
-            owner_start_failure_action(slot.as_ref(), generation, key),
-            slot.as_ref().map(|session| session.preserve.clone()),
-        )
-    };
-
-    match action {
-        OwnerStartFailureAction::TeardownSession => {
-            {
-                let mut slot = provisioner
-                    .inner
-                    .session
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if slot
-                    .as_ref()
-                    .is_some_and(|session| session.generation == generation)
-                {
-                    *slot = None;
-                }
-            }
-            environment.fail(reason).await;
-        }
-        OwnerStartFailureAction::StripOwnerServices => {
-            if preserve_decision(false, preserve.as_ref()) {
-                poison_session(provisioner, generation);
-                environment.release_to_session(reason, true).await;
-                return;
-            }
-            let restored = {
-                let mut slot = provisioner
-                    .inner
-                    .session
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                strip_cluster_services(&mut slot, key, generation)
-            };
-            let service_names = cluster
-                .service_names()
-                .map(str::to_owned)
-                .collect::<Vec<_>>();
-            let project = environment.project().clone();
-            let removal = async {
-                let _project_access = project.lock_mutation().await;
-                project
-                    .remove_services_unlocked(&service_names)
-                    .await
-                    .map_err(ComposeRunnerError::Compose)?;
-                match restored {
-                    Some(Ok(descriptor)) => write_compose_file(&descriptor, project.compose_file())
-                        .map_err(|source| {
-                            ComposeRunnerError::Config(ConfigError::Template { source })
-                        }),
-                    Some(Err(source)) => Err(ComposeRunnerError::Config(ConfigError::Descriptor {
-                        source,
-                    })),
-                    None => Ok(()),
-                }
-            }
-            .await;
-            if let Err(rollback) = removal {
-                warn!(
-                    error = %rollback,
-                    "failed to remove the failed owner cluster from the shared session"
-                );
-                poison_session(provisioner, generation);
-            }
-            environment.release_to_session(reason, false).await;
-        }
-        OwnerStartFailureAction::LeaveSession => environment.fail(reason).await,
-    }
-}
-
 /// Extends an established shared session with the cluster's services; failed
 /// extensions roll back without touching running container services.
 ///
-/// The caller-held provisioner mutation lock covers the compose-file rewrite,
-/// service start, and session commit, and is released before the readiness
-/// waits.
+/// The caller-held provisioner mutation lock is held for the whole attempt,
+/// readiness included, and the extension is committed to the session model
+/// only once the cluster is up.
 #[expect(
     clippy::too_many_arguments,
     reason = "session extension needs the full provisioning context"
@@ -611,6 +451,43 @@ async fn extend_shared_session<E: ComposeDeployEnv>(
             &session,
             &service_names,
             &mut cfgsync_handle,
+            policy.cleanup_policy.preserve_artifacts,
+            failure,
+        )
+        .await);
+    }
+
+    let deployed = match resolve_cluster_nodes::<E>(
+        &session.project,
+        deployment,
+        policy.readiness_enabled,
+        policy.readiness_requirement,
+    )
+    .await
+    {
+        Ok(deployed) => deployed,
+        Err(failure) => {
+            session.project.dump_logs().await;
+            return Err(rolled_back_failure(
+                provisioner,
+                &session,
+                &service_names,
+                &mut cfgsync_handle,
+                policy.cleanup_policy.preserve_artifacts,
+                failure,
+            )
+            .await);
+        }
+    };
+
+    if let Err(failure) = append_external_clients::<E>(&deployed.node_clients, external) {
+        session.project.dump_logs().await;
+        return Err(rolled_back_failure(
+            provisioner,
+            &session,
+            &service_names,
+            &mut cfgsync_handle,
+            policy.cleanup_policy.preserve_artifacts,
             failure,
         )
         .await);
@@ -624,46 +501,9 @@ async fn extend_shared_session<E: ComposeDeployEnv>(
     provisioner.store_session(ComposeSession {
         clusters,
         poisoned: false,
-        epoch: provisioner.next_generation(),
         ..session.clone()
     });
     drop(mutation);
-
-    let deployed = match resolve_cluster_nodes::<E>(
-        &session.project,
-        deployment,
-        policy.readiness_enabled,
-        policy.readiness_requirement,
-    )
-    .await
-    {
-        Ok(deployed) => deployed,
-        Err(failure) => {
-            session.project.dump_logs().await;
-            return Err(rolled_back_committed_failure(
-                provisioner,
-                key,
-                &session,
-                &service_names,
-                &mut cfgsync_handle,
-                failure,
-            )
-            .await);
-        }
-    };
-
-    if let Err(failure) = append_external_clients::<E>(&deployed.node_clients, external) {
-        session.project.dump_logs().await;
-        return Err(rolled_back_committed_failure(
-            provisioner,
-            key,
-            &session,
-            &service_names,
-            &mut cfgsync_handle,
-            failure,
-        )
-        .await);
-    }
 
     log_observability_endpoints(observability);
     log_profiling_urls(&deployed.host, &deployed.host_ports);
@@ -743,9 +583,10 @@ async fn rolled_back_failure(
     session: &ComposeSession,
     service_names: &[String],
     cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
+    policy_preserve: bool,
     failure: ComposeRunnerError,
 ) -> ComposeRunnerError {
-    if rollback_preserves(provisioner, session, cfgsync_handle) {
+    if rollback_preserves(provisioner, session, cfgsync_handle, policy_preserve) {
         return failure;
     }
 
@@ -763,60 +604,18 @@ async fn rolled_back_failure(
     finish_rollback(provisioner, session.generation, rollback, failure)
 }
 
-/// Rolls back an extension that was already committed to the shared session
-/// model; reacquires the provisioner mutation lock the caller released for
-/// the readiness waits.
-async fn rolled_back_committed_failure(
-    provisioner: &ComposeProvisioner,
-    key: &ClusterKey,
-    session: &ComposeSession,
-    service_names: &[String],
-    cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
-    failure: ComposeRunnerError,
-) -> ComposeRunnerError {
-    let _mutation = provisioner.inner.mutation.lock().await;
-    if rollback_preserves(provisioner, session, cfgsync_handle) {
-        return failure;
-    }
-
-    let rollback = async {
-        let restored = {
-            let mut slot = provisioner
-                .inner
-                .session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            strip_cluster_services(&mut slot, key, session.generation)
-        };
-        let _project_access = session.project.lock_mutation().await;
-        session
-            .project
-            .remove_services_unlocked(service_names)
-            .await
-            .map_err(ComposeRunnerError::Compose)?;
-        match restored {
-            Some(Ok(descriptor)) => write_compose_file(&descriptor, session.project.compose_file())
-                .map_err(|source| ComposeRunnerError::Config(ConfigError::Template { source })),
-            Some(Err(source)) => Err(ComposeRunnerError::Config(ConfigError::Descriptor {
-                source,
-            })),
-            None => Ok(()),
-        }
-    }
-    .await;
-
-    finish_rollback(provisioner, session.generation, rollback, failure)
-}
-
 /// Applies the preservation policy before any rollback teardown: when
-/// preservation is requested the cfgsync server is marked preserved instead
-/// of being shut down and the session is poisoned in place.
+/// preservation is requested — by the environment, any session participant,
+/// or the failing request's own cleanup policy — the cfgsync server is
+/// marked preserved instead of being shut down and the session is poisoned
+/// in place.
 fn rollback_preserves(
     provisioner: &ComposeProvisioner,
     session: &ComposeSession,
     cfgsync_handle: &mut Option<Box<dyn ConfigServerHandle>>,
+    policy_preserve: bool,
 ) -> bool {
-    if preserve_requested() || session.preserve.requested() {
+    if policy_preserve || preserve_requested() || session.preserve.requested() {
         if let Some(handle) = cfgsync_handle.as_deref_mut() {
             handle.mark_preserved();
         }
@@ -1115,9 +914,8 @@ mod tests {
     };
 
     use super::{
-        OwnerStartFailureAction, cluster_key, ensure_cluster_names_available,
-        ensure_session_accepts_cluster, owner_start_failure_action, poison_session,
-        provisioner_error, session_cfgsync_path,
+        cluster_key, ensure_cluster_names_available, ensure_session_accepts_cluster,
+        poison_session, provisioner_error, session_cfgsync_path,
     };
     use crate::{
         ComposeProvisioner,
@@ -1184,7 +982,6 @@ mod tests {
             clusters: BTreeMap::new(),
             poisoned: false,
             generation: 1,
-            epoch: 1,
             preserve: SessionPreservation::default(),
         }
     }
@@ -1432,67 +1229,6 @@ mod tests {
             named_key("alpha").cfgsync_file_name(),
             "cfgsync-alpha.yaml",
             "owners derive their workspace cfgsync file from the same key mapping"
-        );
-    }
-
-    #[test]
-    fn owner_failure_with_other_participants_strips_only_its_own_services() {
-        let mut session = session_with_containers(&[]);
-        session.clusters.insert(
-            named_key("alpha"),
-            ClusterServices::new(vec![cluster_node("alpha-node-0")]),
-        );
-        session.clusters.insert(
-            named_key("beta"),
-            ClusterServices::new(vec![cluster_node("beta-node-0")]),
-        );
-
-        assert_eq!(
-            owner_start_failure_action(Some(&session), 1, &named_key("alpha")),
-            OwnerStartFailureAction::StripOwnerServices
-        );
-    }
-
-    #[test]
-    fn owner_failure_with_container_participants_strips_only_its_own_services() {
-        let mut session = session_with_containers(&["worker"]);
-        session.clusters.insert(
-            named_key("alpha"),
-            ClusterServices::new(vec![cluster_node("alpha-node-0")]),
-        );
-
-        assert_eq!(
-            owner_start_failure_action(Some(&session), 1, &named_key("alpha")),
-            OwnerStartFailureAction::StripOwnerServices
-        );
-    }
-
-    #[test]
-    fn sole_owner_failure_tears_the_session_down() {
-        let mut session = session_with_containers(&[]);
-        session.clusters.insert(
-            named_key("alpha"),
-            ClusterServices::new(vec![cluster_node("alpha-node-0")]),
-        );
-
-        assert_eq!(
-            owner_start_failure_action(Some(&session), 1, &named_key("alpha")),
-            OwnerStartFailureAction::TeardownSession
-        );
-    }
-
-    #[test]
-    fn owner_failure_leaves_an_unrelated_session_alone() {
-        let mut session = session_with_containers(&[]);
-        session.generation = 2;
-
-        assert_eq!(
-            owner_start_failure_action(Some(&session), 1, &named_key("alpha")),
-            OwnerStartFailureAction::LeaveSession
-        );
-        assert_eq!(
-            owner_start_failure_action(None, 1, &named_key("alpha")),
-            OwnerStartFailureAction::LeaveSession
         );
     }
 

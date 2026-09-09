@@ -218,10 +218,6 @@ impl CleanupGuard for ClusterServicesCleanup {
             return;
         }
 
-        if let Some(mut cfgsync) = self.cfgsync.take() {
-            cfgsync.shutdown();
-        }
-
         if let Err(err) = run_cluster_removal_blocking(
             Arc::clone(&self.inner),
             self.project.clone(),
@@ -235,13 +231,19 @@ impl CleanupGuard for ClusterServicesCleanup {
                  session model"
             );
         }
+
+        if let Some(mut cfgsync) = self.cfgsync.take() {
+            cfgsync.shutdown();
+        }
     }
 }
 
 /// Removes one cluster's services and rewrites the shared compose file while
 /// holding the provisioner mutation lock, so the remainder descriptor cannot
 /// race a concurrent extension commit; the session snapshot is taken (and its
-/// generation re-checked) only after the lock is acquired.
+/// generation re-checked) only after the lock is acquired. A remainder
+/// descriptor that fails to build aborts the removal before any mutation, so
+/// docker state, the compose file, and the session model stay consistent.
 fn run_cluster_removal_blocking(
     inner: Arc<ComposeProvisionerInner>,
     project: ComposeProject,
@@ -277,11 +279,10 @@ fn run_cluster_removal_blocking(
                         Some(session) => match descriptor_without_cluster(session, &key) {
                             Ok(descriptor) => Some(descriptor),
                             Err(source) => {
-                                warn!(
-                                    error = %source,
-                                    "failed to rebuild the compose descriptor without the cluster"
-                                );
-                                None
+                                return Err(ComposeCommandError::Spawn {
+                                    command: "rebuild compose descriptor without cluster".into(),
+                                    source: io::Error::other(source.to_string()),
+                                });
                             }
                         },
                         None => None,
@@ -384,7 +385,6 @@ mod tests {
             clusters,
             poisoned: false,
             generation,
-            epoch: generation,
             preserve: SessionPreservation::default(),
         }
     }

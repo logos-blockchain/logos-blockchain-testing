@@ -243,7 +243,6 @@ impl ComposeProvisioner {
             clusters: BTreeMap::new(),
             poisoned: false,
             generation,
-            epoch: generation,
             preserve,
         });
 
@@ -358,7 +357,6 @@ impl ComposeProvisioner {
                 services,
                 runner_ports,
                 poisoned: false,
-                epoch: self.next_generation(),
                 ..session
             });
 
@@ -993,7 +991,6 @@ mod tests {
             clusters: std::collections::BTreeMap::new(),
             poisoned: false,
             generation: 1,
-            epoch: 1,
             preserve: SessionPreservation::default(),
         };
 

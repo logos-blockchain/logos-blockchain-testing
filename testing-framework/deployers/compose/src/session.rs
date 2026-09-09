@@ -140,9 +140,6 @@ pub(crate) struct ComposeSession {
     pub(crate) clusters: BTreeMap<ClusterKey, ClusterServices>,
     pub(crate) poisoned: bool,
     pub(crate) generation: u64,
-    /// Monotonic mutation counter bumped on every committed extension so
-    /// snapshot-based paths can detect that the session gained participants.
-    pub(crate) epoch: u64,
     pub(crate) preserve: SessionPreservation,
 }
 
@@ -153,12 +150,6 @@ impl ComposeSession {
                 .values()
                 .flat_map(ClusterServices::service_names),
         )
-    }
-
-    /// Reports whether the session hosts any participant besides the given
-    /// cluster.
-    pub(crate) fn has_other_participants(&self, key: &ClusterKey) -> bool {
-        !self.services.is_empty() || self.clusters.keys().any(|existing| existing != key)
     }
 }
 
@@ -186,33 +177,6 @@ pub(crate) fn descriptor_without_cluster(
     let mut clusters = session.clusters.clone();
     clusters.remove(key);
     session_descriptor(&clusters, &session.services, &session.runner_ports)
-}
-
-/// Drops one cluster's services from the session model and returns the
-/// descriptor that should be restored on disk for the remaining services.
-///
-/// A stale request from a dead session (mismatched generation) is a no-op so
-/// it cannot strip services from an unrelated newer session.
-pub(crate) fn strip_cluster_services(
-    session: &mut Option<ComposeSession>,
-    key: &ClusterKey,
-    expected_generation: u64,
-) -> Option<Result<ComposeDescriptor, DynError>> {
-    let session = session.as_mut()?;
-    if session.generation != expected_generation {
-        warn!(
-            expected_generation,
-            live_generation = session.generation,
-            "stale compose session strip request; leaving the live session untouched"
-        );
-        return None;
-    }
-    session.clusters.remove(key);
-    Some(session_descriptor(
-        &session.clusters,
-        &session.services,
-        &session.runner_ports,
-    ))
 }
 
 /// Clears the shared session and tears down the whole Compose project.
@@ -258,7 +222,6 @@ mod tests {
     use super::{
         ClusterKey, ClusterServices, ComposeSession, ComposeSessionCleanup, RunnerPorts,
         SessionPreservation, descriptor_without_cluster, session_descriptor,
-        strip_cluster_services,
     };
     use crate::{
         ComposeProvisioner, descriptor::NodeDescriptor, infrastructure::project::ComposeProject,
@@ -304,7 +267,6 @@ mod tests {
             clusters,
             poisoned: false,
             generation: 1,
-            epoch: 1,
             preserve: SessionPreservation::default(),
         }
     }
@@ -335,64 +297,12 @@ mod tests {
     }
 
     #[test]
-    fn stripping_one_cluster_keeps_other_services_in_the_model() {
-        let mut slot = Some(session());
-
-        let restored = strip_cluster_services(&mut slot, &ClusterKey::Unnamed, 1)
-            .expect("active session should produce a restore descriptor")
-            .expect("remaining descriptor should render");
-
-        let names: Vec<_> = restored.nodes().iter().map(NodeDescriptor::name).collect();
-        assert_eq!(names, ["alpha-node-0", "worker"]);
-        let session = slot.expect("session should stay active");
-        assert_eq!(session.clusters.len(), 1);
-        assert!(
-            session
-                .clusters
-                .contains_key(&ClusterKey::Named("alpha".to_owned()))
-        );
-        assert_eq!(session.services.len(), 1);
-    }
-
-    #[test]
-    fn stripping_without_a_session_is_a_no_op() {
-        let mut slot = None;
-
-        assert!(strip_cluster_services(&mut slot, &ClusterKey::Unnamed, 1).is_none());
-    }
-
-    #[test]
-    fn stripping_with_a_stale_generation_leaves_a_newer_session_untouched() {
-        let mut newer = session();
-        newer.generation = 2;
-        let mut slot = Some(newer);
-
-        assert!(strip_cluster_services(&mut slot, &ClusterKey::Unnamed, 1).is_none());
-        let session = slot.expect("newer session must survive a stale strip");
-        assert!(session.clusters.contains_key(&ClusterKey::Unnamed));
-    }
-
-    #[test]
     fn cluster_keys_map_to_distinct_cfgsync_files() {
         assert_eq!(ClusterKey::Unnamed.cfgsync_file_name(), "cfgsync.yaml");
         assert_eq!(
             ClusterKey::Named("alpha".to_owned()).cfgsync_file_name(),
             "cfgsync-alpha.yaml"
         );
-    }
-
-    #[test]
-    fn other_participants_are_detected_across_service_kinds() {
-        let session = session();
-        let alpha = ClusterKey::Named("alpha".to_owned());
-
-        assert!(session.has_other_participants(&alpha));
-
-        let mut solo = session.clone();
-        solo.services.clear();
-        solo.clusters.retain(|key, _| *key == alpha);
-        assert!(!solo.has_other_participants(&alpha));
-        assert!(solo.has_other_participants(&ClusterKey::Unnamed));
     }
 
     #[test]
