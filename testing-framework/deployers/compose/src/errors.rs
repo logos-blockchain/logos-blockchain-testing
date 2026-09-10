@@ -31,8 +31,6 @@ pub enum ComposeRunnerError {
     NodeClients(#[from] NodeClientError),
     #[error(transparent)]
     Telemetry(#[from] MetricsError),
-    #[error("observation runtime requires at least one node client")]
-    ObservationMissing,
     #[error("runtime preflight failed: no node clients available")]
     RuntimePreflight,
     #[error("runtime extension setup failed: {source}")]
@@ -45,11 +43,6 @@ pub enum ComposeRunnerError {
         #[source]
         source: DynError,
     },
-    #[error("failed to start observation runtime: {source}")]
-    ObservationRuntime {
-        #[source]
-        source: DynError,
-    },
     #[error("docker image '{image}' is not available; build or load it locally")]
     MissingImage { image: String },
     #[error("failed to prepare docker image: {source}")]
@@ -57,8 +50,44 @@ pub enum ComposeRunnerError {
         #[source]
         source: anyhow::Error,
     },
+    #[error("compose provisioner does not support on-demand start")]
+    OnDemandUnsupported,
+    #[error(
+        "compose session already hosts a managed cluster named '{name}'; pick a distinct name \
+         for each cluster"
+    )]
+    ClusterAlreadyProvisioned { name: String },
+    #[error(
+        "compose session already hosts an unnamed managed cluster; name clusters via \
+         `ClusterRequest::with_name` to deploy several in one session"
+    )]
+    UnnamedClusterAlreadyProvisioned,
+    #[error(
+        "invalid compose cluster name '{name}'; use a short lowercase DNS label (letters, \
+         digits, and dashes)"
+    )]
+    InvalidClusterName { name: String },
+    #[error("service name '{name}' is already provisioned in the shared compose session")]
+    ServiceNameConflict { name: String },
     #[error("internal invariant violated: {message}")]
     InternalInvariant { message: &'static str },
+}
+
+impl ComposeRunnerError {
+    /// Returns whether the error is terminal for a provisioning attempt, so
+    /// retrying with backoff cannot succeed and would only mask the root
+    /// cause.
+    #[must_use]
+    pub const fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            Self::ClusterAlreadyProvisioned { .. }
+                | Self::UnnamedClusterAlreadyProvisioned
+                | Self::InvalidClusterName { .. }
+                | Self::ServiceNameConflict { .. }
+                | Self::OnDemandUnsupported
+        )
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

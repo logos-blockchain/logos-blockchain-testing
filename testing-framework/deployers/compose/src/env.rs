@@ -29,7 +29,7 @@ use crate::{
     },
     docker::config_server::DockerConfigServerSpec,
     infrastructure::ports::{
-        HostPortMapping, NodeContainerPorts, NodeHostPorts, compose_runner_host,
+        HostPortMapping, NodeContainerPorts, NodeHostPorts, compose_runner_host, node_identifier,
     },
 };
 
@@ -75,10 +75,15 @@ pub enum ComposeNodeConfigFileName {
 
 impl ComposeNodeConfigFileName {
     /// Resolves the config file name for one node index.
+    ///
+    /// Fixed-extension names derive from [`node_identifier`], so they carry
+    /// the cluster namespace whenever one is active.
     #[must_use]
     pub fn resolve(&self, index: usize) -> String {
         match self {
-            Self::FixedExtension(extension) => format!("node-{index}.{extension}"),
+            Self::FixedExtension(extension) => {
+                format!("{}.{extension}", node_identifier(index))
+            }
             Self::Custom(build) => build(index),
         }
     }
@@ -99,7 +104,7 @@ pub trait ComposeDeployEnv: Application + Sized {
 
     /// Returns the static config file name used for one node.
     fn static_node_config_file_name(index: usize) -> String {
-        format!("node-{index}.yaml")
+        format!("{}.yaml", node_identifier(index))
     }
 
     /// Returns the runtime spec for one loopback node when using the standard

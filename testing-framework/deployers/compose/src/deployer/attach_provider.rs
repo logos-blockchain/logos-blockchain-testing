@@ -16,12 +16,12 @@ use crate::{
     env::{ComposeDeployEnv, readiness_http_path},
 };
 
-pub(super) struct ComposeAttachProvider<E: ComposeDeployEnv> {
+pub(crate) struct ComposeAttachProvider<E: ComposeDeployEnv> {
     host: String,
     _env: PhantomData<E>,
 }
 
-pub(super) struct ComposeAttachedClusterWait<E: ComposeDeployEnv> {
+pub(crate) struct ComposeAttachedClusterWait<E: ComposeDeployEnv> {
     host: String,
     source: ExistingCluster,
     _env: PhantomData<E>,
@@ -34,7 +34,7 @@ enum ComposeAttachDiscoveryError {
 }
 
 impl<E: ComposeDeployEnv> ComposeAttachProvider<E> {
-    pub(super) fn new(host: String) -> Self {
+    pub(crate) fn new(host: String) -> Self {
         Self {
             host,
             _env: PhantomData,
@@ -43,7 +43,7 @@ impl<E: ComposeDeployEnv> ComposeAttachProvider<E> {
 }
 
 impl<E: ComposeDeployEnv> ComposeAttachedClusterWait<E> {
-    pub(super) fn try_new(host: String, source: &ExistingCluster) -> Result<Self, DynError> {
+    pub(crate) fn try_new(host: String, source: &ExistingCluster) -> Result<Self, DynError> {
         let _ = compose_wait_request(source)?;
 
         Ok(Self {

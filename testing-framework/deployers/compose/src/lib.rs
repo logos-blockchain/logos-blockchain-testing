@@ -1,3 +1,4 @@
+mod container_stack;
 pub mod deployer;
 pub mod descriptor;
 pub mod docker;
@@ -5,6 +6,8 @@ pub mod env;
 pub mod errors;
 pub mod infrastructure;
 pub mod lifecycle;
+mod provisioner;
+mod session;
 
 pub use deployer::{ComposeDeployer, ComposeDeploymentMetadata};
 pub use descriptor::{
@@ -30,3 +33,4 @@ pub use infrastructure::{
     ports::{HostPortMapping, NodeHostPorts, compose_runner_host, node_identifier},
     template::{TemplateError, repository_root, write_compose_file},
 };
+pub use session::ComposeProvisioner;

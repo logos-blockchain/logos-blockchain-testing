@@ -13,12 +13,25 @@ pub use node::{
 #[derive(Clone, Debug, Serialize)]
 pub struct ComposeDescriptor {
     nodes: Vec<NodeDescriptor>,
+    external_network: Option<String>,
 }
 
 impl ComposeDescriptor {
     #[must_use]
     pub fn new(nodes: Vec<NodeDescriptor>) -> Self {
-        Self { nodes }
+        Self {
+            nodes,
+            external_network: None,
+        }
+    }
+
+    /// Attaches every service to the given pre-existing Docker network in
+    /// addition to the project's default network, so services from separate
+    /// compose projects reach each other by service name.
+    #[must_use]
+    pub fn with_external_network(mut self, name: impl Into<String>) -> Self {
+        self.external_network = Some(name.into());
+        self
     }
 
     #[must_use]

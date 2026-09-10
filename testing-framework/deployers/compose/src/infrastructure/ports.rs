@@ -5,7 +5,7 @@ use testing_framework_core::adjust_timeout;
 use tokio::{process::Command, time::timeout};
 use tracing::{debug, info};
 
-use crate::{errors::ComposeRunnerError, infrastructure::environment::StackEnvironment};
+use crate::{errors::ComposeRunnerError, infrastructure::project::ComposeProject};
 
 const COMPOSE_PORT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -38,19 +38,19 @@ impl HostPortMapping {
 }
 
 /// Resolve host ports for all nodes from docker compose.
-pub async fn discover_host_ports(
-    environment: &StackEnvironment,
+pub(crate) async fn discover_host_ports(
+    project: &ComposeProject,
     nodes: &[NodeContainerPorts],
 ) -> Result<HostPortMapping, ComposeRunnerError> {
     debug!(
-        compose_file = %environment.compose_path().display(),
-        project = environment.project_name(),
+        compose_file = %project.compose_file().display(),
+        project = project.name(),
         nodes = nodes.len(),
         "resolving compose host ports"
     );
     let mut host_nodes = Vec::with_capacity(nodes.len());
     for node in nodes {
-        host_nodes.push(resolve_node_ports(environment, node).await?);
+        host_nodes.push(resolve_node_ports(project, node).await?);
     }
 
     let mapping = HostPortMapping { nodes: host_nodes };
@@ -64,29 +64,14 @@ pub async fn discover_host_ports(
 }
 
 async fn resolve_node_ports(
-    environment: &StackEnvironment,
+    project: &ComposeProject,
     node: &NodeContainerPorts,
 ) -> Result<NodeHostPorts, ComposeRunnerError> {
     let service = node_identifier(node.index);
-    let api = resolve_service_port(environment, &service, node.api).await?;
-    let testing = resolve_service_port(environment, &service, node.testing).await?;
+    let api = project.resolve_service_port(&service, node.api).await?;
+    let testing = project.resolve_service_port(&service, node.testing).await?;
 
     Ok(NodeHostPorts { api, testing })
-}
-
-async fn resolve_service_port(
-    environment: &StackEnvironment,
-    service: &str,
-    container_port: u16,
-) -> Result<u16, ComposeRunnerError> {
-    resolve_service_port_with(
-        environment.compose_path(),
-        environment.project_name(),
-        environment.root(),
-        service,
-        container_port,
-    )
-    .await
 }
 
 pub(crate) async fn resolve_service_port_with(
@@ -102,8 +87,35 @@ pub(crate) async fn resolve_service_port_with(
     parse_port_from_output(service, container_port, &output)
 }
 
+tokio::task_local! {
+    /// Cluster namespace applied to node identifiers for the duration of one
+    /// managed provisioning attempt.
+    static SERVICE_NAMESPACE: Option<String>;
+}
+
+/// Runs `future` with every [`node_identifier`] call namespaced by the given
+/// cluster name; `None` keeps the plain `node-{index}` convention.
+pub(crate) async fn with_service_namespace<F: Future>(
+    namespace: Option<String>,
+    future: F,
+) -> F::Output {
+    SERVICE_NAMESPACE.scope(namespace, future).await
+}
+
+fn service_namespace() -> Option<String> {
+    SERVICE_NAMESPACE.try_with(Clone::clone).ok().flatten()
+}
+
+/// Returns the compose service name for one managed node.
+///
+/// Within a named-cluster provisioning attempt the identifier carries the
+/// cluster namespace (for example `alpha-node-0`), so descriptors, config
+/// hostnames, and port discovery agree on the same service names.
 pub fn node_identifier(index: usize) -> String {
-    format!("node-{index}")
+    service_namespace().map_or_else(
+        || format!("node-{index}"),
+        |namespace| format!("{namespace}-node-{index}"),
+    )
 }
 
 pub fn compose_runner_host() -> String {
@@ -195,4 +207,25 @@ fn parse_port_line(line: &str) -> Option<u16> {
     }
 
     line.rsplit(':').next()?.trim().parse::<u16>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{node_identifier, with_service_namespace};
+
+    #[test]
+    fn node_identifier_defaults_to_plain_names() {
+        assert_eq!(node_identifier(2), "node-2");
+    }
+
+    #[tokio::test]
+    async fn node_identifier_carries_the_cluster_namespace() {
+        let namespaced =
+            with_service_namespace(Some("alpha".to_owned()), async { node_identifier(0) }).await;
+        let plain = with_service_namespace(None, async { node_identifier(0) }).await;
+
+        assert_eq!(namespaced, "alpha-node-0");
+        assert_eq!(plain, "node-0");
+        assert_eq!(node_identifier(0), "node-0");
+    }
 }

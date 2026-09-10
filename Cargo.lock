@@ -1950,9 +1950,15 @@ dependencies = [
 name = "multi-app-e2e"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "multi-app-fixture",
+ "queue-node",
+ "queue-runtime-ext",
+ "serde",
  "testing-framework-app",
+ "testing-framework-container",
  "testing-framework-core",
+ "testing-framework-runner-compose",
  "tokio",
 ]
 
@@ -3748,11 +3754,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "reqwest",
  "serde",
  "serde_json",
  "tempfile",
  "tera",
+ "testing-framework-container",
  "testing-framework-core",
  "thiserror 2.0.18",
  "tokio",
