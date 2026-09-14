@@ -72,6 +72,8 @@ pub async fn docker_image_exists(image: &str) -> Result<bool, ComposeRunnerError
         Err(_) => Err(ComposeRunnerError::Compose(ComposeCommandError::Timeout {
             command: format!("docker image inspect {image}"),
             timeout: adjust_timeout(IMAGE_INSPECT_TIMEOUT),
+            stdout: String::new(),
+            stderr: String::new(),
         })),
     }
 }

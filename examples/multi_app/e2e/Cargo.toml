@@ -5,7 +5,13 @@ name              = "multi-app-e2e"
 version.workspace = true
 
 [dependencies]
-multi-app-fixture      = { path = "../fixture" }
-testing-framework-app  = { workspace = true }
-testing-framework-core = { workspace = true }
-tokio                  = { workspace = true, features = ["full"] }
+async-trait                      = { workspace = true }
+multi-app-fixture                = { path = "../fixture" }
+queue-node                       = { path = "../../queue/queue-node" }
+queue-runtime-ext                = { path = "../../queue/testing/integration" }
+serde                            = { features = ["derive"], workspace = true }
+testing-framework-app            = { workspace = true }
+testing-framework-container      = { workspace = true }
+testing-framework-core           = { workspace = true }
+testing-framework-runner-compose = { workspace = true }
+tokio                            = { workspace = true, features = ["full"] }

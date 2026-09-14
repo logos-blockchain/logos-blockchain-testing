@@ -20,14 +20,6 @@ where
     descriptors: &'a <E as Application>::Deployment,
 }
 
-pub struct DeploymentContext<'a, E>
-where
-    E: ComposeDeployEnv,
-{
-    pub descriptors: &'a <E as Application>::Deployment,
-    pub environment: StackEnvironment,
-}
-
 impl<'a, E> DeploymentSetup<'a, E>
 where
     E: ComposeDeployEnv,
@@ -48,22 +40,21 @@ where
     pub async fn prepare_workspace(
         self,
         observability: &ObservabilityInputs,
-    ) -> Result<DeploymentContext<'a, E>, ComposeRunnerError> {
+        cfgsync_file_name: &str,
+        external_network: Option<&str>,
+    ) -> Result<StackEnvironment, ComposeRunnerError> {
         let metrics_otlp_ingest_url = observability.metrics_otlp_ingest_url.as_ref();
         let environment = prepare_environment::<E>(
             self.descriptors,
             metrics_otlp_ingest_url,
-            "cfgsync.yaml",
-            None,
+            cfgsync_file_name,
+            external_network,
         )
         .await?;
 
         log_workspace_prepared(&environment);
 
-        Ok(DeploymentContext {
-            descriptors: self.descriptors,
-            environment,
-        })
+        Ok(environment)
     }
 }
 

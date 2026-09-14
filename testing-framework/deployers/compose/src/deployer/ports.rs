@@ -27,7 +27,7 @@ impl<E: ComposeDeployEnv> PortManager<E> {
             nodes = nodes.len(),
             "resolving host ports for compose services"
         );
-        let mapping = match discover_host_ports(environment, &nodes).await {
+        let mapping = match discover_host_ports(environment.project(), &nodes).await {
             Ok(mapping) => mapping,
             Err(error) => return Err(fail_host_port_resolution(environment, error).await),
         };

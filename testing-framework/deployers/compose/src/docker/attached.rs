@@ -50,9 +50,7 @@ pub async fn discover_service_container_id(
 }
 
 pub async fn discover_attachable_services(project: &str) -> Result<Vec<String>, DynError> {
-    let attachable_filter =
-        format!("label={ATTACHABLE_NODE_LABEL_KEY}={ATTACHABLE_NODE_LABEL_VALUE}");
-    let attachable = discover_services_with_filters(project, Some(&attachable_filter)).await?;
+    let attachable = discover_running_attachable_services(project).await?;
 
     if attachable.is_empty() {
         return Err(format!(
@@ -62,6 +60,21 @@ pub async fn discover_attachable_services(project: &str) -> Result<Vec<String>, 
     }
 
     Ok(attachable)
+}
+
+pub async fn discover_running_attachable_services(project: &str) -> Result<Vec<String>, DynError> {
+    let attachable_filter =
+        format!("label={ATTACHABLE_NODE_LABEL_KEY}={ATTACHABLE_NODE_LABEL_VALUE}");
+    discover_services_with_filters(project, Some(&attachable_filter), false).await
+}
+
+pub async fn discover_running_services(project: &str) -> Result<Vec<String>, DynError> {
+    discover_services_with_filters(project, None, false).await
+}
+
+/// Lists every compose service in the project, including stopped ones.
+pub async fn discover_all_services(project: &str) -> Result<Vec<String>, DynError> {
+    discover_services_with_filters(project, None, true).await
 }
 
 pub async fn inspect_mapped_tcp_ports(container_id: &str) -> Result<Vec<MappedTcpPort>, DynError> {
@@ -145,12 +158,14 @@ pub async fn run_docker_capture<const N: usize>(args: [&str; N]) -> Result<Strin
 async fn discover_services_with_filters(
     project: &str,
     extra_filter: Option<&str>,
+    include_stopped: bool,
 ) -> Result<Vec<String>, DynError> {
-    let mut args = vec![
-        "ps".to_owned(),
-        "--filter".to_owned(),
-        format!("label=com.docker.compose.project={project}"),
-    ];
+    let mut args = vec!["ps".to_owned()];
+    if include_stopped {
+        args.push("--all".to_owned());
+    }
+    args.push("--filter".to_owned());
+    args.push(format!("label=com.docker.compose.project={project}"));
 
     if let Some(filter) = extra_filter {
         args.push("--filter".to_owned());

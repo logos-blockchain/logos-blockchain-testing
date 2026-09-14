@@ -1,12 +1,11 @@
-use std::{env, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use reqwest::Url;
 use testing_framework_core::{
     scenario::{
         Application, ClusterControlProfile, ClusterMode, ClusterWaitHandle, DeploymentPolicy,
-        DynError, ExistingCluster, HttpReadinessRequirement, Metrics, NodeClients,
-        NodeControlHandle, ObservabilityCapabilityProvider, ObservabilityInputs,
-        RequiresNodeControl, Runner, Scenario,
+        DynError, ExistingCluster, Metrics, NodeClients, NodeControlHandle,
+        ObservabilityCapabilityProvider, ObservabilityInputs, RequiresNodeControl, Runner,
+        Scenario,
         internal::{
             ApplicationExternalProvider, RuntimeAssembly, SourceOrchestrationPlan, SourceProviders,
             StaticManagedProvider, build_source_orchestration_plan,
@@ -20,23 +19,19 @@ use tracing::info;
 use super::{
     ComposeDeployer, ComposeDeploymentMetadata,
     attach_provider::{ComposeAttachProvider, ComposeAttachedClusterWait},
-    clients::ClientBuilder,
     make_cleanup_guard,
-    ports::PortManager,
-    readiness::ReadinessChecker,
     setup::{DeploymentContext, DeploymentSetup},
 };
 use crate::{
     docker::control::{ComposeAttachedNodeControl, ComposeNodeControl},
     env::ComposeDeployEnv,
     errors::ComposeRunnerError,
-    infrastructure::{
-        environment::StackEnvironment,
-        ports::{HostPortMapping, compose_runner_host},
+    infrastructure::{environment::StackEnvironment, ports::compose_runner_host},
+    provisioner::{
+        DeployedNodes, log_observability_endpoints, log_profiling_urls, maybe_print_endpoints,
+        resolve_cluster_nodes,
     },
 };
-
-const PRINT_ENDPOINTS_ENV: &str = "TESTNET_PRINT_ENDPOINTS";
 
 pub struct DeploymentOrchestrator<E>
 where
@@ -97,7 +92,7 @@ where
         setup.validate_environment().await?;
 
         let observability = resolve_observability_inputs(scenario)?;
-        let mut prepared = prepare_deployment::<E>(setup, &observability).await?;
+        let prepared = prepare_deployment::<E>(setup, &observability).await?;
         let deployment_policy = scenario.deployment_policy();
         let readiness_enabled =
             self.deployer.readiness_checks && deployment_policy.readiness_enabled;
@@ -109,8 +104,8 @@ where
             &observability,
         );
 
-        let mut deployed = deploy_nodes::<E>(
-            &mut prepared.environment,
+        let mut deployed = resolve_cluster_nodes::<E>(
+            prepared.environment.project(),
             &prepared.descriptors,
             readiness_enabled,
             deployment_policy.readiness_requirement,
@@ -237,8 +232,9 @@ where
             .ok_or(ComposeRunnerError::InternalInvariant {
                 message: "existing-cluster node control requested outside existing-cluster mode",
             })?;
-        let node_control = ComposeAttachedNodeControl::try_from_existing_cluster(attach)
-            .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
+        let node_control =
+            ComposeAttachedNodeControl::try_from_existing_cluster(attach, Vec::new())
+                .map_err(|source| ComposeRunnerError::SourceOrchestration { source })?;
 
         Ok(Some(Arc::new(node_control) as Arc<dyn NodeControlHandle<E>>))
     }
@@ -314,8 +310,8 @@ where
     {
         Caps::REQUIRED.then(|| {
             Arc::new(ComposeNodeControl {
-                compose_file: environment.compose_path().to_path_buf(),
-                project_name: environment.project_name().to_owned(),
+                project: environment.project().clone(),
+                node_names: Vec::new(),
             }) as Arc<dyn NodeControlHandle<E>>
         })
     }
@@ -439,12 +435,6 @@ where
     ComposeDeploymentMetadata::from_existing_cluster(scenario.existing_cluster())
 }
 
-struct DeployedNodes<E: ComposeDeployEnv> {
-    host_ports: HostPortMapping,
-    host: String,
-    node_clients: NodeClients<E>,
-}
-
 struct ComposeRuntime<E: ComposeDeployEnv> {
     assembly: RuntimeAssembly<E>,
 }
@@ -491,35 +481,6 @@ async fn build_compose_runtime<E: ComposeDeployEnv, Caps>(
     Ok(ComposeRuntime { assembly })
 }
 
-async fn deploy_nodes<E: ComposeDeployEnv>(
-    environment: &mut StackEnvironment,
-    descriptors: &E::Deployment,
-    readiness_enabled: bool,
-    readiness_requirement: HttpReadinessRequirement,
-) -> Result<DeployedNodes<E>, ComposeRunnerError> {
-    let host_ports = PortManager::<E>::prepare(environment, descriptors).await?;
-    wait_for_readiness_or_grace_period::<E>(
-        readiness_enabled,
-        descriptors,
-        readiness_requirement,
-        &host_ports,
-        environment,
-    )
-    .await?;
-
-    let host = compose_runner_host();
-    let client_builder = ClientBuilder::<E>::new();
-    let node_clients = client_builder
-        .build_node_clients(descriptors, &host_ports, &host, environment)
-        .await?;
-
-    Ok(DeployedNodes {
-        host_ports,
-        host,
-        node_clients,
-    })
-}
-
 fn build_runtime_assembly<E: ComposeDeployEnv>(
     descriptors: E::Deployment,
     node_clients: NodeClients<E>,
@@ -562,90 +523,6 @@ where
         .unwrap_or_default();
 
     Ok(env_inputs.with_overrides(cap_inputs))
-}
-
-async fn wait_for_readiness_or_grace_period<E: ComposeDeployEnv>(
-    readiness_checks: bool,
-    descriptors: &E::Deployment,
-    readiness_requirement: HttpReadinessRequirement,
-    host_ports: &HostPortMapping,
-    environment: &mut StackEnvironment,
-) -> Result<(), ComposeRunnerError> {
-    if readiness_checks {
-        ReadinessChecker::<E>::wait_all(
-            descriptors,
-            host_ports,
-            readiness_requirement,
-            environment,
-        )
-        .await?;
-        return Ok(());
-    }
-
-    info!("readiness checks disabled; giving the stack a short grace period");
-    crate::lifecycle::readiness::maybe_sleep_for_disabled_readiness(false).await;
-    Ok(())
-}
-
-fn log_observability_endpoints(observability: &ObservabilityInputs) {
-    if let Some(url) = observability.metrics_query_url.as_ref() {
-        info!(
-            metrics_query_url = %url.as_str(),
-            "metrics query endpoint configured"
-        );
-    }
-
-    if let Some(url) = observability.grafana_url.as_ref() {
-        info!(grafana_url = %url.as_str(), "grafana url configured");
-    }
-}
-
-fn maybe_print_endpoints(observability: &ObservabilityInputs, host: &str, ports: &HostPortMapping) {
-    if !should_print_endpoints() {
-        return;
-    }
-
-    let prometheus = endpoint_or_disabled(observability.metrics_query_url.as_ref());
-    let grafana = endpoint_or_disabled(observability.grafana_url.as_ref());
-
-    println!(
-        "TESTNET_ENDPOINTS prometheus={} grafana={}",
-        prometheus, grafana
-    );
-
-    print_profiling_urls(host, ports);
-}
-
-fn should_print_endpoints() -> bool {
-    env::var(PRINT_ENDPOINTS_ENV).is_ok()
-}
-
-fn endpoint_or_disabled(endpoint: Option<&Url>) -> String {
-    endpoint.map_or_else(|| "<disabled>".to_string(), |url| url.as_str().to_string())
-}
-
-fn log_profiling_urls(host: &str, ports: &HostPortMapping) {
-    for (idx, node) in ports.nodes.iter().enumerate() {
-        info!(
-            node = idx,
-            profiling_url = %profiling_url(host, node.api),
-            "node profiling endpoint (profiling feature required)"
-        );
-    }
-}
-
-fn print_profiling_urls(host: &str, ports: &HostPortMapping) {
-    for (idx, node) in ports.nodes.iter().enumerate() {
-        println!(
-            "TESTNET_PPROF node_{}={}",
-            idx,
-            profiling_url(host, node.api)
-        );
-    }
-}
-
-fn profiling_url(host: &str, api_port: u16) -> String {
-    format!("http://{host}:{api_port}/debug/pprof/profile?seconds=15&format=proto")
 }
 
 struct PreparedDeployment<E>
