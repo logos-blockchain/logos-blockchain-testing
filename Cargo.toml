@@ -39,6 +39,7 @@ members = [
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
   "testing-framework/deployers/local",
+  "tools",
 ]
 resolver = "2"
 
@@ -66,6 +67,7 @@ cfgsync-core                     = { default-features = false, path = "cfgsync/c
 testing-framework-app            = { default-features = false, path = "testing-framework/app" }
 testing-framework-container      = { default-features = false, path = "testing-framework/container" }
 testing-framework-core           = { default-features = false, path = "testing-framework/core" }
+testing-framework-tools          = { default-features = false, path = "tools" }
 testing-framework-runner-compose = { default-features = false, path = "testing-framework/deployers/compose" }
 testing-framework-runner-k8s     = { default-features = false, path = "testing-framework/deployers/k8s" }
 testing-framework-runner-local   = { default-features = false, path = "testing-framework/deployers/local" }

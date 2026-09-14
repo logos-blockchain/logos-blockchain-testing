@@ -15,10 +15,12 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
 };
+
+use testing_framework_tools::net::{ReservedPortBlock, get_available_tcp_port};
 
 use crate::{errors::ComposeRunnerError, infrastructure::network::SharedNetwork};
 
@@ -38,6 +40,7 @@ pub(crate) struct ComposeProvisionerInner {
     registry: Mutex<ParticipantRegistry>,
     network: SharedNetwork,
     preserve: SessionPreservation,
+    runner_ports: OnceLock<Mutex<Option<ReservedPortBlock>>>,
 }
 
 impl Default for ComposeProvisionerInner {
@@ -46,6 +49,7 @@ impl Default for ComposeProvisionerInner {
             registry: Mutex::default(),
             network: SharedNetwork::new(),
             preserve: SessionPreservation::default(),
+            runner_ports: OnceLock::new(),
         }
     }
 }
@@ -95,6 +99,22 @@ impl ComposeProvisionerInner {
 
     pub(crate) const fn preserve(&self) -> &SessionPreservation {
         &self.preserve
+    }
+
+    /// Allocates a published runner port from this provisioner's leased port
+    /// block; the block's data ports are never bound by the framework, so
+    /// Docker can bind them without a release race. Falls back to OS-assigned
+    /// ephemeral probing when every block is already claimed.
+    pub(crate) fn allocate_runner_port(&self) -> Option<u16> {
+        let mut block = self
+            .runner_ports
+            .get_or_init(|| Mutex::new(ReservedPortBlock::try_new()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match block.as_mut() {
+            Some(block) => block.next_tcp_port(),
+            None => get_available_tcp_port(),
+        }
     }
 
     /// Removes the session network when the last participant is gone and no
