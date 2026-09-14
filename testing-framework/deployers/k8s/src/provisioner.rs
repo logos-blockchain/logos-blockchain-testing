@@ -11,6 +11,7 @@ use thiserror::Error;
 
 use crate::{
     attach_provider::{K8sAttachProvider, K8sAttachedClusterWait},
+    attached_control::K8sAttachedNodeControl,
     env::K8sDeployEnv,
     manual::{ManualCluster, ManualClusterError},
 };
@@ -31,8 +32,6 @@ pub enum K8sClusterProvisionerError {
         #[source]
         source: DynError,
     },
-    #[error("node control is not available for attached k8s clusters")]
-    AttachedNodeControlUnsupported,
     #[error("failed to build external node client for '{name}': {source}")]
     ExternalNodeClient {
         name: String,
@@ -138,10 +137,6 @@ async fn provision_attached<E: K8sDeployEnv>(
     cluster: &ExistingCluster,
     external: Vec<ExternalNodeSource>,
 ) -> Result<ClusterUnit<E>, K8sClusterProvisionerError> {
-    if request.control() == ClusterControlRequest::Full {
-        return Err(K8sClusterProvisionerError::AttachedNodeControlUnsupported);
-    }
-
     let client = init_kube_client().await?;
     let provider = K8sAttachProvider::<E>::new(client.clone());
     let attached = provider
@@ -150,13 +145,14 @@ async fn provision_attached<E: K8sDeployEnv>(
         .map_err(|source| K8sClusterProvisionerError::Attach { source })?;
 
     let clients = NodeClients::default();
-    for node_client in attached.clients {
-        clients.add_node(node_client);
+    for (_, node_client) in &attached.clients {
+        clients.add_node(node_client.clone());
     }
     add_external_clients::<E>(&clients, external)?;
 
-    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, cluster, attached.access)
-        .map_err(|source| K8sClusterProvisionerError::Attach { source })?;
+    let cluster_wait =
+        K8sAttachedClusterWait::<E>::try_new(client.clone(), cluster, attached.access.clone())
+            .map_err(|source| K8sClusterProvisionerError::Attach { source })?;
 
     let mut unit = ClusterUnit::new(
         None,
@@ -165,6 +161,16 @@ async fn provision_attached<E: K8sDeployEnv>(
     )
     .with_cluster_wait(Arc::new(cluster_wait))
     .with_attachment(cluster.clone());
+
+    if request.control() == ClusterControlRequest::Full {
+        let control = K8sAttachedNodeControl::<E>::new(
+            client,
+            attached.namespace,
+            attached.clients,
+            attached.access,
+        );
+        unit = unit.with_node_control(Arc::new(control) as Arc<dyn NodeControlHandle<E>>);
+    }
 
     if let Some(forwards) = attached.forwards {
         unit = unit.with_cleanup(forwards);
@@ -194,36 +200,4 @@ async fn init_kube_client() -> Result<Client, K8sClusterProvisionerError> {
     Client::try_default()
         .await
         .map_err(|source| ManualClusterError::ClientInit { source }.into())
-}
-
-#[cfg(test)]
-mod tests {
-    use testing_framework_core::scenario::{
-        ClusterControlRequest, ClusterRequest, ExistingCluster,
-    };
-
-    use super::{K8sClusterProvisioner, K8sClusterProvisionerError};
-    use crate::manual::tests_dummy_env::DummyEnv;
-
-    #[tokio::test]
-    async fn provision_attached_rejects_full_control_request() {
-        let request = ClusterRequest::<DummyEnv>::attached(ExistingCluster::for_k8s_selector(
-            "app=node".to_owned(),
-        ))
-        .with_control(ClusterControlRequest::Full);
-
-        let result = K8sClusterProvisioner.provision(request).await;
-
-        let Err(error) = result else {
-            panic!("full control against an attached cluster must fail at provisioning");
-        };
-        assert!(matches!(
-            error,
-            K8sClusterProvisionerError::AttachedNodeControlUnsupported
-        ));
-        assert_eq!(
-            error.to_string(),
-            "node control is not available for attached k8s clusters"
-        );
-    }
 }

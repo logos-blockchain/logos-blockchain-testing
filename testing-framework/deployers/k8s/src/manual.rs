@@ -941,8 +941,7 @@ pub(crate) async fn scale_node<E: K8sDeployEnv>(
     replicas: i32,
 ) -> Result<(), ManualClusterError> {
     let name = node_deployment_name::<E>(release, index);
-    patch_node_replicas(client, namespace, &name, replicas).await?;
-    wait_for_replicas(
+    scale_deployment(
         client,
         namespace,
         &name,
@@ -950,6 +949,19 @@ pub(crate) async fn scale_node<E: K8sDeployEnv>(
         replicas,
     )
     .await
+}
+
+/// Patches the named deployment to the requested replica count and waits for
+/// the deployment to reach it.
+pub(crate) async fn scale_deployment(
+    client: &Client,
+    namespace: &str,
+    deployment_name: &str,
+    node_name: &str,
+    replicas: i32,
+) -> Result<(), ManualClusterError> {
+    patch_node_replicas(client, namespace, deployment_name, replicas).await?;
+    wait_for_replicas(client, namespace, deployment_name, node_name, replicas).await
 }
 
 pub(crate) async fn patch_node_replicas(
@@ -1045,7 +1057,7 @@ fn validate_start_options<E: K8sDeployEnv>(
 /// relaunched with the container arguments and timeouts baked into its
 /// deployment, so accepting them would report a configured restart that never
 /// happened.
-fn validate_restart_options<E: K8sDeployEnv>(
+pub(crate) fn validate_restart_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
     validate_start_options(options)?;
@@ -1062,7 +1074,7 @@ fn validate_restart_options<E: K8sDeployEnv>(
     Ok(())
 }
 
-fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
+pub(crate) fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
     let default_peers = matches!(options.peers, None | Some(PeerSelection::DefaultLayout));

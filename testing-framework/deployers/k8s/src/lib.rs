@@ -1,4 +1,5 @@
 mod attach_provider;
+mod attached_control;
 mod deployer;
 mod env;
 mod host;

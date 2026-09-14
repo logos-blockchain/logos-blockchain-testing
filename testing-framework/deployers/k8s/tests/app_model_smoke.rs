@@ -15,8 +15,9 @@ use serde::{Deserialize, Serialize};
 use testing_framework_app::{AppHostEnv, AppHostTopology, ClusterApp, DeployContext};
 use testing_framework_core::{
     scenario::{
-        Application, ClusterHandle, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView,
-        ClusterRequest, DynError, NodeAccess, NodeClients, serialize_cluster_yaml_config,
+        Application, ClusterControlRequest, ClusterHandle, ClusterNodeConfigApplication,
+        ClusterNodeView, ClusterPeerView, ClusterRequest, DynError, NodeAccess, NodeClients,
+        serialize_cluster_yaml_config,
     },
     topology::ClusterTopology,
 };
@@ -193,10 +194,12 @@ async fn app_model_smoke() -> Result<()> {
     })?;
 
     let attached: ClusterHandle<SmokeEnv> = ctx
-        .deploy_cluster(ClusterRequest::attached(attachment))
+        .deploy_cluster(
+            ClusterRequest::attached(attachment).with_control(ClusterControlRequest::Full),
+        )
         .await
         .map_err(|source| anyhow!(source.to_string()))
-        .context("attaching to the first cluster through its attachment descriptor")?;
+        .context("attaching to the first cluster with full node control")?;
 
     assert!(
         !attached.clients().is_empty(),
@@ -208,6 +211,36 @@ async fn app_model_smoke() -> Result<()> {
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("waiting for network readiness through the attached handle")?;
+
+    let attached_target = attached
+        .node_names()
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow!("the attached handle must report its discovered node names"))?;
+
+    attached
+        .restart_node(&attached_target)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("restarting a node through the attached handle")?;
+
+    attached
+        .wait_node_ready(&attached_target)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("waiting for the restarted node through the attached handle")?;
+
+    attached
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("waiting for network readiness after the attached restart")?;
+
+    handle
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("the managed handle must stay ready after the attached restart")?;
 
     drop(attached);
 

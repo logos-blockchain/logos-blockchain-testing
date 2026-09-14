@@ -1,4 +1,8 @@
-use std::{marker::PhantomData, time::Duration};
+use std::{
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Service;
@@ -16,7 +20,9 @@ use url::Url;
 use crate::{
     env::{K8sDeployEnv, node_readiness_path},
     host::node_host,
-    lifecycle::wait::{PortForwardHandle, PortForwardSpawn, port_forward_service},
+    lifecycle::wait::{
+        ForwardSpec, PortForwardHandle, PortForwardSpawn, port_forward_service, respawn_forward,
+    },
 };
 
 const LOCALHOST: &str = "127.0.0.1";
@@ -73,12 +79,13 @@ const fn attach_access_mode(direct_endpoint_reachable: bool) -> AttachAccessMode
 }
 
 /// Resolved node access for an attached cluster.
+#[derive(Clone)]
 pub(crate) enum AttachedAccess {
     /// Node services are reached directly on their discovered `NodePorts`.
     Direct,
     /// Node services are reached through local `kubectl port-forward`
-    /// listeners on these API ports.
-    Forwarded { api_ports: Vec<u16> },
+    /// listeners tracked by this registry.
+    Forwarded { forwards: AttachedForwardRegistry },
 }
 
 /// Clients and access details discovered for one attached cluster.
@@ -87,24 +94,95 @@ pub(crate) enum AttachedAccess {
 /// processes; the provisioner must attach it to the cluster unit so the
 /// forwards live exactly as long as the unit.
 pub(crate) struct AttachedDiscovery<E: K8sDeployEnv> {
-    pub(crate) clients: Vec<E::NodeClient>,
+    pub(crate) namespace: String,
+    pub(crate) clients: Vec<(String, E::NodeClient)>,
     pub(crate) access: AttachedAccess,
     pub(crate) forwards: Option<Box<dyn CleanupGuard>>,
 }
 
-/// Owns the `kubectl port-forward` processes spawned for an attached cluster.
-///
-/// Both explicit cleanup and a plain drop kill the processes, so the forwards
-/// die with the cluster unit that owns this guard.
-struct AttachedPortForwards {
-    handles: Vec<PortForwardHandle>,
+/// One attached service's live forward together with the spec to recreate it.
+struct AttachedForwardEntry {
+    service: String,
+    spec: ForwardSpec,
+    handle: PortForwardHandle,
 }
 
-impl CleanupGuard for AttachedPortForwards {
-    fn cleanup(mut self: Box<Self>) {
-        for handle in &mut self.handles {
-            handle.shutdown();
+/// Shared registry of the `kubectl port-forward` processes spawned for an
+/// attached cluster, keyed by service name.
+///
+/// A restarted node's pod kills the forward bound to it, so the attached node
+/// control respawns that service's forward on its original local port. Both
+/// explicit cleanup and dropping the last clone kill the processes, so the
+/// forwards die with the cluster unit that owns the cleanup guard.
+#[derive(Clone, Default)]
+pub(crate) struct AttachedForwardRegistry {
+    entries: Arc<Mutex<Vec<AttachedForwardEntry>>>,
+}
+
+impl AttachedForwardRegistry {
+    fn register(&self, service: String, spec: ForwardSpec, handle: PortForwardHandle) {
+        self.lock().push(AttachedForwardEntry {
+            service,
+            spec,
+            handle,
+        });
+    }
+
+    /// Returns the local API ports of every registered forward.
+    pub(crate) fn local_api_ports(&self) -> Vec<u16> {
+        self.lock()
+            .iter()
+            .map(|entry| entry.spec.local_port)
+            .collect()
+    }
+
+    /// Returns the local API port forwarded for the given service.
+    pub(crate) fn local_port(&self, service: &str) -> Option<u16> {
+        self.lock()
+            .iter()
+            .find(|entry| entry.service == service)
+            .map(|entry| entry.spec.local_port)
+    }
+
+    /// Respawns the given service's forward on its original local port.
+    ///
+    /// Blocking: spawns a `kubectl` process and polls the local port for
+    /// readiness.
+    pub(crate) fn respawn(&self, service: &str) -> Result<(), DynError> {
+        let mut entries = self.lock();
+        let entry = entries
+            .iter_mut()
+            .find(|entry| entry.service == service)
+            .ok_or_else(|| {
+                DynError::from(format!(
+                    "no port-forward is registered for service '{service}'"
+                ))
+            })?;
+        entry.handle.shutdown();
+        entry.handle = respawn_forward(&entry.spec)?;
+        Ok(())
+    }
+
+    fn shutdown_all(&self) {
+        let entries = {
+            let mut entries = self.lock();
+            std::mem::take(&mut *entries)
+        };
+        for mut entry in entries {
+            entry.handle.shutdown();
         }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<AttachedForwardEntry>> {
+        self.entries
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+impl CleanupGuard for AttachedForwardRegistry {
+    fn cleanup(self: Box<Self>) {
+        self.shutdown_all();
     }
 }
 
@@ -205,9 +283,9 @@ impl<E: K8sDeployEnv> K8sAttachProvider<E> {
         let reachable = direct_endpoint_reachable(&host, probe_port, DIRECT_PROBE_TIMEOUT).await;
 
         match attach_access_mode(reachable) {
-            AttachAccessMode::Direct => direct_discovery::<E>(&host, &endpoints),
+            AttachAccessMode::Direct => direct_discovery::<E>(namespace, &host, &endpoints),
             AttachAccessMode::PortForward => {
-                forwarded_discovery::<E>(&namespace, &host, probe_port, endpoints).await
+                forwarded_discovery::<E>(namespace, &host, probe_port, endpoints).await
             }
         }
     }
@@ -216,20 +294,21 @@ impl<E: K8sDeployEnv> K8sAttachProvider<E> {
 /// Builds clients straight against the discovered `NodePorts` (the historical
 /// attached-cluster behavior).
 fn direct_discovery<E: K8sDeployEnv>(
+    namespace: String,
     host: &str,
     endpoints: &[ServiceEndpoint],
 ) -> Result<AttachedDiscovery<E>, DynError> {
     let mut clients = Vec::with_capacity(endpoints.len());
 
     for endpoint in endpoints {
-        clients.push(attached_node_client::<E>(
-            host,
-            endpoint.ports.node_port,
-            &endpoint.name,
-        )?);
+        clients.push((
+            endpoint.name.clone(),
+            attached_node_client::<E>(host, endpoint.ports.node_port, &endpoint.name)?,
+        ));
     }
 
     Ok(AttachedDiscovery {
+        namespace,
         clients,
         access: AttachedAccess::Direct,
         forwards: None,
@@ -242,12 +321,12 @@ fn direct_discovery<E: K8sDeployEnv>(
 /// A forwarding failure is reported together with the failed direct probe so
 /// the attach error names both attempts.
 async fn forwarded_discovery<E: K8sDeployEnv>(
-    namespace: &str,
+    namespace: String,
     probed_host: &str,
     probed_node_port: u16,
     endpoints: Vec<ServiceEndpoint>,
 ) -> Result<AttachedDiscovery<E>, DynError> {
-    let spawned = spawn_attach_forwards(namespace.to_owned(), endpoints)
+    let spawned = spawn_attach_forwards(namespace.clone(), endpoints)
         .await
         .map_err(|source| K8sAttachDiscoveryError::EndpointsUnreachable {
             host: probed_host.to_owned(),
@@ -257,23 +336,32 @@ async fn forwarded_discovery<E: K8sDeployEnv>(
         })?;
 
     let mut clients = Vec::with_capacity(spawned.len());
-    let mut api_ports = Vec::with_capacity(spawned.len());
-    let mut handles = Vec::with_capacity(spawned.len());
+    let forwards = AttachedForwardRegistry::default();
 
-    for (service_name, forward) in spawned {
-        clients.push(attached_node_client::<E>(
-            LOCALHOST,
-            forward.local_port,
-            &service_name,
-        )?);
-        api_ports.push(forward.local_port);
-        handles.push(forward.handle);
+    for (endpoint, forward) in spawned {
+        clients.push((
+            endpoint.name.clone(),
+            attached_node_client::<E>(LOCALHOST, forward.local_port, &endpoint.name)?,
+        ));
+        forwards.register(
+            endpoint.name.clone(),
+            ForwardSpec {
+                namespace: namespace.clone(),
+                service: endpoint.name,
+                local_port: forward.local_port,
+                remote_port: endpoint.ports.service_port,
+            },
+            forward.handle,
+        );
     }
 
     Ok(AttachedDiscovery {
+        namespace,
         clients,
-        access: AttachedAccess::Forwarded { api_ports },
-        forwards: Some(Box::new(AttachedPortForwards { handles })),
+        access: AttachedAccess::Forwarded {
+            forwards: forwards.clone(),
+        },
+        forwards: Some(Box::new(forwards)),
     })
 }
 
@@ -282,13 +370,13 @@ async fn forwarded_discovery<E: K8sDeployEnv>(
 async fn spawn_attach_forwards(
     namespace: String,
     endpoints: Vec<ServiceEndpoint>,
-) -> Result<Vec<(String, PortForwardSpawn)>, DynError> {
+) -> Result<Vec<(ServiceEndpoint, PortForwardSpawn)>, DynError> {
     tokio::task::spawn_blocking(move || {
         let mut spawned = Vec::with_capacity(endpoints.len());
         for endpoint in endpoints {
             let forward =
                 port_forward_service(&namespace, &endpoint.name, endpoint.ports.service_port)?;
-            spawned.push((endpoint.name, forward));
+            spawned.push((endpoint, forward));
         }
         Ok::<_, DynError>(spawned)
     })
@@ -456,9 +544,9 @@ impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         match &self.access {
             AttachedAccess::Direct => self.wait_direct_network_ready().await,
-            AttachedAccess::Forwarded { api_ports } => {
+            AttachedAccess::Forwarded { forwards } => {
                 wait_for_http_ports_with_host_and_requirement(
-                    api_ports,
+                    &forwards.local_api_ports(),
                     LOCALHOST,
                     node_readiness_path::<E>(),
                     HttpReadinessRequirement::AllNodesReady,
