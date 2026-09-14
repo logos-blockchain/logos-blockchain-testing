@@ -15,12 +15,13 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        Arc, Mutex, OnceLock,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
 
 use testing_framework_tools::net::{ReservedPortBlock, get_available_tcp_port};
+use tracing::warn;
 
 use crate::{errors::ComposeRunnerError, infrastructure::network::SharedNetwork};
 
@@ -40,7 +41,7 @@ pub(crate) struct ComposeProvisionerInner {
     registry: Mutex<ParticipantRegistry>,
     network: SharedNetwork,
     preserve: SessionPreservation,
-    runner_ports: OnceLock<Mutex<Option<ReservedPortBlock>>>,
+    runner_ports: Mutex<Vec<ReservedPortBlock>>,
 }
 
 impl Default for ComposeProvisionerInner {
@@ -49,7 +50,7 @@ impl Default for ComposeProvisionerInner {
             registry: Mutex::default(),
             network: SharedNetwork::new(),
             preserve: SessionPreservation::default(),
-            runner_ports: OnceLock::new(),
+            runner_ports: Mutex::default(),
         }
     }
 }
@@ -102,19 +103,43 @@ impl ComposeProvisionerInner {
     }
 
     /// Allocates a published runner port from this provisioner's leased port
-    /// block; the block's data ports are never bound by the framework, so
-    /// Docker can bind them without a release race. Falls back to OS-assigned
-    /// ephemeral probing when every block is already claimed.
+    /// blocks; leased data ports are never bound by the framework, so Docker
+    /// can bind them without a release race. An exhausted block leases the
+    /// next one, and OS-assigned ephemeral probing remains only for the
+    /// degenerate case where no block on the machine can be claimed at all.
     pub(crate) fn allocate_runner_port(&self) -> Option<u16> {
-        let mut block = self
+        let mut blocks = self
             .runner_ports
-            .get_or_init(|| Mutex::new(ReservedPortBlock::try_new()))
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        match block.as_mut() {
-            Some(block) => block.next_tcp_port(),
-            None => get_available_tcp_port(),
+        if let Some(port) = blocks
+            .iter_mut()
+            .find_map(ReservedPortBlock::try_next_tcp_port)
+        {
+            return Some(port);
         }
+
+        if let Some(mut fresh) = ReservedPortBlock::try_new() {
+            let port = fresh.try_next_tcp_port();
+            blocks.push(fresh);
+            if port.is_some() {
+                return port;
+            }
+        }
+
+        warn!(
+            "no test port block could be leased; falling back to ephemeral port probing \
+             without a reservation"
+        );
+        get_available_tcp_port()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn leased_block_count(&self) -> usize {
+        self.runner_ports
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
     }
 
     /// Removes the session network when the last participant is gone and no
@@ -238,6 +263,26 @@ mod tests {
 
     fn named_key(name: &str) -> ClusterKey {
         ClusterKey::Named(name.to_owned())
+    }
+
+    #[test]
+    fn exhausted_port_block_leases_the_next_one() {
+        let provisioner = ComposeProvisioner::default();
+        let mut ports = std::collections::BTreeSet::new();
+
+        for _ in 0..129 {
+            let port = provisioner
+                .inner
+                .allocate_runner_port()
+                .expect("a runner port should be allocatable");
+            assert!(ports.insert(port), "allocated ports must be unique");
+        }
+
+        assert!(
+            provisioner.inner.leased_block_count() >= 2,
+            "exhausting the first block must lease another instead of \
+             degrading to unreserved probing"
+        );
     }
 
     #[test]

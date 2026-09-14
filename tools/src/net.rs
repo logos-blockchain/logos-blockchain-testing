@@ -92,6 +92,15 @@ impl ReservedPortBlock {
 
     /// Returns an available TCP port from the reserved block.
     pub fn next_tcp_port(&mut self) -> Option<u16> {
+        self.try_next_tcp_port().or_else(get_available_tcp_port)
+    }
+
+    /// Returns an available TCP port from the reserved block, or `None` once
+    /// the block is exhausted, without falling back to ephemeral probing.
+    ///
+    /// Callers that must keep the no-race guarantee lease another block on
+    /// `None` instead of accepting an unreserved port.
+    pub fn try_next_tcp_port(&mut self) -> Option<u16> {
         while self.tcp_next <= self.tcp_end {
             let candidate = self.tcp_next;
             self.tcp_next = self.tcp_next.saturating_add(1);
@@ -101,7 +110,7 @@ impl ReservedPortBlock {
             }
         }
 
-        get_available_tcp_port()
+        None
     }
 
     /// Returns an available UDP port from the reserved block.
@@ -339,6 +348,19 @@ mod tests {
             allocated_ports.len(),
             child_count * CHILD_PORT_COUNT * 2,
             "every child must retain all allocated TCP and UDP ports"
+        );
+    }
+
+    #[test]
+    fn try_next_tcp_port_reports_exhaustion_without_fallback() {
+        let mut allocator = ReservedPortBlock::try_new().expect("a test port block should exist");
+
+        while allocator.try_next_tcp_port().is_some() {}
+
+        assert!(allocator.try_next_tcp_port().is_none());
+        assert!(
+            allocator.next_tcp_port().is_some(),
+            "the falling-back variant must still hand out an ephemeral port"
         );
     }
 
