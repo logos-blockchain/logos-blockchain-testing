@@ -150,21 +150,27 @@ async fn provision_attached<E: K8sDeployEnv>(
         .map_err(|source| K8sClusterProvisionerError::Attach { source })?;
 
     let clients = NodeClients::default();
-    for node_client in attached {
+    for node_client in attached.clients {
         clients.add_node(node_client);
     }
     add_external_clients::<E>(&clients, external)?;
 
-    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, cluster)
+    let cluster_wait = K8sAttachedClusterWait::<E>::try_new(client, cluster, attached.access)
         .map_err(|source| K8sClusterProvisionerError::Attach { source })?;
 
-    Ok(ClusterUnit::new(
+    let mut unit = ClusterUnit::new(
         None,
         clients,
         ClusterControlProfile::ExistingClusterAttached,
     )
     .with_cluster_wait(Arc::new(cluster_wait))
-    .with_attachment(cluster.clone()))
+    .with_attachment(cluster.clone());
+
+    if let Some(forwards) = attached.forwards {
+        unit = unit.with_cleanup(forwards);
+    }
+
+    Ok(unit)
 }
 
 fn add_external_clients<E: K8sDeployEnv>(

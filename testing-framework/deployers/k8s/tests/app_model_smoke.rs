@@ -16,7 +16,7 @@ use testing_framework_app::{AppHostEnv, AppHostTopology, ClusterApp, DeployConte
 use testing_framework_core::{
     scenario::{
         Application, ClusterHandle, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView,
-        DynError, NodeAccess, NodeClients, serialize_cluster_yaml_config,
+        ClusterRequest, DynError, NodeAccess, NodeClients, serialize_cluster_yaml_config,
     },
     topology::ClusterTopology,
 };
@@ -187,6 +187,39 @@ async fn app_model_smoke() -> Result<()> {
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("the sibling cluster must stay reachable across the other cluster's restart")?;
+
+    let attachment = handle.attachment().cloned().ok_or_else(|| {
+        anyhow!("the managed cluster handle must expose an attachment descriptor")
+    })?;
+
+    let attached: ClusterHandle<SmokeEnv> = ctx
+        .deploy_cluster(ClusterRequest::attached(attachment))
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("attaching to the first cluster through its attachment descriptor")?;
+
+    assert!(
+        !attached.clients().is_empty(),
+        "the attached handle must expose node clients"
+    );
+
+    attached
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("waiting for network readiness through the attached handle")?;
+
+    drop(attached);
+
+    handle
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("the original handle must stay ready after the attached handle is dropped")?;
+    assert!(
+        handle.node_client("node-0").is_some(),
+        "the original handle must keep its node clients after the attached handle is dropped"
+    );
 
     drop(sibling);
     drop(handle);
