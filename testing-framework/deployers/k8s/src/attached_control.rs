@@ -1,7 +1,7 @@
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
 use kube::{Api, Client, Error as KubeError};
 use testing_framework_core::scenario::{
-    DynError, HttpReadinessRequirement, NodeControlHandle, StartNodeOptions,
+    DynError, HttpReadinessRequirement, NodeControlHandle, StartNodeOptions, StartedNode,
     wait_for_http_ports_with_host_and_requirement,
 };
 use thiserror::Error;
@@ -51,7 +51,7 @@ pub(crate) enum K8sAttachedControlError {
     },
     #[error(
         "deployment '{deployment}' in namespace '{namespace}' declares {replicas} replicas; \
-         attached node control requires exactly 1"
+         attached node control requires at most 1"
     )]
     UnexpectedReplicas {
         deployment: String,
@@ -96,9 +96,11 @@ pub(crate) enum K8sAttachedControlError {
 ///
 /// Reuses the managed path's restart-by-scaling machinery: a restart scales
 /// the node's deployment to zero, waits for its pods to be gone, and scales
-/// it back to one. The framework's convention names each node's deployment
-/// after its discovered service, so the deployment is resolved by that name
-/// in the attached namespace at call time.
+/// it back to one. Stop and start drive the same machinery on their own: stop
+/// scales to zero, start scales back to one, re-establishes the node's
+/// port-forward, and waits for readiness. The framework's convention names
+/// each node's deployment after its discovered service, so the deployment is
+/// resolved by that name in the attached namespace at call time.
 pub(crate) struct K8sAttachedNodeControl<E: K8sDeployEnv> {
     client: Client,
     namespace: String,
@@ -126,6 +128,33 @@ impl<E: K8sDeployEnv> K8sAttachedNodeControl<E> {
         self.scale(name, 0).await?;
         self.scale(name, 1).await?;
         self.restore_forward(name).await
+    }
+
+    /// Stops the node by scaling its deployment to zero and waiting for its
+    /// pods to be gone.
+    async fn stop(&self, name: &str) -> Result<(), K8sAttachedControlError> {
+        self.resolve_deployment(name).await?;
+        self.scale(name, 0).await
+    }
+
+    /// Starts the node by scaling its deployment back to one, re-establishing
+    /// its port-forward, and waiting for readiness.
+    async fn start(&self, name: &str) -> Result<(), K8sAttachedControlError> {
+        self.resolve_deployment(name).await?;
+        self.scale(name, 1).await?;
+        self.restore_forward(name).await?;
+        self.wait_ready(name).await
+    }
+
+    fn started_node(&self, name: &str) -> Result<StartedNode<E>, K8sAttachedControlError> {
+        self.nodes
+            .iter()
+            .find(|(node, _)| node == name)
+            .map(|(node, client)| StartedNode {
+                name: node.clone(),
+                client: client.clone(),
+            })
+            .ok_or_else(|| self.unknown_node_error(name))
     }
 
     async fn wait_ready(&self, name: &str) -> Result<(), K8sAttachedControlError> {
@@ -229,7 +258,11 @@ impl<E: K8sDeployEnv> K8sAttachedNodeControl<E> {
             return Ok(());
         }
 
-        Err(K8sAttachedControlError::UnknownNode {
+        Err(self.unknown_node_error(name))
+    }
+
+    fn unknown_node_error(&self, name: &str) -> K8sAttachedControlError {
+        K8sAttachedControlError::UnknownNode {
             name: name.to_owned(),
             namespace: self.namespace.clone(),
             known: self
@@ -238,7 +271,7 @@ impl<E: K8sDeployEnv> K8sAttachedNodeControl<E> {
                 .map(|(node, _)| node.as_str())
                 .collect::<Vec<_>>()
                 .join(", "),
-        })
+        }
     }
 }
 
@@ -252,7 +285,7 @@ fn validate_deployment_shape(
         .as_ref()
         .and_then(|spec| spec.replicas)
         .unwrap_or(1);
-    if replicas == 1 {
+    if replicas == 0 || replicas == 1 {
         return Ok(());
     }
 
@@ -279,6 +312,26 @@ impl<E: K8sDeployEnv> NodeControlHandle<E> for K8sAttachedNodeControl<E> {
         self.restart(name).await.map_err(Into::into)
     }
 
+    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
+        self.start(name).await?;
+        self.started_node(name).map_err(Into::into)
+    }
+
+    async fn start_node_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        validate_restart_options(&options)?;
+        ensure_default_cfgsync_options(&options)?;
+        self.start(name).await?;
+        self.started_node(name).map_err(Into::into)
+    }
+
+    async fn stop_node(&self, name: &str) -> Result<(), DynError> {
+        self.stop(name).await.map_err(Into::into)
+    }
+
     async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
         self.wait_ready(name).await.map_err(Into::into)
     }
@@ -299,7 +352,9 @@ impl<E: K8sDeployEnv> NodeControlHandle<E> for K8sAttachedNodeControl<E> {
 mod tests {
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
     use kube::{Client, Config};
-    use testing_framework_core::scenario::{NodeControlHandle, StartNodeOptions};
+    use testing_framework_core::scenario::{
+        DynError, NodeControlHandle, StartNodeOptions, StartedNode,
+    };
 
     use super::{K8sAttachedControlError, K8sAttachedNodeControl, validate_deployment_shape};
     use crate::{
@@ -317,6 +372,13 @@ mod tests {
             vec![("kv-node-0".to_owned(), "http://kv-node-0/".to_owned())],
             access,
         )
+    }
+
+    fn expect_start_error(result: Result<StartedNode<DummyEnv>, DynError>, msg: &str) -> DynError {
+        match result {
+            Ok(_) => panic!("{msg}"),
+            Err(error) => error,
+        }
     }
 
     fn deployment_with_replicas(replicas: Option<i32>) -> Deployment {
@@ -402,6 +464,99 @@ mod tests {
         assert!(
             error.to_string().contains("not supported on restart"),
             "got: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn stop_node_surfaces_deployment_resolution_errors() {
+        let control = offline_control(AttachedAccess::Direct);
+
+        let error = NodeControlHandle::stop_node(&control, "kv-node-0")
+            .await
+            .expect_err("offline stop must fail against the unreachable API server");
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("not supported by this deployer"),
+            "stop_node must not fall back to the trait default: {message}"
+        );
+        assert!(
+            message.contains("kv-node-0") && message.contains("attached-ns"),
+            "the error must name the deployment and namespace: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn start_node_surfaces_deployment_resolution_errors() {
+        let control = offline_control(AttachedAccess::Direct);
+
+        let error = expect_start_error(
+            NodeControlHandle::start_node(&control, "kv-node-0").await,
+            "offline start must fail against the unreachable API server",
+        );
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("not supported by this deployer"),
+            "start_node must not fall back to the trait default: {message}"
+        );
+        assert!(
+            message.contains("kv-node-0") && message.contains("attached-ns"),
+            "the error must name the deployment and namespace: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn start_node_with_rejects_unsupported_options() {
+        let control = offline_control(AttachedAccess::Direct);
+        let options = StartNodeOptions::<DummyEnv>::default()
+            .with_persist_dir(std::path::PathBuf::from("/tmp/demo"));
+
+        let error = expect_start_error(
+            NodeControlHandle::start_node_with(&control, "kv-node-0", options).await,
+            "persist directories must be rejected on attached start",
+        );
+
+        assert!(
+            error
+                .to_string()
+                .contains("persist/snapshot directories are not supported"),
+            "got: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn start_node_with_default_options_surfaces_backend_errors() {
+        let control = offline_control(AttachedAccess::Direct);
+
+        let error = expect_start_error(
+            NodeControlHandle::start_node_with(
+                &control,
+                "kv-node-0",
+                StartNodeOptions::<DummyEnv>::default(),
+            )
+            .await,
+            "offline start must fail against the unreachable API server",
+        );
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("not supported by this deployer"),
+            "start_node_with must not fall back to the trait default: {message}"
+        );
+        assert!(
+            message.contains("kv-node-0") && message.contains("attached-ns"),
+            "the error must name the deployment and namespace: {message}"
+        );
+    }
+
+    #[test]
+    fn deployment_shape_accepts_stopped_workload() {
+        let stopped = deployment_with_replicas(Some(0));
+
+        assert!(
+            validate_deployment_shape(&stopped, "kv-node-0", "attached-ns").is_ok(),
+            "a scaled-to-zero deployment must stay controllable so start_node can scale it back"
         );
     }
 

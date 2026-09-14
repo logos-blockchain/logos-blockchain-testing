@@ -236,6 +236,34 @@ async fn app_model_smoke() -> Result<()> {
         .map_err(|source| anyhow!(source.to_string()))
         .context("waiting for network readiness after the attached restart")?;
 
+    attached
+        .stop_node(&attached_target)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("stopping a node through the attached handle")?;
+
+    let started = attached
+        .start_node(&attached_target)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("starting the stopped node through the attached handle")?;
+    assert_eq!(
+        started.name, attached_target,
+        "the attached start must report the started node's name"
+    );
+
+    attached
+        .wait_node_ready(&attached_target)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("waiting for the node after the attached stop/start round-trip")?;
+
+    attached
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("waiting for network readiness after the attached stop/start round-trip")?;
+
     handle
         .wait_network_ready()
         .await

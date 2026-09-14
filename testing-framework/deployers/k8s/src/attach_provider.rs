@@ -11,8 +11,8 @@ use kube::{
     api::{ListParams, ObjectList},
 };
 use testing_framework_core::scenario::{
-    CleanupGuard, ClusterWaitHandle, DynError, ExistingCluster, ExternalNodeSource,
-    HttpReadinessRequirement, wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+    CleanupGuard, ClusterWaitHandle, DynError, ExistingCluster, HttpReadinessRequirement,
+    wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
 };
 use tokio::net::TcpStream;
 use url::Url;
@@ -38,12 +38,14 @@ enum K8sAttachDiscoveryError {
     NoMatchingServices { namespace: String, selector: String },
     #[error("k8s service has no metadata.name")]
     MissingServiceName,
-    #[error("service '{service}' has no TCP node ports exposed")]
-    ServiceHasNoNodePorts { service: String },
+    #[error("service '{service}' has no TCP ports exposed")]
+    ServiceHasNoTcpPorts { service: String },
+    #[error("service '{service}' exposes no node port for direct access")]
+    ServiceHasNoNodePort { service: String },
     #[error(
-        "service '{service}' has multiple candidate API node ports ({ports}); explicit API port required"
+        "service '{service}' has multiple candidate API ports ({ports}); explicit API port required"
     )]
-    ServiceHasMultipleNodePorts { service: String, ports: String },
+    ServiceHasMultipleApiPorts { service: String, ports: String },
     #[error(
         "attached k8s cluster is unreachable: direct endpoint {host}:{port} did not accept a TCP \
          connection within {timeout:?}, and the kubectl port-forward fallback failed: {source}"
@@ -52,6 +54,14 @@ enum K8sAttachDiscoveryError {
         host: String,
         port: u16,
         timeout: Duration,
+        #[source]
+        source: DynError,
+    },
+    #[error(
+        "attached k8s cluster is unreachable: the matched services expose no node ports for a \
+         direct connection, and the kubectl port-forward fallback failed: {source}"
+    )]
+    ClusterIpForwardFailed {
         #[source]
         source: DynError,
     },
@@ -186,11 +196,15 @@ impl CleanupGuard for AttachedForwardRegistry {
     }
 }
 
-/// Service and node port resolved for one node service's API endpoint.
+/// Service port resolved for one node service's API endpoint, together with
+/// the node port when the service exposes one.
+///
+/// A `ClusterIP`-style service has no node port: it cannot be probed or
+/// reached directly and is served through `kubectl port-forward` instead.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct ApiServicePort {
     pub(super) service_port: u16,
-    pub(super) node_port: u16,
+    pub(super) node_port: Option<u16>,
 }
 
 /// One discovered node service together with its resolved API ports.
@@ -270,25 +284,41 @@ impl<E: K8sDeployEnv> K8sAttachProvider<E> {
         let services =
             discover_services(&self.client, request.namespace, request.label_selector).await?;
         let endpoints = collect_service_endpoints(&services.items)?;
-        let Some(first) = endpoints.first() else {
+        if endpoints.is_empty() {
             return Err(K8sAttachDiscoveryError::NoMatchingServices {
                 namespace,
                 selector: request.label_selector.to_owned(),
             }
             .into());
-        };
+        }
 
         let host = node_host();
-        let probe_port = first.ports.node_port;
+        let Some(probe_port) = direct_probe_port(&endpoints) else {
+            return forwarded_discovery::<E>(namespace, None, endpoints).await;
+        };
         let reachable = direct_endpoint_reachable(&host, probe_port, DIRECT_PROBE_TIMEOUT).await;
 
         match attach_access_mode(reachable) {
             AttachAccessMode::Direct => direct_discovery::<E>(namespace, &host, &endpoints),
             AttachAccessMode::PortForward => {
-                forwarded_discovery::<E>(namespace, &host, probe_port, endpoints).await
+                forwarded_discovery::<E>(namespace, Some((host, probe_port)), endpoints).await
             }
         }
     }
+}
+
+/// Returns the node port to probe for direct access when every discovered
+/// service exposes one.
+///
+/// Any service without a node port cannot be reached directly, so the whole
+/// attachment skips the direct probe and goes straight to port-forwarding.
+fn direct_probe_port(endpoints: &[ServiceEndpoint]) -> Option<u16> {
+    endpoints
+        .iter()
+        .map(|endpoint| endpoint.ports.node_port)
+        .collect::<Option<Vec<_>>>()?
+        .first()
+        .copied()
 }
 
 /// Builds clients straight against the discovered `NodePorts` (the historical
@@ -301,9 +331,14 @@ fn direct_discovery<E: K8sDeployEnv>(
     let mut clients = Vec::with_capacity(endpoints.len());
 
     for endpoint in endpoints {
+        let node_port = endpoint.ports.node_port.ok_or_else(|| {
+            K8sAttachDiscoveryError::ServiceHasNoNodePort {
+                service: endpoint.name.clone(),
+            }
+        })?;
         clients.push((
             endpoint.name.clone(),
-            attached_node_client::<E>(host, endpoint.ports.node_port, &endpoint.name)?,
+            attached_node_client::<E>(host, node_port)?,
         ));
     }
 
@@ -318,21 +353,25 @@ fn direct_discovery<E: K8sDeployEnv>(
 /// Spawns one `kubectl port-forward` per discovered node service and builds
 /// the clients against the forwarded local ports.
 ///
-/// A forwarding failure is reported together with the failed direct probe so
-/// the attach error names both attempts.
+/// When the fallback follows a failed direct probe (`probe` names the probed
+/// endpoint), a forwarding failure is reported together with that probe so
+/// the attach error names both attempts; without node ports there was no
+/// probe to report.
 async fn forwarded_discovery<E: K8sDeployEnv>(
     namespace: String,
-    probed_host: &str,
-    probed_node_port: u16,
+    probe: Option<(String, u16)>,
     endpoints: Vec<ServiceEndpoint>,
 ) -> Result<AttachedDiscovery<E>, DynError> {
     let spawned = spawn_attach_forwards(namespace.clone(), endpoints)
         .await
-        .map_err(|source| K8sAttachDiscoveryError::EndpointsUnreachable {
-            host: probed_host.to_owned(),
-            port: probed_node_port,
-            timeout: DIRECT_PROBE_TIMEOUT,
-            source,
+        .map_err(|source| match probe {
+            Some((host, port)) => K8sAttachDiscoveryError::EndpointsUnreachable {
+                host,
+                port,
+                timeout: DIRECT_PROBE_TIMEOUT,
+                source,
+            },
+            None => K8sAttachDiscoveryError::ClusterIpForwardFailed { source },
         })?;
 
     let mut clients = Vec::with_capacity(spawned.len());
@@ -341,7 +380,7 @@ async fn forwarded_discovery<E: K8sDeployEnv>(
     for (endpoint, forward) in spawned {
         clients.push((
             endpoint.name.clone(),
-            attached_node_client::<E>(LOCALHOST, forward.local_port, &endpoint.name)?,
+            attached_node_client::<E>(LOCALHOST, forward.local_port)?,
         ));
         forwards.register(
             endpoint.name.clone(),
@@ -384,15 +423,14 @@ async fn spawn_attach_forwards(
     .map_err(|source| DynError::from(format!("port-forward task failed: {source}")))?
 }
 
-fn attached_node_client<E: K8sDeployEnv>(
-    host: &str,
-    port: u16,
-    service_name: &str,
-) -> Result<E::NodeClient, DynError> {
-    let endpoint = format!("http://{host}:{port}/");
-    let source = ExternalNodeSource::new(service_name.to_owned(), endpoint);
-
-    E::external_node_client(&source)
+/// Builds one attached node client the same way the managed path builds its
+/// clients: through `node_client_from_ports` over discovered node access.
+///
+/// Attach discovery resolves a single API port per service, so that port
+/// serves as both the API and the auxiliary port, mirroring the managed
+/// path's port pairing when only one port is available.
+fn attached_node_client<E: K8sDeployEnv>(host: &str, port: u16) -> Result<E::NodeClient, DynError> {
+    E::node_client_from_ports(host, port, port)
 }
 
 /// Reports whether one direct endpoint accepts a TCP connection within the
@@ -446,7 +484,7 @@ pub(super) async fn discover_services(
     let services: Api<Service> = Api::namespaced(client.clone(), namespace);
     let params = ListParams::default().labels(selector);
     let services = services.list(&params).await?;
-    let services = filter_services_with_tcp_node_ports(services);
+    let services = filter_services_with_tcp_ports(services);
 
     if services.items.is_empty() {
         return Err(K8sAttachDiscoveryError::NoMatchingServices {
@@ -459,7 +497,7 @@ pub(super) async fn discover_services(
     Ok(services)
 }
 
-fn filter_services_with_tcp_node_ports(services: ObjectList<Service>) -> ObjectList<Service> {
+fn filter_services_with_tcp_ports(services: ObjectList<Service>) -> ObjectList<Service> {
     ObjectList {
         items: services
             .items
@@ -479,7 +517,7 @@ fn tcp_api_port_pairs(service: &Service) -> Vec<(String, ApiServicePort)> {
         .flat_map(|spec| spec.ports.as_ref())
         .flat_map(|ports| ports.iter())
         .filter_map(|port| {
-            let node_port = port.node_port.and_then(|value| u16::try_from(value).ok())?;
+            let node_port = port.node_port.and_then(|value| u16::try_from(value).ok());
             let service_port = u16::try_from(port.port).ok()?;
             let protocol = port.protocol.as_deref().unwrap_or("TCP");
             if protocol != "TCP" {
@@ -506,16 +544,16 @@ pub(super) fn extract_api_port(service: &Service) -> Result<ApiServicePort, DynE
     let ports = api_port_candidates(tcp_api_port_pairs(service));
 
     match ports.as_slice() {
-        [] => Err(K8sAttachDiscoveryError::ServiceHasNoNodePorts {
+        [] => Err(K8sAttachDiscoveryError::ServiceHasNoTcpPorts {
             service: service_name,
         }
         .into()),
         [port] => Ok(*port),
-        _ => Err(K8sAttachDiscoveryError::ServiceHasMultipleNodePorts {
+        _ => Err(K8sAttachDiscoveryError::ServiceHasMultipleApiPorts {
             service: service_name,
             ports: ports
                 .iter()
-                .map(|port| port.node_port.to_string())
+                .map(|port| port.service_port.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
         }
@@ -523,8 +561,23 @@ pub(super) fn extract_api_port(service: &Service) -> Result<ApiServicePort, DynE
     }
 }
 
+/// Resolves the node port used for direct access; a service without a node
+/// port cannot be reached directly and is rejected here.
 pub(super) fn extract_api_node_port(service: &Service) -> Result<u16, DynError> {
-    extract_api_port(service).map(|ports| ports.node_port)
+    let ports = extract_api_port(service)?;
+    ports.node_port.map_or_else(
+        || {
+            Err(K8sAttachDiscoveryError::ServiceHasNoNodePort {
+                service: service
+                    .metadata
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "<unknown>".to_owned()),
+            }
+            .into())
+        },
+        Ok,
+    )
 }
 
 fn api_port_candidates(ports: Vec<(String, ApiServicePort)>) -> Vec<ApiServicePort> {
@@ -596,8 +649,8 @@ mod tests {
     use k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec};
 
     use super::{
-        AttachAccessMode, attach_access_mode, direct_endpoint_reachable, extract_api_node_port,
-        extract_api_port,
+        AttachAccessMode, ServiceEndpoint, attach_access_mode, direct_endpoint_reachable,
+        direct_probe_port, extract_api_node_port, extract_api_port,
     };
 
     #[test]
@@ -665,7 +718,65 @@ mod tests {
 
         let ports = extract_api_port(&service).expect("api port should resolve");
         assert_eq!(ports.service_port, 8080);
-        assert_eq!(ports.node_port, 31234);
+        assert_eq!(ports.node_port, Some(31234));
+    }
+
+    #[test]
+    fn cluster_ip_service_resolves_to_forward_path() {
+        let service = Service {
+            metadata: Default::default(),
+            spec: Some(ServiceSpec {
+                ports: Some(vec![ServicePort {
+                    name: Some("api".to_owned()),
+                    port: 8080,
+                    node_port: None,
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let ports = extract_api_port(&service).expect("a ClusterIP service must resolve");
+        assert_eq!(ports.service_port, 8080);
+        assert_eq!(ports.node_port, None);
+
+        let endpoints = vec![ServiceEndpoint {
+            name: "kv-node-0".to_owned(),
+            ports,
+        }];
+        assert_eq!(
+            direct_probe_port(&endpoints),
+            None,
+            "a service without a node port must skip the direct probe and go straight to \
+             port-forwarding"
+        );
+
+        let error = extract_api_node_port(&service)
+            .expect_err("direct access must be rejected without a node port");
+        assert!(error.to_string().contains("no node port"), "got: {error}");
+    }
+
+    #[test]
+    fn node_port_services_keep_the_direct_probe() {
+        let endpoints = vec![
+            ServiceEndpoint {
+                name: "kv-node-0".to_owned(),
+                ports: super::ApiServicePort {
+                    service_port: 8080,
+                    node_port: Some(31234),
+                },
+            },
+            ServiceEndpoint {
+                name: "kv-node-1".to_owned(),
+                ports: super::ApiServicePort {
+                    service_port: 8080,
+                    node_port: Some(31235),
+                },
+            },
+        ];
+
+        assert_eq!(direct_probe_port(&endpoints), Some(31234));
     }
 
     #[test]

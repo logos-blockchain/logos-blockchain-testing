@@ -209,6 +209,15 @@ where
     Ok(docs.join("\n---\n"))
 }
 
+/// Helm template expression substituted with the release name at install
+/// time.
+///
+/// The generated chart is installed through `helm install`, which runs every
+/// file under `templates/` through Helm's Go templating, so the expression
+/// resolves to the actual release name and the resulting label matches the
+/// attach selector produced by [`default_attach_node_service_selector`].
+const RELEASE_NAME_TEMPLATE: &str = "{{ .Release.Name }}";
+
 fn render_node_config_map(name: &str, config_yaml: &str) -> String {
     format!(
         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {name}-config\ndata:\n  config.yaml: |\n{}",
@@ -218,7 +227,7 @@ fn render_node_config_map(name: &str, config_yaml: &str) -> String {
 
 fn render_node_deployment(name: &str, spec: &BinaryConfigK8sSpec) -> String {
     format!(
-        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {name}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: {name}\n  template:\n    metadata:\n      labels:\n        app: {name}\n    spec:\n      containers:\n        - name: app\n          image: {}\n          imagePullPolicy: {}\n          args:\n            - --config\n            - {}\n          ports:\n            - containerPort: {}\n          volumeMounts:\n            - name: config\n              mountPath: {}\n              subPath: config.yaml\n      volumes:\n        - name: config\n          configMap:\n            name: {name}-config",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {name}\n  labels:\n    app.kubernetes.io/instance: {RELEASE_NAME_TEMPLATE}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: {name}\n  template:\n    metadata:\n      labels:\n        app: {name}\n    spec:\n      containers:\n        - name: app\n          image: {}\n          imagePullPolicy: {}\n          args:\n            - --config\n            - {}\n          ports:\n            - containerPort: {}\n          volumeMounts:\n            - name: config\n              mountPath: {}\n              subPath: config.yaml\n      volumes:\n        - name: config\n          configMap:\n            name: {name}-config",
         k8s_image(spec),
         spec.image_pull_policy,
         spec.config_container_path,
@@ -229,7 +238,7 @@ fn render_node_deployment(name: &str, spec: &BinaryConfigK8sSpec) -> String {
 
 fn render_node_service(name: &str, spec: &BinaryConfigK8sSpec) -> String {
     format!(
-        "apiVersion: v1\nkind: Service\nmetadata:\n  name: {name}\nspec:\n  selector:\n    app: {name}\n  type: NodePort\n  ports:\n    - name: api\n      port: {api_port}\n      targetPort: {api_port}\n      protocol: TCP\n    - name: testing\n      port: {testing_port}\n      targetPort: {api_port}\n      protocol: TCP",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  name: {name}\n  labels:\n    app.kubernetes.io/instance: {RELEASE_NAME_TEMPLATE}\nspec:\n  selector:\n    app: {name}\n  type: NodePort\n  ports:\n    - name: api\n      port: {api_port}\n      targetPort: {api_port}\n      protocol: TCP\n    - name: testing\n      port: {testing_port}\n      targetPort: {api_port}\n      protocol: TCP",
         api_port = spec.container_http_port,
         testing_port = spec.service_testing_port
     )
@@ -717,6 +726,43 @@ fn default_node_name(release: &str, index: usize) -> String {
 
 fn default_attach_node_service_selector(release: &str) -> String {
     format!("app.kubernetes.io/instance={release}")
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::{BinaryConfigK8sSpec, render_node_deployment, render_node_service};
+
+    fn spec() -> BinaryConfigK8sSpec {
+        BinaryConfigK8sSpec::conventional(
+            "kv-chart",
+            "kv-node",
+            "/usr/local/bin/kvstore-node",
+            "/etc/kvstore/config.yaml",
+            8080,
+            8081,
+        )
+    }
+
+    #[test]
+    fn rendered_service_carries_release_instance_label() {
+        let service = render_node_service("kv-node-0", &spec());
+
+        assert!(
+            service.contains("  labels:\n    app.kubernetes.io/instance: {{ .Release.Name }}"),
+            "the Service metadata must carry the instance label the attach selector matches, \
+             got:\n{service}"
+        );
+    }
+
+    #[test]
+    fn rendered_deployment_carries_release_instance_label() {
+        let deployment = render_node_deployment("kv-node-0", &spec());
+
+        assert!(
+            deployment.contains("  labels:\n    app.kubernetes.io/instance: {{ .Release.Name }}"),
+            "the Deployment metadata must carry the instance label, got:\n{deployment}"
+        );
+    }
 }
 
 #[cfg(test)]
