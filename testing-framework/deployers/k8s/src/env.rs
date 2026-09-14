@@ -2,6 +2,7 @@ use std::{
     env, fs,
     path::PathBuf,
     process,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -699,11 +700,14 @@ pub(crate) fn build_cfgsync_override_artifacts<E: K8sDeployEnv>(
 }
 
 fn default_cluster_identifiers() -> (String, String) {
+    static PROVISION_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or_default();
-    let suffix = format!("{stamp:x}-{:x}", process::id());
+    let sequence = PROVISION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let suffix = format!("{stamp:x}-{:x}-{sequence:x}", process::id());
     (format!("tf-testnet-{suffix}"), String::from("tf-runner"))
 }
 
@@ -713,4 +717,20 @@ fn default_node_name(release: &str, index: usize) -> String {
 
 fn default_attach_node_service_selector(release: &str) -> String {
     format!("app.kubernetes.io/instance={release}")
+}
+
+#[cfg(test)]
+mod identifier_tests {
+    use super::default_cluster_identifiers;
+
+    #[test]
+    fn cluster_identifiers_are_unique_within_one_process() {
+        let (first_namespace, _) = default_cluster_identifiers();
+        let (second_namespace, _) = default_cluster_identifiers();
+
+        assert_ne!(
+            first_namespace, second_namespace,
+            "two provisions in the same process and millisecond must not share a namespace"
+        );
+    }
 }

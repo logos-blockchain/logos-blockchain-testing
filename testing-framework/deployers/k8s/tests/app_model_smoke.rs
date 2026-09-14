@@ -132,9 +132,25 @@ async fn app_model_smoke() -> Result<()> {
         .map_err(|source| anyhow!(source.to_string()))
         .context("deploying the smoke cluster through the app model")?;
 
+    let sibling: ClusterHandle<SmokeEnv> = ctx
+        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(1)))
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("deploying a sibling cluster into its own namespace")?;
+
     assert_eq!(
         handle.node_names(),
         vec!["node-0".to_owned(), "node-1".to_owned()]
+    );
+
+    sibling
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("waiting for the sibling cluster's readiness")?;
+    assert!(
+        sibling.node_client("node-0").is_some(),
+        "the sibling cluster must expose its own clients"
     );
 
     handle
@@ -166,6 +182,13 @@ async fn app_model_smoke() -> Result<()> {
         "node-0 client must be rebuilt after the restart round-trip"
     );
 
+    sibling
+        .wait_network_ready()
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("the sibling cluster must stay reachable across the other cluster's restart")?;
+
+    drop(sibling);
     drop(handle);
     drop(ctx);
     Ok(())
