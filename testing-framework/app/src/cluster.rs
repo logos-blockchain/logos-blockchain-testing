@@ -35,6 +35,8 @@ impl<E: Application> ClusterApp<E> {
 
     /// Assigns a stable cluster name so several managed clusters can share one
     /// deployment session; backends namespace the cluster's services with it.
+    /// Names use a short lowercase DNS-label form so they remain portable
+    /// across Compose and Kubernetes.
     #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.request = self.request.with_name(name);

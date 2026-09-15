@@ -17,6 +17,7 @@ use testing_framework_container::{
 };
 use testing_framework_core::{
     adjust_timeout,
+    naming::is_valid_dns_label,
     scenario::{CleanupGuard, DynError},
 };
 use tokio::{net::TcpStream, sync::Mutex as AsyncMutex, time::Instant};
@@ -393,22 +394,6 @@ fn is_valid_env_key(key: &str) -> bool {
         .next()
         .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-}
-
-pub(crate) fn is_valid_dns_label(name: &str, max_len: usize) -> bool {
-    !name.is_empty()
-        && name.len() <= max_len
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-        && name
-            .as_bytes()
-            .first()
-            .is_some_and(u8::is_ascii_alphanumeric)
-        && name
-            .as_bytes()
-            .last()
-            .is_some_and(u8::is_ascii_alphanumeric)
 }
 
 fn readiness_port(readiness: &ContainerReadiness) -> &str {

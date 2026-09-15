@@ -128,16 +128,34 @@ async fn app_model_smoke() -> Result<()> {
     );
 
     let handle: ClusterHandle<SmokeEnv> = ctx
-        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(2)))
+        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(2)).with_name("alpha"))
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("deploying the smoke cluster through the app model")?;
 
     let sibling: ClusterHandle<SmokeEnv> = ctx
-        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(1)))
+        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(1)).with_name("beta"))
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("deploying a sibling cluster into its own namespace")?;
+
+    let alpha_namespace = handle
+        .attachment()
+        .and_then(|attachment| attachment.k8s_namespace())
+        .ok_or_else(|| anyhow!("the alpha cluster must expose its Kubernetes namespace"))?;
+    let beta_namespace = sibling
+        .attachment()
+        .and_then(|attachment| attachment.k8s_namespace())
+        .ok_or_else(|| anyhow!("the beta cluster must expose its Kubernetes namespace"))?;
+    assert!(
+        alpha_namespace.ends_with("-alpha"),
+        "the alpha cluster name must scope its namespace, got: {alpha_namespace}"
+    );
+    assert!(
+        beta_namespace.ends_with("-beta"),
+        "the beta cluster name must scope its namespace, got: {beta_namespace}"
+    );
+    assert_ne!(alpha_namespace, beta_namespace);
 
     assert_eq!(
         handle.node_names(),

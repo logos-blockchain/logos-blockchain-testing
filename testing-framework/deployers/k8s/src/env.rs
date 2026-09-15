@@ -636,8 +636,10 @@ where
     )?))
 }
 
-pub(crate) fn cluster_identifiers<E: K8sDeployEnv>() -> (String, String) {
-    E::cluster_identifiers()
+pub(crate) fn cluster_identifiers<E: K8sDeployEnv>(cluster_name: Option<&str>) -> (String, String) {
+    let (namespace, release) = E::cluster_identifiers();
+    let namespace = cluster_name.map_or(namespace.clone(), |name| format!("{namespace}-{name}"));
+    (namespace, release)
 }
 
 pub(crate) fn node_readiness_path<E: K8sDeployEnv>() -> &'static str {
@@ -767,7 +769,8 @@ mod render_tests {
 
 #[cfg(test)]
 mod identifier_tests {
-    use super::default_cluster_identifiers;
+    use super::{K8sDeployEnv, cluster_identifiers, default_cluster_identifiers};
+    use crate::manual::tests_dummy_env::DummyEnv;
 
     #[test]
     fn cluster_identifiers_are_unique_within_one_process() {
@@ -777,6 +780,24 @@ mod identifier_tests {
         assert_ne!(
             first_namespace, second_namespace,
             "two provisions in the same process and millisecond must not share a namespace"
+        );
+    }
+
+    #[test]
+    fn requested_cluster_name_scopes_the_namespace() {
+        let (alpha_namespace, alpha_release) = cluster_identifiers::<DummyEnv>(Some("alpha"));
+        let (beta_namespace, beta_release) = cluster_identifiers::<DummyEnv>(Some("beta"));
+
+        assert!(
+            alpha_namespace.ends_with("-alpha"),
+            "got: {alpha_namespace}"
+        );
+        assert!(beta_namespace.ends_with("-beta"), "got: {beta_namespace}");
+        assert_ne!(alpha_namespace, beta_namespace);
+        assert_eq!(alpha_release, beta_release);
+        assert_eq!(
+            alpha_release,
+            <DummyEnv as K8sDeployEnv>::cluster_identifiers().1
         );
     }
 }

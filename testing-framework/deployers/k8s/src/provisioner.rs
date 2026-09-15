@@ -102,8 +102,9 @@ async fn provision_managed<E: K8sDeployEnv>(
     let observability =
         ObservabilityInputs::from_env()?.with_overrides(request.observability().clone());
     let cluster = Arc::new(
-        ManualCluster::<E>::provision(
+        ManualCluster::<E>::provision_named(
             deployment.clone(),
+            request.name(),
             request.start_mode(),
             request.policy(),
             &observability,

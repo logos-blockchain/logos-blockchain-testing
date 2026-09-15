@@ -1,5 +1,6 @@
 pub mod cfgsync;
 pub mod env;
+pub mod naming;
 pub mod observation;
 pub mod runtime;
 pub mod scenario;

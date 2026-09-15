@@ -16,6 +16,7 @@ use kube::{
 use reqwest::Url;
 use testing_framework_core::{
     manual::ManualClusterHandle,
+    naming::is_valid_cluster_name,
     scenario::{
         CleanupGuard, ClusterStartMode, ClusterWaitHandle, DeploymentPolicy, DynError,
         ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
@@ -49,6 +50,10 @@ const LOCALHOST: &str = "127.0.0.1";
 pub enum ManualClusterError {
     #[error("kubernetes runner requires at least one node (nodes={nodes})")]
     UnsupportedTopology { nodes: usize },
+    #[error(
+        "invalid k8s cluster name '{name}'; use a short lowercase DNS label (letters, digits, and dashes)"
+    )]
+    InvalidClusterName { name: String },
     #[error("failed to initialise kubernetes client: {source}")]
     ClientInit {
         #[source]
@@ -175,9 +180,26 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         policy: DeploymentPolicy,
         observability: &ObservabilityInputs,
     ) -> Result<Self, ManualClusterError> {
+        Self::provision_named(topology, None, start_mode, policy, observability).await
+    }
+
+    pub(crate) async fn provision_named(
+        topology: E::Deployment,
+        cluster_name: Option<&str>,
+        start_mode: ClusterStartMode,
+        policy: DeploymentPolicy,
+        observability: &ObservabilityInputs,
+    ) -> Result<Self, ManualClusterError> {
         let nodes = testing_framework_core::topology::DeploymentDescriptor::node_count(&topology);
         if nodes == 0 {
             return Err(ManualClusterError::UnsupportedTopology { nodes });
+        }
+        if let Some(name) = cluster_name
+            && !is_valid_cluster_name(name)
+        {
+            return Err(ManualClusterError::InvalidClusterName {
+                name: name.to_owned(),
+            });
         }
 
         crate::ensure_rustls_provider_installed();
@@ -190,7 +212,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             .map_err(|source| ManualClusterError::ClientInit { source })?;
         let assets = prepare_stack::<E>(&topology, observability.metrics_otlp_ingest_url.as_ref())
             .map_err(|source| ManualClusterError::Assets { source })?;
-        let (namespace, release) = cluster_identifiers::<E>();
+        let (namespace, release) = cluster_identifiers::<E>(cluster_name);
         let cleanup = assets
             .install(&client, &namespace, &release, nodes)
             .await
@@ -1224,6 +1246,26 @@ mod tests {
     use testing_framework_core::scenario::PeerSelection;
 
     use super::{tests_dummy_env::DummyEnv, *};
+
+    #[tokio::test]
+    async fn invalid_cluster_name_is_rejected_before_kubernetes_access() {
+        let result = ManualCluster::<DummyEnv>::provision_named(
+            testing_framework_core::topology::ClusterTopology::new(1),
+            Some("Bad_Name"),
+            ClusterStartMode::Eager,
+            DeploymentPolicy::default(),
+            &ObservabilityInputs::default(),
+        )
+        .await;
+
+        let Err(error) = result else {
+            panic!("invalid cluster name must be rejected");
+        };
+        assert!(matches!(
+            error,
+            ManualClusterError::InvalidClusterName { name } if name == "Bad_Name"
+        ));
+    }
 
     #[test]
     fn parse_node_index_accepts_node_labels() {
