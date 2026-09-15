@@ -39,6 +39,7 @@ members = [
   "testing-framework/deployers/compose",
   "testing-framework/deployers/k8s",
   "testing-framework/deployers/local",
+  "tools",
 ]
 resolver = "2"
 
@@ -69,6 +70,7 @@ testing-framework-core           = { default-features = false, path = "testing-f
 testing-framework-runner-compose = { default-features = false, path = "testing-framework/deployers/compose" }
 testing-framework-runner-k8s     = { default-features = false, path = "testing-framework/deployers/k8s" }
 testing-framework-runner-local   = { default-features = false, path = "testing-framework/deployers/local" }
+testing-framework-tools          = { default-features = false, path = "tools" }
 # External crates
 async-trait         = { default-features = false, version = "0.1" }
 bytes               = { default-features = false, version = "1.3" }
