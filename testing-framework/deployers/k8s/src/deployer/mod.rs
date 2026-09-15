@@ -1,4 +1,4 @@
-mod attach_provider;
+pub(crate) mod attach_provider;
 mod node_control;
 mod orchestrator;
 
@@ -76,5 +76,18 @@ impl IntoExistingCluster for K8sDeploymentMetadata {
 impl IntoExistingCluster for &K8sDeploymentMetadata {
     fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
         self.existing_cluster()
+    }
+}
+
+impl<E> K8sDeployer<E>
+where
+    E: crate::K8sDeployEnv,
+{
+    pub async fn manual_cluster_from_descriptors(
+        &self,
+        descriptors: E::Deployment,
+    ) -> Result<crate::ManualCluster<E>, crate::ManualClusterError> {
+        let _ = self;
+        crate::ManualCluster::from_topology(descriptors).await
     }
 }

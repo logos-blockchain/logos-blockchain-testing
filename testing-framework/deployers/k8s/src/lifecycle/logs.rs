@@ -5,6 +5,11 @@ use kube::{
 };
 use tracing::{info, warn};
 
+const LOG_TAIL_LINES: i64 = 500;
+
+/// Dumps recent logs for every pod in the namespace so failures keep their
+/// diagnostics before cleanup tears the release and namespace down. Failures
+/// while collecting logs only warn and never mask the original error.
 pub async fn dump_namespace_logs(client: &Client, namespace: &str) {
     let pod_names = match list_pod_names(client, namespace).await {
         Ok(names) => names,
@@ -33,7 +38,7 @@ async fn stream_pod_logs(client: &Client, namespace: &str, pod_name: &str) {
     let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
     let params = LogParams {
         follow: false,
-        tail_lines: Some(500),
+        tail_lines: Some(LOG_TAIL_LINES),
         ..Default::default()
     };
 

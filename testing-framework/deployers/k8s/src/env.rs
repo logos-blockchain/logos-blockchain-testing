@@ -2,6 +2,7 @@ use std::{
     env, fs,
     path::PathBuf,
     process,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -208,6 +209,15 @@ where
     Ok(docs.join("\n---\n"))
 }
 
+/// Helm template expression substituted with the release name at install
+/// time.
+///
+/// The generated chart is installed through `helm install`, which runs every
+/// file under `templates/` through Helm's Go templating, so the expression
+/// resolves to the actual release name and the resulting label matches the
+/// attach selector produced by [`default_attach_node_service_selector`].
+const RELEASE_NAME_TEMPLATE: &str = "{{ .Release.Name }}";
+
 fn render_node_config_map(name: &str, config_yaml: &str) -> String {
     format!(
         "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {name}-config\ndata:\n  config.yaml: |\n{}",
@@ -217,7 +227,7 @@ fn render_node_config_map(name: &str, config_yaml: &str) -> String {
 
 fn render_node_deployment(name: &str, spec: &BinaryConfigK8sSpec) -> String {
     format!(
-        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {name}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: {name}\n  template:\n    metadata:\n      labels:\n        app: {name}\n    spec:\n      containers:\n        - name: app\n          image: {}\n          imagePullPolicy: {}\n          args:\n            - --config\n            - {}\n          ports:\n            - containerPort: {}\n          volumeMounts:\n            - name: config\n              mountPath: {}\n              subPath: config.yaml\n      volumes:\n        - name: config\n          configMap:\n            name: {name}-config",
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {name}\n  labels:\n    app.kubernetes.io/instance: {RELEASE_NAME_TEMPLATE}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: {name}\n  template:\n    metadata:\n      labels:\n        app: {name}\n    spec:\n      containers:\n        - name: app\n          image: {}\n          imagePullPolicy: {}\n          args:\n            - --config\n            - {}\n          ports:\n            - containerPort: {}\n          volumeMounts:\n            - name: config\n              mountPath: {}\n              subPath: config.yaml\n      volumes:\n        - name: config\n          configMap:\n            name: {name}-config",
         k8s_image(spec),
         spec.image_pull_policy,
         spec.config_container_path,
@@ -228,7 +238,7 @@ fn render_node_deployment(name: &str, spec: &BinaryConfigK8sSpec) -> String {
 
 fn render_node_service(name: &str, spec: &BinaryConfigK8sSpec) -> String {
     format!(
-        "apiVersion: v1\nkind: Service\nmetadata:\n  name: {name}\nspec:\n  selector:\n    app: {name}\n  type: NodePort\n  ports:\n    - name: api\n      port: {api_port}\n      targetPort: {api_port}\n      protocol: TCP\n    - name: testing\n      port: {testing_port}\n      targetPort: {api_port}\n      protocol: TCP",
+        "apiVersion: v1\nkind: Service\nmetadata:\n  name: {name}\n  labels:\n    app.kubernetes.io/instance: {RELEASE_NAME_TEMPLATE}\nspec:\n  selector:\n    app: {name}\n  type: NodePort\n  ports:\n    - name: api\n      port: {api_port}\n      targetPort: {api_port}\n      protocol: TCP\n    - name: testing\n      port: {testing_port}\n      targetPort: {api_port}\n      protocol: TCP",
         api_port = spec.container_http_port,
         testing_port = spec.service_testing_port
     )
@@ -626,16 +636,10 @@ where
     )?))
 }
 
-pub(crate) fn cluster_identifiers<E: K8sDeployEnv>() -> (String, String) {
-    E::cluster_identifiers()
-}
-
-pub(crate) fn build_node_clients<E: K8sDeployEnv>(
-    host: &str,
-    node_api_ports: &[u16],
-    node_auxiliary_ports: &[u16],
-) -> Result<Vec<E::NodeClient>, DynError> {
-    E::build_node_clients(host, node_api_ports, node_auxiliary_ports)
+pub(crate) fn cluster_identifiers<E: K8sDeployEnv>(cluster_name: Option<&str>) -> (String, String) {
+    let (namespace, release) = E::cluster_identifiers();
+    let namespace = cluster_name.map_or(namespace.clone(), |name| format!("{namespace}-{name}"));
+    (namespace, release)
 }
 
 pub(crate) fn node_readiness_path<E: K8sDeployEnv>() -> &'static str {
@@ -648,6 +652,18 @@ pub(crate) async fn wait_remote_readiness<E: K8sDeployEnv>(
     requirement: HttpReadinessRequirement,
 ) -> Result<(), DynError> {
     E::wait_remote_readiness(deployment, urls, requirement).await
+}
+
+pub(crate) fn build_node_clients<E: K8sDeployEnv>(
+    host: &str,
+    node_api_ports: &[u16],
+    node_auxiliary_ports: &[u16],
+) -> Result<Vec<E::NodeClient>, DynError> {
+    E::build_node_clients(host, node_api_ports, node_auxiliary_ports)
+}
+
+pub(crate) fn node_base_url<E: K8sDeployEnv>(client: &E::NodeClient) -> Option<String> {
+    E::node_base_url(client)
 }
 
 pub(crate) fn node_role<E: K8sDeployEnv>() -> &'static str {
@@ -677,10 +693,6 @@ pub(crate) async fn wait_for_node_http<E: K8sDeployEnv>(
     E::wait_for_node_http(ports, role, host, timeout, poll_interval, requirement).await
 }
 
-pub(crate) fn node_base_url<E: K8sDeployEnv>(client: &E::NodeClient) -> Option<String> {
-    E::node_base_url(client)
-}
-
 pub(crate) fn cfgsync_service<E: K8sDeployEnv>(release: &str) -> Option<(String, u16)> {
     E::cfgsync_service(release)
 }
@@ -699,11 +711,14 @@ pub(crate) fn build_cfgsync_override_artifacts<E: K8sDeployEnv>(
 }
 
 fn default_cluster_identifiers() -> (String, String) {
+    static PROVISION_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or_default();
-    let suffix = format!("{stamp:x}-{:x}", process::id());
+    let sequence = PROVISION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let suffix = format!("{stamp:x}-{:x}-{sequence:x}", process::id());
     (format!("tf-testnet-{suffix}"), String::from("tf-runner"))
 }
 
@@ -713,4 +728,76 @@ fn default_node_name(release: &str, index: usize) -> String {
 
 fn default_attach_node_service_selector(release: &str) -> String {
     format!("app.kubernetes.io/instance={release}")
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::{BinaryConfigK8sSpec, render_node_deployment, render_node_service};
+
+    fn spec() -> BinaryConfigK8sSpec {
+        BinaryConfigK8sSpec::conventional(
+            "kv-chart",
+            "kv-node",
+            "/usr/local/bin/kvstore-node",
+            "/etc/kvstore/config.yaml",
+            8080,
+            8081,
+        )
+    }
+
+    #[test]
+    fn rendered_service_carries_release_instance_label() {
+        let service = render_node_service("kv-node-0", &spec());
+
+        assert!(
+            service.contains("  labels:\n    app.kubernetes.io/instance: {{ .Release.Name }}"),
+            "the Service metadata must carry the instance label the attach selector matches, \
+             got:\n{service}"
+        );
+    }
+
+    #[test]
+    fn rendered_deployment_carries_release_instance_label() {
+        let deployment = render_node_deployment("kv-node-0", &spec());
+
+        assert!(
+            deployment.contains("  labels:\n    app.kubernetes.io/instance: {{ .Release.Name }}"),
+            "the Deployment metadata must carry the instance label, got:\n{deployment}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod identifier_tests {
+    use super::{K8sDeployEnv, cluster_identifiers, default_cluster_identifiers};
+    use crate::manual::tests_dummy_env::DummyEnv;
+
+    #[test]
+    fn cluster_identifiers_are_unique_within_one_process() {
+        let (first_namespace, _) = default_cluster_identifiers();
+        let (second_namespace, _) = default_cluster_identifiers();
+
+        assert_ne!(
+            first_namespace, second_namespace,
+            "two provisions in the same process and millisecond must not share a namespace"
+        );
+    }
+
+    #[test]
+    fn requested_cluster_name_scopes_the_namespace() {
+        let (alpha_namespace, alpha_release) = cluster_identifiers::<DummyEnv>(Some("alpha"));
+        let (beta_namespace, beta_release) = cluster_identifiers::<DummyEnv>(Some("beta"));
+
+        assert!(
+            alpha_namespace.ends_with("-alpha"),
+            "got: {alpha_namespace}"
+        );
+        assert!(beta_namespace.ends_with("-beta"), "got: {beta_namespace}");
+        assert_ne!(alpha_namespace, beta_namespace);
+        assert_eq!(alpha_release, beta_release);
+        assert_eq!(
+            alpha_release,
+            <DummyEnv as K8sDeployEnv>::cluster_identifiers().1
+        );
+    }
 }

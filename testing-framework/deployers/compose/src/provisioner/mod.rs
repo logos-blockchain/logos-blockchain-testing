@@ -8,10 +8,14 @@ use std::{
 
 use async_trait::async_trait;
 use reqwest::Url;
-use testing_framework_core::scenario::{
-    CleanupGuard, ClusterControlProfile, ClusterControlRequest, ClusterProvisioner, ClusterRequest,
-    ClusterSource, ClusterStartMode, ClusterUnit, ClusterWaitHandle, DynError, ExistingCluster,
-    ExternalNodeSource, HttpReadinessRequirement, NodeClients, ObservabilityInputs, RetryPolicy,
+use testing_framework_core::{
+    naming::is_valid_cluster_name,
+    scenario::{
+        CleanupGuard, ClusterControlProfile, ClusterControlRequest, ClusterProvisioner,
+        ClusterRequest, ClusterSource, ClusterStartMode, ClusterUnit, ClusterWaitHandle, DynError,
+        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
+        ObservabilityInputs, RetryPolicy,
+    },
 };
 use tokio_retry::{
     RetryIf,
@@ -25,7 +29,6 @@ use self::{
 };
 use crate::{
     ComposeProvisioner,
-    container_stack::is_valid_dns_label,
     docker::control::{ComposeAttachedNodeControl, ComposeNodeControl},
     env::{
         ComposeDeployEnv, compose_descriptor, node_container_ports,
@@ -121,12 +124,9 @@ async fn provision_managed<E: ComposeDeployEnv>(
 }
 
 fn cluster_key(name: Option<&str>) -> Result<ClusterKey, ComposeRunnerError> {
-    const MAX_CLUSTER_NAME_LEN: usize = 32;
     match name {
         None => Ok(ClusterKey::Unnamed),
-        Some(name) if is_valid_dns_label(name, MAX_CLUSTER_NAME_LEN) => {
-            Ok(ClusterKey::Named(name.to_owned()))
-        }
+        Some(name) if is_valid_cluster_name(name) => Ok(ClusterKey::Named(name.to_owned())),
         Some(name) => Err(ComposeRunnerError::InvalidClusterName {
             name: name.to_owned(),
         }),
