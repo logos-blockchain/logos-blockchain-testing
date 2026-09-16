@@ -256,8 +256,14 @@ fn lock_node(node: &Mutex<NodeForwards>) -> std::sync::MutexGuard<'_, NodeForwar
 /// Kills an entry's forward and spawns a replacement on the same local port.
 fn respawn_entry(entry: &mut ForwardEntry) -> Result<(), ClusterWaitError> {
     entry.handle.shutdown();
+    entry.handle = respawn_forward(&entry.spec)?;
+    Ok(())
+}
 
-    let spec = &entry.spec;
+/// Spawns a forward for the given spec on its original local port and waits
+/// for it to become ready. The caller must have shut down any previous
+/// forward bound to that port.
+pub(crate) fn respawn_forward(spec: &ForwardSpec) -> Result<PortForwardHandle, ClusterWaitError> {
     let mut child = spawn_kubectl_port_forward(
         &spec.namespace,
         &spec.service,
@@ -267,8 +273,7 @@ fn respawn_entry(entry: &mut ForwardEntry) -> Result<(), ClusterWaitError> {
     .map_err(|source| port_forward_error(&spec.service, spec.remote_port, source.into()))?;
     wait_until_port_forward_ready(&mut child, spec.local_port, &spec.service, spec.remote_port)?;
 
-    entry.handle = PortForwardHandle { child };
-    Ok(())
+    Ok(PortForwardHandle { child })
 }
 
 pub fn port_forward_service(

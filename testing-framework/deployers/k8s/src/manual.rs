@@ -1,37 +1,45 @@
 use std::{
     collections::HashSet,
     net::Ipv4Addr,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use cfgsync_core::Client as CfgsyncClient;
 use k8s_openapi::api::apps::v1::Deployment;
 use kube::{
-    Api, Client,
+    Api, Client, Config,
     api::{Patch, PatchParams},
 };
+use reqwest::Url;
 use testing_framework_core::{
     manual::ManualClusterHandle,
+    naming::is_valid_cluster_name,
     scenario::{
-        ClusterWaitHandle, DynError, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
-        NodeControlHandle, PeerSelection, StartNodeOptions, StartedNode,
+        CleanupGuard, ClusterStartMode, ClusterWaitHandle, DeploymentPolicy, DynError,
+        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
+        NodeControlHandle, ObservabilityInputs, PeerSelection, StartNodeOptions, StartedNode,
     },
 };
 use thiserror::Error;
 use tokio_retry::{RetryIf, strategy::FixedInterval};
+use tracing::warn;
 
 use crate::{
-    K8sDeployer,
     env::{
-        K8sDeployEnv, build_cfgsync_override_artifacts, cfgsync_hostnames, cfgsync_service,
-        cluster_identifiers, collect_port_specs, discovered_node_access, node_deployment_name,
-        node_readiness_path, node_service_name, prepare_stack,
+        K8sDeployEnv, attach_node_service_selector, build_cfgsync_override_artifacts,
+        cfgsync_hostnames, cfgsync_service, cluster_identifiers, collect_port_specs,
+        discovered_node_access, node_deployment_name, node_readiness_path, node_service_name,
+        prepare_stack, wait_remote_readiness,
     },
     lifecycle::{
-        cleanup::RunnerCleanup,
+        cleanup::{CLEANUP_TIMEOUT, RunnerCleanup},
+        logs::dump_namespace_logs,
         wait::{
             ClusterWaitError, NodeConfigPorts, NodePortAllocation, PortForwardRegistry,
-            deployment::wait_for_deployment_ready, port_forward_service,
+            deployment::wait_for_deployment_ready, port_forward_service, wait_for_cluster_ready,
         },
     },
 };
@@ -42,6 +50,10 @@ const LOCALHOST: &str = "127.0.0.1";
 pub enum ManualClusterError {
     #[error("kubernetes runner requires at least one node (nodes={nodes})")]
     UnsupportedTopology { nodes: usize },
+    #[error(
+        "invalid k8s cluster name '{name}'; use a short lowercase DNS label (letters, digits, and dashes)"
+    )]
+    InvalidClusterName { name: String },
     #[error("failed to initialise kubernetes client: {source}")]
     ClientInit {
         #[source]
@@ -106,17 +118,21 @@ pub enum ManualClusterError {
         #[source]
         source: DynError,
     },
+    #[error("k8s manual cluster is no longer owned by an active run")]
+    Closed,
 }
 
 struct ManualClusterState<E: K8sDeployEnv> {
     running: HashSet<usize>,
     node_clients: NodeClients<E>,
     known_clients: Vec<Option<E::NodeClient>>,
+    inventory_slots: Vec<Option<usize>>,
     node_allocations: Vec<Option<NodePortAllocation>>,
 }
 
 pub struct ManualCluster<E: K8sDeployEnv> {
     client: Client,
+    config: Config,
     namespace: String,
     release: String,
     topology: E::Deployment,
@@ -124,48 +140,153 @@ pub struct ManualCluster<E: K8sDeployEnv> {
     node_host: String,
     node_ports: Vec<NodeConfigPorts>,
     forwards: PortForwardRegistry,
-    cleanup: Option<RunnerCleanup>,
+    cleanup: Mutex<Option<RunnerCleanup>>,
+    closed: AtomicBool,
     state: Arc<Mutex<ManualClusterState<E>>>,
+}
+
+struct ManualClusterCleanup<E: K8sDeployEnv> {
+    cluster: Arc<ManualCluster<E>>,
+}
+
+impl<E: K8sDeployEnv> CleanupGuard for ManualClusterCleanup<E> {
+    fn cleanup(self: Box<Self>) {
+        self.cluster.close();
+    }
+}
+
+struct EagerClusterParts<E: K8sDeployEnv> {
+    node_host: String,
+    node_allocations: Vec<NodePortAllocation>,
+    port_forwards: PortForwardRegistry,
+    node_clients: NodeClients<E>,
+    known_clients: Vec<Option<E::NodeClient>>,
 }
 
 impl<E: K8sDeployEnv> ManualCluster<E> {
     pub async fn from_topology(topology: E::Deployment) -> Result<Self, ManualClusterError> {
+        Self::provision(
+            topology,
+            ClusterStartMode::OnDemand,
+            DeploymentPolicy::default(),
+            &ObservabilityInputs::default(),
+        )
+        .await
+    }
+
+    pub async fn provision(
+        topology: E::Deployment,
+        start_mode: ClusterStartMode,
+        policy: DeploymentPolicy,
+        observability: &ObservabilityInputs,
+    ) -> Result<Self, ManualClusterError> {
+        Self::provision_named(topology, None, start_mode, policy, observability).await
+    }
+
+    pub(crate) async fn provision_named(
+        topology: E::Deployment,
+        cluster_name: Option<&str>,
+        start_mode: ClusterStartMode,
+        policy: DeploymentPolicy,
+        observability: &ObservabilityInputs,
+    ) -> Result<Self, ManualClusterError> {
         let nodes = testing_framework_core::topology::DeploymentDescriptor::node_count(&topology);
         if nodes == 0 {
             return Err(ManualClusterError::UnsupportedTopology { nodes });
         }
+        if let Some(name) = cluster_name
+            && !is_valid_cluster_name(name)
+        {
+            return Err(ManualClusterError::InvalidClusterName {
+                name: name.to_owned(),
+            });
+        }
 
         crate::ensure_rustls_provider_installed();
-        let client = Client::try_default()
+        let config = Config::infer()
             .await
+            .map_err(|source| ManualClusterError::ClientInit {
+                source: kube::Error::InferConfig(source),
+            })?;
+        let client = Client::try_from(config.clone())
             .map_err(|source| ManualClusterError::ClientInit { source })?;
-        let assets = prepare_stack::<E>(&topology, None)
+        let assets = prepare_stack::<E>(&topology, observability.metrics_otlp_ingest_url.as_ref())
             .map_err(|source| ManualClusterError::Assets { source })?;
-        let (namespace, release) = cluster_identifiers::<E>();
+        let (namespace, release) = cluster_identifiers::<E>(cluster_name);
         let cleanup = assets
             .install(&client, &namespace, &release, nodes)
             .await
             .map_err(|source| ManualClusterError::InstallStack { source })?;
 
         let node_ports = collect_port_specs::<E>(&topology).nodes;
-        scale_all_nodes::<E>(&client, &namespace, &release, nodes, 0).await?;
 
-        Ok(Self {
-            client,
-            namespace,
-            release,
-            topology,
-            node_count: nodes,
-            node_host: LOCALHOST.to_owned(),
-            node_ports,
-            forwards: PortForwardRegistry::default(),
-            cleanup: Some(cleanup),
-            state: Arc::new(Mutex::new(ManualClusterState {
-                running: HashSet::new(),
-                node_clients: NodeClients::default(),
-                known_clients: vec![None; nodes],
-                node_allocations: vec![None; nodes],
-            })),
+        match start_mode {
+            ClusterStartMode::OnDemand => {
+                let scaled = scale_all_nodes::<E>(&client, &namespace, &release, nodes, 0).await;
+                let ((), cleanup) = cleanup_if_failed(&client, &namespace, scaled, cleanup).await?;
+
+                Ok(Self {
+                    client,
+                    config,
+                    namespace,
+                    release,
+                    topology,
+                    node_count: nodes,
+                    node_host: LOCALHOST.to_owned(),
+                    node_ports,
+                    forwards: PortForwardRegistry::default(),
+                    cleanup: Mutex::new(Some(cleanup)),
+                    closed: AtomicBool::new(false),
+                    state: Arc::new(Mutex::new(ManualClusterState {
+                        running: HashSet::new(),
+                        node_clients: NodeClients::default(),
+                        known_clients: vec![None; nodes],
+                        inventory_slots: vec![None; nodes],
+                        node_allocations: vec![None; nodes],
+                    })),
+                })
+            }
+            ClusterStartMode::Eager => {
+                let provisioned = provision_eager_parts::<E>(
+                    &client,
+                    &namespace,
+                    &release,
+                    &topology,
+                    policy,
+                    &node_ports,
+                )
+                .await;
+                let (parts, cleanup) =
+                    cleanup_if_failed(&client, &namespace, provisioned, cleanup).await?;
+
+                Ok(Self {
+                    client,
+                    config,
+                    namespace,
+                    release,
+                    topology,
+                    node_count: nodes,
+                    node_host: parts.node_host,
+                    node_ports,
+                    forwards: parts.port_forwards,
+                    cleanup: Mutex::new(Some(cleanup)),
+                    closed: AtomicBool::new(false),
+                    state: Arc::new(Mutex::new(ManualClusterState {
+                        running: (0..nodes).collect(),
+                        node_clients: parts.node_clients,
+                        known_clients: parts.known_clients,
+                        inventory_slots: (0..nodes).map(Some).collect(),
+                        node_allocations: parts.node_allocations.into_iter().map(Some).collect(),
+                    })),
+                })
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn cleanup_guard(self: &Arc<Self>) -> Box<dyn CleanupGuard> {
+        Box::new(ManualClusterCleanup {
+            cluster: Arc::clone(self),
         })
     }
 
@@ -197,6 +318,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         name: &str,
         options: StartNodeOptions<E>,
     ) -> Result<StartedNode<E>, ManualClusterError> {
+        self.ensure_open()?;
         validate_start_options(&options)?;
         let index = self.require_node_index(name)?;
         {
@@ -222,8 +344,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         state.running.insert(index);
-        state.known_clients[index] = Some(client.clone());
-        state.node_clients.add_node(client.clone());
+        record_node_client(&mut state, index, client.clone());
 
         Ok(StartedNode {
             name: canonical_node_name(index),
@@ -232,10 +353,26 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
     }
 
     pub fn stop_all(&self) {
-        block_on_best_effort(self.stop_all_async());
+        self.stop_all_blocking();
     }
 
-    async fn stop_all_async(&self) -> Result<(), ManualClusterError> {
+    /// Runs the sequential per-node scale-down under one overall deadline so a
+    /// degraded API server cannot stall close() far beyond the cleanup budget.
+    ///
+    /// Reuses `RunnerCleanup`'s timeout; when the deadline cuts teardown short
+    /// a warning is logged and the caller proceeds with release and namespace
+    /// cleanup.
+    async fn stop_all_bounded(&self, client: &Client) {
+        let result = tokio::time::timeout(CLEANUP_TIMEOUT, self.stop_all_with_client(client)).await;
+        if result.is_err() {
+            warn!(
+                timeout_secs = CLEANUP_TIMEOUT.as_secs(),
+                "node scale-down did not finish before the teardown deadline; proceeding with cleanup"
+            );
+        }
+    }
+
+    async fn stop_all_with_client(&self, client: &Client) -> Result<(), ManualClusterError> {
         let indices = {
             let state = self
                 .state
@@ -246,14 +383,33 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
 
         for index in indices {
             let name = canonical_node_name(index);
-            self.stop_node(&name).await?;
+            self.stop_node_with_client(client, &name).await?;
         }
 
         Ok(())
     }
 
     pub async fn restart_node(&self, name: &str) -> Result<(), ManualClusterError> {
+        self.restart_node_with(name, StartNodeOptions::<E>::default())
+            .await
+    }
+
+    /// Restarts a running node with the given start options.
+    ///
+    /// Options the k8s backend can honor (peer selection, config overrides,
+    /// config patches) are applied through cfgsync before the node's pod is
+    /// replaced; options it cannot honor (persist/snapshot directories, extra
+    /// process arguments, start timeout overrides) are rejected, mirroring the
+    /// legacy managed k8s node control.
+    pub async fn restart_node_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), ManualClusterError> {
+        self.ensure_open()?;
+        validate_restart_options(&options)?;
         let index = self.require_running_node_index(name)?;
+        self.apply_cfgsync_override(index, &options).await?;
         scale_node::<E>(&self.client, &self.namespace, &self.release, index, 0).await?;
         scale_node::<E>(&self.client, &self.namespace, &self.release, index, 1).await?;
         self.refresh_forwards(index).await?;
@@ -264,14 +420,26 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.known_clients[index] = Some(client.clone());
-        state.node_clients.add_node(client);
+        record_node_client(&mut state, index, client);
         Ok(())
     }
 
     pub async fn stop_node(&self, name: &str) -> Result<(), ManualClusterError> {
+        self.ensure_open()?;
+        self.stop_node_inner(name).await
+    }
+
+    async fn stop_node_inner(&self, name: &str) -> Result<(), ManualClusterError> {
+        self.stop_node_with_client(&self.client, name).await
+    }
+
+    async fn stop_node_with_client(
+        &self,
+        client: &Client,
+        name: &str,
+    ) -> Result<(), ManualClusterError> {
         let index = self.require_running_node_index(name)?;
-        scale_node::<E>(&self.client, &self.namespace, &self.release, index, 0).await?;
+        scale_node::<E>(client, &self.namespace, &self.release, index, 0).await?;
         let mut state = self
             .state
             .lock()
@@ -280,13 +448,119 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         Ok(())
     }
 
+    async fn refresh_forwards(&self, index: usize) -> Result<(), ManualClusterError> {
+        if self.node_host != LOCALHOST {
+            return Ok(());
+        }
+
+        let forwards = self.forwards.clone();
+        let namespace = self.namespace.clone();
+        let service = node_service_name::<E>(&self.release, index);
+        let ports = self.node_ports[index];
+        let allocation = tokio::task::spawn_blocking(move || {
+            forwards.forward_node(index, &namespace, &service, ports)
+        })
+        .await
+        .map_err(|source| {
+            ManualClusterError::NodePorts(ClusterWaitError::PortForwardTask {
+                source: source.into(),
+            })
+        })??;
+
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.node_allocations[index] = Some(allocation);
+        Ok(())
+    }
+
+    fn ensure_open(&self) -> Result<(), ManualClusterError> {
+        if self.closed.load(Ordering::Acquire) {
+            return Err(ManualClusterError::Closed);
+        }
+        Ok(())
+    }
+
+    fn close(&self) {
+        if self.closed.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        self.stop_all_blocking();
+        self.forwards.shutdown_all();
+        if let Some(cleanup) = take_cleanup(&self.cleanup) {
+            CleanupGuard::cleanup(Box::new(cleanup));
+        }
+    }
+
+    /// Drives a best-effort node scale-down to completion from synchronous
+    /// code.
+    ///
+    /// `block_in_place` panics on current-thread tokio runtimes, which would
+    /// abort cleanup mid-run, so that flavor runs the scale-down on a
+    /// dedicated thread with its own small runtime instead. Code outside any
+    /// runtime blocks on a fresh current-thread runtime with the pooled
+    /// client: its connections are either still driven by the (unblocked)
+    /// owning runtime or fail fast once that runtime is gone.
+    fn stop_all_blocking(&self) {
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle)
+                if handle.runtime_flavor() != tokio::runtime::RuntimeFlavor::CurrentThread =>
+            {
+                tokio::task::block_in_place(|| {
+                    handle.block_on(self.stop_all_bounded(&self.client));
+                });
+            }
+            Ok(_) => self.stop_all_on_dedicated_thread(),
+            Err(_) => {
+                if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    runtime.block_on(self.stop_all_bounded(&self.client));
+                }
+            }
+        }
+    }
+
+    /// Scales nodes down from a dedicated thread while the calling
+    /// current-thread runtime stays blocked.
+    ///
+    /// The pooled client must not be reused here: its connections are driven
+    /// by tasks on the blocked outer runtime, so requests through it could
+    /// stall forever. A fresh client built from the stored config keeps every
+    /// connection on the dedicated runtime; if building it fails the
+    /// scale-down is skipped with a warning instead of hanging.
+    fn stop_all_on_dedicated_thread(&self) {
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    return;
+                };
+                runtime.block_on(async {
+                    match Client::try_from(self.config.clone()) {
+                        Ok(client) => self.stop_all_bounded(&client).await,
+                        Err(error) => warn!(
+                            error = ?error,
+                            "failed to build a dedicated cleanup client; skipping node scale-down"
+                        ),
+                    }
+                });
+            });
+        });
+    }
+
     pub async fn wait_network_ready(&self) -> Result<(), ManualClusterError> {
-        let running_ports = {
+        self.ensure_open()?;
+        let (running_ports, registered_nodes) = {
             let state = self
                 .state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state
+            let ports = state
                 .running
                 .iter()
                 .copied()
@@ -298,11 +572,22 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
                             source: "node has no active port-forward allocation".into(),
                         })
                 })
-                .collect::<Result<Vec<_>, _>>()?
+                .collect::<Result<Vec<_>, _>>()?;
+            let registered = state.inventory_slots.iter().flatten().count();
+            (ports, registered)
         };
 
         if running_ports.is_empty() {
-            return Ok(());
+            if registered_nodes == 0 {
+                return Ok(());
+            }
+            return Err(ManualClusterError::NetworkReadiness {
+                source: format!(
+                    "all {} nodes are stopped; no running nodes to await readiness",
+                    self.node_count
+                )
+                .into(),
+            });
         }
 
         let ports = running_ports;
@@ -319,6 +604,7 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
     }
 
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), ManualClusterError> {
+        self.ensure_open()?;
         let index = self.require_node_index(name)?;
         let port = self.node_allocation(index)?.api;
         testing_framework_core::scenario::wait_for_http_ports_with_host_and_requirement(
@@ -343,21 +629,37 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         state.node_clients.clone()
     }
 
+    /// Returns the descriptor a later attached cluster request can consume to
+    /// re-attach to this deployment's node services.
+    #[must_use]
+    pub fn attachment(&self) -> ExistingCluster {
+        ExistingCluster::for_k8s_selector_in_namespace(
+            self.namespace.clone(),
+            attach_node_service_selector::<E>(&self.release),
+        )
+    }
+
     pub fn add_external_sources(
         &self,
         external_sources: impl IntoIterator<Item = ExternalNodeSource>,
     ) -> Result<(), DynError> {
-        let node_clients = self.node_clients();
-        for source in external_sources {
-            node_clients.add_node(E::external_node_client(&source)?);
-        }
+        let clients = external_sources
+            .into_iter()
+            .map(|source| E::external_node_client(&source))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.add_external_clients(clients);
         Ok(())
     }
 
+    /// Appends external clients while holding the state lock so the appends
+    /// cannot interleave with `record_node_client`'s slot bookkeeping.
     pub fn add_external_clients(&self, clients: impl IntoIterator<Item = E::NodeClient>) {
-        let node_clients = self.node_clients();
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         for client in clients {
-            node_clients.add_node(client);
+            state.node_clients.add_node(client);
         }
     }
 
@@ -383,29 +685,6 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
             name: canonical_node_name(index),
             source: "node has no active port-forward allocation".into(),
         })
-    }
-
-    async fn refresh_forwards(&self, index: usize) -> Result<(), ManualClusterError> {
-        let forwards = self.forwards.clone();
-        let namespace = self.namespace.clone();
-        let service = node_service_name::<E>(&self.release, index);
-        let ports = self.node_ports[index];
-        let allocation = tokio::task::spawn_blocking(move || {
-            forwards.forward_node(index, &namespace, &service, ports)
-        })
-        .await
-        .map_err(|source| {
-            ManualClusterError::NodePorts(ClusterWaitError::PortForwardTask {
-                source: source.into(),
-            })
-        })??;
-
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.node_allocations[index] = Some(allocation);
-        Ok(())
     }
 
     fn require_node_index(&self, name: &str) -> Result<usize, ManualClusterError> {
@@ -480,11 +759,7 @@ where
     E: K8sDeployEnv,
 {
     fn drop(&mut self) {
-        self.stop_all();
-        self.forwards.shutdown_all();
-        if let Some(cleanup) = self.cleanup.take() {
-            testing_framework_core::scenario::CleanupGuard::cleanup(Box::new(cleanup));
-        }
+        self.close();
     }
 }
 
@@ -495,6 +770,16 @@ where
 {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         Self::restart_node(self, name).await.map_err(Into::into)
+    }
+
+    async fn restart_node_with(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        Self::restart_node_with(self, name, options)
+            .await
+            .map_err(Into::into)
     }
 
     async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
@@ -515,8 +800,18 @@ where
         Self::stop_node(self, name).await.map_err(Into::into)
     }
 
+    async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
+        self.ensure_open()?;
+        self.require_running_node_index(name)?;
+        Self::wait_node_ready(self, name).await.map_err(Into::into)
+    }
+
     fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         Self::node_client(self, name)
+    }
+
+    fn node_names(&self) -> Vec<String> {
+        (0..self.node_count).map(canonical_node_name).collect()
     }
 }
 
@@ -533,17 +828,116 @@ where
 #[async_trait::async_trait]
 impl<E> ManualClusterHandle<E> for ManualCluster<E> where E: K8sDeployEnv {}
 
-impl<E> K8sDeployer<E>
-where
-    E: K8sDeployEnv,
-{
-    pub async fn manual_cluster_from_descriptors(
-        &self,
-        descriptors: E::Deployment,
-    ) -> Result<ManualCluster<E>, ManualClusterError> {
-        let _ = self;
-        ManualCluster::from_topology(descriptors).await
+fn take_cleanup(cleanup: &Mutex<Option<RunnerCleanup>>) -> Option<RunnerCleanup> {
+    cleanup
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+}
+
+async fn run_failed_provision_cleanup<C: CleanupGuard + Send + 'static>(cleanup: C) {
+    let _ = tokio::task::spawn_blocking(move || {
+        CleanupGuard::cleanup(Box::new(cleanup));
+    })
+    .await;
+}
+
+/// Passes through a successful provisioning step, or dumps namespace pod
+/// logs and runs the installed stack's cleanup before propagating the error
+/// so failed provisioning keeps its diagnostics and does not leak the Helm
+/// release and namespace.
+async fn cleanup_if_failed<T, C: CleanupGuard + Send + 'static>(
+    client: &Client,
+    namespace: &str,
+    result: Result<T, ManualClusterError>,
+    cleanup: C,
+) -> Result<(T, C), ManualClusterError> {
+    match result {
+        Ok(value) => Ok((value, cleanup)),
+        Err(error) => {
+            dump_namespace_logs(client, namespace).await;
+            run_failed_provision_cleanup(cleanup).await;
+            Err(error)
+        }
     }
+}
+
+async fn provision_eager_parts<E: K8sDeployEnv>(
+    client: &Client,
+    namespace: &str,
+    release: &str,
+    topology: &E::Deployment,
+    policy: DeploymentPolicy,
+    node_ports: &[NodeConfigPorts],
+) -> Result<EagerClusterParts<E>, ManualClusterError> {
+    let ready = wait_for_cluster_ready::<E>(client, namespace, release, node_ports).await?;
+    let node_host = ready.ports.node_host;
+    let node_allocations = ready.ports.nodes;
+    let port_forwards = ready.port_forwards;
+
+    if policy.readiness_enabled {
+        let api_ports = node_allocations
+            .iter()
+            .map(|allocation| allocation.api)
+            .collect::<Vec<_>>();
+        if let Err(error) = wait_policy_readiness::<E>(
+            topology,
+            &node_host,
+            &api_ports,
+            policy.readiness_requirement,
+        )
+        .await
+        {
+            port_forwards.shutdown_all_async().await;
+            return Err(error);
+        }
+    }
+
+    let node_clients = NodeClients::default();
+    let mut known_clients = Vec::with_capacity(node_allocations.len());
+    for (index, allocation) in node_allocations.iter().enumerate() {
+        let access = discovered_node_access(&node_host, allocation.api, allocation.auxiliary);
+        match E::build_node_client(&access) {
+            Ok(node_client) => {
+                known_clients.push(Some(node_client.clone()));
+                node_clients.add_node(node_client);
+            }
+            Err(source) => {
+                port_forwards.shutdown_all_async().await;
+                return Err(ManualClusterError::NodeClient {
+                    name: canonical_node_name(index),
+                    source,
+                });
+            }
+        }
+    }
+
+    Ok(EagerClusterParts {
+        node_host,
+        node_allocations,
+        port_forwards,
+        node_clients,
+        known_clients,
+    })
+}
+
+async fn wait_policy_readiness<E: K8sDeployEnv>(
+    topology: &E::Deployment,
+    node_host: &str,
+    api_ports: &[u16],
+    requirement: HttpReadinessRequirement,
+) -> Result<(), ManualClusterError> {
+    let urls = api_ports
+        .iter()
+        .map(|port| Url::parse(&format!("http://{node_host}:{port}/")))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|source| ManualClusterError::NetworkReadiness {
+            source: source.into(),
+        })?;
+
+    wait_remote_readiness::<E>(topology, &urls, requirement)
+        .await
+        .map_err(|source| ManualClusterError::NetworkReadiness { source })
 }
 
 async fn scale_all_nodes<E: K8sDeployEnv>(
@@ -569,8 +963,7 @@ pub(crate) async fn scale_node<E: K8sDeployEnv>(
     replicas: i32,
 ) -> Result<(), ManualClusterError> {
     let name = node_deployment_name::<E>(release, index);
-    patch_node_replicas(client, namespace, &name, replicas).await?;
-    wait_for_replicas(
+    scale_deployment(
         client,
         namespace,
         &name,
@@ -578,6 +971,19 @@ pub(crate) async fn scale_node<E: K8sDeployEnv>(
         replicas,
     )
     .await
+}
+
+/// Patches the named deployment to the requested replica count and waits for
+/// the deployment to reach it.
+pub(crate) async fn scale_deployment(
+    client: &Client,
+    namespace: &str,
+    deployment_name: &str,
+    node_name: &str,
+    replicas: i32,
+) -> Result<(), ManualClusterError> {
+    patch_node_replicas(client, namespace, deployment_name, replicas).await?;
+    wait_for_replicas(client, namespace, deployment_name, node_name, replicas).await
 }
 
 pub(crate) async fn patch_node_replicas(
@@ -669,7 +1075,28 @@ fn validate_start_options<E: K8sDeployEnv>(
     Ok(())
 }
 
-fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
+/// Rejects restart options the k8s backend cannot honor: a restarted pod is
+/// relaunched with the container arguments and timeouts baked into its
+/// deployment, so accepting them would report a configured restart that never
+/// happened.
+pub(crate) fn validate_restart_options<E: K8sDeployEnv>(
+    options: &StartNodeOptions<E>,
+) -> Result<(), ManualClusterError> {
+    validate_start_options(options)?;
+    if !options.args.is_empty() {
+        return Err(ManualClusterError::UnsupportedStartOptions {
+            message: "extra process arguments are not supported on restart".to_owned(),
+        });
+    }
+    if options.runtime.start_timeout.is_some() {
+        return Err(ManualClusterError::UnsupportedStartOptions {
+            message: "start timeout overrides are not supported on restart".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
     let default_peers = matches!(options.peers, None | Some(PeerSelection::DefaultLayout));
@@ -682,6 +1109,23 @@ fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     })
 }
 
+/// Records a node's client after a start or restart, replacing the node's
+/// existing entry in the shared inventory instead of appending a duplicate.
+fn record_node_client<E: K8sDeployEnv>(
+    state: &mut ManualClusterState<E>,
+    index: usize,
+    client: E::NodeClient,
+) {
+    state.known_clients[index] = Some(client.clone());
+    if let Some(slot) = state.inventory_slots[index]
+        && state.node_clients.replace_node(slot, client.clone())
+    {
+        return;
+    }
+    state.inventory_slots[index] = Some(state.node_clients.len());
+    state.node_clients.add_node(client);
+}
+
 /// Parses a canonical `node-<index>` name into its index.
 pub(crate) fn parse_node_index(name: &str) -> Option<usize> {
     name.strip_prefix("node-")?.parse().ok()
@@ -690,22 +1134,6 @@ pub(crate) fn parse_node_index(name: &str) -> Option<usize> {
 /// Formats the canonical `node-<index>` name for a node index.
 pub(crate) fn canonical_node_name(index: usize) -> String {
     format!("node-{index}")
-}
-
-fn block_on_best_effort(fut: impl std::future::Future<Output = Result<(), ManualClusterError>>) {
-    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        tokio::task::block_in_place(|| {
-            let _ = handle.block_on(fut);
-        });
-        return;
-    }
-
-    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
-        let _ = runtime.block_on(fut);
-    }
 }
 
 /// Minimal `K8sDeployEnv` implementation shared by unit tests in this crate.
@@ -819,6 +1247,26 @@ mod tests {
 
     use super::{tests_dummy_env::DummyEnv, *};
 
+    #[tokio::test]
+    async fn invalid_cluster_name_is_rejected_before_kubernetes_access() {
+        let result = ManualCluster::<DummyEnv>::provision_named(
+            testing_framework_core::topology::ClusterTopology::new(1),
+            Some("Bad_Name"),
+            ClusterStartMode::Eager,
+            DeploymentPolicy::default(),
+            &ObservabilityInputs::default(),
+        )
+        .await;
+
+        let Err(error) = result else {
+            panic!("invalid cluster name must be rejected");
+        };
+        assert!(matches!(
+            error,
+            ManualClusterError::InvalidClusterName { name } if name == "Bad_Name"
+        ));
+    }
+
     #[test]
     fn parse_node_index_accepts_node_labels() {
         assert_eq!(parse_node_index("node-0"), Some(0));
@@ -888,6 +1336,354 @@ mod tests {
 
         assert_eq!(artifacts.files.len(), 1);
         assert_eq!(artifacts.files[0].content, "node=1;peers=node-0");
+    }
+
+    fn offline_cluster() -> ManualCluster<DummyEnv> {
+        crate::ensure_rustls_provider_installed();
+        let config = kube::Config::new("http://127.0.0.1:1".parse().expect("cluster url"));
+        let client = Client::try_from(config.clone()).expect("offline kube client");
+        let cleanup =
+            RunnerCleanup::new(client.clone(), "ns".to_owned(), "release".to_owned(), true);
+        ManualCluster {
+            client,
+            config,
+            namespace: "ns".to_owned(),
+            release: "release".to_owned(),
+            topology: testing_framework_core::topology::ClusterTopology::new(1),
+            node_count: 1,
+            node_host: "127.0.0.1".to_owned(),
+            node_ports: vec![NodeConfigPorts {
+                api: 8080,
+                auxiliary: 8081,
+            }],
+            forwards: PortForwardRegistry::default(),
+            cleanup: Mutex::new(Some(cleanup)),
+            closed: AtomicBool::new(false),
+            state: Arc::new(Mutex::new(ManualClusterState {
+                running: HashSet::new(),
+                node_clients: NodeClients::default(),
+                known_clients: vec![None],
+                inventory_slots: vec![None],
+                node_allocations: vec![Some(NodePortAllocation {
+                    api: 1,
+                    auxiliary: 2,
+                })],
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn close_with_running_node_completes_on_current_thread_runtime() {
+        let cluster = Arc::new(offline_cluster());
+        {
+            let mut state = cluster
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.running.insert(0);
+        }
+        let guard = cluster.cleanup_guard();
+
+        guard.cleanup();
+
+        assert!(take_cleanup(&cluster.cleanup).is_none());
+        assert!(cluster.closed.load(Ordering::Acquire));
+        drop(cluster);
+    }
+
+    #[tokio::test]
+    async fn external_client_appends_keep_recorded_slots_stable() {
+        let cluster = offline_cluster();
+
+        cluster.add_external_clients(vec!["http://external-0/".to_owned()]);
+        {
+            let mut state = cluster
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            record_node_client(&mut state, 0, "http://managed-old/".to_owned());
+        }
+        cluster.add_external_clients(vec!["http://external-1/".to_owned()]);
+        {
+            let mut state = cluster
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            record_node_client(&mut state, 0, "http://managed-new/".to_owned());
+        }
+
+        let state = cluster
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert_eq!(
+            state.node_clients.snapshot(),
+            vec![
+                "http://external-0/".to_owned(),
+                "http://managed-new/".to_owned(),
+                "http://external-1/".to_owned(),
+            ]
+        );
+        assert_eq!(state.inventory_slots[0], Some(1));
+    }
+
+    #[tokio::test]
+    async fn cleanup_guard_does_not_panic_on_current_thread_runtime() {
+        let cluster = Arc::new(offline_cluster());
+        let guard = cluster.cleanup_guard();
+
+        guard.cleanup();
+
+        assert!(take_cleanup(&cluster.cleanup).is_none());
+        assert!(cluster.closed.load(Ordering::Acquire));
+        drop(cluster);
+    }
+
+    #[tokio::test]
+    async fn cleanup_if_failed_runs_cleanup_only_on_error() {
+        struct CountingCleanup(Arc<std::sync::atomic::AtomicUsize>);
+
+        impl CleanupGuard for CountingCleanup {
+            fn cleanup(self: Box<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        crate::ensure_rustls_provider_installed();
+        let config = kube::Config::new("http://127.0.0.1:1".parse().expect("cluster url"));
+        let client = Client::try_from(config).expect("offline kube client");
+
+        let ok = cleanup_if_failed(&client, "ns", Ok(7), CountingCleanup(Arc::clone(&calls))).await;
+        let (value, kept) = ok.expect("success must pass through");
+        assert_eq!(value, 7);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        CleanupGuard::cleanup(Box::new(kept));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        let failed = cleanup_if_failed::<usize, _>(
+            &client,
+            "ns",
+            Err(ManualClusterError::Closed),
+            CountingCleanup(Arc::clone(&calls)),
+        )
+        .await;
+        assert!(matches!(failed, Err(ManualClusterError::Closed)));
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn record_node_client_replaces_entry_after_restart() {
+        let mut state = ManualClusterState::<DummyEnv> {
+            running: HashSet::from([0]),
+            node_clients: NodeClients::new(vec!["http://old/".to_owned()]),
+            known_clients: vec![Some("http://old/".to_owned())],
+            inventory_slots: vec![Some(0)],
+            node_allocations: vec![Some(NodePortAllocation {
+                api: 1,
+                auxiliary: 2,
+            })],
+        };
+
+        record_node_client(&mut state, 0, "http://new/".to_owned());
+
+        assert_eq!(state.node_clients.len(), 1);
+        assert_eq!(
+            state.node_clients.snapshot(),
+            vec!["http://new/".to_owned()]
+        );
+        assert_eq!(state.known_clients[0].as_deref(), Some("http://new/"));
+        assert_eq!(state.inventory_slots[0], Some(0));
+    }
+
+    #[test]
+    fn record_node_client_appends_once_for_first_start() {
+        let mut state = ManualClusterState::<DummyEnv> {
+            running: HashSet::new(),
+            node_clients: NodeClients::default(),
+            known_clients: vec![None],
+            inventory_slots: vec![None],
+            node_allocations: vec![None],
+        };
+
+        record_node_client(&mut state, 0, "http://first/".to_owned());
+        record_node_client(&mut state, 0, "http://second/".to_owned());
+
+        assert_eq!(state.node_clients.len(), 1);
+        assert_eq!(
+            state.node_clients.snapshot(),
+            vec!["http://second/".to_owned()]
+        );
+        assert_eq!(state.inventory_slots[0], Some(0));
+    }
+
+    #[test]
+    fn validate_restart_options_rejects_args_and_timeout_overrides() {
+        let with_args = StartNodeOptions::<DummyEnv>::default().with_args(["--flag".to_owned()]);
+        let with_timeout = StartNodeOptions::<DummyEnv>::default()
+            .with_start_timeout(std::time::Duration::from_secs(5));
+        assert!(matches!(
+            validate_restart_options(&with_args),
+            Err(ManualClusterError::UnsupportedStartOptions { .. })
+        ));
+        assert!(matches!(
+            validate_restart_options(&with_timeout),
+            Err(ManualClusterError::UnsupportedStartOptions { .. })
+        ));
+        assert!(validate_restart_options(&StartNodeOptions::<DummyEnv>::default()).is_ok());
+    }
+
+    #[tokio::test]
+    async fn node_control_restart_node_with_reaches_backend() {
+        let cluster = offline_cluster();
+        {
+            let mut state = cluster
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.running.insert(0);
+        }
+
+        let error = NodeControlHandle::restart_node_with(
+            &cluster,
+            "node-0",
+            StartNodeOptions::<DummyEnv>::default(),
+        )
+        .await
+        .expect_err("offline restart must fail against the unreachable API server");
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("not supported by this deployer"),
+            "restart_node_with must not fall back to the trait default: {message}"
+        );
+        assert!(
+            message.contains("failed to patch deployment"),
+            "expected a real scale attempt error, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn node_control_wait_node_ready_rejects_stopped_node() {
+        let cluster = offline_cluster();
+
+        let error = NodeControlHandle::wait_node_ready(&cluster, "node-0")
+            .await
+            .expect_err("waiting on a stopped node must fail");
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("not supported by this deployer"),
+            "wait_node_ready must not fall back to the trait default: {message}"
+        );
+        assert!(
+            message.contains("is not running"),
+            "expected a stopped-node error, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn node_control_wait_node_ready_requires_allocation() {
+        let cluster = offline_cluster();
+        {
+            let mut state = cluster
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.running.insert(0);
+            state.node_allocations[0] = None;
+        }
+
+        let error = NodeControlHandle::wait_node_ready(&cluster, "node-0")
+            .await
+            .expect_err("waiting without a port-forward allocation must fail");
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("not supported by this deployer"),
+            "wait_node_ready must not fall back to the trait default: {message}"
+        );
+        assert!(
+            message.contains("no active port-forward allocation"),
+            "expected a missing-allocation error, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_network_ready_errors_when_all_nodes_stopped() {
+        let cluster = offline_cluster();
+        {
+            let mut state = cluster
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.inventory_slots[0] = Some(0);
+        }
+
+        let error = cluster
+            .wait_network_ready()
+            .await
+            .expect_err("an all-stopped cluster must not report readiness");
+
+        assert!(matches!(error, ManualClusterError::NetworkReadiness { .. }));
+        assert!(error.to_string().contains("all 1 nodes are stopped"));
+    }
+
+    #[tokio::test]
+    async fn wait_network_ready_is_ok_before_any_node_started() {
+        let cluster = offline_cluster();
+
+        cluster
+            .wait_network_ready()
+            .await
+            .expect("a never-started cluster must not fail readiness");
+    }
+
+    #[tokio::test]
+    async fn node_control_reports_canonical_node_names() {
+        let cluster = offline_cluster();
+
+        assert_eq!(
+            NodeControlHandle::node_names(&cluster),
+            vec!["node-0".to_owned()]
+        );
+    }
+
+    #[tokio::test]
+    async fn attachment_describes_namespace_and_node_service_selector() {
+        let cluster = offline_cluster();
+
+        assert_eq!(
+            cluster.attachment(),
+            ExistingCluster::for_k8s_selector_in_namespace(
+                "ns".to_owned(),
+                "app.kubernetes.io/instance=release".to_owned(),
+            )
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cleanup_guard_runs_once_and_locks_out_operations() {
+        let cluster = Arc::new(offline_cluster());
+        let guard = cluster.cleanup_guard();
+
+        guard.cleanup();
+
+        assert!(take_cleanup(&cluster.cleanup).is_none());
+        assert!(cluster.closed.load(Ordering::Acquire));
+        assert!(matches!(
+            cluster.start_node("node-0").await,
+            Err(ManualClusterError::Closed)
+        ));
+        assert!(matches!(
+            cluster.stop_node("node-0").await,
+            Err(ManualClusterError::Closed)
+        ));
+        assert!(matches!(
+            cluster.wait_network_ready().await,
+            Err(ManualClusterError::Closed)
+        ));
+        drop(cluster);
     }
 
     #[test]

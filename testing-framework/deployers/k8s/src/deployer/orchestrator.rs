@@ -524,7 +524,7 @@ async fn prepare_cluster_setup<E: K8sDeployEnv>(
     let assets = prepare_stack::<E>(descriptors, observability.metrics_otlp_ingest_url.as_ref())
         .map_err(|source| K8sRunnerError::Assets { source })?;
     let nodes = descriptors.node_count();
-    let (namespace, release) = cluster_identifiers::<E>();
+    let (namespace, release) = cluster_identifiers::<E>(None);
     info!(%namespace, %release, nodes, "preparing k8s assets and namespace");
 
     let cleanup = assets

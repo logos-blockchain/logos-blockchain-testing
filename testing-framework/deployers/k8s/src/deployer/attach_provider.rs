@@ -34,12 +34,12 @@ enum K8sAttachDiscoveryError {
     ServiceHasMultipleNodePorts { service: String, ports: String },
 }
 
-pub(super) struct K8sAttachProvider<E: K8sDeployEnv> {
+pub(crate) struct K8sAttachProvider<E: K8sDeployEnv> {
     client: Client,
     _env: PhantomData<E>,
 }
 
-pub(super) struct K8sAttachedClusterWait<E: K8sDeployEnv> {
+pub(crate) struct K8sAttachedClusterWait<E: K8sDeployEnv> {
     client: Client,
     source: ExistingCluster,
     _env: PhantomData<E>,
@@ -51,7 +51,7 @@ struct K8sAttachRequest<'a> {
 }
 
 impl<E: K8sDeployEnv> K8sAttachProvider<E> {
-    pub(super) fn new(client: Client) -> Self {
+    pub(crate) fn new(client: Client) -> Self {
         Self {
             client,
             _env: PhantomData,
@@ -60,7 +60,7 @@ impl<E: K8sDeployEnv> K8sAttachProvider<E> {
 }
 
 impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
-    pub(super) fn try_new(client: Client, source: &ExistingCluster) -> Result<Self, DynError> {
+    pub(crate) fn try_new(client: Client, source: &ExistingCluster) -> Result<Self, DynError> {
         let _ = k8s_wait_request(source)?;
 
         Ok(Self {

@@ -1,12 +1,18 @@
+mod attach_provider;
+mod attached_control;
 mod deployer;
 mod env;
 mod host;
 mod infrastructure;
 mod lifecycle;
 mod manual;
+mod provisioner;
 mod workspace;
 use std::sync::Once;
 
+pub use deployer::{
+    K8sDeployer, K8sDeploymentMetadata, K8sNodeControl, K8sNodeControlError, K8sRunnerError,
+};
 pub use k8s_openapi;
 
 pub mod wait {
@@ -21,9 +27,6 @@ pub(crate) fn ensure_rustls_provider_installed() {
     });
 }
 
-pub use deployer::{
-    K8sDeployer, K8sDeploymentMetadata, K8sNodeControl, K8sNodeControlError, K8sRunnerError,
-};
 pub use env::{
     BinaryConfigK8sSpec, HelmManifest, HelmReleaseAssets, K8sBinaryApp, K8sDeployEnv,
     PreparedK8sStack, RenderedHelmChartAssets, discovered_node_access,
@@ -46,6 +49,7 @@ pub use infrastructure::{
 };
 pub use lifecycle::cleanup::RunnerCleanup;
 pub use manual::{ManualCluster, ManualClusterError};
+pub use provisioner::{K8sClusterProvisioner, K8sClusterProvisionerError};
 pub use workspace::{
     RequiredPathError, bundled_runner_chart_path, create_temp_workspace, require_existing_paths,
     resolve_optional_relative_dir, resolve_workspace_root, write_temp_file,

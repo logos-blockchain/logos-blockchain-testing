@@ -138,6 +138,8 @@ impl<E: Application> ClusterRequest<E> {
 
     /// Assigns a stable name identifying this cluster within a shared
     /// deployment session; backends namespace the cluster's services with it.
+    /// Names use a short lowercase DNS-label form so they remain portable
+    /// across Compose and Kubernetes.
     #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = Some(name.into());

@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 use crate::infrastructure::helm::uninstall_release;
 
-const CLEANUP_TIMEOUT: Duration = Duration::from_secs(120);
+pub(crate) const CLEANUP_TIMEOUT: Duration = Duration::from_secs(120);
 const NAMESPACE_DELETE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Tears down Helm release and namespace after a run unless preservation is
