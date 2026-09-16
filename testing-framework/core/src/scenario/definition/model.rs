@@ -5,14 +5,12 @@ use thiserror::Error;
 use super::builder::Builder;
 use crate::{
     scenario::{
-        Application, ClusterControlProfile, ClusterControlSummary, ClusterMode, DeploymentPolicy,
-        DynError, ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
+        Application, ClusterControlSummary, DeploymentPolicy, DynError, HttpReadinessRequirement,
+        NodeClients,
         expectation::Expectation,
         runtime::{
-            CleanupGuard, RuntimeExtensionFactory, RuntimeExtensions, SourceOrchestrationPlan,
-            prepare_runtime_extensions,
+            CleanupGuard, RuntimeExtensionFactory, RuntimeExtensions, prepare_runtime_extensions,
         },
-        sources::ScenarioSources,
         workload::Workload,
     },
     topology::DynTopologyError,
@@ -26,15 +24,11 @@ pub enum ScenarioBuildError {
     WorkloadInit { name: String, source: DynError },
     #[error("expectation '{name}' failed to initialize")]
     ExpectationInit { name: String, source: DynError },
-    #[error("invalid scenario source configuration: {message}")]
-    SourceConfiguration { message: String },
-    #[error("scenario source mode '{mode}' is not wired into deployers yet")]
-    SourceModeNotWiredYet { mode: &'static str },
 }
 
 /// Immutable scenario definition used by the runner, workloads, and
 /// expectations.
-pub struct Scenario<E: Application, Caps = ()> {
+pub struct Scenario<E: Application> {
     deployment: E::Deployment,
     workloads: Vec<Arc<dyn Workload<E>>>,
     expectations: Vec<Box<dyn Expectation<E>>>,
@@ -42,12 +36,9 @@ pub struct Scenario<E: Application, Caps = ()> {
     duration: Duration,
     expectation_cooldown: Duration,
     deployment_policy: DeploymentPolicy,
-    sources: ScenarioSources,
-    source_orchestration_plan: SourceOrchestrationPlan,
-    capabilities: Caps,
 }
 
-impl<E: Application, Caps> Scenario<E, Caps> {
+impl<E: Application> Scenario<E> {
     pub(super) fn new(
         deployment: E::Deployment,
         workloads: Vec<Arc<dyn Workload<E>>>,
@@ -56,9 +47,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
         duration: Duration,
         expectation_cooldown: Duration,
         deployment_policy: DeploymentPolicy,
-        sources: ScenarioSources,
-        source_orchestration_plan: SourceOrchestrationPlan,
-        capabilities: Caps,
     ) -> Self {
         Self {
             deployment,
@@ -68,9 +56,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
-            sources,
-            source_orchestration_plan,
-            capabilities,
         }
     }
 
@@ -114,47 +99,6 @@ impl<E: Application, Caps> Scenario<E, Caps> {
         self.deployment_policy
     }
 
-    #[must_use]
-    pub fn existing_cluster(&self) -> Option<&ExistingCluster> {
-        self.sources.existing_cluster()
-    }
-
-    #[must_use]
-    pub const fn cluster_mode(&self) -> ClusterMode {
-        self.sources.cluster_mode()
-    }
-
-    #[must_use]
-    pub const fn cluster_control_profile(&self) -> ClusterControlProfile {
-        self.sources.control_profile()
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn attached_source(&self) -> Option<&ExistingCluster> {
-        self.existing_cluster()
-    }
-
-    #[must_use]
-    pub fn external_nodes(&self) -> &[ExternalNodeSource] {
-        self.sources.external_nodes()
-    }
-
-    #[must_use]
-    pub fn has_external_nodes(&self) -> bool {
-        !self.sources.external_nodes().is_empty()
-    }
-
-    #[must_use]
-    pub const fn source_orchestration_plan(&self) -> &SourceOrchestrationPlan {
-        &self.source_orchestration_plan
-    }
-
-    #[must_use]
-    pub const fn capabilities(&self) -> &Caps {
-        &self.capabilities
-    }
-
     #[doc(hidden)]
     pub async fn prepare_runtime_extensions(
         &self,
@@ -181,33 +125,7 @@ impl<E: Application> super::builder::ScenarioBuilder<E> {
     }
 }
 
-impl<E: Application> super::builder::NodeControlScenarioBuilder<E> {
-    pub fn build(
-        self,
-    ) -> Result<Scenario<E, crate::scenario::NodeControlCapability>, ScenarioBuildError> {
-        self.inner.build()
-    }
-}
-
-impl<E: Application> super::builder::ObservabilityScenarioBuilder<E> {
-    pub fn build(
-        self,
-    ) -> Result<Scenario<E, crate::scenario::ObservabilityCapability>, ScenarioBuildError> {
-        self.inner.build()
-    }
-}
-
-impl<E: Application, Caps> Builder<E, Caps> {
-    #[must_use]
-    pub const fn capabilities(&self) -> &Caps {
-        &self.capabilities
-    }
-
-    #[must_use]
-    pub const fn capabilities_mut(&mut self) -> &mut Caps {
-        &mut self.capabilities
-    }
-
+impl<E: Application> Builder<E> {
     #[must_use]
     pub const fn run_duration(&self) -> Duration {
         self.duration

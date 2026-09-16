@@ -2,7 +2,7 @@ use std::env;
 
 use reqwest::Url;
 
-use super::{Metrics, MetricsError, NodeControlCapability, ObservabilityCapability};
+use super::{Metrics, MetricsError};
 
 /// Optional observability endpoints used by deployers and runners.
 #[derive(Clone, Debug, Default)]
@@ -15,39 +15,7 @@ pub struct ObservabilityInputs {
     pub grafana_url: Option<Url>,
 }
 
-/// Exposes observability capability from scenario capability markers.
-pub trait ObservabilityCapabilityProvider {
-    fn observability_capability(&self) -> Option<&ObservabilityCapability>;
-}
-
-impl ObservabilityCapabilityProvider for () {
-    fn observability_capability(&self) -> Option<&ObservabilityCapability> {
-        None
-    }
-}
-
-impl ObservabilityCapabilityProvider for NodeControlCapability {
-    fn observability_capability(&self) -> Option<&ObservabilityCapability> {
-        None
-    }
-}
-
-impl ObservabilityCapabilityProvider for ObservabilityCapability {
-    fn observability_capability(&self) -> Option<&ObservabilityCapability> {
-        Some(self)
-    }
-}
-
 impl ObservabilityInputs {
-    #[must_use]
-    pub fn from_capability(capabilities: &ObservabilityCapability) -> Self {
-        Self {
-            metrics_query_url: capabilities.metrics_query_url.clone(),
-            metrics_otlp_ingest_url: capabilities.metrics_otlp_ingest_url.clone(),
-            grafana_url: capabilities.grafana_url.clone(),
-        }
-    }
-
     /// Load observability inputs from `LOGOS_BLOCKCHAIN_*` environment vars.
     pub fn from_env() -> Result<Self, MetricsError> {
         Ok(Self {

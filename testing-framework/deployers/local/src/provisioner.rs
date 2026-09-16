@@ -99,7 +99,6 @@ impl LocalClusterProvisioner {
     pub async fn provision<E: LocalDeployerEnv>(
         &self,
         request: ClusterRequest<E>,
-        membership_check: bool,
     ) -> Result<ProvisionedLocalCluster<E>, LocalClusterProvisionerError> {
         match request.source().clone() {
             ClusterSource::Managed {
@@ -111,12 +110,8 @@ impl LocalClusterProvisioner {
                 let cluster = LocalCluster::empty(deployment.clone(), keep_tempdir);
 
                 if request.start_mode() == ClusterStartMode::Eager {
-                    let nodes = spawn_with_readiness_retry::<E>(
-                        &deployment,
-                        membership_check,
-                        request.policy(),
-                    )
-                    .await?;
+                    let nodes =
+                        spawn_with_readiness_retry::<E>(&deployment, request.policy()).await?;
                     cluster.initialize_with_nodes(nodes);
                 }
 
@@ -166,7 +161,7 @@ impl<E: LocalDeployerEnv> ClusterProvisioner<E> for LocalClusterProvisioner {
         request: ClusterRequest<E>,
     ) -> Result<ClusterUnit<E>, DynError> {
         let (_, unit) = self
-            .provision(request, true)
+            .provision(request)
             .await
             .map_err(DynError::from)?
             .into_parts();
@@ -176,10 +171,9 @@ impl<E: LocalDeployerEnv> ClusterProvisioner<E> for LocalClusterProvisioner {
 
 async fn spawn_with_readiness_retry<E: LocalDeployerEnv>(
     deployment: &E::Deployment,
-    membership_check: bool,
     policy: DeploymentPolicy,
 ) -> Result<Vec<Node<E>>, LocalClusterProvisionerError> {
-    let (retry_policy, execution) = build_retry_execution_config(policy, membership_check);
+    let (retry_policy, execution) = build_retry_execution_config(policy);
     let attempts = Arc::new(AtomicUsize::new(0));
     let strategy = ExponentialBackoff::from_millis(retry_policy.base_delay.as_millis() as u64)
         .max_delay(retry_policy.max_delay)
@@ -215,10 +209,7 @@ async fn spawn_with_readiness_retry<E: LocalDeployerEnv>(
         .map_err(Into::into)
 }
 
-fn build_retry_execution_config(
-    policy: DeploymentPolicy,
-    membership_check: bool,
-) -> (RetryPolicy, RetryExecutionConfig) {
+fn build_retry_execution_config(policy: DeploymentPolicy) -> (RetryPolicy, RetryExecutionConfig) {
     let retry_policy = policy.retry_policy.unwrap_or_else(|| {
         RetryPolicy::new(
             READINESS_ATTEMPTS,
@@ -229,7 +220,7 @@ fn build_retry_execution_config(
     let execution = RetryExecutionConfig {
         max_attempts: retry_policy.max_attempts.max(1),
         keep_tempdir: policy.cleanup_policy.preserve_artifacts || keep_tempdir_from_env(),
-        readiness_enabled: policy.readiness_enabled && membership_check,
+        readiness_enabled: policy.readiness_enabled,
         readiness_requirement: policy.readiness_requirement,
     };
     (retry_policy, execution)
@@ -378,7 +369,7 @@ mod tests {
             .with_start_mode(ClusterStartMode::OnDemand)
             .with_control(ClusterControlRequest::Full);
         let provisioned = LocalClusterProvisioner
-            .provision::<TestEnv>(request, true)
+            .provision::<TestEnv>(request)
             .await
             .expect("manual unit should provision");
         let (cluster, mut unit) = provisioned.into_parts();
@@ -411,7 +402,7 @@ mod tests {
             .with_external_nodes(vec![invalid_source]);
 
         let error = LocalClusterProvisioner
-            .provision::<TestEnv>(request, true)
+            .provision::<TestEnv>(request)
             .await
             .err()
             .expect("invalid external source should fail provisioning");
@@ -425,7 +416,7 @@ mod tests {
     async fn external_unit_is_borrowed_and_uncontrolled() {
         let source = ExternalNodeSource::new("external-0".into(), "http://node-0".into());
         let provisioned = LocalClusterProvisioner
-            .provision::<TestEnv>(ClusterRequest::external(vec![source]), true)
+            .provision::<TestEnv>(ClusterRequest::external(vec![source]))
             .await
             .expect("external unit should resolve");
         let (cluster, mut unit) = provisioned.into_parts();
@@ -447,7 +438,7 @@ mod tests {
             "existing".into(),
         ));
         let error = LocalClusterProvisioner
-            .provision(request, true)
+            .provision(request)
             .await
             .err()
             .expect("local attached provisioning should be rejected");

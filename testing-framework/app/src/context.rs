@@ -5,12 +5,9 @@ use testing_framework_core::scenario::{
     Application, CleanupGuard, ClusterControlProfile, ClusterHandle, ClusterProvisioner,
     ClusterRequest, ClusterSource, DynError, NodeClients,
 };
-use testing_framework_runner_local::{LocalClusterProvisioner, LocalDeployerEnv};
+use testing_framework_runner_local::LocalClusterProvisioner;
 
-use crate::{
-    AppDeployError, AppDeployment, AppHandle, HandleRegistry, LocalAppCluster,
-    cleanup::AppCleanupStack,
-};
+use crate::{AppDeployError, AppDeployment, AppHandle, HandleRegistry, cleanup::AppCleanupStack};
 
 /// Mutable deployment context used to compose applications and expose handles.
 ///
@@ -205,22 +202,6 @@ where
             self.register_cleanup(cleanup);
         }
         Ok(handle)
-    }
-
-    /// Starts every node of an additional uniform local cluster.
-    ///
-    /// The cluster is registered with scenario cleanup before its handle is
-    /// returned. Cleanup stops all nodes independently of handle clones.
-    pub async fn deploy_local_cluster<App>(
-        &mut self,
-        deployment: App::Deployment,
-    ) -> Result<LocalAppCluster<App>, DynError>
-    where
-        App: LocalDeployerEnv,
-        P: ClusterProvisioner<App>,
-    {
-        self.deploy_cluster(ClusterRequest::managed(deployment))
-            .await
     }
 
     /// Returns the outer scenario deployment descriptor.

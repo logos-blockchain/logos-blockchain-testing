@@ -36,7 +36,6 @@ pub struct QueueScenarioBuilder {
 
 impl CoreBuilderAccess for QueueScenarioBuilder {
     type Env = AppHostEnv;
-    type Caps = ();
 
     fn map_core_builder(
         mut self,

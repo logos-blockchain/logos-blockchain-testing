@@ -6,31 +6,26 @@ use crate::scenario::definition::Builder;
 #[doc(hidden)]
 pub trait CoreBuilderAccess: Sized {
     type Env: Application;
-    type Caps;
 
-    fn map_core_builder(
-        self,
-        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
-    ) -> Self;
+    fn map_core_builder(self, f: impl FnOnce(Builder<Self::Env>) -> Builder<Self::Env>) -> Self;
 
-    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps>;
+    fn core_builder_ref(&self) -> &Builder<Self::Env>;
 
-    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps>;
+    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env>;
 }
 
-impl<E: Application, Caps> CoreBuilderAccess for Builder<E, Caps> {
+impl<E: Application> CoreBuilderAccess for Builder<E> {
     type Env = E;
-    type Caps = Caps;
 
-    fn map_core_builder(self, f: impl FnOnce(Builder<E, Caps>) -> Builder<E, Caps>) -> Self {
+    fn map_core_builder(self, f: impl FnOnce(Builder<E>) -> Builder<E>) -> Self {
         f(self)
     }
 
-    fn core_builder_ref(&self) -> &Builder<E, Caps> {
+    fn core_builder_ref(&self) -> &Builder<E> {
         self
     }
 
-    fn core_builder_mut(&mut self) -> &mut Builder<E, Caps> {
+    fn core_builder_mut(&mut self) -> &mut Builder<E> {
         self
     }
 }

@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 use testing_framework_core::{
     scenario::{
-        Application, ClusterControlProfile, Deployer, DynError, Metrics, NodeAccess, NodeClients,
-        Runner, Scenario, ScenarioBuilder, internal::RuntimeAssembly,
+        Application, ClusterControlProfile, DynError, Metrics, NodeAccess, NodeClients, Runner,
+        Scenario, ScenarioBuilder, internal::RuntimeAssembly,
     },
     topology::DeploymentDescriptor,
 };
-use testing_framework_runner_local::{LocalDeployerEnv, ProcessDeployer};
 use thiserror::Error;
 
 #[derive(Clone, Default)]
@@ -38,9 +37,6 @@ impl Application for AppHostEnv {
         Err(std::io::Error::other("app host does not expose node clients").into())
     }
 }
-
-#[async_trait]
-impl LocalDeployerEnv for AppHostEnv {}
 
 /// Entry point for a scenario composed entirely from application deployments.
 pub struct AppHost;
@@ -108,21 +104,6 @@ impl AppHostDeployer {
         Ok(assembly.build_runner(None))
     }
 }
-
-#[async_trait]
-impl Deployer<AppHostEnv> for AppHostDeployer {
-    type Error = AppHostDeployError;
-
-    async fn deploy(
-        &self,
-        scenario: &Scenario<AppHostEnv>,
-    ) -> Result<Runner<AppHostEnv>, Self::Error> {
-        Self::deploy(self, scenario).await
-    }
-}
-
-/// Local process deployer used to execute an [`AppHost`] scenario.
-pub type AppHostLocalDeployer = ProcessDeployer<AppHostEnv>;
 
 #[cfg(test)]
 mod tests {

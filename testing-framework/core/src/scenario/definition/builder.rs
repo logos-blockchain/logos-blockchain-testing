@@ -4,24 +4,19 @@ use tracing::info;
 
 use super::{
     model::{Scenario, ScenarioBuildError},
-    validation::{
-        build_source_orchestration_plan, enforce_min_duration, expectation_cooldown_for,
-        initialize_components, validate_source_contract,
-    },
+    validation::{enforce_min_duration, expectation_cooldown_for, initialize_components},
 };
 use crate::{
     scenario::{
-        Application, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
-        HttpReadinessRequirement, IntoExistingCluster, NodeControlCapability,
-        ObservabilityCapability, RequiresNodeControl, RuntimeExtensionFactory,
+        Application, DeploymentPolicy, HttpReadinessRequirement, RuntimeExtensionFactory,
         builder_ops::CoreBuilderAccess, expectation::Expectation, runtime::context::RunMetrics,
-        sources::ScenarioSources, workload::Workload,
+        workload::Workload,
     },
     topology::{DeploymentDescriptor, DeploymentProvider, DeploymentSeed, FixedDeploymentProvider},
 };
 
 /// Scenario builder entry point.
-pub struct Builder<E: Application, Caps = ()> {
+pub struct Builder<E: Application> {
     pub(super) deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
     pub(super) topology_seed: Option<DeploymentSeed>,
     pub(super) workloads: Vec<Box<dyn Workload<E>>>,
@@ -30,228 +25,117 @@ pub struct Builder<E: Application, Caps = ()> {
     pub(super) duration: Duration,
     pub(super) expectation_cooldown: Option<Duration>,
     pub(super) deployment_policy: DeploymentPolicy,
-    pub(super) sources: ScenarioSources,
-    pub(super) capabilities: Caps,
 }
 
 pub struct ScenarioBuilder<E: Application> {
-    pub(super) inner: Builder<E, ()>,
+    pub(super) inner: Builder<E>,
 }
 
-pub struct NodeControlScenarioBuilder<E: Application> {
-    pub(super) inner: Builder<E, NodeControlCapability>,
-}
+impl<E: Application> ScenarioBuilder<E> {
+    #[must_use]
+    pub fn map_deployment_provider(
+        self,
+        f: impl FnOnce(
+            Box<dyn DeploymentProvider<E::Deployment>>,
+        ) -> Box<dyn DeploymentProvider<E::Deployment>>,
+    ) -> Self {
+        self.map_core_builder(|builder| builder.map_deployment_provider(f))
+    }
 
-pub struct ObservabilityScenarioBuilder<E: Application> {
-    pub(super) inner: Builder<E, ObservabilityCapability>,
-}
+    #[must_use]
+    pub fn with_deployment_provider(
+        self,
+        deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
+    ) -> Self {
+        self.map_core_builder(|builder| builder.with_deployment_provider(deployment_provider))
+    }
 
-macro_rules! impl_common_builder_methods {
-    ($builder:ident) => {
-        impl<E: Application> $builder<E> {
-            #[must_use]
-            pub fn map_deployment_provider(
-                self,
-                f: impl FnOnce(
-                    Box<dyn DeploymentProvider<E::Deployment>>,
-                ) -> Box<dyn DeploymentProvider<E::Deployment>>,
-            ) -> Self {
-                self.map_core_builder(|builder| builder.map_deployment_provider(f))
-            }
+    #[must_use]
+    pub fn with_deployment_seed(self, seed: DeploymentSeed) -> Self {
+        self.map_core_builder(|builder| builder.with_deployment_seed(seed))
+    }
 
-            #[must_use]
-            pub fn with_deployment_provider(
-                self,
-                deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
-            ) -> Self {
-                self.map_core_builder(|builder| {
-                    builder.with_deployment_provider(deployment_provider)
-                })
-            }
+    #[must_use]
+    pub fn with_workload<W>(self, workload: W) -> Self
+    where
+        W: Workload<E> + 'static,
+    {
+        self.map_core_builder(|builder| builder.with_workload(workload))
+    }
 
-            #[must_use]
-            pub fn with_deployment_seed(self, seed: DeploymentSeed) -> Self {
-                self.map_core_builder(|builder| builder.with_deployment_seed(seed))
-            }
+    #[must_use]
+    pub fn with_workload_boxed(self, workload: Box<dyn Workload<E>>) -> Self {
+        self.map_core_builder(|builder| builder.with_workload_boxed(workload))
+    }
 
-            #[must_use]
-            pub fn with_workload<W>(self, workload: W) -> Self
-            where
-                W: Workload<E> + 'static,
-            {
-                self.map_core_builder(|builder| builder.with_workload(workload))
-            }
+    #[must_use]
+    pub fn with_expectation<Exp>(self, expectation: Exp) -> Self
+    where
+        Exp: Expectation<E> + 'static,
+    {
+        self.map_core_builder(|builder| builder.with_expectation(expectation))
+    }
 
-            #[must_use]
-            pub fn with_workload_boxed(self, workload: Box<dyn Workload<E>>) -> Self {
-                self.map_core_builder(|builder| builder.with_workload_boxed(workload))
-            }
+    #[must_use]
+    pub fn with_expectation_boxed(self, expectation: Box<dyn Expectation<E>>) -> Self {
+        self.map_core_builder(|builder| builder.with_expectation_boxed(expectation))
+    }
 
-            #[must_use]
-            pub fn with_expectation<Exp>(self, expectation: Exp) -> Self
-            where
-                Exp: Expectation<E> + 'static,
-            {
-                self.map_core_builder(|builder| builder.with_expectation(expectation))
-            }
+    #[must_use]
+    pub fn with_runtime_extension_factory(
+        self,
+        extension: Box<dyn RuntimeExtensionFactory<E>>,
+    ) -> Self {
+        self.map_core_builder(|builder| builder.with_runtime_extension_factory(extension))
+    }
 
-            #[must_use]
-            pub fn with_expectation_boxed(self, expectation: Box<dyn Expectation<E>>) -> Self {
-                self.map_core_builder(|builder| builder.with_expectation_boxed(expectation))
-            }
+    #[must_use]
+    pub fn with_run_duration(self, duration: Duration) -> Self {
+        self.map_core_builder(|builder| builder.with_run_duration(duration))
+    }
 
-            #[must_use]
-            pub fn with_runtime_extension_factory(
-                self,
-                extension: Box<dyn RuntimeExtensionFactory<E>>,
-            ) -> Self {
-                self.map_core_builder(|builder| builder.with_runtime_extension_factory(extension))
-            }
+    #[must_use]
+    pub fn with_expectation_cooldown(self, cooldown: Duration) -> Self {
+        self.map_core_builder(|builder| builder.with_expectation_cooldown(cooldown))
+    }
 
-            #[must_use]
-            pub fn with_run_duration(self, duration: Duration) -> Self {
-                self.map_core_builder(|builder| builder.with_run_duration(duration))
-            }
+    #[must_use]
+    pub fn with_http_readiness_requirement(self, requirement: HttpReadinessRequirement) -> Self {
+        self.map_core_builder(|builder| builder.with_http_readiness_requirement(requirement))
+    }
 
-            #[must_use]
-            pub fn with_expectation_cooldown(self, cooldown: Duration) -> Self {
-                self.map_core_builder(|builder| builder.with_expectation_cooldown(cooldown))
-            }
+    #[must_use]
+    pub fn with_deployment_policy(self, policy: DeploymentPolicy) -> Self {
+        self.map_core_builder(|builder| builder.with_deployment_policy(policy))
+    }
 
-            #[must_use]
-            pub fn with_http_readiness_requirement(
-                self,
-                requirement: HttpReadinessRequirement,
-            ) -> Self {
-                self.map_core_builder(|builder| {
-                    builder.with_http_readiness_requirement(requirement)
-                })
-            }
-
-            #[must_use]
-            pub fn with_deployment_policy(self, policy: DeploymentPolicy) -> Self {
-                self.map_core_builder(|builder| builder.with_deployment_policy(policy))
-            }
-
-            #[must_use]
-            pub fn with_existing_cluster(self, cluster: ExistingCluster) -> Self {
-                self.map_core_builder(|builder| builder.with_existing_cluster(cluster))
-            }
-
-            #[must_use]
-            pub fn with_existing_cluster_from(
-                self,
-                cluster: impl IntoExistingCluster,
-            ) -> Result<Self, DynError> {
-                let cluster = cluster.into_existing_cluster()?;
-
-                Ok(self.with_existing_cluster(cluster))
-            }
-
-            #[must_use]
-            #[doc(hidden)]
-            pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
-                self.with_existing_cluster(attach)
-            }
-
-            #[must_use]
-            pub fn with_external_node(self, node: ExternalNodeSource) -> Self {
-                self.map_core_builder(|builder| builder.with_external_node(node))
-            }
-
-            #[must_use]
-            pub fn with_external_nodes(
-                self,
-                nodes: impl IntoIterator<Item = ExternalNodeSource>,
-            ) -> Self {
-                self.map_core_builder(|builder| builder.with_external_nodes(nodes))
-            }
-
-            #[must_use]
-            pub fn with_external_only(self) -> Self {
-                self.map_core_builder(|builder| builder.with_external_only())
-            }
-
-            #[must_use]
-            pub fn with_external_only_nodes(
-                self,
-                nodes: impl IntoIterator<Item = ExternalNodeSource>,
-            ) -> Self {
-                self.map_core_builder(|builder| builder.with_external_only_nodes(nodes))
-            }
-
-            #[must_use]
-            pub fn run_duration(&self) -> Duration {
-                self.core_builder_ref().run_duration()
-            }
-        }
-    };
+    #[must_use]
+    pub fn run_duration(&self) -> Duration {
+        self.core_builder_ref().run_duration()
+    }
 }
 
 impl<E: Application> CoreBuilderAccess for ScenarioBuilder<E> {
     type Env = E;
-    type Caps = ();
 
     fn map_core_builder(
         mut self,
-        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
+        f: impl FnOnce(Builder<Self::Env>) -> Builder<Self::Env>,
     ) -> Self {
         self.inner = f(self.inner);
         self
     }
 
-    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps> {
+    fn core_builder_ref(&self) -> &Builder<Self::Env> {
         &self.inner
     }
 
-    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps> {
+    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env> {
         &mut self.inner
     }
 }
 
-impl<E: Application> CoreBuilderAccess for NodeControlScenarioBuilder<E> {
-    type Env = E;
-    type Caps = NodeControlCapability;
-
-    fn map_core_builder(
-        mut self,
-        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
-    ) -> Self {
-        self.inner = f(self.inner);
-        self
-    }
-
-    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps> {
-        &self.inner
-    }
-
-    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps> {
-        &mut self.inner
-    }
-}
-
-impl<E: Application> CoreBuilderAccess for ObservabilityScenarioBuilder<E> {
-    type Env = E;
-    type Caps = ObservabilityCapability;
-
-    fn map_core_builder(
-        mut self,
-        f: impl FnOnce(Builder<Self::Env, Self::Caps>) -> Builder<Self::Env, Self::Caps>,
-    ) -> Self {
-        self.inner = f(self.inner);
-        self
-    }
-
-    fn core_builder_ref(&self) -> &Builder<Self::Env, Self::Caps> {
-        &self.inner
-    }
-
-    fn core_builder_mut(&mut self) -> &mut Builder<Self::Env, Self::Caps> {
-        &mut self.inner
-    }
-}
-
-impl<E: Application, Caps: Default> Builder<E, Caps> {
+impl<E: Application> Builder<E> {
     #[must_use]
     /// Start a builder from a topology provider.
     pub fn new(deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>) -> Self {
@@ -264,8 +148,6 @@ impl<E: Application, Caps: Default> Builder<E, Caps> {
             duration: Duration::ZERO,
             expectation_cooldown: None,
             deployment_policy: DeploymentPolicy::default(),
-            sources: ScenarioSources::default(),
-            capabilities: Caps::default(),
         }
     }
 }
@@ -285,56 +167,9 @@ impl<E: Application> ScenarioBuilder<E> {
     {
         Self::new(Box::new(FixedDeploymentProvider::new(deployment)))
     }
-
-    #[must_use]
-    pub fn with_node_control(self) -> NodeControlScenarioBuilder<E> {
-        NodeControlScenarioBuilder {
-            inner: self.inner.with_capabilities(NodeControlCapability),
-        }
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn enable_node_control(self) -> NodeControlScenarioBuilder<E> {
-        self.with_node_control()
-    }
-
-    #[must_use]
-    pub fn with_observability(self) -> ObservabilityScenarioBuilder<E> {
-        ObservabilityScenarioBuilder {
-            inner: self
-                .inner
-                .with_capabilities(ObservabilityCapability::default()),
-        }
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn enable_observability(self) -> ObservabilityScenarioBuilder<E> {
-        self.with_observability()
-    }
-
-    pub(crate) fn with_observability_capability(
-        self,
-        observability: ObservabilityCapability,
-    ) -> ObservabilityScenarioBuilder<E> {
-        ObservabilityScenarioBuilder {
-            inner: self.inner.with_capabilities(observability),
-        }
-    }
 }
 
-impl_common_builder_methods!(ScenarioBuilder);
-impl_common_builder_methods!(NodeControlScenarioBuilder);
-impl_common_builder_methods!(ObservabilityScenarioBuilder);
-
-impl<E: Application> ObservabilityScenarioBuilder<E> {
-    pub(crate) fn capabilities_mut(&mut self) -> &mut ObservabilityCapability {
-        self.inner.capabilities_mut()
-    }
-}
-
-impl<E: Application, Caps> Builder<E, Caps> {
+impl<E: Application> Builder<E> {
     #[must_use]
     /// Transform the existing deployment provider while preserving all
     /// accumulated builder state.
@@ -357,36 +192,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
     ) -> Self {
         self.deployment_provider = deployment_provider;
         self
-    }
-
-    #[must_use]
-    /// Internal capability transition helper.
-    pub(crate) fn with_capabilities<NewCaps>(self, capabilities: NewCaps) -> Builder<E, NewCaps> {
-        let Self {
-            deployment_provider,
-            topology_seed,
-            workloads,
-            expectations,
-            runtime_extensions,
-            duration,
-            expectation_cooldown,
-            deployment_policy,
-            sources,
-            ..
-        } = self;
-
-        Builder {
-            deployment_provider,
-            topology_seed,
-            workloads,
-            expectations,
-            runtime_extensions,
-            duration,
-            expectation_cooldown,
-            deployment_policy,
-            sources,
-            capabilities,
-        }
     }
 
     #[must_use]
@@ -464,66 +269,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
         self
     }
 
-    #[must_use]
-    pub fn with_existing_cluster(mut self, cluster: ExistingCluster) -> Self {
-        self.sources = self.sources.with_attach(cluster);
-        self
-    }
-
-    #[must_use]
-    pub fn with_existing_cluster_from(
-        self,
-        cluster: impl IntoExistingCluster,
-    ) -> Result<Self, DynError> {
-        let cluster = cluster.into_existing_cluster()?;
-
-        Ok(self.with_existing_cluster(cluster))
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn with_attach_source(self, attach: ExistingCluster) -> Self {
-        self.with_existing_cluster(attach)
-    }
-
-    #[must_use]
-    pub fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
-        self.sources = self.sources.with_external_node(node);
-        self
-    }
-
-    #[must_use]
-    pub fn with_external_nodes(
-        mut self,
-        nodes: impl IntoIterator<Item = ExternalNodeSource>,
-    ) -> Self {
-        for node in nodes {
-            self.sources = self.sources.with_external_node(node);
-        }
-
-        self
-    }
-
-    #[must_use]
-    pub fn with_external_only(mut self) -> Self {
-        self.sources = self.sources.into_external_only();
-        self
-    }
-
-    #[must_use]
-    pub fn with_external_only_nodes(
-        self,
-        nodes: impl IntoIterator<Item = ExternalNodeSource>,
-    ) -> Self {
-        self.with_external_only().with_external_nodes(nodes)
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn with_external_only_sources(self) -> Self {
-        self.with_external_only()
-    }
-
     fn add_workload(&mut self, workload: Box<dyn Workload<E>>) {
         self.expectations.extend(workload.expectations());
         self.workloads.push(workload);
@@ -536,18 +281,11 @@ impl<E: Application, Caps> Builder<E, Caps> {
     #[must_use]
     /// Finalize the scenario, computing run metrics and initializing
     /// components.
-    pub fn build(self) -> Result<Scenario<E, Caps>, ScenarioBuildError>
-    where
-        Caps: RequiresNodeControl,
-    {
+    pub fn build(self) -> Result<Scenario<E>, ScenarioBuildError> {
         let mut parts = BuilderParts::from_builder(self);
         let descriptors = parts.resolve_deployment()?;
         let run_plan = parts.run_plan();
         let run_metrics = RunMetrics::new(run_plan.duration);
-
-        validate_source_contract::<Caps>(parts.sources())?;
-
-        let source_orchestration_plan = build_source_orchestration_plan(parts.sources())?;
 
         initialize_components(
             &descriptors,
@@ -574,9 +312,6 @@ impl<E: Application, Caps> Builder<E, Caps> {
             run_plan.duration,
             run_plan.expectation_cooldown,
             parts.deployment_policy,
-            parts.sources,
-            source_orchestration_plan,
-            parts.capabilities,
         ))
     }
 }
@@ -586,7 +321,7 @@ struct RunPlan {
     expectation_cooldown: Duration,
 }
 
-struct BuilderParts<E: Application, Caps> {
+struct BuilderParts<E: Application> {
     deployment_provider: Box<dyn DeploymentProvider<E::Deployment>>,
     topology_seed: Option<DeploymentSeed>,
     workloads: Vec<Box<dyn Workload<E>>>,
@@ -595,12 +330,10 @@ struct BuilderParts<E: Application, Caps> {
     duration: Duration,
     expectation_cooldown: Option<Duration>,
     deployment_policy: DeploymentPolicy,
-    sources: ScenarioSources,
-    capabilities: Caps,
 }
 
-impl<E: Application, Caps> BuilderParts<E, Caps> {
-    fn from_builder(builder: Builder<E, Caps>) -> Self {
+impl<E: Application> BuilderParts<E> {
+    fn from_builder(builder: Builder<E>) -> Self {
         let Builder {
             deployment_provider,
             topology_seed,
@@ -610,8 +343,6 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
-            sources,
-            capabilities,
             ..
         } = builder;
 
@@ -624,8 +355,6 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             duration,
             expectation_cooldown,
             deployment_policy,
-            sources,
-            capabilities,
         }
     }
 
@@ -640,34 +369,6 @@ impl<E: Application, Caps> BuilderParts<E, Caps> {
             duration: enforce_min_duration(self.duration),
             expectation_cooldown: expectation_cooldown_for(self.expectation_cooldown),
         }
-    }
-
-    fn sources(&self) -> &ScenarioSources {
-        &self.sources
-    }
-}
-
-impl<E: Application> Builder<E, ()> {
-    #[must_use]
-    pub fn with_node_control(self) -> Builder<E, NodeControlCapability> {
-        self.with_capabilities(NodeControlCapability)
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn enable_node_control(self) -> Builder<E, NodeControlCapability> {
-        self.with_node_control()
-    }
-
-    #[must_use]
-    pub fn with_observability(self) -> Builder<E, ObservabilityCapability> {
-        self.with_capabilities(ObservabilityCapability::default())
-    }
-
-    #[must_use]
-    #[doc(hidden)]
-    pub fn enable_observability(self) -> Builder<E, ObservabilityCapability> {
-        self.with_observability()
     }
 }
 

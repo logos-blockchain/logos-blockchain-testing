@@ -1,5 +1,3 @@
-use crate::scenario::DynError;
-
 /// Typed descriptor for an existing cluster.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExistingCluster {
@@ -96,23 +94,6 @@ impl ExistingCluster {
     }
 }
 
-/// Converts a value into an existing-cluster descriptor.
-pub trait IntoExistingCluster {
-    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError>;
-}
-
-impl IntoExistingCluster for ExistingCluster {
-    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
-        Ok(self)
-    }
-}
-
-impl IntoExistingCluster for &ExistingCluster {
-    fn into_existing_cluster(self) -> Result<ExistingCluster, DynError> {
-        Ok(self.clone())
-    }
-}
-
 /// Static external node endpoint that should be included in the runtime
 /// inventory.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,25 +116,6 @@ impl ExternalNodeSource {
     #[must_use]
     pub fn endpoint(&self) -> &str {
         &self.endpoint
-    }
-}
-
-/// High-level source mode of a scenario cluster.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ClusterMode {
-    Managed,
-    ExistingCluster,
-    ExternalOnly,
-}
-
-impl ClusterMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Managed => "managed",
-            Self::ExistingCluster => "existing-cluster",
-            Self::ExternalOnly => "external-only",
-        }
     }
 }
 
@@ -205,130 +167,5 @@ impl ClusterControlProfile {
             Self::ExistingClusterAttached => 1,
             Self::ExternalUncontrolled => 0,
         }
-    }
-}
-
-/// Source model that makes invalid managed+attached combinations
-/// unrepresentable by type.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ScenarioSources {
-    Managed {
-        external: Vec<ExternalNodeSource>,
-    },
-    Attached {
-        attach: ExistingCluster,
-        external: Vec<ExternalNodeSource>,
-    },
-    ExternalOnly {
-        external: Vec<ExternalNodeSource>,
-    },
-}
-
-impl Default for ScenarioSources {
-    fn default() -> Self {
-        Self::Managed {
-            external: Vec::new(),
-        }
-    }
-}
-
-impl ScenarioSources {
-    #[must_use]
-    pub(crate) fn with_external_node(mut self, node: ExternalNodeSource) -> Self {
-        match &mut self {
-            Self::Managed { external }
-            | Self::Attached { external, .. }
-            | Self::ExternalOnly { external } => external.push(node),
-        }
-
-        self
-    }
-
-    #[must_use]
-    pub(crate) fn with_attach(self, attach: ExistingCluster) -> Self {
-        let external = self.external_nodes().to_vec();
-
-        Self::Attached { attach, external }
-    }
-
-    #[must_use]
-    pub(crate) fn into_external_only(self) -> Self {
-        let external = self.external_nodes().to_vec();
-
-        Self::ExternalOnly { external }
-    }
-
-    #[must_use]
-    pub(crate) fn existing_cluster(&self) -> Option<&ExistingCluster> {
-        match self {
-            Self::Attached { attach, .. } => Some(attach),
-            Self::Managed { .. } | Self::ExternalOnly { .. } => None,
-        }
-    }
-
-    #[must_use]
-    pub(crate) fn external_nodes(&self) -> &[ExternalNodeSource] {
-        match self {
-            Self::Managed { external }
-            | Self::Attached { external, .. }
-            | Self::ExternalOnly { external } => external,
-        }
-    }
-
-    #[must_use]
-    pub(crate) const fn cluster_mode(&self) -> ClusterMode {
-        match self {
-            Self::Managed { .. } => ClusterMode::Managed,
-            Self::Attached { .. } => ClusterMode::ExistingCluster,
-            Self::ExternalOnly { .. } => ClusterMode::ExternalOnly,
-        }
-    }
-
-    #[must_use]
-    pub(crate) const fn control_profile(&self) -> ClusterControlProfile {
-        match self.cluster_mode() {
-            ClusterMode::Managed => ClusterControlProfile::FrameworkManaged,
-            ClusterMode::ExistingCluster => ClusterControlProfile::ExistingClusterAttached,
-            ClusterMode::ExternalOnly => ClusterControlProfile::ExternalUncontrolled,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ClusterControlProfile, ExistingCluster, ExternalNodeSource, ScenarioSources};
-
-    #[test]
-    fn managed_sources_map_to_framework_managed_control() {
-        assert_eq!(
-            ScenarioSources::default().control_profile(),
-            ClusterControlProfile::FrameworkManaged,
-        );
-    }
-
-    #[test]
-    fn attached_sources_map_to_existing_cluster_control() {
-        let sources = ScenarioSources::default()
-            .with_attach(ExistingCluster::for_compose_project("project".to_owned()));
-
-        assert_eq!(
-            sources.control_profile(),
-            ClusterControlProfile::ExistingClusterAttached,
-        );
-    }
-
-    #[test]
-    fn external_only_sources_map_to_uncontrolled_profile() {
-        let sources = ScenarioSources::default()
-            .with_external_node(ExternalNodeSource::new(
-                "node".to_owned(),
-                "http://node".to_owned(),
-            ))
-            .into_external_only();
-
-        assert_eq!(
-            sources.control_profile(),
-            ClusterControlProfile::ExternalUncontrolled,
-        );
     }
 }

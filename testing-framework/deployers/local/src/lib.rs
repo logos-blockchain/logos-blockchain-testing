@@ -1,6 +1,5 @@
 pub mod binary;
 mod cluster;
-mod deployer;
 pub mod env;
 mod external;
 mod manual;
@@ -15,7 +14,6 @@ pub use binary::{
     PathBinaryProvider,
 };
 pub use cluster::LocalCluster;
-pub use deployer::{ProcessDeployer, ProcessDeployerError};
 pub use env::{
     BuiltNodeConfig, LocalBinaryApp, LocalBuildContext, LocalConfigArgMode, LocalDeployerEnv,
     LocalNodePorts, LocalPeerNode, LocalProcessSpec, LocalReadinessProbe, NodeConfigEntry,

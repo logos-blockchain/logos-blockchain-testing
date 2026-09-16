@@ -5,7 +5,6 @@ pub mod observation;
 pub mod runtime;
 pub mod scenario;
 pub mod topology;
-pub mod workloads;
 
 use std::{env as std_env, ops::Mul as _, sync::LazyLock, time::Duration};
 

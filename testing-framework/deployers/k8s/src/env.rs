@@ -654,18 +654,6 @@ pub(crate) async fn wait_remote_readiness<E: K8sDeployEnv>(
     E::wait_remote_readiness(deployment, urls, requirement).await
 }
 
-pub(crate) fn build_node_clients<E: K8sDeployEnv>(
-    host: &str,
-    node_api_ports: &[u16],
-    node_auxiliary_ports: &[u16],
-) -> Result<Vec<E::NodeClient>, DynError> {
-    E::build_node_clients(host, node_api_ports, node_auxiliary_ports)
-}
-
-pub(crate) fn node_base_url<E: K8sDeployEnv>(client: &E::NodeClient) -> Option<String> {
-    E::node_base_url(client)
-}
-
 pub(crate) fn node_role<E: K8sDeployEnv>() -> &'static str {
     E::node_role()
 }
