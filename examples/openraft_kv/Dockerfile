@@ -7,6 +7,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY cfgsync/ ./cfgsync/
 COPY examples/ ./examples/
 COPY testing-framework/ ./testing-framework/
+COPY tools/ ./tools/
 
 RUN cargo build --release -p openraft-kv-node
 
