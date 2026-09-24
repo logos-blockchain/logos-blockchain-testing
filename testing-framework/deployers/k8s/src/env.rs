@@ -15,8 +15,8 @@ use tempfile::TempDir;
 use testing_framework_core::{
     cfgsync::StaticNodeConfigProvider,
     scenario::{
-        Application, DynError, HttpReadinessRequirement, NodeAccess,
-        wait_for_http_ports_with_host_and_config, wait_http_readiness,
+        Application, DEFAULT_READINESS_POLL_INTERVAL, DEFAULT_READINESS_TIMEOUT, DynError,
+        NodeAccess, ReadinessRequirement, wait_for_readiness_ports, wait_readiness,
     },
     topology::DeploymentDescriptor,
 };
@@ -413,26 +413,20 @@ pub trait K8sDeployEnv: Application + Sized {
             .collect()
     }
 
-    /// Returns the readiness endpoint path used for remote HTTP probes.
-    fn node_readiness_path() -> &'static str {
-        <Self as Application>::node_readiness_path()
-    }
-
     /// Waits for remote node readiness after port-forwarding is established.
     async fn wait_remote_readiness(
         _deployment: &Self::Deployment,
         urls: &[Url],
-        requirement: HttpReadinessRequirement,
+        requirement: ReadinessRequirement,
     ) -> Result<(), DynError> {
-        let readiness_urls: Vec<_> = urls
-            .iter()
-            .map(|url| {
-                let mut endpoint = url.clone();
-                endpoint.set_path(<Self as K8sDeployEnv>::node_readiness_path());
-                endpoint
-            })
-            .collect();
-        wait_http_readiness(&readiness_urls, requirement).await?;
+        wait_readiness(
+            urls,
+            Self::node_readiness_probe(),
+            requirement,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
+        )
+        .await?;
         Ok(())
     }
 
@@ -456,7 +450,9 @@ pub trait K8sDeployEnv: Application + Sized {
         default_attach_node_service_selector(release)
     }
 
-    /// Waits for direct HTTP readiness against forwarded node ports.
+    /// Waits for readiness against forwarded node ports.
+    ///
+    /// The HTTP-specific method name is retained for existing overrides.
     ///
     /// Enforces `timeout` as a hard deadline: against an unreachable host
     /// (e.g. NodePorts blocked by a firewall) the probe must give up so the
@@ -467,12 +463,12 @@ pub trait K8sDeployEnv: Application + Sized {
         host: &str,
         timeout: Duration,
         poll_interval: Duration,
-        requirement: HttpReadinessRequirement,
+        requirement: ReadinessRequirement,
     ) -> Result<(), DynError> {
-        wait_for_http_ports_with_host_and_config(
+        wait_for_readiness_ports(
             ports,
             host,
-            <Self as K8sDeployEnv>::node_readiness_path(),
+            Self::node_readiness_probe(),
             requirement,
             timeout,
             poll_interval,
@@ -480,7 +476,7 @@ pub trait K8sDeployEnv: Application + Sized {
         .await
         .map_err(|source| {
             DynError::from(format!(
-                "{role} HTTP readiness failed on {host} after {timeout:?}: {source}"
+                "{role} readiness failed on {host} after {timeout:?}: {source}"
             ))
         })?;
         Ok(())
@@ -642,14 +638,10 @@ pub(crate) fn cluster_identifiers<E: K8sDeployEnv>(cluster_name: Option<&str>) -
     (namespace, release)
 }
 
-pub(crate) fn node_readiness_path<E: K8sDeployEnv>() -> &'static str {
-    <E as K8sDeployEnv>::node_readiness_path()
-}
-
 pub(crate) async fn wait_remote_readiness<E: K8sDeployEnv>(
     deployment: &E::Deployment,
     urls: &[Url],
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), DynError> {
     E::wait_remote_readiness(deployment, urls, requirement).await
 }
@@ -676,7 +668,7 @@ pub(crate) async fn wait_for_node_http<E: K8sDeployEnv>(
     host: &str,
     timeout: Duration,
     poll_interval: Duration,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), DynError> {
     E::wait_for_node_http(ports, role, host, timeout, poll_interval, requirement).await
 }

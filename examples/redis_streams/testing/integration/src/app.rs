@@ -6,7 +6,7 @@ use redis::{
 };
 use testing_framework_core::{
     cfgsync::{StaticNodeConfigProvider, serialize_plain_text_config},
-    scenario::{Application, DynError, NodeAccess},
+    scenario::{Application, DynError, NodeAccess, ReadinessProbe},
 };
 
 pub type RedisStreamsTopology = testing_framework_core::topology::ClusterTopology;
@@ -146,6 +146,10 @@ pub struct RedisStreamsEnv;
 
 #[async_trait]
 impl Application for RedisStreamsEnv {
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Tcp
+    }
+
     type Deployment = RedisStreamsTopology;
     type NodeClient = RedisStreamsClient;
     type NodeConfig = String;

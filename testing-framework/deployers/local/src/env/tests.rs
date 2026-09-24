@@ -5,7 +5,7 @@ use std::{
 };
 
 use testing_framework_core::{
-    scenario::{Application, DynError, HttpReadinessRequirement},
+    scenario::{Application, DynError, ReadinessProbe, ReadinessRequirement},
     topology::DeploymentDescriptor,
 };
 
@@ -40,6 +40,10 @@ impl Application for TcpEnv {
     type Deployment = DummyTopology;
     type NodeClient = ();
     type NodeConfig = DummyConfig;
+
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Tcp
+    }
 }
 
 #[async_trait::async_trait]
@@ -82,11 +86,7 @@ impl LocalDeployerEnv for DummyEnv {
 }
 
 #[async_trait::async_trait]
-impl LocalDeployerEnv for TcpEnv {
-    fn readiness_probe() -> LocalReadinessProbe {
-        LocalReadinessProbe::Tcp
-    }
-}
+impl LocalDeployerEnv for TcpEnv {}
 
 fn build_dummy_node() -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
     unreachable!("not used in this test")
@@ -118,7 +118,7 @@ async fn dummy_wait_stable() -> Result<(), DynError> {
 async fn empty_cluster_still_runs_stability_hook() {
     STABLE_CALLS.store(0, Ordering::SeqCst);
     let nodes: Vec<Node<DummyEnv>> = Vec::new();
-    wait_local_readiness::<DummyEnv>(&nodes, HttpReadinessRequirement::AllNodesReady)
+    wait_local_readiness::<DummyEnv>(&nodes, ReadinessRequirement::AllNodesReady)
         .await
         .expect("empty cluster should be considered ready");
     assert_eq!(STABLE_CALLS.load(Ordering::SeqCst), 1);
@@ -131,7 +131,7 @@ async fn tcp_readiness_probe_accepts_bound_port() {
 
     wait_for_local_readiness_ports::<TcpEnv>(
         &[port],
-        HttpReadinessRequirement::AllNodesReady,
+        ReadinessRequirement::AllNodesReady,
         Some(Duration::from_secs(1)),
     )
     .await

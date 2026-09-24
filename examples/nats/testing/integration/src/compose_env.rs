@@ -4,8 +4,7 @@ use testing_framework_core::{
     cfgsync::StaticArtifactRenderer, scenario::DynError, topology::DeploymentDescriptor,
 };
 use testing_framework_runner_compose::{
-    ComposeDeployEnv, ComposeNodeConfigFileName, ComposeReadinessProbe, LoopbackNodeRuntimeSpec,
-    node_identifier,
+    ComposeDeployEnv, ComposeNodeConfigFileName, LoopbackNodeRuntimeSpec, node_identifier,
 };
 
 use crate::NatsEnv;
@@ -54,12 +53,6 @@ impl ComposeDeployEnv for NatsEnv {
     ) -> Result<Option<LoopbackNodeRuntimeSpec>, DynError> {
         let _ = topology;
         Ok(Some(build_nats_runtime(index)))
-    }
-
-    fn readiness_probe() -> ComposeReadinessProbe {
-        ComposeReadinessProbe::Http {
-            path: <Self as testing_framework_core::scenario::Application>::node_readiness_path(),
-        }
     }
 }
 
