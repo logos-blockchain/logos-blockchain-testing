@@ -18,10 +18,11 @@ use testing_framework_core::{
     manual::ManualClusterHandle,
     naming::is_valid_cluster_name,
     scenario::{
-        CleanupGuard, ClusterStartMode, ClusterWaitHandle, DeploymentPolicy, DynError,
-        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeAccess, NodeClients,
-        NodeControl, NodeControlHandle, NodeLaunchOptions, ObservabilityInputs, PeerSelection,
-        StartNodeOptions, StartedNode, StartedNodeAccess,
+        CleanupGuard, ClusterStartMode, ClusterWaitHandle, DEFAULT_READINESS_POLL_INTERVAL,
+        DEFAULT_READINESS_TIMEOUT, DeploymentPolicy, DynError, ExistingCluster, ExternalNodeSource,
+        NodeAccess, NodeClients, NodeControl, NodeControlHandle, NodeLaunchOptions,
+        ObservabilityInputs, PeerSelection, ReadinessRequirement, StartNodeOptions, StartedNode,
+        StartedNodeAccess, wait_for_readiness_ports,
     },
 };
 use thiserror::Error;
@@ -32,8 +33,8 @@ use crate::{
     env::{
         K8sDeployEnv, attach_node_service_selector, build_cfgsync_override_artifacts,
         cfgsync_hostnames, cfgsync_service, cluster_identifiers, collect_port_specs,
-        discovered_node_access, node_deployment_name, node_readiness_path, node_service_name,
-        prepare_stack, wait_remote_readiness,
+        discovered_node_access, node_deployment_name, node_service_name, prepare_stack,
+        wait_remote_readiness,
     },
     lifecycle::{
         cleanup::{CLEANUP_TIMEOUT, RunnerCleanup},
@@ -592,11 +593,13 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         }
 
         let ports = running_ports;
-        testing_framework_core::scenario::wait_for_http_ports_with_host_and_requirement(
+        wait_for_readiness_ports(
             &ports,
             &self.node_host,
-            node_readiness_path::<E>(),
-            HttpReadinessRequirement::AllNodesReady,
+            E::node_readiness_probe(),
+            ReadinessRequirement::AllNodesReady,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
         )
         .await
         .map_err(|source| ManualClusterError::NetworkReadiness {
@@ -608,11 +611,13 @@ impl<E: K8sDeployEnv> ManualCluster<E> {
         self.ensure_open()?;
         let index = self.require_node_index(name)?;
         let port = self.node_allocation(index)?.api;
-        testing_framework_core::scenario::wait_for_http_ports_with_host_and_requirement(
+        wait_for_readiness_ports(
             &[port],
             &self.node_host,
-            node_readiness_path::<E>(),
-            HttpReadinessRequirement::AllNodesReady,
+            E::node_readiness_probe(),
+            ReadinessRequirement::AllNodesReady,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
         )
         .await
         .map_err(|source| ManualClusterError::NodeReadiness {
@@ -960,7 +965,7 @@ async fn wait_policy_readiness<E: K8sDeployEnv>(
     topology: &E::Deployment,
     node_host: &str,
     api_ports: &[u16],
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), ManualClusterError> {
     let urls = api_ports
         .iter()

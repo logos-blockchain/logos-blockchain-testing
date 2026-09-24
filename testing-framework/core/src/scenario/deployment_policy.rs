@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use super::HttpReadinessRequirement;
+use super::ReadinessRequirement;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RetryPolicy {
@@ -35,7 +35,7 @@ impl CleanupPolicy {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeploymentPolicy {
     pub readiness_enabled: bool,
-    pub readiness_requirement: HttpReadinessRequirement,
+    pub readiness_requirement: ReadinessRequirement,
     pub retry_policy: Option<RetryPolicy>,
     pub cleanup_policy: CleanupPolicy,
 }
@@ -44,7 +44,7 @@ impl Default for DeploymentPolicy {
     fn default() -> Self {
         Self {
             readiness_enabled: true,
-            readiness_requirement: HttpReadinessRequirement::AllNodesReady,
+            readiness_requirement: ReadinessRequirement::AllNodesReady,
             retry_policy: None,
             cleanup_policy: CleanupPolicy::new(false),
         }

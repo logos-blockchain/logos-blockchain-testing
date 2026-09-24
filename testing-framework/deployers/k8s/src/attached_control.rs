@@ -1,15 +1,15 @@
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
 use kube::{Api, Client, Error as KubeError};
 use testing_framework_core::scenario::{
-    DynError, HttpReadinessRequirement, NodeAccess, NodeControl, NodeControlHandle,
-    NodeLaunchOptions, StartNodeOptions, StartedNode, StartedNodeAccess,
-    wait_for_http_ports_with_host_and_requirement,
+    DEFAULT_READINESS_POLL_INTERVAL, DEFAULT_READINESS_TIMEOUT, DynError, NodeAccess, NodeControl,
+    NodeControlHandle, NodeLaunchOptions, ReadinessRequirement, StartNodeOptions, StartedNode,
+    StartedNodeAccess, wait_for_readiness_ports,
 };
 use thiserror::Error;
 
 use crate::{
     attach_provider::{AttachedAccess, extract_api_node_port},
-    env::{K8sDeployEnv, node_readiness_path},
+    env::K8sDeployEnv,
     host::node_host,
     manual::{
         ManualClusterError, ensure_default_cfgsync_options, scale_deployment,
@@ -178,11 +178,13 @@ impl<E: K8sDeployEnv> K8sAttachedNodeControl<E> {
 
     async fn wait_ready(&self, name: &str) -> Result<(), K8sAttachedControlError> {
         let access = self.access(name).await?;
-        wait_for_http_ports_with_host_and_requirement(
+        wait_for_readiness_ports(
             &[access.api_port()],
             access.host(),
-            node_readiness_path::<E>(),
-            HttpReadinessRequirement::AllNodesReady,
+            E::node_readiness_probe(),
+            ReadinessRequirement::AllNodesReady,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
         )
         .await
         .map_err(|source| K8sAttachedControlError::NodeReadiness {

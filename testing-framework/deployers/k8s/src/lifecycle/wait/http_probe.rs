@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use testing_framework_core::scenario::HttpReadinessRequirement;
+use testing_framework_core::scenario::ReadinessRequirement;
 
 use super::{ClusterWaitError, http_poll_interval, node_http_probe_timeout, node_http_timeout};
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
 };
 
 const LOCALHOST: &str = "127.0.0.1";
-const READINESS_REQUIREMENT: HttpReadinessRequirement = HttpReadinessRequirement::AllNodesReady;
+const READINESS_REQUIREMENT: ReadinessRequirement = ReadinessRequirement::AllNodesReady;
 
 pub async fn wait_for_node_http_nodeport<E: K8sDeployEnv>(
     ports: &[u16],

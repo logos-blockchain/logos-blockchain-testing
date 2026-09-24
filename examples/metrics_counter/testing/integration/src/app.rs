@@ -3,7 +3,7 @@ use metrics_counter_node::MetricsCounterHttpClient;
 use serde::{Deserialize, Serialize};
 use testing_framework_core::{
     cfgsync::{StaticNodeConfigProvider, serialize_yaml_config},
-    scenario::{Application, DynError, NodeAccess},
+    scenario::{Application, DynError, NodeAccess, ReadinessProbe},
 };
 
 pub type MetricsCounterTopology = testing_framework_core::topology::ClusterTopology;
@@ -25,8 +25,10 @@ impl Application for MetricsCounterEnv {
         Ok(MetricsCounterHttpClient::new(access.api_base_url()?))
     }
 
-    fn node_readiness_path() -> &'static str {
-        "/health/ready"
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Http {
+            path: "/health/ready",
+        }
     }
 }
 

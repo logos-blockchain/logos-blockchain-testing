@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    ClusterWaitHandle, DynError, ExistingCluster, ExternalNodeSource, HttpReadinessRequirement,
-    wait_http_readiness,
+    ClusterWaitHandle, DEFAULT_READINESS_POLL_INTERVAL, DEFAULT_READINESS_TIMEOUT, DynError,
+    ExistingCluster, ExternalNodeSource, ReadinessRequirement, wait_readiness,
 };
 use url::Url;
 
@@ -13,7 +13,7 @@ use crate::{
         discover_running_attachable_services, discover_running_services,
         discover_service_container_id, discover_service_node_access,
     },
-    env::{ComposeDeployEnv, readiness_http_path},
+    env::ComposeDeployEnv,
 };
 
 pub(crate) struct ComposeAttachProvider<E: ComposeDeployEnv> {
@@ -182,10 +182,16 @@ impl<E: ComposeDeployEnv> ClusterWaitHandle for ComposeAttachedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         let request = compose_wait_request(&self.source)?;
         let services = resolve_running_wait_services(request.project, request.services).await?;
-        let endpoints =
-            collect_readiness_endpoints::<E>(&self.host, request.project, &services).await?;
+        let endpoints = collect_readiness_endpoints(&self.host, request.project, &services).await?;
 
-        wait_http_readiness(&endpoints, HttpReadinessRequirement::AllNodesReady).await?;
+        wait_readiness(
+            &endpoints,
+            E::node_readiness_probe(),
+            ReadinessRequirement::AllNodesReady,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
+        )
+        .await?;
 
         Ok(())
     }
@@ -225,7 +231,7 @@ fn compose_wait_request(source: &ExistingCluster) -> Result<ComposeAttachRequest
     Ok(ComposeAttachRequest { project, services })
 }
 
-async fn collect_readiness_endpoints<E: ComposeDeployEnv>(
+async fn collect_readiness_endpoints(
     host: &str,
     project: &str,
     services: &[String],
@@ -235,8 +241,7 @@ async fn collect_readiness_endpoints<E: ComposeDeployEnv>(
     for service in services {
         let container_id = discover_service_container_id(project, service).await?;
         let api_port = discover_api_port(&container_id).await?;
-        let mut endpoint = build_service_endpoint(host, api_port)?;
-        endpoint.set_path(readiness_http_path::<E>());
+        let endpoint = build_service_endpoint(host, api_port)?;
         endpoints.push(endpoint);
     }
 

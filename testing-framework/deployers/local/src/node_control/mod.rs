@@ -4,8 +4,8 @@ use std::{
 };
 
 use testing_framework_core::scenario::{
-    Application, DynError, HttpReadinessRequirement, NodeAccess, NodeClients, NodeControl,
-    NodeControlHandle, NodeLaunchOptions, NodeRuntimeOptions, ReadinessError, StartNodeOptions,
+    Application, DynError, NodeAccess, NodeClients, NodeControl, NodeControlHandle,
+    NodeLaunchOptions, NodeRuntimeOptions, ReadinessError, ReadinessRequirement, StartNodeOptions,
     StartedNode, StartedNodeAccess,
 };
 use thiserror::Error;
@@ -277,8 +277,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             tokio::time::sleep(RESTART_POLL_INTERVAL).await;
         };
 
-        wait_for_local_readiness_ports::<E>(&ports, HttpReadinessRequirement::AllNodesReady, None)
-            .await
+        wait_for_local_readiness_ports::<E>(&ports, ReadinessRequirement::AllNodesReady, None).await
     }
 
     pub async fn wait_node_ready(&self, name: &str) -> Result<(), NodeManagerError> {
@@ -286,7 +285,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
         wait_for_local_readiness_ports::<E>(
             &[target.port],
-            HttpReadinessRequirement::AllNodesReady,
+            ReadinessRequirement::AllNodesReady,
             target.runtime.start_timeout,
         )
         .await
@@ -751,7 +750,7 @@ mod tests {
     use testing_framework_core::{
         scenario::{
             Application, DynError, NodeClients, NodeControl, NodeControlHandle, NodeLaunchOptions,
-            StartNodeOptions,
+            ReadinessProbe, StartNodeOptions,
         },
         topology::DeploymentDescriptor,
     };
@@ -759,7 +758,7 @@ mod tests {
     use super::NodeManager;
     use crate::{
         LaunchSpec, NodeEndpoints,
-        env::{BuiltNodeConfig, LocalDeployerEnv, LocalReadinessProbe, spawn_node_from_config},
+        env::{BuiltNodeConfig, LocalDeployerEnv, spawn_node_from_config},
     };
 
     #[derive(Clone)]
@@ -783,6 +782,10 @@ mod tests {
         type Deployment = SleepTopology;
         type NodeClient = ();
         type NodeConfig = SleepConfig;
+
+        fn node_readiness_probe() -> ReadinessProbe {
+            ReadinessProbe::Tcp
+        }
     }
 
     #[async_trait::async_trait]
@@ -827,10 +830,6 @@ mod tests {
         fn node_client(_endpoints: &NodeEndpoints) -> Result<(), DynError> {
             Ok(())
         }
-
-        fn readiness_probe() -> LocalReadinessProbe {
-            LocalReadinessProbe::Tcp
-        }
     }
 
     fn reserve_unbound_port() -> u16 {
@@ -874,6 +873,10 @@ mod tests {
         type Deployment = SleepTopology;
         type NodeClient = ();
         type NodeConfig = FlakyConfig;
+
+        fn node_readiness_probe() -> ReadinessProbe {
+            ReadinessProbe::Tcp
+        }
     }
 
     #[async_trait::async_trait]
@@ -900,10 +903,6 @@ mod tests {
 
         fn node_client(_endpoints: &NodeEndpoints) -> Result<(), DynError> {
             Ok(())
-        }
-
-        fn readiness_probe() -> LocalReadinessProbe {
-            LocalReadinessProbe::Tcp
         }
     }
 
