@@ -23,8 +23,7 @@ pub use docker::{
 };
 pub use env::{
     ComposeBinaryApp, ComposeConfigServerMode, ComposeDeployEnv, ComposeNodeConfigFileName,
-    ComposeReadinessProbe, ConfigServerHandle, discovered_node_access,
-    write_registration_server_compose_configs,
+    ConfigServerHandle, discovered_node_access, write_registration_server_compose_configs,
 };
 pub use errors::ComposeRunnerError;
 pub use infrastructure::{

@@ -7,7 +7,8 @@ use testing_framework_core::{
     observation::ObservationRuntime,
     scenario::{
         Application, CleanupGuard, ClusterHandle, ClusterNodeConfigApplication, ClusterNodeView,
-        ClusterPeerView, ClusterProvisioner, DynError, NodeAccess, serialize_cluster_yaml_config,
+        ClusterPeerView, ClusterProvisioner, DynError, NodeAccess, ReadinessProbe,
+        serialize_cluster_yaml_config,
     },
 };
 use tokio::task::JoinHandle;
@@ -29,8 +30,8 @@ impl Application for OpenRaftKvEnv {
         Ok(OpenRaftKvClient::new(access.api_base_url()?))
     }
 
-    fn node_readiness_path() -> &'static str {
-        "/healthz"
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Http { path: "/healthz" }
     }
 }
 

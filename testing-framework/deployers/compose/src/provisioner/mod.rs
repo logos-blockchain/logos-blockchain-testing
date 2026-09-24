@@ -13,8 +13,8 @@ use testing_framework_core::{
     scenario::{
         CleanupGuard, ClusterControlProfile, ClusterControlRequest, ClusterProvisioner,
         ClusterRequest, ClusterSource, ClusterStartMode, ClusterUnit, ClusterWaitHandle, DynError,
-        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
-        ObservabilityInputs, RetryPolicy,
+        ExistingCluster, ExternalNodeSource, NodeClients, ObservabilityInputs,
+        ReadinessRequirement, RetryPolicy,
     },
 };
 use tokio_retry::{
@@ -513,7 +513,7 @@ impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeManagedClusterWait<E> 
         E::wait_remote_readiness(
             &self.deployment,
             &self.host_ports,
-            HttpReadinessRequirement::AllNodesReady,
+            ReadinessRequirement::AllNodesReady,
         )
         .await
     }
@@ -531,7 +531,7 @@ pub(crate) async fn resolve_cluster_nodes<E: ComposeDeployEnv>(
     project: &ComposeProject,
     descriptors: &E::Deployment,
     readiness_enabled: bool,
-    readiness_requirement: HttpReadinessRequirement,
+    readiness_requirement: ReadinessRequirement,
 ) -> Result<DeployedNodes<E>, ComposeRunnerError> {
     let nodes = node_container_ports::<E>(descriptors)
         .map_err(|source| ComposeRunnerError::Config(ConfigError::Descriptor { source }))?;
