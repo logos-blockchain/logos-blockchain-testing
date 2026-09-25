@@ -1,7 +1,8 @@
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
 use kube::{Api, Client, Error as KubeError};
 use testing_framework_core::scenario::{
-    DynError, HttpReadinessRequirement, NodeControlHandle, StartNodeOptions, StartedNode,
+    DynError, HttpReadinessRequirement, NodeAccess, NodeControl, NodeControlHandle,
+    NodeLaunchOptions, StartNodeOptions, StartedNode, StartedNodeAccess,
     wait_for_http_ports_with_host_and_requirement,
 };
 use thiserror::Error;
@@ -157,7 +158,7 @@ impl<E: K8sDeployEnv> K8sAttachedNodeControl<E> {
             .ok_or_else(|| self.unknown_node_error(name))
     }
 
-    async fn wait_ready(&self, name: &str) -> Result<(), K8sAttachedControlError> {
+    async fn access(&self, name: &str) -> Result<NodeAccess, K8sAttachedControlError> {
         self.require_known_node(name)?;
         let (host, port) = match &self.access {
             AttachedAccess::Direct => (node_host(), self.resolve_node_port(name).await?),
@@ -172,9 +173,14 @@ impl<E: K8sDeployEnv> K8sAttachedNodeControl<E> {
             }
         };
 
+        Ok(NodeAccess::new(host, port))
+    }
+
+    async fn wait_ready(&self, name: &str) -> Result<(), K8sAttachedControlError> {
+        let access = self.access(name).await?;
         wait_for_http_ports_with_host_and_requirement(
-            &[port],
-            &host,
+            &[access.api_port()],
+            access.host(),
             node_readiness_path::<E>(),
             HttpReadinessRequirement::AllNodesReady,
         )
@@ -297,7 +303,7 @@ fn validate_deployment_shape(
 }
 
 #[async_trait::async_trait]
-impl<E: K8sDeployEnv> NodeControlHandle<E> for K8sAttachedNodeControl<E> {
+impl<E: K8sDeployEnv> NodeControl for K8sAttachedNodeControl<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.restart(name).await.map_err(Into::into)
     }
@@ -305,27 +311,22 @@ impl<E: K8sDeployEnv> NodeControlHandle<E> for K8sAttachedNodeControl<E> {
     async fn restart_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
+        options: NodeLaunchOptions,
     ) -> Result<(), DynError> {
-        validate_restart_options(&options)?;
-        ensure_default_cfgsync_options(&options)?;
-        self.restart(name).await.map_err(Into::into)
-    }
-
-    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
-        self.start(name).await?;
-        self.started_node(name).map_err(Into::into)
+        self.restart_node_with_config(name, options.into()).await
     }
 
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
-    ) -> Result<StartedNode<E>, DynError> {
-        validate_restart_options(&options)?;
-        ensure_default_cfgsync_options(&options)?;
-        self.start(name).await?;
-        self.started_node(name).map_err(Into::into)
+        options: NodeLaunchOptions,
+    ) -> Result<StartedNodeAccess, DynError> {
+        let started = self.start_node_with_config(name, options.into()).await?;
+        let access = NodeControl::node_access(self, &started.name).await?;
+        Ok(StartedNodeAccess {
+            name: started.name,
+            access,
+        })
     }
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
@@ -336,15 +337,43 @@ impl<E: K8sDeployEnv> NodeControlHandle<E> for K8sAttachedNodeControl<E> {
         self.wait_ready(name).await.map_err(Into::into)
     }
 
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.access(name).await.map_err(Into::into)
+    }
+
+    fn node_names(&self) -> Vec<String> {
+        self.nodes.iter().map(|(node, _)| node.clone()).collect()
+    }
+}
+
+#[async_trait::async_trait]
+impl<E: K8sDeployEnv> NodeControlHandle<E> for K8sAttachedNodeControl<E> {
+    async fn restart_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        validate_restart_options(&options)?;
+        ensure_default_cfgsync_options(&options)?;
+        self.restart(name).await.map_err(Into::into)
+    }
+
+    async fn start_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        validate_restart_options(&options)?;
+        ensure_default_cfgsync_options(&options)?;
+        self.start(name).await?;
+        self.started_node(name).map_err(Into::into)
+    }
+
     fn node_client(&self, name: &str) -> Option<E::NodeClient> {
         self.nodes
             .iter()
             .find(|(node, _)| node == name)
             .map(|(_, client)| client.clone())
-    }
-
-    fn node_names(&self) -> Vec<String> {
-        self.nodes.iter().map(|(node, _)| node.clone()).collect()
     }
 }
 
@@ -353,7 +382,7 @@ mod tests {
     use k8s_openapi::api::apps::v1::{Deployment, DeploymentSpec};
     use kube::{Client, Config};
     use testing_framework_core::scenario::{
-        DynError, NodeControlHandle, StartNodeOptions, StartedNode,
+        DynError, NodeAccess, NodeControl, NodeControlHandle, NodeLaunchOptions, StartNodeOptions,
     };
 
     use super::{K8sAttachedControlError, K8sAttachedNodeControl, validate_deployment_shape};
@@ -374,7 +403,7 @@ mod tests {
         )
     }
 
-    fn expect_start_error(result: Result<StartedNode<DummyEnv>, DynError>, msg: &str) -> DynError {
+    fn expect_start_error<T>(result: Result<T, DynError>, msg: &str) -> DynError {
         match result {
             Ok(_) => panic!("{msg}"),
             Err(error) => error,
@@ -420,7 +449,7 @@ mod tests {
     async fn restart_node_rejects_unknown_node_names() {
         let control = offline_control(AttachedAccess::Direct);
 
-        let error = NodeControlHandle::restart_node(&control, "other-node")
+        let error = NodeControl::restart_node(&control, "other-node")
             .await
             .expect_err("an undiscovered node must be rejected");
 
@@ -437,7 +466,7 @@ mod tests {
     async fn restart_node_surfaces_deployment_resolution_errors() {
         let control = offline_control(AttachedAccess::Direct);
 
-        let error = NodeControlHandle::restart_node(&control, "kv-node-0")
+        let error = NodeControl::restart_node(&control, "kv-node-0")
             .await
             .expect_err("offline restart must fail against the unreachable API server");
 
@@ -457,7 +486,7 @@ mod tests {
         let control = offline_control(AttachedAccess::Direct);
         let options = StartNodeOptions::<DummyEnv>::default().with_args(["--flag".to_owned()]);
 
-        let error = NodeControlHandle::restart_node_with(&control, "kv-node-0", options)
+        let error = NodeControlHandle::restart_node_with_config(&control, "kv-node-0", options)
             .await
             .expect_err("extra process arguments must be rejected on attached restart");
 
@@ -471,7 +500,7 @@ mod tests {
     async fn stop_node_surfaces_deployment_resolution_errors() {
         let control = offline_control(AttachedAccess::Direct);
 
-        let error = NodeControlHandle::stop_node(&control, "kv-node-0")
+        let error = NodeControl::stop_node(&control, "kv-node-0")
             .await
             .expect_err("offline stop must fail against the unreachable API server");
 
@@ -491,7 +520,7 @@ mod tests {
         let control = offline_control(AttachedAccess::Direct);
 
         let error = expect_start_error(
-            NodeControlHandle::start_node(&control, "kv-node-0").await,
+            NodeControl::start_node(&control, "kv-node-0").await,
             "offline start must fail against the unreachable API server",
         );
 
@@ -513,7 +542,7 @@ mod tests {
             .with_persist_dir(std::path::PathBuf::from("/tmp/demo"));
 
         let error = expect_start_error(
-            NodeControlHandle::start_node_with(&control, "kv-node-0", options).await,
+            NodeControlHandle::start_node_with_config(&control, "kv-node-0", options).await,
             "persist directories must be rejected on attached start",
         );
 
@@ -530,7 +559,7 @@ mod tests {
         let control = offline_control(AttachedAccess::Direct);
 
         let error = expect_start_error(
-            NodeControlHandle::start_node_with(
+            NodeControlHandle::start_node_with_config(
                 &control,
                 "kv-node-0",
                 StartNodeOptions::<DummyEnv>::default(),
@@ -566,7 +595,7 @@ mod tests {
             forwards: AttachedForwardRegistry::default(),
         });
 
-        let error = NodeControlHandle::wait_node_ready(&control, "kv-node-0")
+        let error = NodeControl::wait_node_ready(&control, "kv-node-0")
             .await
             .expect_err("a missing forward must fail the readiness wait");
 
@@ -582,11 +611,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn common_control_preserves_attached_validation_errors() {
+        let attached = offline_control(AttachedAccess::Forwarded {
+            forwards: AttachedForwardRegistry::default(),
+        });
+        let control: &dyn NodeControl = &attached;
+        let options = NodeLaunchOptions::default().with_args(["--flag"]);
+
+        let error = control
+            .start_node_with("kv-node-0", options.clone())
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("not supported on restart"));
+        let error = control
+            .restart_node_with("kv-node-0", options)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("not supported on restart"));
+        let error = control.node_access("kv-node-0").await.unwrap_err();
+        assert!(error.to_string().contains("no registered port-forward"));
+        let error = control.node_access("unknown").await.unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("not part of the attached cluster")
+        );
+        assert_eq!(control.node_pid("kv-node-0"), None);
+    }
+
+    #[tokio::test]
+    async fn common_control_resolves_attached_service_node_port() {
+        use std::{
+            io::{Read as _, Write as _},
+            net::TcpListener,
+            thread,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request).unwrap();
+            let body = serde_json::json!({
+                "apiVersion": "v1",
+                "kind": "Service",
+                "metadata": { "name": "kv-node-0" },
+                "spec": {
+                    "ports": [{ "name": "http", "port": 8080, "nodePort": 31080 }]
+                }
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\n\
+                 Content-Type: application/json\r\n\
+                 Content-Length: {}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let mut attached = offline_control(AttachedAccess::Direct);
+        attached.client =
+            Client::try_from(Config::new(format!("http://{address}").parse().unwrap())).unwrap();
+        let control: &dyn NodeControl = &attached;
+
+        let access: NodeAccess = control.node_access("kv-node-0").await.unwrap();
+
+        assert_eq!(access.host(), crate::host::node_host());
+        assert_eq!(access.api_port(), 31080);
+        assert_eq!(access.testing_port(), None);
+        server.join().unwrap();
+    }
+
+    #[tokio::test]
     async fn node_names_and_clients_come_from_discovery() {
         let control = offline_control(AttachedAccess::Direct);
 
         assert_eq!(
-            NodeControlHandle::node_names(&control),
+            NodeControl::node_names(&control),
             vec!["kv-node-0".to_owned()]
         );
         assert_eq!(

@@ -121,7 +121,7 @@ async fn provision_managed<E: K8sDeployEnv>(
         ClusterStartMode::OnDemand => ClusterControlProfile::ManualControlled,
     };
     let mut unit = ClusterUnit::new(Some(deployment), cluster.node_clients(), profile)
-        .with_cluster_wait(Arc::clone(&cluster) as Arc<dyn ClusterWaitHandle<E>>)
+        .with_cluster_wait(Arc::clone(&cluster) as Arc<dyn ClusterWaitHandle>)
         .with_cleanup(cluster.cleanup_guard())
         .with_observability(observability)
         .with_attachment(cluster.attachment());

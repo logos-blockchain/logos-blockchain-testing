@@ -8,16 +8,17 @@
 //! and exits immediately otherwise so offline `cargo test` stays green. It
 //! reuses the `kvstore-node:local` image the Kind workflow builds and loads.
 
-use std::io::Error as IoError;
+use std::{io::Error as IoError, time::Duration};
 
 use anyhow::{Context as _, Result, anyhow};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use testing_framework_app::{AppHostEnv, AppHostTopology, ClusterApp, DeployContext};
 use testing_framework_core::{
     scenario::{
         Application, ClusterControlRequest, ClusterHandle, ClusterNodeConfigApplication,
-        ClusterNodeView, ClusterPeerView, ClusterRequest, DynError, NodeAccess, NodeClients,
-        serialize_cluster_yaml_config,
+        ClusterNodeView, ClusterPeerView, ClusterRequest, ClusterStartMode, DynError, NodeAccess,
+        NodeClients, NodeLaunchOptions, StartNodeOptions, serialize_cluster_yaml_config,
     },
     topology::ClusterTopology,
 };
@@ -128,10 +129,36 @@ async fn app_model_smoke() -> Result<()> {
     );
 
     let handle: ClusterHandle<SmokeEnv> = ctx
-        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(2)).with_name("alpha"))
+        .deploy(
+            ClusterApp::<SmokeEnv>::new(ClusterTopology::new(2))
+                .with_name("alpha")
+                .with_start_mode(ClusterStartMode::OnDemand),
+        )
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("deploying the smoke cluster through the app model")?;
+
+    let control = handle
+        .control()
+        .ok_or_else(|| anyhow!("managed cluster must expose common control"))?;
+    let started = control
+        .start_node("node-00")
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("starting node-0 through common control")?;
+    assert_eq!(started.name, "node-0");
+    assert_ready_endpoint(&started.access).await?;
+    let first_endpoint = started
+        .access
+        .api_base_url()
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let second = control
+        .start_node_with("node-1", NodeLaunchOptions::default())
+        .await
+        .map_err(|source| anyhow!(source.to_string()))
+        .context("starting node-1 through common control")?;
+    assert_ready_endpoint(&second.access).await?;
+    assert!(control.node_pid(&started.name).is_none());
 
     let sibling: ClusterHandle<SmokeEnv> = ctx
         .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(1)).with_name("beta"))
@@ -178,14 +205,14 @@ async fn app_model_smoke() -> Result<()> {
         .map_err(|source| anyhow!(source.to_string()))
         .context("waiting for initial network readiness")?;
 
-    handle
-        .restart_node("node-0")
+    control
+        .restart_node_with(&started.name, NodeLaunchOptions::default())
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("restarting node-0")?;
 
-    handle
-        .wait_node_ready("node-0")
+    control
+        .wait_node_ready(&started.name)
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("waiting for node-0 readiness after restart")?;
@@ -199,6 +226,54 @@ async fn app_model_smoke() -> Result<()> {
     assert!(
         handle.node_client("node-0").is_some(),
         "node-0 client must be rebuilt after the restart round-trip"
+    );
+    let restarted_access = control
+        .node_access(&started.name)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))?;
+    assert_ready_endpoint(&restarted_access).await?;
+    assert_eq!(
+        restarted_access
+            .api_base_url()
+            .map_err(|e| anyhow!(e.to_string()))?,
+        first_endpoint,
+        "restart must preserve the runner endpoint"
+    );
+
+    let override_error = handle
+        .restart_node_with(
+            &started.name,
+            StartNodeOptions::<SmokeEnv>::default().create_patch(|mut config| {
+                config.sync_interval_ms = 250;
+                Ok(config)
+            }),
+        )
+        .await
+        .expect_err("static ConfigMap fixtures must reject unsupported config patches");
+    assert!(
+        override_error
+            .to_string()
+            .contains("cfgsync override support")
+    );
+    assert_ready_endpoint(&restarted_access).await?;
+
+    control
+        .stop_node(&started.name)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))?;
+    let restarted = control
+        .start_node(&started.name)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))?;
+    assert_eq!(restarted.name, started.name);
+    assert_ready_endpoint(&restarted.access).await?;
+    assert_eq!(
+        restarted
+            .access
+            .api_base_url()
+            .map_err(|e| anyhow!(e.to_string()))?,
+        first_endpoint,
+        "stop/start must preserve the runner endpoint"
     );
 
     sibling
@@ -230,19 +305,32 @@ async fn app_model_smoke() -> Result<()> {
         .map_err(|source| anyhow!(source.to_string()))
         .context("waiting for network readiness through the attached handle")?;
 
-    let attached_target = attached
+    let attached_control = attached
+        .control()
+        .ok_or_else(|| anyhow!("attached cluster must expose common control"))?;
+    let attached_target = attached_control
         .node_names()
         .first()
         .cloned()
         .ok_or_else(|| anyhow!("the attached handle must report its discovered node names"))?;
 
-    attached
+    let attached_access = attached_control
+        .node_access(&attached_target)
+        .await
+        .map_err(|source| anyhow!(source.to_string()))?;
+    assert_ready_endpoint(&attached_access).await?;
+    let attached_endpoint = attached_access
+        .api_base_url()
+        .map_err(|e| anyhow!(e.to_string()))?;
+    eprintln!("attached runner endpoint: {attached_endpoint}");
+
+    attached_control
         .restart_node(&attached_target)
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("restarting a node through the attached handle")?;
 
-    attached
+    attached_control
         .wait_node_ready(&attached_target)
         .await
         .map_err(|source| anyhow!(source.to_string()))
@@ -254,14 +342,14 @@ async fn app_model_smoke() -> Result<()> {
         .map_err(|source| anyhow!(source.to_string()))
         .context("waiting for network readiness after the attached restart")?;
 
-    attached
+    attached_control
         .stop_node(&attached_target)
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("stopping a node through the attached handle")?;
 
-    let started = attached
-        .start_node(&attached_target)
+    let started = attached_control
+        .start_node_with(&attached_target, NodeLaunchOptions::default())
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("starting the stopped node through the attached handle")?;
@@ -269,8 +357,17 @@ async fn app_model_smoke() -> Result<()> {
         started.name, attached_target,
         "the attached start must report the started node's name"
     );
+    assert_ready_endpoint(&started.access).await?;
+    assert_eq!(
+        started
+            .access
+            .api_base_url()
+            .map_err(|e| anyhow!(e.to_string()))?,
+        attached_endpoint,
+        "attached lifecycle operations must preserve the runner endpoint"
+    );
 
-    attached
+    attached_control
         .wait_node_ready(&attached_target)
         .await
         .map_err(|source| anyhow!(source.to_string()))
@@ -303,5 +400,16 @@ async fn app_model_smoke() -> Result<()> {
     drop(sibling);
     drop(handle);
     drop(ctx);
+    Ok(())
+}
+
+async fn assert_ready_endpoint(access: &NodeAccess) -> Result<()> {
+    let base = access.api_base_url().map_err(|e| anyhow!(e.to_string()))?;
+    Client::new()
+        .get(base.join("health/ready")?)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?
+        .error_for_status()?;
     Ok(())
 }

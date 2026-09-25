@@ -2,7 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use super::{CleanupChain, RuntimeExtensions, metrics::Metrics, node_clients::ClusterClient};
 use crate::scenario::{
-    Application, ClusterControlProfile, ClusterWaitHandle, DynError, NodeClients, NodeControlHandle,
+    Application, ClusterControlProfile, ClusterWaitHandle, DynError, NodeClients, NodeControl,
+    NodeControlHandle,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -22,7 +23,7 @@ pub struct RunContext<E: Application> {
     runtime_extensions: RuntimeExtensions,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     node_control_granted: bool,
-    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle>>,
 }
 
 /// Low-level runtime assembly input used by deployers to build a runnable
@@ -38,7 +39,7 @@ pub struct RuntimeAssembly<E: Application> {
     cleanup_guard: Option<Box<dyn CleanupGuard>>,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
     node_control_granted: bool,
-    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle>>,
 }
 
 impl<E: Application> RunContext<E> {
@@ -73,7 +74,7 @@ impl<E: Application> RunContext<E> {
     }
 
     #[must_use]
-    pub(crate) fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
+    pub(crate) fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle>) -> Self {
         self.cluster_wait = Some(cluster_wait);
         self
     }
@@ -141,6 +142,13 @@ impl<E: Application> RunContext<E> {
         self.node_control.clone()
     }
 
+    #[must_use]
+    pub fn control(&self) -> Option<Arc<dyn NodeControl>> {
+        self.node_control
+            .clone()
+            .map(|control| control as Arc<dyn NodeControl>)
+    }
+
     /// Returns whether any cluster in this run granted node control.
     ///
     /// True when an environment-typed control handle is installed or when an
@@ -160,7 +168,7 @@ impl<E: Application> RunContext<E> {
         self.node_clients.cluster_client()
     }
 
-    fn require_cluster_wait(&self) -> Result<Arc<dyn ClusterWaitHandle<E>>, DynError> {
+    fn require_cluster_wait(&self) -> Result<Arc<dyn ClusterWaitHandle>, DynError> {
         self.cluster_wait
             .as_ref()
             .map(Arc::clone)
@@ -221,7 +229,7 @@ impl<E: Application> RuntimeAssembly<E> {
     }
 
     #[must_use]
-    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
+    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle>) -> Self {
         self.cluster_wait = Some(cluster_wait);
         self
     }

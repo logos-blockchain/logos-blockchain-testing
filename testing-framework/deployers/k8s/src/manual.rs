@@ -19,8 +19,9 @@ use testing_framework_core::{
     naming::is_valid_cluster_name,
     scenario::{
         CleanupGuard, ClusterStartMode, ClusterWaitHandle, DeploymentPolicy, DynError,
-        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeClients,
-        NodeControlHandle, ObservabilityInputs, PeerSelection, StartNodeOptions, StartedNode,
+        ExistingCluster, ExternalNodeSource, HttpReadinessRequirement, NodeAccess, NodeClients,
+        NodeControl, NodeControlHandle, NodeLaunchOptions, ObservabilityInputs, PeerSelection,
+        StartNodeOptions, StartedNode, StartedNodeAccess,
     },
 };
 use thiserror::Error;
@@ -764,7 +765,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<E> NodeControlHandle<E> for ManualCluster<E>
+impl<E> NodeControl for ManualCluster<E>
 where
     E: K8sDeployEnv,
 {
@@ -775,25 +776,22 @@ where
     async fn restart_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
+        options: NodeLaunchOptions,
     ) -> Result<(), DynError> {
-        Self::restart_node_with(self, name, options)
-            .await
-            .map_err(Into::into)
-    }
-
-    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
-        Self::start_node(self, name).await.map_err(Into::into)
+        self.restart_node_with_config(name, options.into()).await
     }
 
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
-    ) -> Result<StartedNode<E>, DynError> {
-        Self::start_node_with(self, name, options)
-            .await
-            .map_err(Into::into)
+        options: NodeLaunchOptions,
+    ) -> Result<StartedNodeAccess, DynError> {
+        let started = self.start_node_with_config(name, options.into()).await?;
+        let access = NodeControl::node_access(self, &started.name).await?;
+        Ok(StartedNodeAccess {
+            name: started.name,
+            access,
+        })
     }
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
@@ -806,8 +804,15 @@ where
         Self::wait_node_ready(self, name).await.map_err(Into::into)
     }
 
-    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
-        Self::node_client(self, name)
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.ensure_open()?;
+        let index = self.require_node_index(name)?;
+        let allocation = self.node_allocation(index)?;
+        Ok(discovered_node_access(
+            &self.node_host,
+            allocation.api,
+            allocation.auxiliary,
+        ))
     }
 
     fn node_names(&self) -> Vec<String> {
@@ -816,7 +821,37 @@ where
 }
 
 #[async_trait::async_trait]
-impl<E> ClusterWaitHandle<E> for ManualCluster<E>
+impl<E> NodeControlHandle<E> for ManualCluster<E>
+where
+    E: K8sDeployEnv,
+{
+    async fn restart_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        Self::restart_node_with(self, name, options)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn start_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        Self::start_node_with(self, name, options)
+            .await
+            .map_err(Into::into)
+    }
+
+    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
+        Self::node_client(self, name)
+    }
+}
+
+#[async_trait::async_trait]
+impl<E> ClusterWaitHandle for ManualCluster<E>
 where
     E: K8sDeployEnv,
 {
@@ -1067,7 +1102,7 @@ pub(crate) async fn wait_for_replicas(
 fn validate_start_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
-    if options.persist_dir.is_some() || options.snapshot_dir.is_some() {
+    if options.common.persist_dir.is_some() || options.common.snapshot_dir.is_some() {
         return Err(ManualClusterError::UnsupportedStartOptions {
             message: "persist/snapshot directories are not supported".to_owned(),
         });
@@ -1083,12 +1118,12 @@ pub(crate) fn validate_restart_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
     validate_start_options(options)?;
-    if !options.args.is_empty() {
+    if !options.common.args.is_empty() {
         return Err(ManualClusterError::UnsupportedStartOptions {
             message: "extra process arguments are not supported on restart".to_owned(),
         });
     }
-    if options.runtime.start_timeout.is_some() {
+    if options.common.runtime.start_timeout.is_some() {
         return Err(ManualClusterError::UnsupportedStartOptions {
             message: "start timeout overrides are not supported on restart".to_owned(),
         });
@@ -1099,7 +1134,10 @@ pub(crate) fn validate_restart_options<E: K8sDeployEnv>(
 pub(crate) fn ensure_default_cfgsync_options<E: K8sDeployEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), ManualClusterError> {
-    let default_peers = matches!(options.peers, None | Some(PeerSelection::DefaultLayout));
+    let default_peers = matches!(
+        options.common.peers,
+        None | Some(PeerSelection::DefaultLayout)
+    );
     if default_peers && options.config_override.is_none() && options.config_patch.is_none() {
         return Ok(());
     }
@@ -1214,7 +1252,7 @@ pub(crate) mod tests_dummy_env {
             _hostnames: &[String],
             options: &StartNodeOptions<Self>,
         ) -> Result<Option<cfgsync_artifacts::ArtifactSet>, Self::Error> {
-            let mut config = match &options.peers {
+            let mut config = match &options.common.peers {
                 None | Some(PeerSelection::DefaultLayout) => {
                     if options.config_override.is_none() && options.config_patch.is_none() {
                         return Ok(None);
@@ -1243,6 +1281,8 @@ pub(crate) mod tests_dummy_env {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use testing_framework_core::scenario::PeerSelection;
 
     use super::{tests_dummy_env::DummyEnv, *};
@@ -1544,7 +1584,7 @@ mod tests {
             state.running.insert(0);
         }
 
-        let error = NodeControlHandle::restart_node_with(
+        let error = NodeControlHandle::restart_node_with_config(
             &cluster,
             "node-0",
             StartNodeOptions::<DummyEnv>::default(),
@@ -1567,7 +1607,7 @@ mod tests {
     async fn node_control_wait_node_ready_rejects_stopped_node() {
         let cluster = offline_cluster();
 
-        let error = NodeControlHandle::wait_node_ready(&cluster, "node-0")
+        let error = NodeControl::wait_node_ready(&cluster, "node-0")
             .await
             .expect_err("waiting on a stopped node must fail");
 
@@ -1594,7 +1634,7 @@ mod tests {
             state.node_allocations[0] = None;
         }
 
-        let error = NodeControlHandle::wait_node_ready(&cluster, "node-0")
+        let error = NodeControl::wait_node_ready(&cluster, "node-0")
             .await
             .expect_err("waiting without a port-forward allocation must fail");
 
@@ -1640,13 +1680,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn common_control_returns_allocated_runner_endpoints() {
+        let cluster = offline_cluster();
+        let control: &dyn NodeControl = &cluster;
+
+        let access = control
+            .node_access("node-0")
+            .await
+            .expect("allocated access");
+
+        assert_eq!(
+            access.api_base_url().unwrap().as_str(),
+            "http://127.0.0.1:1/"
+        );
+        assert_eq!(access.testing_port(), Some(2));
+        assert_eq!(control.node_pid("node-0"), None);
+        assert_eq!(control.node_names(), vec!["node-0"]);
+        assert!(control.node_access("node-1").await.is_err());
+
+        cluster.state.lock().unwrap().node_allocations[0] = None;
+        let error = control.node_access("node-0").await.unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("no active port-forward allocation")
+        );
+    }
+
+    #[tokio::test]
+    async fn common_control_preserves_start_and_restart_validation() {
+        let cluster = offline_cluster();
+        let control: &dyn NodeControl = &cluster;
+        let options = NodeLaunchOptions::default().with_persist_dir(PathBuf::from("/tmp/demo"));
+
+        let error = control
+            .start_node_with("node-0", options)
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("persist/snapshot directories are not supported")
+        );
+        let error = control.restart_node("node-0").await.unwrap_err();
+        assert!(error.to_string().contains("is not running"));
+
+        cluster.closed.store(true, Ordering::Release);
+        let error = control.node_access("node-0").await.unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("no longer owned by an active run")
+        );
+    }
+
+    #[tokio::test]
     async fn node_control_reports_canonical_node_names() {
         let cluster = offline_cluster();
 
-        assert_eq!(
-            NodeControlHandle::node_names(&cluster),
-            vec!["node-0".to_owned()]
-        );
+        assert_eq!(NodeControl::node_names(&cluster), vec!["node-0".to_owned()]);
     }
 
     #[tokio::test]

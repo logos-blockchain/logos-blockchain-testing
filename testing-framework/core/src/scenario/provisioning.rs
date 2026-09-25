@@ -4,8 +4,9 @@ use async_trait::async_trait;
 
 use super::{
     Application, ClusterControlProfile, ClusterWaitHandle, DeploymentPolicy, DynError,
-    ExistingCluster, ExternalNodeSource, Metrics, MetricsError, NodeClients, NodeControlHandle,
-    ObservabilityInputs, StartNodeOptions, StartedNode, internal::CleanupGuard,
+    ExistingCluster, ExternalNodeSource, Metrics, MetricsError, NodeAccess, NodeClients,
+    NodeControl, NodeControlHandle, ObservabilityInputs, StartNodeOptions, StartedNode,
+    internal::CleanupGuard,
 };
 use crate::topology::DeploymentDescriptor;
 
@@ -208,7 +209,7 @@ pub struct ClusterUnit<E: Application> {
     node_clients: NodeClients<E>,
     control_profile: ClusterControlProfile,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
-    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle>>,
     cleanup: Option<Box<dyn CleanupGuard>>,
     observability: ObservabilityInputs,
     attachment: Option<ExistingCluster>,
@@ -220,7 +221,7 @@ pub struct ClusterHandle<E: Application> {
     node_clients: NodeClients<E>,
     control_profile: ClusterControlProfile,
     node_control: Option<Arc<dyn NodeControlHandle<E>>>,
-    cluster_wait: Option<Arc<dyn ClusterWaitHandle<E>>>,
+    cluster_wait: Option<Arc<dyn ClusterWaitHandle>>,
     observability: ObservabilityInputs,
     attachment: Option<ExistingCluster>,
 }
@@ -319,8 +320,27 @@ impl<E: Application> ClusterHandle<E> {
         self.observability.telemetry_handle()
     }
 
+    /// Shares common control without exposing the application's types.
+    /// The deployment owner must remain alive while this handle is used.
+    #[must_use]
+    pub fn control(&self) -> Option<Arc<dyn NodeControl>> {
+        self.node_control
+            .clone()
+            .map(|control| control as Arc<dyn NodeControl>)
+    }
+
+    #[must_use]
+    pub fn cluster_wait(&self) -> Option<Arc<dyn ClusterWaitHandle>> {
+        self.cluster_wait.clone()
+    }
+
+    pub async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.require_control()?.node_access(name).await
+    }
+
     pub async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
-        self.require_control()?.start_node(name).await
+        self.start_node_with(name, StartNodeOptions::default())
+            .await
     }
 
     pub async fn start_node_with(
@@ -328,7 +348,9 @@ impl<E: Application> ClusterHandle<E> {
         name: &str,
         options: StartNodeOptions<E>,
     ) -> Result<StartedNode<E>, DynError> {
-        self.require_control()?.start_node_with(name, options).await
+        self.require_control()?
+            .start_node_with_config(name, options)
+            .await
     }
 
     pub async fn stop_node(&self, name: &str) -> Result<(), DynError> {
@@ -345,7 +367,7 @@ impl<E: Application> ClusterHandle<E> {
         options: StartNodeOptions<E>,
     ) -> Result<(), DynError> {
         self.require_control()?
-            .restart_node_with(name, options)
+            .restart_node_with_config(name, options)
             .await
     }
 
@@ -434,7 +456,7 @@ impl<E: Application> ClusterUnit<E> {
     }
 
     #[must_use]
-    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle<E>>) -> Self {
+    pub fn with_cluster_wait(mut self, cluster_wait: Arc<dyn ClusterWaitHandle>) -> Self {
         self.cluster_wait = Some(cluster_wait);
         self
     }
@@ -472,7 +494,7 @@ impl<E: Application> ClusterUnit<E> {
     }
 
     #[must_use]
-    pub fn cluster_wait(&self) -> Option<Arc<dyn ClusterWaitHandle<E>>> {
+    pub fn cluster_wait(&self) -> Option<Arc<dyn ClusterWaitHandle>> {
         self.cluster_wait.clone()
     }
 
@@ -514,8 +536,9 @@ mod tests {
     };
     use crate::{
         scenario::{
-            Application, CleanupPolicy, ClusterControlProfile, DeploymentPolicy, ExistingCluster,
-            ExternalNodeSource, NodeClients, NodeControlHandle, internal::CleanupGuard,
+            Application, CleanupPolicy, ClusterControlProfile, ClusterWaitHandle, DeploymentPolicy,
+            DynError, ExistingCluster, ExternalNodeSource, NodeClients, NodeControl,
+            NodeControlHandle, internal::CleanupGuard,
         },
         topology::NodeCountTopology,
     };
@@ -670,10 +693,85 @@ mod tests {
     }
 
     #[async_trait]
-    impl NodeControlHandle<TestApp> for NamedControl {
+    impl NodeControl for NamedControl {
         fn node_names(&self) -> Vec<String> {
             self.names.clone()
         }
+    }
+
+    impl<E: Application> NodeControlHandle<E> for NamedControl {}
+
+    struct OtherApp;
+
+    impl Application for OtherApp {
+        type Deployment = NodeCountTopology;
+        type NodeClient = String;
+        type NodeConfig = bool;
+    }
+
+    #[test]
+    fn different_applications_expose_the_same_control_interface() {
+        let first = ClusterUnit::<TestApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ManualControlled,
+        )
+        .with_node_control(Arc::new(NamedControl {
+            names: vec!["first".into()],
+        }));
+        let second = ClusterUnit::<OtherApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ManualControlled,
+        )
+        .with_node_control(Arc::new(NamedControl {
+            names: vec!["second".into()],
+        }));
+
+        let controls: Vec<Arc<dyn NodeControl>> = vec![
+            first.handle().control().expect("first control"),
+            second.handle().control().expect("second control"),
+        ];
+        let names: Vec<_> = controls
+            .iter()
+            .flat_map(|control| control.node_names())
+            .collect();
+        assert_eq!(names, ["first", "second"]);
+    }
+
+    struct CountingWait(Arc<AtomicUsize>);
+
+    #[async_trait]
+    impl ClusterWaitHandle for CountingWait {
+        async fn wait_network_ready(&self) -> Result<(), DynError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn common_readiness_remains_available_without_node_control() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let unit = ClusterUnit::<TestApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ExternalUncontrolled,
+        )
+        .with_cluster_wait(Arc::new(CountingWait(Arc::clone(&calls))));
+        let handle = unit.handle();
+
+        assert!(handle.control().is_none());
+        handle
+            .cluster_wait()
+            .expect("readiness capability")
+            .wait_network_ready()
+            .await
+            .expect("common readiness");
+        handle
+            .wait_network_ready()
+            .await
+            .expect("typed facade readiness");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 
     #[test]

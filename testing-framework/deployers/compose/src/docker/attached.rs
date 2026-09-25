@@ -1,7 +1,7 @@
 use std::process::Stdio;
 
 use serde_json::Value;
-use testing_framework_core::scenario::DynError;
+use testing_framework_core::scenario::{DynError, NodeAccess};
 use tokio::process::Command;
 
 pub const ATTACHABLE_NODE_LABEL_KEY: &str = "testing-framework.node";
@@ -99,6 +99,47 @@ pub async fn inspect_api_container_port_label(container_id: &str) -> Result<u16,
     .await?;
 
     parse_api_container_port_label(&stdout)
+}
+
+pub(crate) async fn discover_service_node_access(
+    host: &str,
+    project: &str,
+    service: &str,
+) -> Result<NodeAccess, DynError> {
+    let container_id = discover_service_container_id(project, service).await?;
+    let api_port = discover_api_port(&container_id).await?;
+    Ok(NodeAccess::new(host, api_port))
+}
+
+pub(crate) async fn discover_api_port(container_id: &str) -> Result<u16, DynError> {
+    let mapped_ports = inspect_mapped_tcp_ports(container_id).await?;
+    let api_container_port = inspect_api_container_port_label(container_id).await?;
+    select_api_port(container_id, api_container_port, &mapped_ports)
+}
+
+fn select_api_port(
+    container_id: &str,
+    api_container_port: u16,
+    mapped_ports: &[MappedTcpPort],
+) -> Result<u16, DynError> {
+    let Some(api_port) = mapped_ports
+        .iter()
+        .find(|port| port.container_port == api_container_port)
+        .map(|port| port.host_port)
+    else {
+        let mapped_ports = mapped_ports
+            .iter()
+            .map(|port| format!("{}->{}", port.container_port, port.host_port))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        return Err(format!(
+            "attached compose service container '{container_id}' does not expose labeled API container port {api_container_port}; mapped tcp ports: {mapped_ports}"
+        )
+        .into());
+    };
+
+    Ok(api_port)
 }
 
 pub fn parse_mapped_tcp_ports(raw: &str) -> Result<Vec<MappedTcpPort>, DynError> {
@@ -239,4 +280,41 @@ fn parse_api_container_port_label(raw: &str) -> Result<u16, DynError> {
         )
         .into()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MappedTcpPort, select_api_port};
+
+    #[test]
+    fn labeled_api_port_selects_the_host_mapping_instead_of_first_port() {
+        let ports = [
+            MappedTcpPort {
+                container_port: 8080,
+                host_port: 31001,
+            },
+            MappedTcpPort {
+                container_port: 19090,
+                host_port: 32123,
+            },
+        ];
+
+        assert_eq!(select_api_port("container", 19090, &ports).unwrap(), 32123);
+    }
+
+    #[test]
+    fn missing_labeled_mapping_does_not_fall_back_to_another_port() {
+        let ports = [MappedTcpPort {
+            container_port: 8080,
+            host_port: 31001,
+        }];
+
+        let error = select_api_port("container", 19090, &ports).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("does not expose labeled API container port 19090")
+        );
+    }
 }

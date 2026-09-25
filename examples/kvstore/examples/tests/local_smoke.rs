@@ -110,8 +110,14 @@ impl Workload<AppHostEnv> for KvRestartExercise {
 
         ensure_cluster_shape(&cluster, self.expected_nodes)?;
         put_value(&cluster, "before-restart").await?;
-        cluster.restart_node("node-1").await?;
-        cluster.wait_node_ready("node-1").await?;
+        let control = cluster.control().ok_or("local cluster has no control")?;
+        control.restart_node("node-1").await?;
+        control.wait_node_ready("node-1").await?;
+        let access = control.node_access("node-1").await?;
+        let client = cluster
+            .node_client("node-1")
+            .ok_or("restarted node has no client")?;
+        assert_eq!(&access.api_base_url()?, client.base_url());
         put_value(&cluster, "after-restart").await?;
 
         Ok(())

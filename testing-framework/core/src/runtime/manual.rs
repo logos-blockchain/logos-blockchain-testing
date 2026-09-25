@@ -4,7 +4,7 @@ use crate::scenario::{Application, ClusterControlProfile, ClusterWaitHandle, Nod
 
 /// Interface for imperative, deployer-backed manual clusters.
 #[async_trait]
-pub trait ManualClusterHandle<E: Application>: NodeControlHandle<E> + ClusterWaitHandle<E> {
+pub trait ManualClusterHandle<E: Application>: NodeControlHandle<E> + ClusterWaitHandle {
     fn cluster_control_profile(&self) -> ClusterControlProfile {
         ClusterControlProfile::ManualControlled
     }

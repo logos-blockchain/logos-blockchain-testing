@@ -9,9 +9,9 @@ use url::Url;
 
 use crate::{
     docker::attached::{
-        discover_all_services, discover_attachable_services, discover_running_attachable_services,
-        discover_running_services, discover_service_container_id, inspect_api_container_port_label,
-        inspect_mapped_tcp_ports,
+        discover_all_services, discover_api_port, discover_attachable_services,
+        discover_running_attachable_services, discover_running_services,
+        discover_service_container_id, discover_service_node_access,
     },
     env::{ComposeDeployEnv, readiness_http_path},
 };
@@ -111,10 +111,8 @@ async fn build_attached_client<E: ComposeDeployEnv>(
     project: &str,
     service: &str,
 ) -> Result<E::NodeClient, DynError> {
-    let container_id = discover_service_container_id(project, service).await?;
-    let api_port = discover_api_port(&container_id).await?;
-    let endpoint = build_service_endpoint(host, api_port)?;
-    let source = ExternalNodeSource::new(service.to_owned(), endpoint.to_string());
+    let access = discover_service_node_access(host, project, service).await?;
+    let source = ExternalNodeSource::new(service.to_owned(), access.api_base_url()?.to_string());
 
     E::external_node_client(&source)
 }
@@ -174,36 +172,13 @@ fn partition_running_wait_services(
     Ok(kept)
 }
 
-pub(super) async fn discover_api_port(container_id: &str) -> Result<u16, DynError> {
-    let mapped_ports = inspect_mapped_tcp_ports(container_id).await?;
-    let api_container_port = inspect_api_container_port_label(container_id).await?;
-    let Some(api_port) = mapped_ports
-        .iter()
-        .find(|port| port.container_port == api_container_port)
-        .map(|port| port.host_port)
-    else {
-        let mapped_ports = mapped_ports
-            .iter()
-            .map(|port| format!("{}->{}", port.container_port, port.host_port))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        return Err(format!(
-            "attached compose service container '{container_id}' does not expose labeled API container port {api_container_port}; mapped tcp ports: {mapped_ports}"
-        )
-        .into());
-    };
-
-    Ok(api_port)
-}
-
 pub(super) fn build_service_endpoint(host: &str, port: u16) -> Result<Url, DynError> {
     let endpoint = Url::parse(&format!("http://{host}:{port}/"))?;
     Ok(endpoint)
 }
 
 #[async_trait]
-impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeAttachedClusterWait<E> {
+impl<E: ComposeDeployEnv> ClusterWaitHandle for ComposeAttachedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         let request = compose_wait_request(&self.source)?;
         let services = resolve_running_wait_services(request.project, request.services).await?;

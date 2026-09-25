@@ -17,6 +17,7 @@ use testing_framework_core::scenario::{
     RunContext, Workload,
 };
 use testing_framework_runner_compose::ComposeProvisioner;
+use tokio::time::{sleep, timeout};
 
 const PROBE_SERVICE: &str = "cluster-probe";
 const DUAL_PROBE_SERVICE: &str = "dual-cluster-probe";
@@ -618,16 +619,28 @@ impl Workload<AppHostEnv> for RestartNamedThenEnqueueBoth {
             "probe must keep serving after reaching both clusters over compose dns"
         );
 
-        let project = handle
+        let control = handle
             .named
-            .attachment()
-            .ok_or("named cluster recorded no attachment")?
-            .compose_project()
-            .ok_or("named cluster recorded no compose project")?
-            .to_owned();
+            .control()
+            .ok_or("named cluster has no control")?;
+        let access = control.node_access("alpha-node-0").await?;
+        let client = QueueHttpClient::new(access.api_base_url()?);
+        enqueue_with_client(&client, "alpha-before-restart-job").await?;
 
-        handle.named.restart_node("alpha-node-0").await?;
-        let restarted = wait_for_node_after_restart(&project, "alpha-node-0").await?;
+        control.restart_node("alpha-node-0").await?;
+        let restarted = timeout(Duration::from_secs(90), async {
+            loop {
+                let access = control.node_access("alpha-node-0").await?;
+                let client = QueueHttpClient::new(access.api_base_url()?);
+                if let Ok(health) = client.get::<HealthResponse>("/health/ready").await
+                    && health.status == "ready"
+                {
+                    return Ok::<_, DynError>(client);
+                }
+                sleep(Duration::from_millis(500)).await;
+            }
+        })
+        .await??;
 
         enqueue_with_client(&restarted, "alpha-after-restart-job").await?;
         enqueue_expecting_acceptance(&handle.unnamed, "unnamed-survivor-job").await?;

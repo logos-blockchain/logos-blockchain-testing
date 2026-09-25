@@ -593,7 +593,7 @@ fn api_port_candidates(ports: Vec<(String, ApiServicePort)>) -> Vec<ApiServicePo
 }
 
 #[async_trait]
-impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
+impl<E: K8sDeployEnv> ClusterWaitHandle for K8sAttachedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         match &self.access {
             AttachedAccess::Direct => self.wait_direct_network_ready().await,

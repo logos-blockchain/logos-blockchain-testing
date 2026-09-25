@@ -38,7 +38,8 @@ use crate::{
     infrastructure::{
         environment::StackEnvironment,
         ports::{
-            HostPortMapping, compose_runner_host, discover_host_ports, with_service_namespace,
+            HostPortMapping, NodeContainerPorts, compose_runner_host, discover_host_ports,
+            with_service_namespace,
         },
         project::ComposeProject,
     },
@@ -418,6 +419,8 @@ fn managed_cluster_unit<E: ComposeDeployEnv>(
         unit = unit.with_node_control(Arc::new(ComposeNodeControl {
             project: project.clone(),
             node_names,
+            host: deployed.host,
+            container_ports: deployed.container_ports,
         }));
     }
 
@@ -508,7 +511,7 @@ struct ComposeManagedClusterWait<E: ComposeDeployEnv> {
 }
 
 #[async_trait]
-impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeManagedClusterWait<E> {
+impl<E: ComposeDeployEnv> ClusterWaitHandle for ComposeManagedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         E::wait_remote_readiness(
             &self.deployment,
@@ -521,6 +524,7 @@ impl<E: ComposeDeployEnv> ClusterWaitHandle<E> for ComposeManagedClusterWait<E> 
 
 pub(crate) struct DeployedNodes<E: ComposeDeployEnv> {
     pub(crate) host_ports: HostPortMapping,
+    pub(crate) container_ports: Vec<NodeContainerPorts>,
     pub(crate) host: String,
     pub(crate) node_clients: NodeClients<E>,
 }
@@ -563,6 +567,7 @@ pub(crate) async fn resolve_cluster_nodes<E: ComposeDeployEnv>(
 
     Ok(DeployedNodes {
         host_ports,
+        container_ports: nodes,
         host,
         node_clients,
     })

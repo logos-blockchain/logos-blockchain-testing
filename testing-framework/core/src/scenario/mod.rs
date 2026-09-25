@@ -26,8 +26,8 @@ pub use config::{
     ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, serialize_cluster_yaml_config,
 };
 pub use control::{
-    ClusterWaitHandle, NodeControlHandle, NodeRuntimeOptions, PeerSelection, StartNodeOptions,
-    StartedNode,
+    ClusterWaitHandle, NodeControl, NodeControlHandle, NodeLaunchOptions, NodeRuntimeOptions,
+    PeerSelection, StartNodeOptions, StartedNode, StartedNodeAccess,
 };
 pub use definition::{Scenario, ScenarioBuildError, ScenarioBuilder};
 pub use deployment_policy::{CleanupPolicy, DeploymentPolicy, RetryPolicy};

@@ -5,8 +5,9 @@ use std::sync::{
 
 use async_trait::async_trait;
 use testing_framework_core::scenario::{
-    CleanupGuard, ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
-    ReadinessError, StartNodeOptions, StartedNode,
+    CleanupGuard, ClusterWaitHandle, DynError, ExternalNodeSource, NodeAccess, NodeClients,
+    NodeControl, NodeControlHandle, NodeLaunchOptions, ReadinessError, StartNodeOptions,
+    StartedNode, StartedNodeAccess,
 };
 
 use crate::{
@@ -121,6 +122,11 @@ impl<E: LocalDeployerEnv> LocalCluster<E> {
         self.owner.nodes.node_client(name)
     }
 
+    pub fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.owner.ensure_open()?;
+        Ok(self.owner.nodes.node_access(name)?)
+    }
+
     #[must_use]
     pub fn node_pid(&self, name: &str) -> Option<u32> {
         self.owner.nodes.node_pid(name)
@@ -218,7 +224,7 @@ impl<E: LocalDeployerEnv> LocalCluster<E> {
 }
 
 #[async_trait]
-impl<E: LocalDeployerEnv> NodeControlHandle<E> for LocalCluster<E> {
+impl<E: LocalDeployerEnv> NodeControl for LocalCluster<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.restart_node(name).await
     }
@@ -226,21 +232,22 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for LocalCluster<E> {
     async fn restart_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
+        options: NodeLaunchOptions,
     ) -> Result<(), DynError> {
-        self.restart_node_with(name, options).await
-    }
-
-    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
-        self.start_node(name).await
+        self.restart_node_with(name, options.into()).await
     }
 
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
-    ) -> Result<StartedNode<E>, DynError> {
-        self.start_node_with(name, options).await
+        options: NodeLaunchOptions,
+    ) -> Result<StartedNodeAccess, DynError> {
+        let started = self.start_node_with(name, options.into()).await?;
+        let access = self.node_access(&started.name)?;
+        Ok(StartedNodeAccess {
+            name: started.name,
+            access,
+        })
     }
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
@@ -251,8 +258,8 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for LocalCluster<E> {
         self.wait_node_ready(name).await
     }
 
-    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
-        self.node_client(name)
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.node_access(name)
     }
 
     fn node_names(&self) -> Vec<String> {
@@ -265,7 +272,30 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for LocalCluster<E> {
 }
 
 #[async_trait]
-impl<E: LocalDeployerEnv> ClusterWaitHandle<E> for LocalCluster<E> {
+impl<E: LocalDeployerEnv> NodeControlHandle<E> for LocalCluster<E> {
+    async fn start_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        self.start_node_with(name, options).await
+    }
+
+    async fn restart_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        self.restart_node_with(name, options).await
+    }
+
+    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
+        self.node_client(name)
+    }
+}
+
+#[async_trait]
+impl<E: LocalDeployerEnv> ClusterWaitHandle for LocalCluster<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         self.wait_network_ready().await
     }

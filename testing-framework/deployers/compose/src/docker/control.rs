@@ -2,18 +2,24 @@ use std::{path::Path, time::Duration};
 
 use testing_framework_core::{
     adjust_timeout,
-    scenario::{Application, DynError, ExistingCluster, NodeControlHandle},
+    scenario::{
+        Application, DynError, ExistingCluster, NodeAccess, NodeControl, NodeControlHandle,
+    },
 };
 use tokio::{process::Command, time::timeout};
 use tracing::info;
 
 use crate::{
     docker::{
-        attached::discover_service_container_id,
+        attached::{discover_service_container_id, discover_service_node_access},
         commands::{ComposeCommandError, run_docker_command},
     },
+    env::discovered_node_access,
     errors::ComposeRunnerError,
-    infrastructure::project::ComposeProject,
+    infrastructure::{
+        ports::{NodeContainerPorts, NodeHostPorts, compose_runner_host},
+        project::ComposeProject,
+    },
 };
 
 const COMPOSE_RESTART_TIMEOUT: Duration = Duration::from_secs(120);
@@ -144,10 +150,12 @@ async fn run_docker_action(
 pub struct ComposeNodeControl {
     pub(crate) project: ComposeProject,
     pub(crate) node_names: Vec<String>,
+    pub(crate) host: String,
+    pub(crate) container_ports: Vec<NodeContainerPorts>,
 }
 
 #[async_trait::async_trait]
-impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
+impl NodeControl for ComposeNodeControl {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.project
             .restart_service(name)
@@ -158,12 +166,35 @@ impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {
     fn node_names(&self) -> Vec<String> {
         self.node_names.clone()
     }
+
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        let index = self
+            .node_names
+            .iter()
+            .position(|node| node == name)
+            .ok_or_else(|| format!("unknown compose node '{name}'"))?;
+        let ports = self
+            .container_ports
+            .get(index)
+            .ok_or_else(|| format!("no container ports found for compose node '{name}'"))?;
+        let host_ports = NodeHostPorts {
+            api: self.project.resolve_service_port(name, ports.api).await?,
+            testing: self
+                .project
+                .resolve_service_port(name, ports.testing)
+                .await?,
+        };
+        Ok(discovered_node_access(&self.host, &host_ports))
+    }
 }
+
+impl<E: Application> NodeControlHandle<E> for ComposeNodeControl {}
 
 /// Node control handle for compose existing-cluster mode.
 pub struct ComposeAttachedNodeControl {
     pub(crate) project_name: String,
     pub(crate) node_names: Vec<String>,
+    host: String,
 }
 
 impl ComposeAttachedNodeControl {
@@ -182,12 +213,13 @@ impl ComposeAttachedNodeControl {
         Ok(Self {
             project_name: project_name.to_owned(),
             node_names,
+            host: compose_runner_host(),
         })
     }
 }
 
 #[async_trait::async_trait]
-impl<E: Application> NodeControlHandle<E> for ComposeAttachedNodeControl {
+impl NodeControl for ComposeAttachedNodeControl {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         restart_attached_compose_service(&self.project_name, name)
             .await
@@ -202,5 +234,115 @@ impl<E: Application> NodeControlHandle<E> for ComposeAttachedNodeControl {
 
     fn node_names(&self) -> Vec<String> {
         self.node_names.clone()
+    }
+
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        if !self.node_names.iter().any(|node| node == name) {
+            return Err(format!("unknown attached compose node '{name}'").into());
+        }
+        discover_service_node_access(&self.host, &self.project_name, name).await
+    }
+}
+
+impl<E: Application> NodeControlHandle<E> for ComposeAttachedNodeControl {}
+
+#[cfg(test)]
+mod tests {
+    use testing_framework_core::scenario::{ExistingCluster, NodeControl, NodeLaunchOptions};
+
+    use super::{ComposeAttachedNodeControl, ComposeNodeControl};
+    use crate::infrastructure::{ports::NodeContainerPorts, project::ComposeProject};
+
+    fn managed_control() -> ComposeNodeControl {
+        ComposeNodeControl {
+            project: ComposeProject::new("compose.yml".into(), "test", ".".into()),
+            node_names: vec!["alpha-node-7".into(), "alpha-node-2".into()],
+            host: "192.0.2.4".into(),
+            container_ports: vec![
+                NodeContainerPorts {
+                    index: 0,
+                    api: 19090,
+                    testing: 19091,
+                },
+                NodeContainerPorts {
+                    index: 1,
+                    api: 19092,
+                    testing: 19093,
+                },
+            ],
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_nodes_fail_before_invoking_docker() {
+        let managed = managed_control();
+        let source =
+            ExistingCluster::for_compose_services("test".into(), vec!["alpha-node-7".into()]);
+        let attached = ComposeAttachedNodeControl::try_from_existing_cluster(
+            &source,
+            vec!["alpha-node-7".into()],
+        )
+        .unwrap();
+
+        for control in [&managed as &dyn NodeControl, &attached as &dyn NodeControl] {
+            let error = control.node_access("other-node").await.unwrap_err();
+            assert!(error.to_string().contains("unknown"));
+            assert!(error.to_string().contains("other-node"));
+        }
+    }
+
+    #[tokio::test]
+    async fn common_control_does_not_add_unsupported_compose_operations() {
+        let managed = managed_control();
+        let source =
+            ExistingCluster::for_compose_services("test".into(), vec!["alpha-node-7".into()]);
+        let attached = ComposeAttachedNodeControl::try_from_existing_cluster(
+            &source,
+            vec!["alpha-node-7".into()],
+        )
+        .unwrap();
+
+        for control in [&managed as &dyn NodeControl, &attached as &dyn NodeControl] {
+            assert!(
+                control
+                    .start_node("alpha-node-7")
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("not supported")
+            );
+            assert!(
+                control
+                    .start_node_with("alpha-node-7", NodeLaunchOptions::default())
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("not supported")
+            );
+            assert!(
+                control
+                    .restart_node_with("alpha-node-7", NodeLaunchOptions::default())
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("not supported")
+            );
+            assert!(
+                control
+                    .wait_node_ready("alpha-node-7")
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("not supported")
+            );
+        }
+        assert!(
+            managed
+                .stop_node("alpha-node-7")
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("not supported")
+        );
     }
 }

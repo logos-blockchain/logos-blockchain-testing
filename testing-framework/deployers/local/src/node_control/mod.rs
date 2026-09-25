@@ -4,16 +4,18 @@ use std::{
 };
 
 use testing_framework_core::scenario::{
-    Application, DynError, HttpReadinessRequirement, NodeClients, NodeControlHandle,
-    NodeRuntimeOptions, ReadinessError, StartNodeOptions, StartedNode,
+    Application, DynError, HttpReadinessRequirement, NodeAccess, NodeClients, NodeControl,
+    NodeControlHandle, NodeLaunchOptions, NodeRuntimeOptions, ReadinessError, StartNodeOptions,
+    StartedNode, StartedNodeAccess,
 };
 use thiserror::Error;
 
 use crate::{
     env::{
         LocalDeployerEnv, Node, build_initial_node_configs, build_launch_spec_with_args,
-        build_node_from_template, initial_persist_dir, initial_snapshot_dir, node_peer_port,
-        spawn_node_from_config, wait_for_local_readiness_ports,
+        build_node_from_template, discovered_node_access, initial_persist_dir,
+        initial_snapshot_dir, node_peer_port, spawn_node_from_config,
+        wait_for_local_readiness_ports,
     },
     process::ProcessSpawnError,
 };
@@ -154,6 +156,17 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         let state = self.lock_state();
 
         state.clients_by_name.get(name).cloned()
+    }
+
+    pub fn node_access(&self, name: &str) -> Result<NodeAccess, NodeManagerError> {
+        let state = self.lock_state();
+        let index = node_index(&state, name)?;
+        let node = state.nodes[index]
+            .as_ref()
+            .ok_or_else(|| NodeManagerError::NodeName {
+                name: name.to_owned(),
+            })?;
+        Ok(discovered_node_access(node.endpoints()))
     }
 
     #[must_use]
@@ -309,10 +322,10 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
                 &snapshot.node_name,
                 built.network_port,
                 built.config,
-                options.runtime,
-                options.persist_dir.as_deref(),
-                options.snapshot_dir.as_deref(),
-                &options.args,
+                options.common.runtime,
+                options.common.persist_dir.as_deref(),
+                options.common.snapshot_dir.as_deref(),
+                &options.common.args,
             )
             .await?;
 
@@ -340,7 +353,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             node.config(),
             node.working_dir(),
             name,
-            &options.args,
+            &options.common.args,
         )
         .await
         {
@@ -361,7 +374,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
         self.put_node_back(index, node);
         self.mark_node_running(name);
-        self.store_runtime_options(name, options.runtime);
+        self.store_runtime_options(name, options.common.runtime);
 
         Ok(())
     }
@@ -546,7 +559,7 @@ fn normalize_node_name(index: usize, requested_name: &str) -> String {
 fn validate_restart_options<E: LocalDeployerEnv>(
     options: &StartNodeOptions<E>,
 ) -> Result<(), NodeManagerError> {
-    if options.peers.is_some() {
+    if options.common.peers.is_some() {
         return Err(unsupported_restart_override("peer selection"));
     }
 
@@ -558,11 +571,11 @@ fn validate_restart_options<E: LocalDeployerEnv>(
         return Err(unsupported_restart_override("config patch"));
     }
 
-    if options.persist_dir.is_some() {
+    if options.common.persist_dir.is_some() {
         return Err(unsupported_restart_override("persist dir"));
     }
 
-    if options.snapshot_dir.is_some() {
+    if options.common.snapshot_dir.is_some() {
         return Err(unsupported_restart_override("snapshot dir"));
     }
 
@@ -646,47 +659,44 @@ fn reinsert_node_at<E: LocalDeployerEnv>(
 }
 
 #[async_trait::async_trait]
-impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
+impl<E: LocalDeployerEnv> NodeControl for NodeManager<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
-        self.restart_node(name).await.map_err(|err| err.into())
+        self.restart_node(name).await.map_err(Into::into)
     }
 
     async fn restart_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
+        options: NodeLaunchOptions,
     ) -> Result<(), DynError> {
-        self.restart_node_with(name, options)
+        self.restart_node_with(name, options.into())
             .await
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
-        self.stop_node(name).await.map_err(|err| err.into())
-    }
-
-    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
-        self.start_node_with(name, StartNodeOptions::<E>::default())
-            .await
-            .map_err(|err| err.into())
+        self.stop_node(name).await.map_err(Into::into)
     }
 
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
-    ) -> Result<StartedNode<E>, DynError> {
-        self.start_node_with(name, options)
-            .await
-            .map_err(|err| err.into())
+        options: NodeLaunchOptions,
+    ) -> Result<StartedNodeAccess, DynError> {
+        let started = self.start_node_with(name, options.into()).await?;
+        let access = self.node_access(&started.name)?;
+        Ok(StartedNodeAccess {
+            name: started.name,
+            access,
+        })
     }
 
     async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
-        self.wait_node_ready(name).await.map_err(|err| err.into())
+        self.wait_node_ready(name).await.map_err(Into::into)
     }
 
-    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
-        self.node_client(name)
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.node_access(name).map_err(Into::into)
     }
 
     fn node_names(&self) -> Vec<String> {
@@ -698,9 +708,37 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
     }
 }
 
+#[async_trait::async_trait]
+impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
+    async fn start_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        self.start_node_with(name, options)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn restart_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        self.restart_node_with(name, options)
+            .await
+            .map_err(Into::into)
+    }
+
+    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
+        self.node_client(name)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::HashMap,
         net::TcpListener,
         path::Path,
         sync::{
@@ -711,14 +749,17 @@ mod tests {
     };
 
     use testing_framework_core::{
-        scenario::{Application, DynError, NodeClients},
+        scenario::{
+            Application, DynError, NodeClients, NodeControl, NodeControlHandle, NodeLaunchOptions,
+            StartNodeOptions,
+        },
         topology::DeploymentDescriptor,
     };
 
     use super::NodeManager;
     use crate::{
         LaunchSpec, NodeEndpoints,
-        env::{LocalDeployerEnv, LocalReadinessProbe, spawn_node_from_config},
+        env::{BuiltNodeConfig, LocalDeployerEnv, LocalReadinessProbe, spawn_node_from_config},
     };
 
     #[derive(Clone)]
@@ -746,6 +787,26 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for SleepEnv {
+        fn build_node_config_from_template(
+            _topology: &SleepTopology,
+            _index: usize,
+            _peer_ports_by_name: &HashMap<String, u16>,
+            options: &StartNodeOptions<Self>,
+            _peer_ports: &[u16],
+            _template_config: Option<&SleepConfig>,
+        ) -> Result<BuiltNodeConfig<SleepConfig>, DynError> {
+            let config = options
+                .config_override
+                .clone()
+                .unwrap_or_else(|| SleepConfig {
+                    api_port: reserve_unbound_port(),
+                });
+            Ok(BuiltNodeConfig {
+                network_port: config.api_port,
+                config,
+            })
+        }
+
         async fn build_launch_spec(
             _config: &SleepConfig,
             _dir: &Path,
@@ -866,6 +927,129 @@ mod tests {
         .expect("spawn flaky sleep node");
         manager.initialize_with_nodes(vec![node]);
         manager
+    }
+
+    #[tokio::test]
+    async fn common_control_starts_and_restarts_a_local_node() {
+        let manager = Arc::new(NodeManager::<SleepEnv>::new(
+            SleepTopology,
+            NodeClients::default(),
+        ));
+        let typed: Arc<dyn NodeControlHandle<SleepEnv>> = manager.clone();
+        let control: Arc<dyn NodeControl> = typed.clone();
+        let directory = tempfile::tempdir().expect("persistent directory");
+        let timeout = Duration::from_secs(2);
+
+        assert!(control.node_access("alice").await.is_err());
+        let started = control
+            .start_node_with(
+                "alice",
+                NodeLaunchOptions::default()
+                    .with_persist_dir(directory.path().join("node"))
+                    .with_start_timeout(timeout),
+            )
+            .await
+            .expect("start through common control");
+        let name = &started.name;
+        let original_pid = control.node_pid(name).expect("started process");
+        assert_eq!(control.node_names(), vec![name.clone()]);
+        assert!(typed.node_client(name).is_some());
+        {
+            let state = manager.lock_state();
+            assert_eq!(state.runtime_by_name[name].start_timeout, Some(timeout));
+            assert!(
+                state.nodes[0]
+                    .as_ref()
+                    .unwrap()
+                    .working_dir()
+                    .starts_with(directory.path())
+            );
+        }
+
+        control.stop_node(name).await.expect("stop process");
+        assert!(control.node_pid(name).is_none());
+        assert_eq!(
+            control
+                .node_access(name)
+                .await
+                .expect("known stopped node")
+                .api_port(),
+            started.access.api_port(),
+        );
+
+        control.restart_node(name).await.expect("restart process");
+        assert_ne!(
+            control.node_pid(name).expect("restarted process"),
+            original_pid
+        );
+        assert_eq!(
+            control
+                .node_access(name)
+                .await
+                .expect("restarted access")
+                .api_port(),
+            started.access.api_port(),
+        );
+        assert!(control.stop_node("missing").await.is_err());
+        control
+            .stop_node(name)
+            .await
+            .expect("stop restarted process");
+    }
+
+    #[tokio::test]
+    async fn typed_config_override_and_patch_share_the_common_runtime() {
+        let before = TcpListener::bind("127.0.0.1:0").expect("override endpoint");
+        let after = TcpListener::bind("127.0.0.1:0").expect("patched endpoint");
+        let before_port = before.local_addr().unwrap().port();
+        let after_port = after.local_addr().unwrap().port();
+        let typed: Arc<dyn NodeControlHandle<SleepEnv>> = Arc::new(NodeManager::<SleepEnv>::new(
+            SleepTopology,
+            NodeClients::default(),
+        ));
+        let control: Arc<dyn NodeControl> = typed.clone();
+        let started = typed
+            .start_node_with_config(
+                "node-0",
+                StartNodeOptions::default()
+                    .with_config_override(SleepConfig {
+                        api_port: before_port,
+                    })
+                    .create_patch(move |mut config: SleepConfig| {
+                        assert_eq!(config.api_port, before_port);
+                        config.api_port = after_port;
+                        Ok(config)
+                    }),
+            )
+            .await
+            .expect("typed start with override and patch");
+
+        assert_eq!(started.name, "node-0");
+        assert_eq!(control.node_names(), vec![started.name.clone()]);
+        assert_eq!(
+            control
+                .node_access(&started.name)
+                .await
+                .expect("effective endpoint")
+                .api_port(),
+            after_port,
+        );
+        control
+            .wait_node_ready(&started.name)
+            .await
+            .expect("probe patched endpoint");
+
+        let original_pid = control.node_pid(&started.name).expect("started process");
+        let error = typed
+            .restart_node_with_config(&started.name, StartNodeOptions::default().create_patch(Ok))
+            .await
+            .expect_err("restart must still reject config patches");
+        assert!(error.to_string().contains("config patch"));
+        assert_eq!(control.node_pid(&started.name), Some(original_pid));
+        control
+            .stop_node(&started.name)
+            .await
+            .expect("common stop of typed node");
     }
 
     #[tokio::test]

@@ -1,8 +1,9 @@
 use testing_framework_core::{
     manual::ManualClusterHandle,
     scenario::{
-        ClusterWaitHandle, DynError, ExternalNodeSource, NodeClients, NodeControlHandle,
-        ReadinessError, StartNodeOptions, StartedNode,
+        ClusterWaitHandle, DynError, ExternalNodeSource, NodeAccess, NodeClients, NodeControl,
+        NodeControlHandle, NodeLaunchOptions, ReadinessError, StartNodeOptions, StartedNode,
+        StartedNodeAccess,
     },
 };
 use thiserror::Error;
@@ -104,7 +105,7 @@ impl<E: LocalDeployerEnv> ManualCluster<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
+impl<E: LocalDeployerEnv> NodeControl for ManualCluster<E> {
     async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.cluster.restart_node(name).await
     }
@@ -112,33 +113,33 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
     async fn restart_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
+        options: NodeLaunchOptions,
     ) -> Result<(), DynError> {
-        self.cluster.restart_node_with(name, options).await
+        self.cluster.restart_node_with(name, options.into()).await
     }
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
         self.cluster.stop_node(name).await
     }
 
-    async fn start_node(&self, name: &str) -> Result<StartedNode<E>, DynError> {
-        self.cluster.start_node(name).await
+    async fn start_node(&self, name: &str) -> Result<StartedNodeAccess, DynError> {
+        NodeControl::start_node(&self.cluster, name).await
     }
 
     async fn start_node_with(
         &self,
         name: &str,
-        options: StartNodeOptions<E>,
-    ) -> Result<StartedNode<E>, DynError> {
-        self.cluster.start_node_with(name, options).await
+        options: NodeLaunchOptions,
+    ) -> Result<StartedNodeAccess, DynError> {
+        NodeControl::start_node_with(&self.cluster, name, options).await
     }
 
     async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
-        self.cluster.wait_node_ready(name).await.map_err(Into::into)
+        self.cluster.wait_node_ready(name).await
     }
 
-    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
-        self.cluster.node_client(name)
+    async fn node_access(&self, name: &str) -> Result<NodeAccess, DynError> {
+        self.cluster.node_access(name)
     }
 
     fn node_names(&self) -> Vec<String> {
@@ -151,7 +152,30 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: LocalDeployerEnv> ClusterWaitHandle<E> for ManualCluster<E> {
+impl<E: LocalDeployerEnv> NodeControlHandle<E> for ManualCluster<E> {
+    async fn start_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<StartedNode<E>, DynError> {
+        self.cluster.start_node_with(name, options).await
+    }
+
+    async fn restart_node_with_config(
+        &self,
+        name: &str,
+        options: StartNodeOptions<E>,
+    ) -> Result<(), DynError> {
+        self.cluster.restart_node_with(name, options).await
+    }
+
+    fn node_client(&self, name: &str) -> Option<E::NodeClient> {
+        self.cluster.node_client(name)
+    }
+}
+
+#[async_trait::async_trait]
+impl<E: LocalDeployerEnv> ClusterWaitHandle for ManualCluster<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         self.cluster.wait_network_ready().await
     }

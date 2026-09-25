@@ -162,7 +162,7 @@ where
         hostnames: &[String],
         options: &StartNodeOptions<Self>,
     ) -> Result<Option<ArtifactSet>, Self::Error> {
-        let mut config = match &options.peers {
+        let mut config = match &options.common.peers {
             None | Some(PeerSelection::DefaultLayout) => {
                 if options.config_override.is_none() && options.config_patch.is_none() {
                     return Ok(None);

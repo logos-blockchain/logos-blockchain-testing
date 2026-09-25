@@ -272,7 +272,9 @@ mod tests {
     use std::{collections::HashMap, sync::Arc, time::Duration};
 
     use testing_framework_core::{
-        scenario::{ClusterControlProfile, ClusterUnit, NodeClients, NodeControlHandle},
+        scenario::{
+            ClusterControlProfile, ClusterUnit, NodeClients, NodeControl, NodeControlHandle,
+        },
         topology::NodeCountTopology,
     };
     use tokio::time::Instant;
@@ -300,11 +302,13 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl NodeControlHandle<TestEnv> for NamedControl {
+    impl NodeControl for NamedControl {
         fn node_names(&self) -> Vec<String> {
             self.names.clone()
         }
     }
+
+    impl NodeControlHandle<TestEnv> for NamedControl {}
 
     fn handle_with_names(
         names: &[&str],
