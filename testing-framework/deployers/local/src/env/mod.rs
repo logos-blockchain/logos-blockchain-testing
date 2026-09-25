@@ -12,7 +12,7 @@ use testing_framework_core::scenario::{
 };
 
 use crate::{
-    LaunchSpec, NodeEndpoints,
+    LaunchSpec, NodeEndpointPort, NodeEndpoints,
     process::{ProcessNode, ProcessSpawnError},
 };
 
@@ -21,12 +21,11 @@ mod helpers;
 mod tests;
 
 pub use helpers::{
-    LocalConfigArgMode, LocalNodePorts, LocalPeerNode, LocalProcessSpec, NodeConfigEntry,
-    PreparedNode, build_indexed_http_peers, build_indexed_node_configs,
-    build_launch_spec_with_args, build_local_cluster_node_config, build_local_peer_nodes,
-    default_yaml_launch_spec, discovered_node_access, preallocate_ports, reserve_local_node_ports,
-    single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
-    yaml_node_config,
+    LocalConfigArgMode, LocalNodePorts, LocalPeerNode, LocalProcessSpec, PreparedNode,
+    build_indexed_http_peers, build_launch_spec_with_args, build_local_cluster_node_config,
+    build_local_peer_nodes, default_yaml_launch_spec, discovered_node_access, preallocate_ports,
+    reserve_local_node_ports, single_http_node_endpoints, text_config_launch_spec,
+    text_node_config, yaml_config_launch_spec, yaml_node_config,
 };
 
 /// Context passed while building a local node config.
@@ -78,7 +77,7 @@ where
     /// Builds the initial local configs for every node in the deployment.
     fn build_initial_node_configs(
         topology: &Self::Deployment,
-    ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError> {
+    ) -> Result<Vec<PreparedNode<<Self as Application>::NodeConfig>>, ProcessSpawnError> {
         helpers::build_generated_initial_nodes::<Self>(topology, Self::build_node_config)
     }
 
@@ -158,11 +157,6 @@ where
         }
 
         Err(std::io::Error::other("node_endpoints is not implemented for this app").into())
-    }
-
-    /// Resolves the port peers should use for cluster traffic.
-    fn node_peer_port(node: &Node<Self>) -> u16 {
-        node.endpoints().api.port()
     }
 
     /// Builds a node client directly from the API endpoint when the default
@@ -286,7 +280,7 @@ pub(crate) fn build_node_from_template<E: LocalDeployerEnv>(
 
 pub(crate) fn build_initial_node_configs<E: LocalDeployerEnv>(
     topology: &E::Deployment,
-) -> Result<Vec<NodeConfigEntry<E::NodeConfig>>, ProcessSpawnError> {
+) -> Result<Vec<PreparedNode<E::NodeConfig>>, ProcessSpawnError> {
     E::build_initial_node_configs(topology)
 }
 
@@ -310,10 +304,6 @@ pub(crate) fn node_client<E: LocalDeployerEnv>(
     endpoints: &NodeEndpoints,
 ) -> Result<E::NodeClient, DynError> {
     E::node_client(endpoints)
-}
-
-pub(crate) fn node_peer_port<E: LocalDeployerEnv>(node: &Node<E>) -> u16 {
-    E::node_peer_port(node)
 }
 
 /// Waits for local readiness across the provided nodes and then applies
@@ -361,17 +351,21 @@ pub(crate) async fn wait_for_local_readiness_ports<E: LocalDeployerEnv>(
 
 /// Spawns a local process node from an already prepared config value.
 pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
-    label: String,
-    config: <E as Application>::NodeConfig,
+    prepared: PreparedNode<E::NodeConfig>,
     keep_tempdir: bool,
     persist_dir: Option<&std::path::Path>,
     snapshot_dir: Option<&std::path::Path>,
     extra_args: &[String],
 ) -> Result<Node<E>, ProcessSpawnError> {
     let extra_args = extra_args.to_vec();
+    let PreparedNode {
+        name,
+        config,
+        network_port,
+    } = prepared;
 
     ProcessNode::spawn(
-        &label,
+        &name,
         config,
         move |config, dir, label| {
             let extra_args = extra_args.clone();
@@ -379,7 +373,11 @@ pub async fn spawn_node_from_config<E: LocalDeployerEnv>(
                 build_launch_spec_with_args::<E>(config, dir, label, &extra_args).await
             })
         },
-        E::node_endpoints,
+        move |config| {
+            let mut endpoints = E::node_endpoints(config)?;
+            endpoints.insert_port(NodeEndpointPort::Network, network_port);
+            Ok(endpoints)
+        },
         keep_tempdir,
         persist_dir,
         snapshot_dir,

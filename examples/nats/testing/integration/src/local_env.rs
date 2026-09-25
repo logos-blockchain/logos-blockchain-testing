@@ -6,7 +6,7 @@ use std::{
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
     LocalBuildContext, LocalDeployerEnv, LocalProcessSpec, NodeEndpointPort, NodeEndpoints,
-    PreparedNode, build_local_cluster_node_config, env::Node, text_node_config,
+    PreparedNode, build_local_cluster_node_config, text_node_config,
 };
 
 use crate::{CLUSTER_PORT_KEY, NatsEnv, NatsNodeConfig, render_nats_config};
@@ -50,11 +50,5 @@ impl LocalDeployerEnv for NatsEnv {
         );
 
         Ok(endpoints)
-    }
-
-    fn node_peer_port(node: &Node<Self>) -> u16 {
-        node.endpoints()
-            .port(&NodeEndpointPort::Custom(CLUSTER_PORT_KEY.to_owned()))
-            .unwrap_or_else(|| node.config().cluster_port)
     }
 }

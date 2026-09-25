@@ -276,10 +276,7 @@ mod tests {
     };
 
     use super::{LocalClusterProvisioner, LocalClusterProvisionerError};
-    use crate::{
-        LaunchSpec, LocalDeployerEnv, NodeConfigEntry, NodeEndpoints, PreparedNode,
-        ProcessSpawnError,
-    };
+    use crate::{LaunchSpec, LocalDeployerEnv, NodeEndpoints, PreparedNode, ProcessSpawnError};
 
     #[derive(Default)]
     struct LifecycleCalls {
@@ -335,7 +332,7 @@ mod tests {
 
         fn build_initial_node_configs(
             _topology: &Self::Deployment,
-        ) -> Result<Vec<NodeConfigEntry<EmptyConfig>>, ProcessSpawnError> {
+        ) -> Result<Vec<PreparedNode<EmptyConfig>>, ProcessSpawnError> {
             Ok(Vec::new())
         }
 
