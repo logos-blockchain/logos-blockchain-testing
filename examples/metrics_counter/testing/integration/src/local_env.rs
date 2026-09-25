@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
-use testing_framework_core::scenario::{DynError, StartNodeOptions};
+use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    LocalBinaryApp, LocalNodePorts, LocalPeerNode, LocalProcessSpec, yaml_node_config,
+    LocalBinaryApp, LocalBuildContext, LocalProcessSpec, yaml_node_config,
 };
 
 use crate::{MetricsCounterEnv, MetricsCounterNodeConfig};
@@ -12,20 +10,12 @@ impl LocalBinaryApp for MetricsCounterEnv {
         "metrics-counter-node"
     }
 
-    fn build_local_node_config_with_peers(
-        _topology: &Self::Deployment,
-        index: usize,
-        ports: &LocalNodePorts,
-        _peers: &[LocalPeerNode],
-        _peer_ports_by_name: &HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        _template_config: Option<
-            &<Self as testing_framework_core::scenario::Application>::NodeConfig,
-        >,
-    ) -> Result<<Self as testing_framework_core::scenario::Application>::NodeConfig, DynError> {
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<MetricsCounterNodeConfig, DynError> {
         Ok(MetricsCounterNodeConfig {
-            node_id: index as u64,
-            http_port: ports.network_port(),
+            node_id: context.index as u64,
+            http_port: context.ports.network_port(),
         })
     }
 

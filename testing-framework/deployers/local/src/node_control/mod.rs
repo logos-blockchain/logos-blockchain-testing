@@ -742,7 +742,6 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashMap,
         net::TcpListener,
         path::Path,
         sync::{
@@ -762,8 +761,8 @@ mod tests {
 
     use super::NodeManager;
     use crate::{
-        LaunchSpec, NodeEndpoints,
-        env::{BuiltNodeConfig, LocalDeployerEnv, spawn_node_from_config},
+        BuiltNodeConfig, LaunchSpec, LocalBuildContext, NodeEndpoints,
+        env::{LocalDeployerEnv, spawn_node_from_config},
     };
 
     #[derive(Clone)]
@@ -795,15 +794,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for SleepEnv {
-        fn build_node_config_from_template(
-            _topology: &SleepTopology,
-            _index: usize,
-            _peer_ports_by_name: &HashMap<String, u16>,
-            options: &StartNodeOptions<Self>,
-            _peer_ports: &[u16],
-            _template_config: Option<&SleepConfig>,
+        fn build_node_config(
+            context: LocalBuildContext<'_, Self>,
         ) -> Result<BuiltNodeConfig<SleepConfig>, DynError> {
-            let config = options
+            let config = context
+                .options
                 .config_override
                 .clone()
                 .unwrap_or_else(|| SleepConfig {
@@ -886,6 +881,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for FlakySleepEnv {
+        fn build_node_config(
+            _context: LocalBuildContext<'_, Self>,
+        ) -> Result<BuiltNodeConfig<FlakyConfig>, DynError> {
+            unreachable!("lifecycle tests supply prebuilt node configs")
+        }
+
         async fn build_launch_spec(
             config: &FlakyConfig,
             _dir: &Path,

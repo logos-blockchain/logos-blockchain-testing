@@ -306,14 +306,6 @@ pub fn build_indexed_http_peers<T>(
         .collect()
 }
 
-pub(crate) fn compact_peer_ports(peer_ports: &[u16], self_index: usize) -> Vec<u16> {
-    peer_ports
-        .iter()
-        .enumerate()
-        .filter_map(|(index, port)| (index != self_index).then_some(*port))
-        .collect()
-}
-
 /// Builds local peer-node views from a full indexed port list while skipping
 /// `self_index`.
 pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<LocalPeerNode> {
@@ -352,14 +344,13 @@ where
         .iter()
         .enumerate()
         .map(|(index, ports)| {
-            let compact_peer_ports = compact_peer_ports(&peer_ports, index);
-            let peers = build_local_peer_nodes(&compact_peer_ports, index);
+            let peers = build_local_peer_nodes(&peer_ports, index);
             let built = build_node(LocalBuildContext {
                 topology,
                 index,
                 ports,
                 peers: &peers,
-                peer_ports: &compact_peer_ports,
+                peer_ports: &peer_ports,
                 peer_ports_by_name: &peer_ports_by_name,
                 options: &options,
                 template_config: None,
