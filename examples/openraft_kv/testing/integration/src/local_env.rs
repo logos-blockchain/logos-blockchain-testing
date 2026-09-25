@@ -22,7 +22,7 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
         let LocalBuildContext {
             index,
             ports,
-            peer_ports,
+            peers,
             template_config,
             ..
         } = context;
@@ -36,7 +36,10 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
         config.node_id = index as u64;
         config.http_port = network_port;
         config.public_addr = local_addr(network_port);
-        config.peer_addrs = peer_addrs_from_ports(peer_ports, index);
+        config.peer_addrs = peers
+            .iter()
+            .map(|peer| (peer.index() as u64, local_addr(peer.network_port())))
+            .collect();
 
         Ok(PreparedNode {
             name: format!("node-{}", index),

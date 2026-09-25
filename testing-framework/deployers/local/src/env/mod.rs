@@ -38,11 +38,6 @@ pub struct LocalBuildContext<'a, E: Application> {
     pub ports: &'a mut LocalNodePorts,
     /// Peer nodes visible to this node after excluding `index`.
     pub peers: &'a [LocalPeerNode],
-    /// Network ports indexed by node index, including this node if already
-    /// allocated.
-    pub peer_ports: &'a [u16],
-    /// Peer ports keyed by application-defined port name.
-    pub peer_ports_by_name: &'a HashMap<String, u16>,
     /// Start-time options for the node being built.
     pub options: &'a StartNodeOptions<E>,
     /// Optional existing config to use as a template when starting a node.
@@ -208,9 +203,8 @@ where
 pub(crate) fn build_node_from_template<E: LocalDeployerEnv>(
     topology: &E::Deployment,
     index: usize,
-    peer_ports_by_name: &HashMap<String, u16>,
     options: &StartNodeOptions<E>,
-    peer_ports: &[u16],
+    peers: &[LocalPeerNode],
     template_config: Option<&E::NodeConfig>,
 ) -> Result<PreparedNode<E::NodeConfig>, DynError> {
     let mut reserved =
@@ -218,15 +212,12 @@ pub(crate) fn build_node_from_template<E: LocalDeployerEnv>(
     let mut ports = reserved
         .pop()
         .ok_or_else(|| std::io::Error::other("failed to reserve local node ports"))?;
-    let peers = build_local_peer_nodes(peer_ports, index);
     E::build_node_config(LocalBuildContext {
         topology,
         index,
         ports: &mut ports,
-        peers: &peers,
-        peer_ports_by_name,
+        peers,
         options,
-        peer_ports,
         template_config,
     })
 }
