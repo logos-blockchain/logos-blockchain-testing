@@ -716,7 +716,7 @@ mod tests {
 
     use super::NodeManager;
     use crate::{
-        LaunchSpec, NodeEndpoints,
+        BuiltNodeConfig, LaunchSpec, LocalBuildContext, NodeEndpoints,
         env::{LocalDeployerEnv, spawn_node_from_config},
     };
 
@@ -749,6 +749,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for SleepEnv {
+        fn build_node_config(
+            _context: LocalBuildContext<'_, Self>,
+        ) -> Result<BuiltNodeConfig<SleepConfig>, DynError> {
+            unreachable!("lifecycle tests supply prebuilt node configs")
+        }
+
         async fn build_launch_spec(
             _config: &SleepConfig,
             _dir: &Path,
@@ -820,6 +826,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for FlakySleepEnv {
+        fn build_node_config(
+            _context: LocalBuildContext<'_, Self>,
+        ) -> Result<BuiltNodeConfig<FlakyConfig>, DynError> {
+            unreachable!("lifecycle tests supply prebuilt node configs")
+        }
+
         async fn build_launch_spec(
             config: &FlakyConfig,
             _dir: &Path,

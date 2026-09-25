@@ -1,38 +1,26 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use openraft_kv_node::OpenRaftKvNodeConfig;
-use testing_framework_core::{
-    scenario::{DynError, StartNodeOptions},
-    topology::DeploymentDescriptor,
-};
+use testing_framework_core::{scenario::DynError, topology::DeploymentDescriptor};
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, BuiltNodeConfig, EnvBinaryProvider,
-    FallbackBinaryProvider, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec, NodeConfigEntry,
-    reserve_local_node_ports, yaml_node_config,
+    FallbackBinaryProvider, LocalBuildContext, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec,
+    NodeConfigEntry, reserve_local_node_ports, yaml_node_config,
 };
 
 use crate::OpenRaftKvEnv;
 
 impl LocalDeployerEnv for OpenRaftKvEnv {
-    fn build_node_config_from_template(
-        _topology: &Self::Deployment,
-        index: usize,
-        _peer_ports_by_name: &HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        peer_ports: &[u16],
-        template_config: Option<&OpenRaftKvNodeConfig>,
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
     ) -> Result<BuiltNodeConfig<OpenRaftKvNodeConfig>, DynError> {
-        let mut reserved = reserve_local_node_ports(1, &[], "node")
-            .map_err(|source| -> DynError { source.into() })?;
-
-        let ports = reserved
-            .pop()
-            .ok_or_else(|| std::io::Error::other("failed to reserve local node ports"))?;
-
+        let LocalBuildContext {
+            index,
+            ports,
+            peer_ports,
+            template_config,
+            ..
+        } = context;
         let mut config = template_config
             .cloned()
             .unwrap_or_else(|| local_node_config(index, ports.network_port(), BTreeMap::new()));

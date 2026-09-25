@@ -3,9 +3,9 @@ use std::{
     net::{Ipv4Addr, SocketAddr},
 };
 
-use testing_framework_core::scenario::{DynError, StartNodeOptions};
+use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    LocalDeployerEnv, LocalNodePorts, LocalPeerNode, LocalProcessSpec, NodeEndpointPort,
+    BuiltNodeConfig, LocalBuildContext, LocalDeployerEnv, LocalProcessSpec, NodeEndpointPort,
     NodeEndpoints, build_local_cluster_node_config, env::Node, text_node_config,
 };
 
@@ -20,18 +20,17 @@ impl LocalDeployerEnv for NatsEnv {
         &["client", "monitor"]
     }
 
-    fn build_local_node_config_with_peers(
-        _topology: &Self::Deployment,
-        index: usize,
-        ports: &LocalNodePorts,
-        peers: &[LocalPeerNode],
-        _peer_ports_by_name: &HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        _template_config: Option<
-            &<Self as testing_framework_core::scenario::Application>::NodeConfig,
-        >,
-    ) -> Result<<Self as testing_framework_core::scenario::Application>::NodeConfig, DynError> {
-        build_local_cluster_node_config::<Self>(index, ports, peers)
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<BuiltNodeConfig<NatsNodeConfig>, DynError> {
+        Ok(BuiltNodeConfig {
+            config: build_local_cluster_node_config::<Self>(
+                context.index,
+                context.ports,
+                context.peers,
+            )?,
+            network_port: context.ports.network_port(),
+        })
     }
 
     fn local_process_spec() -> Option<LocalProcessSpec> {
