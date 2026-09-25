@@ -260,7 +260,6 @@ async fn run_retry_attempt<E: LocalDeployerEnv>(
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashMap,
         path::Path,
         sync::{
             Arc,
@@ -271,7 +270,7 @@ mod tests {
     use testing_framework_core::{
         scenario::{
             Application, ClusterControlProfile, ClusterControlRequest, ClusterRequest,
-            ClusterStartMode, DynError, ExistingCluster, ExternalNodeSource, StartNodeOptions,
+            ClusterStartMode, DynError, ExistingCluster, ExternalNodeSource,
         },
         topology::DeploymentDescriptor,
     };
@@ -329,11 +328,7 @@ mod tests {
         }
 
         fn build_node_config(
-            _topology: &Self::Deployment,
-            _index: usize,
-            _peer_ports_by_name: &HashMap<String, u16>,
-            _options: &StartNodeOptions<Self>,
-            _peer_ports: &[u16],
+            _context: crate::LocalBuildContext<'_, Self>,
         ) -> Result<BuiltNodeConfig<EmptyConfig>, DynError> {
             unreachable!("empty deployment never builds node configs")
         }
