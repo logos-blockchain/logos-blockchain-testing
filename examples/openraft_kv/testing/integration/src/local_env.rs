@@ -9,7 +9,7 @@ use testing_framework_core::{scenario::DynError, topology::DeploymentDescriptor}
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
     FallbackBinaryProvider, LaunchSpec, LocalBuildContext, LocalDeployerEnv, LocalNodePorts,
-    LocalProcessSpec, PreparedNode, reserve_local_node_ports, yaml_config_launch_spec,
+    LocalProcessSpec, PreparedNode, allocate_local_node_ports, yaml_config_launch_spec,
 };
 
 use crate::OpenRaftKvEnv;
@@ -54,16 +54,16 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
         Vec<PreparedNode<OpenRaftKvNodeConfig>>,
         testing_framework_runner_local::process::ProcessSpawnError,
     > {
-        let reserved_ports = reserve_local_node_ports(topology.node_count(), &[], "node")?;
+        let allocated_ports = allocate_local_node_ports(topology.node_count(), &[], "node")?;
 
-        let peer_ports = reserved_ports
+        let peer_ports = allocated_ports
             .iter()
             .map(LocalNodePorts::network_port)
             .collect::<Vec<_>>();
 
         // Build every node from the same reserved port view so the initial
         // cluster starts with a consistent peer list on all nodes.
-        Ok(reserved_ports
+        Ok(allocated_ports
             .iter()
             .enumerate()
             .map(|(index, ports)| PreparedNode {

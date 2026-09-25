@@ -289,7 +289,7 @@ fn individual_config_receives_template_and_current_peers() -> Result<(), DynErro
 
 #[test]
 fn named_ports_are_allocated_on_demand_and_reused() -> Result<(), DynError> {
-    let mut ports = reserve_local_node_ports(1, &[], "node")?;
+    let mut ports = allocate_local_node_ports(1, &[], "node")?;
     let ports = &mut ports[0];
     assert_eq!(ports.get("http"), None);
     let http = ports.allocate("http")?;
