@@ -56,7 +56,7 @@ impl LocalDeployerEnv for DummyEnv {
 
     fn build_initial_node_configs(
         _topology: &Self::Deployment,
-    ) -> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+    ) -> Result<Vec<PreparedNode<DummyConfig>>, crate::process::ProcessSpawnError> {
         build_dummy_initial_nodes()
     }
 
@@ -95,7 +95,7 @@ fn build_dummy_node() -> Result<PreparedNode<DummyConfig>, DynError> {
 }
 
 fn build_dummy_initial_nodes()
--> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+-> Result<Vec<PreparedNode<DummyConfig>>, crate::process::ProcessSpawnError> {
     unreachable!("not used in this test")
 }
 

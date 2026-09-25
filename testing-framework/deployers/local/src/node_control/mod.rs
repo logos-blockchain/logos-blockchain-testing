@@ -10,12 +10,13 @@ use testing_framework_core::scenario::{
 use thiserror::Error;
 
 use crate::{
+    PreparedNode,
     env::{
         LocalDeployerEnv, Node, build_initial_node_configs, build_launch_spec_with_args,
-        build_node_from_template, initial_persist_dir, initial_snapshot_dir, node_peer_port,
+        build_node_from_template, initial_persist_dir, initial_snapshot_dir,
         spawn_node_from_config, wait_for_local_readiness_ports,
     },
-    process::ProcessSpawnError,
+    process::{NodeEndpointPort, ProcessSpawnError},
 };
 
 mod state;
@@ -111,8 +112,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             let snapshot_dir = initial_snapshot_dir::<E>(descriptors, &config_entry.name, index);
             spawned.push(
                 spawn_node_from_config::<E>(
-                    config_entry.name,
-                    config_entry.config,
+                    config_entry,
                     keep_tempdir,
                     persist_dir.as_deref(),
                     snapshot_dir.as_deref(),
@@ -204,7 +204,10 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
         for node in nodes {
             let name = node.name().to_owned();
-            let port = node_peer_port::<E>(&node);
+            let port = node
+                .endpoints()
+                .port(&NodeEndpointPort::Network)
+                .expect("prepared node must retain its network port");
             let client = node.client();
 
             self.node_clients.add_node(client.clone());
@@ -395,8 +398,11 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         extra_args: &[String],
     ) -> Result<E::NodeClient, NodeManagerError> {
         let node = spawn_node_from_config::<E>(
-            node_name.to_string(),
-            config,
+            PreparedNode {
+                name: node_name.to_owned(),
+                config,
+                network_port,
+            },
             self.keep_tempdir,
             persist_dir,
             snapshot_dir,
@@ -709,7 +715,7 @@ mod tests {
 
     use super::{NodeManager, validate_new_node_name};
     use crate::{
-        LaunchSpec, LocalBuildContext, NodeEndpoints, PreparedNode,
+        LaunchSpec, LocalBuildContext, NodeEndpointPort, NodeEndpoints, PreparedNode,
         env::{LocalDeployerEnv, spawn_node_from_config},
     };
 
@@ -766,7 +772,7 @@ mod tests {
             Ok(PreparedNode {
                 name: format!("sleep-{}", context.index),
                 config: SleepConfig {
-                    api_port: context.ports.network_port(),
+                    api_port: context.ports.allocate("api")?,
                 },
                 network_port: context.ports.network_port(),
             })
@@ -807,8 +813,11 @@ mod tests {
         for (index, port) in ports.into_iter().enumerate() {
             nodes.push(
                 spawn_node_from_config::<SleepEnv>(
-                    format!("node-{index}"),
-                    SleepConfig { api_port: port },
+                    PreparedNode {
+                        name: format!("node-{index}"),
+                        config: SleepConfig { api_port: port },
+                        network_port: port,
+                    },
                     false,
                     None,
                     None,
@@ -880,10 +889,13 @@ mod tests {
     ) -> NodeManager<FlakySleepEnv> {
         let manager = NodeManager::new(SleepTopology, NodeClients::default());
         let node = spawn_node_from_config::<FlakySleepEnv>(
-            "node-0".to_string(),
-            FlakyConfig {
-                api_port: port,
-                fail_launch,
+            PreparedNode {
+                name: "node-0".into(),
+                config: FlakyConfig {
+                    api_port: port,
+                    fail_launch,
+                },
+                network_port: port,
             },
             false,
             None,
@@ -904,6 +916,16 @@ mod tests {
             .unwrap();
         manager.initialize_with_nodes(nodes);
         assert_eq!(manager.node_names(), ["sleep-0", "sleep-1"]);
+        let state = manager.lock_state();
+        for (index, node) in state.nodes.iter().enumerate() {
+            let node = node.as_ref().unwrap();
+            assert_ne!(state.peer_ports[index], node.endpoints().api.port());
+            assert_eq!(
+                Some(state.peer_ports[index]),
+                node.endpoints().port(&NodeEndpointPort::Network)
+            );
+        }
+        drop(state);
         let generated = manager
             .start_node_with("", StartNodeOptions::default())
             .await

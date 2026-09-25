@@ -5,7 +5,7 @@ use testing_framework_core::{scenario::DynError, topology::DeploymentDescriptor}
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
     FallbackBinaryProvider, LocalBuildContext, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec,
-    NodeConfigEntry, PreparedNode, reserve_local_node_ports, yaml_node_config,
+    PreparedNode, reserve_local_node_ports, yaml_node_config,
 };
 
 use crate::OpenRaftKvEnv;
@@ -43,7 +43,7 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<
-        Vec<NodeConfigEntry<OpenRaftKvNodeConfig>>,
+        Vec<PreparedNode<OpenRaftKvNodeConfig>>,
         testing_framework_runner_local::process::ProcessSpawnError,
     > {
         let reserved_ports = reserve_local_node_ports(topology.node_count(), &[], "node")?;
@@ -58,8 +58,9 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
         Ok(reserved_ports
             .iter()
             .enumerate()
-            .map(|(index, ports)| NodeConfigEntry {
+            .map(|(index, ports)| PreparedNode {
                 name: format!("node-{index}"),
+                network_port: ports.network_port(),
                 config: local_node_config(
                     index,
                     ports.network_port(),

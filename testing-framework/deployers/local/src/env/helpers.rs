@@ -27,14 +27,6 @@ pub struct PreparedNode<Config> {
     pub network_port: u16,
 }
 
-/// Named initial config entry generated for one node.
-pub struct NodeConfigEntry<NodeConfigValue> {
-    /// Stable generated node name.
-    pub name: String,
-    /// Config value associated with `name`.
-    pub config: NodeConfigValue,
-}
-
 /// Reserved local ports assigned to one node.
 pub struct LocalNodePorts {
     network_port: u16,
@@ -219,22 +211,6 @@ pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessS
         })
 }
 
-/// Builds a stable `name_prefix-{index}` config list.
-pub fn build_indexed_node_configs<T>(
-    count: usize,
-    name_prefix: &str,
-    build: impl FnMut(usize) -> T,
-) -> Vec<NodeConfigEntry<T>> {
-    (0..count)
-        .map(build)
-        .enumerate()
-        .map(|(index, config)| NodeConfigEntry {
-            name: format!("{name_prefix}-{index}"),
-            config,
-        })
-        .collect()
-}
-
 /// Reserves network and named ports for `count` local nodes.
 pub fn reserve_local_node_ports(
     count: usize,
@@ -339,7 +315,7 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
 pub fn build_generated_initial_nodes<E>(
     topology: &E::Deployment,
     build_node: impl Fn(LocalBuildContext<'_, E>) -> Result<PreparedNode<E::NodeConfig>, DynError>,
-) -> Result<Vec<NodeConfigEntry<E::NodeConfig>>, ProcessSpawnError>
+) -> Result<Vec<PreparedNode<E::NodeConfig>>, ProcessSpawnError>
 where
     E: Application,
 {
@@ -368,10 +344,7 @@ where
             })
             .map_err(|source| ProcessSpawnError::Config { source })?;
 
-            Ok(NodeConfigEntry {
-                name: built.name,
-                config: built.config,
-            })
+            Ok(built)
         })
         .collect()
 }
