@@ -1,16 +1,18 @@
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr},
+    path::Path,
 };
 
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    LocalBuildContext, LocalDeployerEnv, LocalProcessSpec, NodeEndpointPort, NodeEndpoints,
-    PreparedNode, build_local_cluster_node_config, text_node_config,
+    LaunchSpec, LocalBuildContext, LocalDeployerEnv, LocalProcessSpec, NodeEndpointPort,
+    NodeEndpoints, PreparedNode, build_local_cluster_node_config, text_config_launch_spec,
 };
 
 use crate::{CLUSTER_PORT_KEY, NatsEnv, NatsNodeConfig, render_nats_config};
 
+#[async_trait::async_trait]
 impl LocalDeployerEnv for NatsEnv {
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
@@ -29,12 +31,13 @@ impl LocalDeployerEnv for NatsEnv {
         })
     }
 
-    fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(LocalProcessSpec::new("NATS_SERVER_BIN").with_config_file("nats.conf", "-c"))
-    }
-
-    fn render_local_config(config: &NatsNodeConfig) -> Result<Vec<u8>, DynError> {
-        Ok(text_node_config(render_nats_config(config)))
+    async fn build_launch_spec(
+        config: &NatsNodeConfig,
+        _dir: &Path,
+        _label: &str,
+    ) -> Result<LaunchSpec, DynError> {
+        let spec = LocalProcessSpec::new("NATS_SERVER_BIN").with_config_file("nats.conf", "-c");
+        text_config_launch_spec(render_nats_config(config), &spec).await
     }
 
     fn node_endpoints(config: &NatsNodeConfig) -> Result<NodeEndpoints, DynError> {

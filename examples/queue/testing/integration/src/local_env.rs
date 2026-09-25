@@ -22,7 +22,7 @@ impl LocalBinaryApp for QueueEnv {
         })
     }
 
-    fn local_process_spec() -> LocalProcessSpec {
+    fn local_process_spec(_config: &Self::NodeConfig) -> LocalProcessSpec {
         LocalProcessSpec::new("QUEUE_NODE_BIN")
             .with_binary_provider(queue_binary_provider())
             .with_rust_log("queue_node=info")

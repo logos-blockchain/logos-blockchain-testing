@@ -22,7 +22,7 @@ impl LocalBinaryApp for KvEnv {
         })
     }
 
-    fn local_process_spec() -> LocalProcessSpec {
+    fn local_process_spec(_config: &Self::NodeConfig) -> LocalProcessSpec {
         LocalProcessSpec::new("KVSTORE_NODE_BIN")
             .with_binary_provider(kvstore_binary_provider())
             .with_rust_log("kvstore_node=info")
