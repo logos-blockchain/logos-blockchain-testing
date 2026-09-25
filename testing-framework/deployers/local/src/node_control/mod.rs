@@ -11,7 +11,7 @@ use testing_framework_core::scenario::{
 use thiserror::Error;
 
 use crate::{
-    PreparedNode,
+    LocalPeerNode, PreparedNode,
     env::{
         LocalDeployerEnv, Node, build_initial_node_configs, build_launch_spec_with_args,
         build_node_from_template, discovered_node_access, initial_persist_dir,
@@ -29,8 +29,7 @@ const RESTART_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_mil
 
 #[derive(Clone)]
 struct NodeStartSnapshot<Config> {
-    peer_ports: Vec<u16>,
-    peer_ports_by_name: HashMap<String, u16>,
+    peers: Vec<LocalPeerNode>,
     index: usize,
     template_config: Option<Config>,
 }
@@ -311,9 +310,8 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         let mut built = build_node_from_template::<E>(
             &self.descriptors,
             snapshot.index,
-            &snapshot.peer_ports_by_name,
             &options,
-            &snapshot.peer_ports,
+            &snapshot.peers,
             snapshot.template_config.as_ref(),
         )
         .map_err(|source| NodeManagerError::Config { source })?;
@@ -497,8 +495,22 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
     fn start_snapshot(&self) -> NodeStartSnapshot<E::NodeConfig> {
         let state = self.lock_state();
         NodeStartSnapshot {
-            peer_ports: state.peer_ports.clone(),
-            peer_ports_by_name: state.peer_ports_by_name.clone(),
+            peers: state
+                .peer_ports
+                .iter()
+                .enumerate()
+                .map(|(index, &port)| {
+                    let peer = LocalPeerNode::new(index, port);
+                    match state
+                        .peer_ports_by_name
+                        .iter()
+                        .find(|(_, peer_port)| **peer_port == port)
+                    {
+                        Some((name, _)) => peer.with_name(name.clone()),
+                        None => peer,
+                    }
+                })
+                .collect(),
             index: state.node_count,
             template_config: state.template_config.clone(),
         }
@@ -1092,6 +1104,15 @@ mod tests {
             );
         }
         drop(state);
+        assert_eq!(
+            manager
+                .start_snapshot()
+                .peers
+                .iter()
+                .map(|peer| peer.name())
+                .collect::<Vec<_>>(),
+            [Some("sleep-0"), Some("sleep-1")]
+        );
         let generated = manager
             .start_node_with("", StartNodeOptions::default())
             .await

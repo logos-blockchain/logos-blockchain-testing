@@ -170,6 +170,7 @@ struct PreparedConfig {
     network_port: u16,
     api_port: u16,
     peers: Vec<(usize, u16)>,
+    peer_names: Vec<Option<String>>,
     value: String,
 }
 
@@ -189,6 +190,11 @@ impl LocalBinaryApp for ConfigEnv {
             index: context.index,
             network_port: context.ports.network_port(),
             api_port: context.ports.allocate("api")?,
+            peer_names: context
+                .peers
+                .iter()
+                .map(|peer| peer.name().map(str::to_owned))
+                .collect(),
             peers: context
                 .peers
                 .iter()
@@ -234,6 +240,7 @@ fn initial_configs_receive_allocated_ports_and_other_nodes_as_peers() -> Result<
             .collect::<Vec<_>>();
         assert_eq!(node.config.peers, expected);
         assert_eq!(node.config.value, "initial");
+        assert!(node.config.peer_names.iter().all(Option::is_none));
     }
     Ok(())
 }
@@ -245,12 +252,14 @@ fn individual_config_receives_template_and_current_peers() -> Result<(), DynErro
     nodes[1].config.value = "preserved".into();
     let peers = nodes
         .iter()
-        .map(|node| node.config.network_port)
+        .enumerate()
+        .map(|(index, node)| {
+            LocalPeerNode::new(index, node.config.network_port).with_name(&node.name)
+        })
         .collect::<Vec<_>>();
     let built = build_node_from_template::<ConfigEnv>(
         &topology,
         3,
-        &HashMap::new(),
         &StartNodeOptions::default(),
         &peers,
         Some(&nodes[1].config),
@@ -258,8 +267,20 @@ fn individual_config_receives_template_and_current_peers() -> Result<(), DynErro
     assert_eq!(built.config.value, "preserved");
     assert_eq!(built.config.index, 3);
     assert_eq!(
+        built.config.peer_names,
+        [
+            Some("config-0".into()),
+            Some("config-1".into()),
+            Some("config-2".into())
+        ]
+    );
+    assert_eq!(
         built.config.peers,
-        [(0, peers[0]), (1, peers[1]), (2, peers[2])]
+        [
+            (0, peers[0].network_port()),
+            (1, peers[1].network_port()),
+            (2, peers[2].network_port())
+        ]
     );
     assert_eq!(built.network_port, built.config.network_port);
     assert_ne!(built.config.network_port, built.config.api_port);
