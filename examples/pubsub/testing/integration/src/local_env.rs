@@ -19,7 +19,7 @@ impl LocalBinaryApp for PubSubEnv {
         })
     }
 
-    fn local_process_spec() -> LocalProcessSpec {
+    fn local_process_spec(_config: &Self::NodeConfig) -> LocalProcessSpec {
         LocalProcessSpec::new("PUBSUB_NODE_BIN").with_rust_log("pubsub_node=info")
     }
 

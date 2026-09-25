@@ -20,7 +20,7 @@ impl LocalBinaryApp for MetricsCounterEnv {
         })
     }
 
-    fn local_process_spec() -> LocalProcessSpec {
+    fn local_process_spec(_config: &Self::NodeConfig) -> LocalProcessSpec {
         LocalProcessSpec::new("METRICS_COUNTER_NODE_BIN").with_rust_log("metrics_counter_node=info")
     }
 

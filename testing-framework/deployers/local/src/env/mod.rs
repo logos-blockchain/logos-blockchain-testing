@@ -101,43 +101,12 @@ where
         None
     }
 
-    /// Returns the default local process description for this app.
-    fn local_process_spec() -> Option<LocalProcessSpec> {
-        None
-    }
-
-    /// Returns the local process description for this concrete node config.
-    ///
-    /// Apps that need mixed-version or mixed-binary clusters can override this
-    /// hook and choose a different binary provider per node while keeping the
-    /// standard launch-spec rendering path.
-    fn local_process_spec_for_node(
-        _config: &<Self as Application>::NodeConfig,
-        _label: &str,
-    ) -> Option<LocalProcessSpec> {
-        Self::local_process_spec()
-    }
-
-    /// Serializes a local node config into the file bytes written next to the
-    /// spawned process.
-    fn render_local_config(
-        _config: &<Self as Application>::NodeConfig,
-    ) -> Result<Vec<u8>, DynError> {
-        Err(std::io::Error::other("render_local_config is not implemented for this app").into())
-    }
-
-    /// Builds the full launch spec for a local node process.
+    /// Builds the executable, files, and arguments for this node.
     async fn build_launch_spec(
-        config: &<Self as Application>::NodeConfig,
-        _dir: &Path,
+        config: &Self::NodeConfig,
+        dir: &Path,
         label: &str,
-    ) -> Result<LaunchSpec, DynError> {
-        let spec = Self::local_process_spec_for_node(config, label).ok_or_else(|| {
-            std::io::Error::other("build_launch_spec is not implemented for this app")
-        })?;
-        let rendered = Self::render_local_config(config)?;
-        helpers::rendered_config_launch_spec(rendered, &spec).await
-    }
+    ) -> Result<LaunchSpec, DynError>;
 
     /// Returns the main HTTP API port from a node config when the app follows
     /// the standard single-HTTP-endpoint pattern.
@@ -188,7 +157,7 @@ where
     ) -> Result<PreparedNode<Self::NodeConfig>, DynError>;
 
     /// Returns the standard process description for launching one local node.
-    fn local_process_spec() -> LocalProcessSpec;
+    fn local_process_spec(config: &Self::NodeConfig) -> LocalProcessSpec;
 
     /// Serializes a local node config into the file bytes written next to the
     /// spawned process.
@@ -217,14 +186,14 @@ where
         T::build_node_config(context)
     }
 
-    fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(T::local_process_spec())
-    }
-
-    fn render_local_config(
-        config: &<Self as Application>::NodeConfig,
-    ) -> Result<Vec<u8>, DynError> {
-        T::render_local_config(config)
+    async fn build_launch_spec(
+        config: &Self::NodeConfig,
+        _dir: &Path,
+        _label: &str,
+    ) -> Result<LaunchSpec, DynError> {
+        let spec = T::local_process_spec(config);
+        let rendered = T::render_local_config(config)?;
+        helpers::rendered_config_launch_spec(rendered, &spec).await
     }
 
     fn http_api_port(config: &<Self as Application>::NodeConfig) -> Option<u16> {
