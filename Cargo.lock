@@ -3771,6 +3771,7 @@ dependencies = [
  "tera",
  "testing-framework-container",
  "testing-framework-core",
+ "testing-framework-tools",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -3820,6 +3821,13 @@ dependencies = [
  "tokio",
  "tokio-retry",
  "tracing",
+]
+
+[[package]]
+name = "testing-framework-tools"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]

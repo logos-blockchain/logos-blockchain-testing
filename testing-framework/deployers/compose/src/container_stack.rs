@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    net::{Ipv4Addr, TcpListener as StdTcpListener},
     path::Path,
     sync::Arc,
     time::Duration,
@@ -29,7 +28,7 @@ use crate::{
         ports::compose_runner_host, project::ComposeProject, template::write_compose_file,
     },
     lifecycle::cleanup::{ParticipantCleanup, RunnerCleanup, preserve_requested},
-    session::{ComposeProvisioner, ParticipantId},
+    session::{ComposeProvisioner, ComposeProvisionerInner, ParticipantId},
 };
 
 const READINESS_POLL_INTERVAL: Duration = Duration::from_millis(200);
@@ -37,23 +36,6 @@ const STOP_CONFIRM_TIMEOUT: Duration = Duration::from_secs(15);
 const PORT_BIND_ATTEMPTS: usize = 3;
 
 pub(crate) type RunnerPorts = BTreeMap<String, BTreeMap<String, u16>>;
-
-struct RunnerPortReservation {
-    ports: RunnerPorts,
-    listeners: Vec<StdTcpListener>,
-}
-
-impl RunnerPortReservation {
-    fn ports(&self) -> &RunnerPorts {
-        &self.ports
-    }
-
-    fn release(self) {
-        let Self { ports, listeners } = self;
-        drop(ports);
-        drop(listeners);
-    }
-}
 
 struct ComposeContainerControl {
     operation: AsyncMutex<()>,
@@ -189,8 +171,8 @@ impl ComposeProvisioner {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let reservation = match reserve_runner_ports(request.services()) {
-                Ok(reservation) => reservation,
+            let runner_ports = match reserve_runner_ports(&self.inner, request.services()) {
+                Ok(runner_ports) => runner_ports,
                 Err(source) => {
                     cleanup_failed_stack(cleanup, &project).await;
                     return Err(source);
@@ -198,7 +180,7 @@ impl ComposeProvisioner {
             };
             let descriptor = match stack_descriptor(
                 request.services(),
-                reservation.ports(),
+                &runner_ports,
                 self.inner.network().name(),
             ) {
                 Ok(descriptor) => descriptor,
@@ -212,7 +194,6 @@ impl ComposeProvisioner {
                 cleanup_failed_stack(cleanup, &project).await;
                 return Err(source.into());
             }
-            reservation.release();
 
             match project.up().await {
                 Ok(()) => break,
@@ -424,9 +405,9 @@ fn write_service_files(root: &Path, services: &[ContainerServiceSpec]) -> Result
 }
 
 fn reserve_runner_ports(
+    inner: &ComposeProvisionerInner,
     services: &[ContainerServiceSpec],
-) -> Result<RunnerPortReservation, DynError> {
-    let mut listeners = Vec::new();
+) -> Result<RunnerPorts, DynError> {
     let mut mappings = RunnerPorts::new();
     for service in services {
         let mut service_ports = BTreeMap::new();
@@ -435,23 +416,18 @@ fn reserve_runner_ports(
             .iter()
             .filter(|port| needs_runner_port(service, port.name()))
         {
-            let listener = StdTcpListener::bind((Ipv4Addr::LOCALHOST, 0)).with_context(|| {
+            let host_port = inner.allocate_runner_port().with_context(|| {
                 format!(
                     "allocating host port for service '{}' port '{}'",
                     service.name(),
                     port.name()
                 )
             })?;
-            let host_port = listener.local_addr()?.port();
-            listeners.push(listener);
             service_ports.insert(port.name().to_owned(), host_port);
         }
         mappings.insert(service.name().to_owned(), service_ports);
     }
-    Ok(RunnerPortReservation {
-        ports: mappings,
-        listeners,
-    })
+    Ok(mappings)
 }
 
 pub(crate) fn container_node_descriptors(
@@ -680,7 +656,7 @@ mod tests {
     };
 
     use super::{reserve_runner_ports, stack_descriptor, validate_request, write_service_files};
-    use crate::infrastructure::template::write_compose_file;
+    use crate::{ComposeProvisioner, infrastructure::template::write_compose_file};
 
     fn service(name: &str) -> ContainerServiceSpec {
         ContainerServiceSpec::new(name, "example:local")
@@ -701,13 +677,13 @@ mod tests {
     #[test]
     fn published_ports_are_explicit_and_distinct() {
         let services = [service("queue"), service("worker")];
-        let reservation = reserve_runner_ports(&services).unwrap();
-        let ports = reservation.ports();
+        let provisioner = ComposeProvisioner::default();
+        let ports = reserve_runner_ports(&provisioner.inner, &services).unwrap();
         let queue = ports["queue"]["api"];
         let worker = ports["worker"]["api"];
 
         assert_ne!(queue, worker);
-        let descriptor = stack_descriptor(&services, ports, "tf-session-test").unwrap();
+        let descriptor = stack_descriptor(&services, &ports, "tf-session-test").unwrap();
         assert_eq!(descriptor.nodes().len(), 2);
         assert!(descriptor.nodes()[0].ports()[0].contains(&queue.to_string()));
         assert!(descriptor.nodes()[1].ports()[0].contains(&worker.to_string()));
@@ -716,9 +692,9 @@ mod tests {
     #[test]
     fn environment_values_render_as_literal_compose_data() {
         let services = [service("worker").with_env("MESSAGE", "say \"hi\"\n$HOME")];
-        let reservation = reserve_runner_ports(&services).unwrap();
-        let descriptor =
-            stack_descriptor(&services, reservation.ports(), "tf-session-test").unwrap();
+        let provisioner = ComposeProvisioner::default();
+        let ports = reserve_runner_ports(&provisioner.inner, &services).unwrap();
+        let descriptor = stack_descriptor(&services, &ports, "tf-session-test").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("compose.yml");
 
@@ -732,9 +708,9 @@ mod tests {
     #[test]
     fn stack_services_attach_to_the_shared_session_network() {
         let services = [service("worker")];
-        let reservation = reserve_runner_ports(&services).unwrap();
-        let descriptor =
-            stack_descriptor(&services, reservation.ports(), "tf-session-test").unwrap();
+        let provisioner = ComposeProvisioner::default();
+        let ports = reserve_runner_ports(&provisioner.inner, &services).unwrap();
+        let descriptor = stack_descriptor(&services, &ports, "tf-session-test").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let output = directory.path().join("compose.yml");
 
