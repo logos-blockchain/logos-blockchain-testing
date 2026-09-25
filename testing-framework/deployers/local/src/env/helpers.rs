@@ -73,10 +73,34 @@ impl LocalNodePorts {
 #[derive(Clone, Debug)]
 pub struct LocalPeerNode {
     index: usize,
+    name: Option<String>,
     network_port: u16,
 }
 
 impl LocalPeerNode {
+    /// Describes a peer whose name is not yet known during initial preparation.
+    #[must_use]
+    pub fn new(index: usize, network_port: u16) -> Self {
+        Self {
+            index,
+            name: None,
+            network_port,
+        }
+    }
+
+    /// Adds the registered node name for an existing peer.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// The registered name, absent while initial configs are still being built.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
     /// Returns the peer's zero-based node index.
     #[must_use]
     pub fn index(&self) -> usize {
@@ -303,10 +327,7 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
         .iter()
         .enumerate()
         .filter_map(|(index, port)| {
-            (index != self_index).then_some(LocalPeerNode {
-                index,
-                network_port: *port,
-            })
+            (index != self_index).then_some(LocalPeerNode::new(index, *port))
         })
         .collect()
 }
@@ -324,7 +345,6 @@ where
         .iter()
         .map(LocalNodePorts::network_port)
         .collect::<Vec<_>>();
-    let peer_ports_by_name = HashMap::new();
     let options = testing_framework_core::scenario::StartNodeOptions::<E>::default();
 
     reserved_ports
@@ -337,8 +357,6 @@ where
                 index,
                 ports,
                 peers: &peers,
-                peer_ports: &peer_ports,
-                peer_ports_by_name: &peer_ports_by_name,
                 options: &options,
                 template_config: None,
             })
