@@ -277,7 +277,7 @@ mod tests {
 
     use super::{LocalClusterProvisioner, LocalClusterProvisionerError};
     use crate::{
-        BuiltNodeConfig, LaunchSpec, LocalDeployerEnv, NodeConfigEntry, NodeEndpoints,
+        LaunchSpec, LocalDeployerEnv, NodeConfigEntry, NodeEndpoints, PreparedNode,
         ProcessSpawnError,
     };
 
@@ -329,7 +329,7 @@ mod tests {
 
         fn build_node_config(
             _context: crate::LocalBuildContext<'_, Self>,
-        ) -> Result<BuiltNodeConfig<EmptyConfig>, DynError> {
+        ) -> Result<PreparedNode<EmptyConfig>, DynError> {
             unreachable!("empty deployment never builds node configs")
         }
 

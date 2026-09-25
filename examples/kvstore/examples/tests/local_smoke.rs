@@ -54,7 +54,7 @@ async fn local_kvstore_runs_a_complete_scenario() {
     let node_pids = (0..NODE_COUNT)
         .map(|index| {
             cluster
-                .node_pid(&format!("node-{index}"))
+                .node_pid(&format!("kv-node-{index}"))
                 .expect("running local node must expose its process id")
         })
         .collect::<Vec<_>>();
@@ -111,11 +111,11 @@ impl Workload<AppHostEnv> for KvRestartExercise {
         ensure_cluster_shape(&cluster, self.expected_nodes)?;
         put_value(&cluster, "before-restart").await?;
         let control = cluster.control().ok_or("local cluster has no control")?;
-        control.restart_node("node-1").await?;
-        control.wait_node_ready("node-1").await?;
-        let access = control.node_access("node-1").await?;
+        control.restart_node("kv-node-1").await?;
+        control.wait_node_ready("kv-node-1").await?;
+        let access = control.node_access("kv-node-1").await?;
         let client = cluster
-            .node_client("node-1")
+            .node_client("kv-node-1")
             .ok_or("restarted node has no client")?;
         assert_eq!(&access.api_base_url()?, client.base_url());
         put_value(&cluster, "after-restart").await?;
@@ -132,12 +132,12 @@ fn ensure_cluster_shape(
         return Err(format!("kv smoke cluster expected {expected_nodes} nodes").into());
     }
 
-    if cluster.node_client("node-1").is_none() {
-        return Err("kv smoke cluster cannot access node-1 client".into());
+    if cluster.node_client("kv-node-1").is_none() {
+        return Err("kv smoke cluster cannot access kv-node-1 client".into());
     }
 
-    if cluster.node_pid("node-1").is_none() {
-        return Err("kv smoke cluster cannot access node-1 process id".into());
+    if cluster.node_pid("kv-node-1").is_none() {
+        return Err("kv smoke cluster cannot access kv-node-1 process id".into());
     }
 
     Ok(())

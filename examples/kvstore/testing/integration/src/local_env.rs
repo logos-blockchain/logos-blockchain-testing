@@ -3,19 +3,23 @@ use std::{path::PathBuf, sync::Arc};
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
-    FallbackBinaryProvider, LocalBinaryApp, LocalBuildContext, LocalProcessSpec,
+    FallbackBinaryProvider, LocalBinaryApp, LocalBuildContext, LocalProcessSpec, PreparedNode,
     build_local_cluster_node_config, yaml_node_config,
 };
 
 use crate::{KvEnv, KvNodeConfig};
 
 impl LocalBinaryApp for KvEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "kv-node"
-    }
-
-    fn build_node_config(context: LocalBuildContext<'_, Self>) -> Result<KvNodeConfig, DynError> {
-        build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<KvNodeConfig>, DynError> {
+        let config =
+            build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)?;
+        Ok(PreparedNode {
+            name: format!("kv-node-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
+        })
     }
 
     fn local_process_spec() -> LocalProcessSpec {

@@ -3,21 +3,23 @@ use std::{path::PathBuf, sync::Arc};
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
-    FallbackBinaryProvider, LocalBinaryApp, LocalBuildContext, LocalProcessSpec,
+    FallbackBinaryProvider, LocalBinaryApp, LocalBuildContext, LocalProcessSpec, PreparedNode,
     build_local_cluster_node_config, yaml_node_config,
 };
 
 use crate::{QueueEnv, QueueNodeConfig};
 
 impl LocalBinaryApp for QueueEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "queue-node"
-    }
-
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<QueueNodeConfig, DynError> {
-        build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)
+    ) -> Result<PreparedNode<QueueNodeConfig>, DynError> {
+        let config =
+            build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)?;
+        Ok(PreparedNode {
+            name: format!("queue-node-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
+        })
     }
 
     fn local_process_spec() -> LocalProcessSpec {
