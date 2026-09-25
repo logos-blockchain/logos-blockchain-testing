@@ -1,21 +1,22 @@
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    LocalBinaryApp, LocalBuildContext, LocalProcessSpec, yaml_node_config,
+    LocalBinaryApp, LocalBuildContext, LocalProcessSpec, PreparedNode, yaml_node_config,
 };
 
 use crate::{MetricsCounterEnv, MetricsCounterNodeConfig};
 
 impl LocalBinaryApp for MetricsCounterEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "metrics-counter-node"
-    }
-
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<MetricsCounterNodeConfig, DynError> {
-        Ok(MetricsCounterNodeConfig {
+    ) -> Result<PreparedNode<MetricsCounterNodeConfig>, DynError> {
+        let config = MetricsCounterNodeConfig {
             node_id: context.index as u64,
             http_port: context.ports.network_port(),
+        };
+        Ok(PreparedNode {
+            name: format!("metrics-counter-node-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
         })
     }
 

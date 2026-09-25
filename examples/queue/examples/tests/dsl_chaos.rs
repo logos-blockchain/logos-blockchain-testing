@@ -10,7 +10,7 @@ async fn dsl_restart_scenario_converges() -> Result<(), DynError> {
         .restart_nodes_randomly()
         .every_secs(4, 8)
         .cooldown_secs(10)
-        .excluding_nodes(["node-0"])
+        .excluding_nodes(["queue-node-0"])
         .done()
         .expect_converged(100)
         .within_secs(30)
