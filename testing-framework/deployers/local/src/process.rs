@@ -4,7 +4,7 @@ use std::{
     future::Future,
     io::{self, Error, ErrorKind},
     mem,
-    net::{Ipv4Addr, SocketAddr},
+    net::{Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     path::{Path, PathBuf},
     pin::Pin,
     process::Stdio,
@@ -145,6 +145,7 @@ pub enum ProcessSpawnError {
 
 pub struct ProcessNode<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'static>
 {
+    name: String,
     child: Child,
     tempdir: TempDir,
     keep_tempdir: bool,
@@ -157,6 +158,10 @@ pub struct ProcessNode<Config: Clone + Send + Sync + 'static, Client: Clone + Se
 impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'static>
     ProcessNode<Config, Client>
 {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub const fn config(&self) -> &Config {
         &self.config
     }
@@ -263,6 +268,7 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         let child = spawn_child_for_launch(tempdir.path(), &launch).await?;
 
         Ok(Self {
+            name: label.to_owned(),
             child,
             tempdir,
             keep_tempdir,
@@ -412,11 +418,27 @@ fn default_api_socket() -> SocketAddr {
     SocketAddr::from((Ipv4Addr::LOCALHOST, 0))
 }
 
+/// Selects a loopback port available for both TCP and UDP at the time of the
+/// check. The sockets are released before returning; this does not reserve the
+/// port until the child process binds it.
 pub fn allocate_available_port() -> Result<u16, io::Error> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let port = listener.local_addr()?.port();
-    drop(listener);
-    Ok(port)
+    for _ in 0..16 {
+        match bind_port_pair(0) {
+            Ok((tcp, _udp)) => return Ok(tcp.local_addr()?.port()),
+            Err(error) if error.kind() == ErrorKind::AddrInUse => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(Error::new(
+        ErrorKind::AddrInUse,
+        "could not select a port available for both TCP and UDP",
+    ))
+}
+
+fn bind_port_pair(port: u16) -> io::Result<(TcpListener, UdpSocket)> {
+    let tcp = TcpListener::bind((Ipv4Addr::LOCALHOST, port))?;
+    let udp = UdpSocket::bind(tcp.local_addr()?)?;
+    Ok((tcp, udp))
 }
 
 fn create_tempdir(persist_dir: Option<&Path>) -> Result<TempDir, ProcessSpawnError> {
@@ -458,6 +480,10 @@ fn create_tempdir(persist_dir: Option<&Path>) -> Result<TempDir, ProcessSpawnErr
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::ErrorKind,
+        net::{TcpListener, UdpSocket},
+    };
     #[cfg(unix)]
     use std::{
         process::{Command as StdCommand, Stdio},
@@ -466,7 +492,24 @@ mod tests {
 
     #[cfg(unix)]
     use super::{LaunchSpec, ProcessNode};
-    use super::{NodeEndpointPort, NodeEndpoints};
+    use super::{NodeEndpointPort, NodeEndpoints, allocate_available_port, bind_port_pair};
+
+    #[test]
+    fn port_selection_checks_udp_as_well_as_tcp() {
+        let udp = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let address = udp.local_addr().unwrap();
+        // TCP alone can bind this port; the combined check must reject it.
+        drop(TcpListener::bind(address).unwrap());
+        let error = bind_port_pair(address.port()).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::AddrInUse);
+    }
+
+    #[test]
+    fn selected_port_is_released_for_the_child_process() {
+        let port = allocate_available_port().unwrap();
+        let (tcp, udp) = bind_port_pair(port).unwrap();
+        assert_eq!(tcp.local_addr().unwrap(), udp.local_addr().unwrap());
+    }
 
     #[test]
     fn typed_ports_roundtrip() {

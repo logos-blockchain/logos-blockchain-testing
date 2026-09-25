@@ -1,33 +1,25 @@
-use std::collections::HashMap;
-
-use testing_framework_core::scenario::{DynError, StartNodeOptions};
+use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    LocalBinaryApp, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
+    LocalBinaryApp, LocalBuildContext, LocalProcessSpec, PreparedNode,
     build_local_cluster_node_config, yaml_node_config,
 };
 
 use crate::{PubSubEnv, PubSubNodeConfig};
 
 impl LocalBinaryApp for PubSubEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "pubsub-node"
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<PubSubNodeConfig>, DynError> {
+        let config =
+            build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)?;
+        Ok(PreparedNode {
+            name: format!("pubsub-node-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
+        })
     }
 
-    fn build_local_node_config_with_peers(
-        _topology: &Self::Deployment,
-        index: usize,
-        ports: &LocalNodePorts,
-        peers: &[LocalPeerNode],
-        _peer_ports_by_name: &HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        _template_config: Option<
-            &<Self as testing_framework_core::scenario::Application>::NodeConfig,
-        >,
-    ) -> Result<<Self as testing_framework_core::scenario::Application>::NodeConfig, DynError> {
-        build_local_cluster_node_config::<Self>(index, ports, peers)
-    }
-
-    fn local_process_spec() -> LocalProcessSpec {
+    fn local_process_spec(_config: &Self::NodeConfig) -> LocalProcessSpec {
         LocalProcessSpec::new("PUBSUB_NODE_BIN").with_rust_log("pubsub_node=info")
     }
 

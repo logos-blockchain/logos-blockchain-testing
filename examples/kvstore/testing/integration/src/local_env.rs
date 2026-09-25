@@ -1,34 +1,28 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
-use testing_framework_core::scenario::{DynError, StartNodeOptions};
+use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
-    FallbackBinaryProvider, LocalBinaryApp, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
+    FallbackBinaryProvider, LocalBinaryApp, LocalBuildContext, LocalProcessSpec, PreparedNode,
     build_local_cluster_node_config, yaml_node_config,
 };
 
 use crate::{KvEnv, KvNodeConfig};
 
 impl LocalBinaryApp for KvEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "kv-node"
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<KvNodeConfig>, DynError> {
+        let config =
+            build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)?;
+        Ok(PreparedNode {
+            name: format!("kv-node-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
+        })
     }
 
-    fn build_local_node_config_with_peers(
-        _topology: &Self::Deployment,
-        index: usize,
-        ports: &LocalNodePorts,
-        peers: &[LocalPeerNode],
-        _peer_ports_by_name: &HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        _template_config: Option<
-            &<Self as testing_framework_core::scenario::Application>::NodeConfig,
-        >,
-    ) -> Result<<Self as testing_framework_core::scenario::Application>::NodeConfig, DynError> {
-        build_local_cluster_node_config::<Self>(index, ports, peers)
-    }
-
-    fn local_process_spec() -> LocalProcessSpec {
+    fn local_process_spec(_config: &Self::NodeConfig) -> LocalProcessSpec {
         LocalProcessSpec::new("KVSTORE_NODE_BIN")
             .with_binary_provider(kvstore_binary_provider())
             .with_rust_log("kvstore_node=info")

@@ -1,11 +1,12 @@
 use std::{
+    io::{Error, ErrorKind},
     net::TcpListener,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 
 use testing_framework_core::{
-    scenario::{Application, DynError, ReadinessProbe, ReadinessRequirement},
+    scenario::{Application, DynError, NodeAccess, ReadinessProbe, ReadinessRequirement},
     topology::DeploymentDescriptor,
 };
 
@@ -41,6 +42,10 @@ impl Application for TcpEnv {
     type NodeClient = ();
     type NodeConfig = DummyConfig;
 
+    fn build_node_client(_access: &NodeAccess) -> Result<(), DynError> {
+        Err(Error::new(ErrorKind::PermissionDenied, "client credentials missing").into())
+    }
+
     fn node_readiness_probe() -> ReadinessProbe {
         ReadinessProbe::Tcp
     }
@@ -49,18 +54,14 @@ impl Application for TcpEnv {
 #[async_trait::async_trait]
 impl LocalDeployerEnv for DummyEnv {
     fn build_node_config(
-        _topology: &Self::Deployment,
-        _index: usize,
-        _peer_ports_by_name: &std::collections::HashMap<String, u16>,
-        _options: &testing_framework_core::scenario::StartNodeOptions<Self>,
-        _peer_ports: &[u16],
-    ) -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+        _context: crate::LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<DummyConfig>, DynError> {
         build_dummy_node()
     }
 
     fn build_initial_node_configs(
         _topology: &Self::Deployment,
-    ) -> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+    ) -> Result<Vec<PreparedNode<DummyConfig>>, crate::process::ProcessSpawnError> {
         build_dummy_initial_nodes()
     }
 
@@ -86,14 +87,28 @@ impl LocalDeployerEnv for DummyEnv {
 }
 
 #[async_trait::async_trait]
-impl LocalDeployerEnv for TcpEnv {}
+impl LocalDeployerEnv for TcpEnv {
+    async fn build_launch_spec(
+        _config: &DummyConfig,
+        _dir: &std::path::Path,
+        _label: &str,
+    ) -> Result<LaunchSpec, DynError> {
+        unreachable!("readiness tests do not launch nodes")
+    }
 
-fn build_dummy_node() -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+    fn build_node_config(
+        _context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<DummyConfig>, DynError> {
+        unreachable!("readiness tests do not build node configs")
+    }
+}
+
+fn build_dummy_node() -> Result<PreparedNode<DummyConfig>, DynError> {
     unreachable!("not used in this test")
 }
 
 fn build_dummy_initial_nodes()
--> Result<Vec<NodeConfigEntry<DummyConfig>>, crate::process::ProcessSpawnError> {
+-> Result<Vec<PreparedNode<DummyConfig>>, crate::process::ProcessSpawnError> {
     unreachable!("not used in this test")
 }
 
@@ -136,4 +151,171 @@ async fn tcp_readiness_probe_accepts_bound_port() {
     )
     .await
     .expect("bound TCP port should be ready");
+}
+
+struct ConfigEnv;
+
+#[derive(Clone)]
+struct ConfigTopology(usize);
+
+impl DeploymentDescriptor for ConfigTopology {
+    fn node_count(&self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Clone, Debug)]
+struct PreparedConfig {
+    index: usize,
+    network_port: u16,
+    api_port: u16,
+    peers: Vec<(usize, u16)>,
+    peer_names: Vec<Option<String>>,
+    value: String,
+}
+
+#[async_trait::async_trait]
+impl Application for ConfigEnv {
+    type Deployment = ConfigTopology;
+    type NodeConfig = PreparedConfig;
+    type NodeClient = ();
+}
+
+#[async_trait::async_trait]
+impl LocalBinaryApp for ConfigEnv {
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<PreparedConfig>, DynError> {
+        let config = PreparedConfig {
+            index: context.index,
+            network_port: context.ports.network_port(),
+            api_port: context.ports.allocate("api")?,
+            peer_names: context
+                .peers
+                .iter()
+                .map(|peer| peer.name().map(str::to_owned))
+                .collect(),
+            peers: context
+                .peers
+                .iter()
+                .map(|peer| (peer.index(), peer.network_port()))
+                .collect(),
+            value: context
+                .template_config
+                .map_or_else(|| "initial".into(), |config| config.value.clone()),
+        };
+        Ok(PreparedNode {
+            name: format!("config-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
+        })
+    }
+
+    fn local_process_spec(config: &PreparedConfig) -> LocalProcessSpec {
+        LocalProcessSpec::new("UNUSED_TEST_BINARY").with_binary_path(&config.value)
+    }
+
+    fn render_local_config(config: &PreparedConfig) -> Result<Vec<u8>, DynError> {
+        Ok(config.value.as_bytes().to_vec())
+    }
+
+    fn http_api_port(config: &PreparedConfig) -> u16 {
+        config.api_port
+    }
+}
+
+#[test]
+fn initial_configs_receive_allocated_ports_and_other_nodes_as_peers() -> Result<(), DynError> {
+    let nodes = ConfigEnv::build_initial_node_configs(&ConfigTopology(3))?;
+    assert_eq!(nodes.len(), 3);
+    for (index, node) in nodes.iter().enumerate() {
+        assert_eq!(node.name, format!("config-{index}"));
+        assert_eq!(node.config.index, index);
+        assert_ne!(node.config.network_port, node.config.api_port);
+        let expected = nodes
+            .iter()
+            .enumerate()
+            .filter(|(peer, _)| *peer != index)
+            .map(|(peer, node)| (peer, node.config.network_port))
+            .collect::<Vec<_>>();
+        assert_eq!(node.config.peers, expected);
+        assert_eq!(node.config.value, "initial");
+        assert!(node.config.peer_names.iter().all(Option::is_none));
+    }
+    Ok(())
+}
+
+#[test]
+fn individual_config_receives_template_and_current_peers() -> Result<(), DynError> {
+    let topology = ConfigTopology(3);
+    let mut nodes = ConfigEnv::build_initial_node_configs(&topology)?;
+    nodes[1].config.value = "preserved".into();
+    let peers = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| {
+            LocalPeerNode::new(index, node.config.network_port).with_name(&node.name)
+        })
+        .collect::<Vec<_>>();
+    let built = build_node_from_template::<ConfigEnv>(
+        &topology,
+        3,
+        &StartNodeOptions::default(),
+        &peers,
+        Some(&nodes[1].config),
+    )?;
+    assert_eq!(built.config.value, "preserved");
+    assert_eq!(built.config.index, 3);
+    assert_eq!(
+        built.config.peer_names,
+        [
+            Some("config-0".into()),
+            Some("config-1".into()),
+            Some("config-2".into())
+        ]
+    );
+    assert_eq!(
+        built.config.peers,
+        [
+            (0, peers[0].network_port()),
+            (1, peers[1].network_port()),
+            (2, peers[2].network_port())
+        ]
+    );
+    assert_eq!(built.network_port, built.config.network_port);
+    assert_ne!(built.config.network_port, built.config.api_port);
+    Ok(())
+}
+
+#[test]
+fn named_ports_are_allocated_on_demand_and_reused() -> Result<(), DynError> {
+    let mut ports = allocate_local_node_ports(1, &[], "node")?;
+    let ports = &mut ports[0];
+    assert_eq!(ports.get("http"), None);
+    let http = ports.allocate("http")?;
+    assert_eq!(ports.allocate("http")?, http);
+    assert_eq!(ports.require("http")?, http);
+    assert_ne!(ports.allocate("metrics")?, http);
+    Ok(())
+}
+
+#[test]
+fn client_construction_preserves_the_original_error() {
+    let error = TcpEnv::node_client(&NodeEndpoints::from_api_port(1234)).unwrap_err();
+    let error = error.downcast_ref::<Error>().expect("original error type");
+    assert_eq!(error.kind(), ErrorKind::PermissionDenied);
+    assert_eq!(error.to_string(), "client credentials missing");
+}
+
+#[tokio::test]
+async fn simple_launch_selects_binary_from_each_node_config() -> Result<(), DynError> {
+    let mut nodes = ConfigEnv::build_initial_node_configs(&ConfigTopology(1))?;
+    let dir = tempfile::tempdir()?;
+    for binary in ["/bin/echo", "/bin/sleep"] {
+        nodes[0].config.value = binary.into();
+        let launch = ConfigEnv::build_launch_spec(&nodes[0].config, dir.path(), "config-0").await?;
+        assert_eq!(launch.binary, std::fs::canonicalize(binary)?);
+        assert_eq!(launch.files[0].contents, binary.as_bytes());
+    }
+    Ok(())
 }

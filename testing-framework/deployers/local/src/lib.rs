@@ -15,10 +15,10 @@ pub use binary::{
 };
 pub use cluster::LocalCluster;
 pub use env::{
-    BuiltNodeConfig, LocalBinaryApp, LocalBuildContext, LocalConfigArgMode, LocalDeployerEnv,
-    LocalNodePorts, LocalPeerNode, LocalProcessSpec, NodeConfigEntry, build_indexed_http_peers,
-    build_indexed_node_configs, build_local_cluster_node_config, build_local_peer_nodes,
-    default_yaml_launch_spec, discovered_node_access, preallocate_ports, reserve_local_node_ports,
+    LocalBinaryApp, LocalBuildContext, LocalConfigArgMode, LocalDeployerEnv, LocalNodePorts,
+    LocalPeerNode, LocalProcessSpec, PreparedNode, allocate_local_node_ports,
+    build_indexed_http_peers, build_local_cluster_node_config, build_local_peer_nodes,
+    default_yaml_launch_spec, discovered_node_access, preallocate_ports,
     single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
     yaml_node_config,
 };
