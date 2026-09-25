@@ -1,15 +1,20 @@
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use openraft_kv_node::OpenRaftKvNodeConfig;
 use testing_framework_core::{scenario::DynError, topology::DeploymentDescriptor};
 use testing_framework_runner_local::{
     BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
-    FallbackBinaryProvider, LocalBuildContext, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec,
-    PreparedNode, reserve_local_node_ports, yaml_node_config,
+    FallbackBinaryProvider, LaunchSpec, LocalBuildContext, LocalDeployerEnv, LocalNodePorts,
+    LocalProcessSpec, PreparedNode, reserve_local_node_ports, yaml_config_launch_spec,
 };
 
 use crate::OpenRaftKvEnv;
 
+#[async_trait::async_trait]
 impl LocalDeployerEnv for OpenRaftKvEnv {
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
@@ -70,16 +75,15 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
             .collect())
     }
 
-    fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(
-            LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN")
-                .with_binary_provider(openraft_binary_provider())
-                .with_rust_log("info"),
-        )
-    }
-
-    fn render_local_config(config: &OpenRaftKvNodeConfig) -> Result<Vec<u8>, DynError> {
-        yaml_node_config(config)
+    async fn build_launch_spec(
+        config: &OpenRaftKvNodeConfig,
+        _dir: &Path,
+        _label: &str,
+    ) -> Result<LaunchSpec, DynError> {
+        let spec = LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN")
+            .with_binary_provider(openraft_binary_provider())
+            .with_rust_log("info");
+        yaml_config_launch_spec(config, &spec).await
     }
 
     fn http_api_port(config: &OpenRaftKvNodeConfig) -> Option<u16> {

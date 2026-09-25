@@ -88,6 +88,14 @@ impl LocalDeployerEnv for DummyEnv {
 
 #[async_trait::async_trait]
 impl LocalDeployerEnv for TcpEnv {
+    async fn build_launch_spec(
+        _config: &DummyConfig,
+        _dir: &std::path::Path,
+        _label: &str,
+    ) -> Result<LaunchSpec, DynError> {
+        unreachable!("readiness tests do not launch nodes")
+    }
+
     fn build_node_config(
         _context: LocalBuildContext<'_, Self>,
     ) -> Result<PreparedNode<DummyConfig>, DynError> {
@@ -197,12 +205,12 @@ impl LocalBinaryApp for ConfigEnv {
         })
     }
 
-    fn local_process_spec() -> LocalProcessSpec {
-        unreachable!("configuration tests do not launch processes")
+    fn local_process_spec(config: &PreparedConfig) -> LocalProcessSpec {
+        LocalProcessSpec::new("UNUSED_TEST_BINARY").with_binary_path(&config.value)
     }
 
-    fn render_local_config(_config: &PreparedConfig) -> Result<Vec<u8>, DynError> {
-        unreachable!("configuration tests do not render files")
+    fn render_local_config(config: &PreparedConfig) -> Result<Vec<u8>, DynError> {
+        Ok(config.value.as_bytes().to_vec())
     }
 
     fn http_api_port(config: &PreparedConfig) -> u16 {
@@ -276,4 +284,17 @@ fn client_construction_preserves_the_original_error() {
     let error = error.downcast_ref::<Error>().expect("original error type");
     assert_eq!(error.kind(), ErrorKind::PermissionDenied);
     assert_eq!(error.to_string(), "client credentials missing");
+}
+
+#[tokio::test]
+async fn simple_launch_selects_binary_from_each_node_config() -> Result<(), DynError> {
+    let mut nodes = ConfigEnv::build_initial_node_configs(&ConfigTopology(1))?;
+    let dir = tempfile::tempdir()?;
+    for binary in ["/bin/echo", "/bin/sleep"] {
+        nodes[0].config.value = binary.into();
+        let launch = ConfigEnv::build_launch_spec(&nodes[0].config, dir.path(), "config-0").await?;
+        assert_eq!(launch.binary, std::fs::canonicalize(binary)?);
+        assert_eq!(launch.files[0].contents, binary.as_bytes());
+    }
+    Ok(())
 }
