@@ -5,11 +5,15 @@ use std::{
 
 use reqwest::{Client, Url};
 use thiserror::Error;
+use tokio::{
+    net::TcpStream,
+    time::{sleep, timeout},
+};
 
 use crate::{adjust_timeout, scenario::DynError};
 
-const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(200);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+pub const DEFAULT_READINESS_POLL_INTERVAL: Duration = Duration::from_millis(200);
+pub const DEFAULT_READINESS_TIMEOUT: Duration = Duration::from_secs(60);
 const LOCALHOST: &str = "127.0.0.1";
 const NO_STABILIZATION_DETAILS: &str = "no probe details reported";
 const NO_FAILING_ENDPOINTS: &str = "<none>";
@@ -35,14 +39,21 @@ pub enum ReadinessError {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum HttpReadinessRequirement {
+pub enum ReadinessRequirement {
     AllNodesReady,
     AnyNodeReady,
     AtLeast(usize),
 }
 
+/// Checks the reachable node endpoint supplied by the backend.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReadinessProbe {
+    Http { path: &'static str },
+    Tcp,
+}
+
 #[derive(Debug)]
-struct HttpProbeStatus {
+struct ProbeStatus {
     endpoint: Url,
     ok: bool,
     detail: String,
@@ -95,26 +106,20 @@ fn build_endpoints_with_host(
         .collect()
 }
 
-fn requirement_satisfied(
-    statuses: &[HttpProbeStatus],
-    requirement: HttpReadinessRequirement,
-) -> bool {
+fn requirement_satisfied(statuses: &[ProbeStatus], requirement: ReadinessRequirement) -> bool {
     let ready = ready_count(statuses);
     match requirement {
-        HttpReadinessRequirement::AllNodesReady => ready == statuses.len(),
-        HttpReadinessRequirement::AnyNodeReady => ready >= 1,
-        HttpReadinessRequirement::AtLeast(min_ready) => ready >= min_ready,
+        ReadinessRequirement::AllNodesReady => ready == statuses.len(),
+        ReadinessRequirement::AnyNodeReady => ready >= 1,
+        ReadinessRequirement::AtLeast(min_ready) => ready >= min_ready,
     }
 }
 
-fn ready_count(statuses: &[HttpProbeStatus]) -> usize {
+fn ready_count(statuses: &[ProbeStatus]) -> usize {
     statuses.iter().filter(|status| status.ok).count()
 }
 
-fn format_http_timeout_message(
-    statuses: &[HttpProbeStatus],
-    requirement: HttpReadinessRequirement,
-) -> String {
+fn format_timeout_message(statuses: &[ProbeStatus], requirement: ReadinessRequirement) -> String {
     let summary = timeout_summary(statuses);
     let required = required_ready_nodes(requirement, summary.total);
 
@@ -130,7 +135,7 @@ struct TimeoutSummary {
     failed_list: String,
 }
 
-fn timeout_summary(statuses: &[HttpProbeStatus]) -> TimeoutSummary {
+fn timeout_summary(statuses: &[ProbeStatus]) -> TimeoutSummary {
     let total = statuses.len();
 
     TimeoutSummary {
@@ -140,7 +145,7 @@ fn timeout_summary(statuses: &[HttpProbeStatus]) -> TimeoutSummary {
     }
 }
 
-fn failed_endpoints(statuses: &[HttpProbeStatus]) -> Vec<String> {
+fn failed_endpoints(statuses: &[ProbeStatus]) -> Vec<String> {
     statuses
         .iter()
         .filter(|status| !status.ok)
@@ -148,7 +153,7 @@ fn failed_endpoints(statuses: &[HttpProbeStatus]) -> Vec<String> {
         .collect()
 }
 
-fn format_failed_endpoints(statuses: &[HttpProbeStatus]) -> String {
+fn format_failed_endpoints(statuses: &[ProbeStatus]) -> String {
     let failed = failed_endpoints(statuses);
     if failed.is_empty() {
         return NO_FAILING_ENDPOINTS.to_string();
@@ -157,11 +162,11 @@ fn format_failed_endpoints(statuses: &[HttpProbeStatus]) -> String {
     failed.join(", ")
 }
 
-fn required_ready_nodes(requirement: HttpReadinessRequirement, total: usize) -> usize {
+fn required_ready_nodes(requirement: ReadinessRequirement, total: usize) -> usize {
     match requirement {
-        HttpReadinessRequirement::AllNodesReady => total,
-        HttpReadinessRequirement::AnyNodeReady => usize::from(total > 0),
-        HttpReadinessRequirement::AtLeast(min_ready) => min_ready,
+        ReadinessRequirement::AllNodesReady => total,
+        ReadinessRequirement::AnyNodeReady => usize::from(total > 0),
+        ReadinessRequirement::AtLeast(min_ready) => min_ready,
     }
 }
 
@@ -173,19 +178,19 @@ fn stabilization_details(failures: &[String]) -> String {
     }
 }
 
-async fn collect_http_statuses(client: &Client, endpoints: &[Url]) -> Vec<HttpProbeStatus> {
+async fn collect_http_statuses(client: &Client, endpoints: &[Url]) -> Vec<ProbeStatus> {
     let futures = endpoints.iter().map(|endpoint| async move {
         match client.get(endpoint.clone()).send().await {
             Ok(response) => {
                 let status = response.status();
-                HttpProbeStatus {
+                ProbeStatus {
                     endpoint: endpoint.clone(),
                     ok: status.is_success(),
                     detail: format!("status {}", status.as_u16()),
                 }
             }
 
-            Err(err) => HttpProbeStatus {
+            Err(err) => ProbeStatus {
                 endpoint: endpoint.clone(),
                 ok: false,
                 detail: err.to_string(),
@@ -193,6 +198,76 @@ async fn collect_http_statuses(client: &Client, endpoints: &[Url]) -> Vec<HttpPr
         }
     });
     futures::future::join_all(futures).await
+}
+
+async fn collect_tcp_statuses(endpoints: &[Url]) -> Vec<ProbeStatus> {
+    let probes = endpoints.iter().map(|endpoint| async move {
+        let result = async {
+            let host = endpoint.host_str().ok_or("missing host")?;
+            let port = endpoint.port_or_known_default().ok_or("missing port")?;
+            TcpStream::connect((host, port))
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok::<_, String>(())
+        };
+
+        let (ok, detail) = match timeout(Duration::from_millis(100), result).await {
+            Ok(Ok(())) => (true, "TCP connected".to_owned()),
+            Ok(Err(error)) => (false, format!("TCP: {error}")),
+            Err(_) => (false, "TCP connection timed out".to_owned()),
+        };
+
+        ProbeStatus {
+            endpoint: endpoint.clone(),
+            ok,
+            detail,
+        }
+    });
+
+    futures::future::join_all(probes).await
+}
+
+/// Waits for the selected probe using the backend's reachable node endpoints.
+pub async fn wait_readiness(
+    endpoints: &[Url],
+    probe: ReadinessProbe,
+    requirement: ReadinessRequirement,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> Result<(), ReadinessError> {
+    match probe {
+        ReadinessProbe::Http { path } => {
+            let path = normalize_endpoint_path(path);
+            let endpoints = endpoints
+                .iter()
+                .map(|url| {
+                    let mut url = url.clone();
+                    url.set_path(&path);
+                    url
+                })
+                .collect::<Vec<_>>();
+
+            probe_http_endpoints(&endpoints, requirement, timeout, poll_interval).await
+        }
+        ReadinessProbe::Tcp => {
+            poll_readiness(endpoints, requirement, timeout, poll_interval, || {
+                collect_tcp_statuses(endpoints)
+            })
+            .await
+        }
+    }
+}
+
+pub async fn wait_for_readiness_ports(
+    ports: &[u16],
+    host: &str,
+    probe: ReadinessProbe,
+    requirement: ReadinessRequirement,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> Result<(), ReadinessError> {
+    let endpoints = build_endpoints_with_host(ports, host, "/")?;
+    wait_readiness(&endpoints, probe, requirement, timeout, poll_interval).await
 }
 
 pub async fn wait_until_stable<F, Fut>(
@@ -221,60 +296,77 @@ where
             return Err(ReadinessError::StabilizationTimeout { timeout, details });
         }
 
-        tokio::time::sleep(poll_interval).await;
+        sleep(poll_interval).await;
     }
 }
 
 pub async fn wait_http_readiness(
     endpoints: &[Url],
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), ReadinessError> {
     wait_http_readiness_with_timeout(endpoints, requirement, None).await
 }
 
 pub async fn wait_http_readiness_with_timeout(
     endpoints: &[Url],
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
     timeout: Option<Duration>,
 ) -> Result<(), ReadinessError> {
-    wait_http_readiness_with_config(
+    probe_http_endpoints(
         endpoints,
         requirement,
-        timeout.unwrap_or(DEFAULT_TIMEOUT),
-        DEFAULT_POLL_INTERVAL,
+        timeout.unwrap_or(DEFAULT_READINESS_TIMEOUT),
+        DEFAULT_READINESS_POLL_INTERVAL,
     )
     .await
 }
 
-async fn wait_http_readiness_with_config(
+async fn probe_http_endpoints(
     endpoints: &[Url],
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
     timeout: Duration,
     poll_interval: Duration,
 ) -> Result<(), ReadinessError> {
+    let client = Client::new();
+    poll_readiness(endpoints, requirement, timeout, poll_interval, || {
+        collect_http_statuses(&client, endpoints)
+    })
+    .await
+}
+
+async fn poll_readiness<F, Fut>(
+    endpoints: &[Url],
+    requirement: ReadinessRequirement,
+    timeout_duration: Duration,
+    poll_interval: Duration,
+    mut probe: F,
+) -> Result<(), ReadinessError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Vec<ProbeStatus>>,
+{
     if endpoints.is_empty() {
         return Ok(());
     }
 
-    let timeout = adjust_timeout(timeout);
+    let timeout_duration = adjust_timeout(timeout_duration);
     let poll_interval = poll_interval.max(Duration::from_millis(1));
-    let deadline = Instant::now() + timeout;
-    let client = Client::new();
+    let deadline = Instant::now() + timeout_duration;
     let mut last_statuses = None;
 
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            return Err(http_probe_timeout(
+            return Err(probe_timeout(
                 last_statuses.as_deref(),
                 requirement,
-                timeout,
+                timeout_duration,
             ));
         }
 
-        let statuses = tokio::time::timeout(remaining, collect_http_statuses(&client, endpoints))
+        let statuses = timeout(remaining, probe())
             .await
-            .map_err(|_| http_probe_timeout(last_statuses.as_deref(), requirement, timeout))?;
+            .map_err(|_| probe_timeout(last_statuses.as_deref(), requirement, timeout_duration))?;
         if requirement_satisfied(&statuses, requirement) {
             return Ok(());
         }
@@ -282,24 +374,24 @@ async fn wait_http_readiness_with_config(
         last_statuses = Some(statuses);
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            return Err(http_probe_timeout(
+            return Err(probe_timeout(
                 last_statuses.as_deref(),
                 requirement,
-                timeout,
+                timeout_duration,
             ));
         }
-        tokio::time::sleep(poll_interval.min(remaining)).await;
+        sleep(poll_interval.min(remaining)).await;
     }
 }
 
-fn http_probe_timeout(
-    statuses: Option<&[HttpProbeStatus]>,
-    requirement: HttpReadinessRequirement,
+fn probe_timeout(
+    statuses: Option<&[ProbeStatus]>,
+    requirement: ReadinessRequirement,
     timeout: Duration,
 ) -> ReadinessError {
     let message = statuses.map_or_else(
         || format!("timed out after {timeout:?} waiting for readiness {requirement:?}"),
-        |statuses| format_http_timeout_message(statuses, requirement),
+        |statuses| format_timeout_message(statuses, requirement),
     );
     ReadinessError::ProbeTimeout { message }
 }
@@ -325,7 +417,7 @@ pub async fn wait_for_http_ports_with_timeout(
 pub async fn wait_for_http_ports_with_requirement(
     ports: &[u16],
     endpoint_path: &str,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), ReadinessError> {
     wait_for_http_ports_with_requirement_and_timeout(ports, endpoint_path, requirement, None).await
 }
@@ -333,7 +425,7 @@ pub async fn wait_for_http_ports_with_requirement(
 pub async fn wait_for_http_ports_with_requirement_and_timeout(
     ports: &[u16],
     endpoint_path: &str,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
     timeout: Option<Duration>,
 ) -> Result<(), ReadinessError> {
     let endpoints = build_local_endpoints(ports, endpoint_path)?;
@@ -358,7 +450,7 @@ pub async fn wait_for_http_ports_with_host_and_requirement(
     ports: &[u16],
     host: &str,
     endpoint_path: &str,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), ReadinessError> {
     let endpoints = build_endpoints_with_host(ports, host, endpoint_path)?;
     wait_http_readiness(&endpoints, requirement).await
@@ -368,16 +460,16 @@ pub async fn wait_for_http_ports_with_host_and_config(
     ports: &[u16],
     host: &str,
     endpoint_path: &str,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
     timeout: Duration,
     poll_interval: Duration,
 ) -> Result<(), ReadinessError> {
     let endpoints = build_endpoints_with_host(ports, host, endpoint_path)?;
-    wait_http_readiness_with_config(&endpoints, requirement, timeout, poll_interval).await
+    probe_http_endpoints(&endpoints, requirement, timeout, poll_interval).await
 }
 
-const fn default_readiness_requirement() -> HttpReadinessRequirement {
-    HttpReadinessRequirement::AllNodesReady
+const fn default_readiness_requirement() -> ReadinessRequirement {
+    ReadinessRequirement::AllNodesReady
 }
 
 #[cfg(test)]
@@ -388,6 +480,8 @@ mod tests {
         thread,
         time::{Duration, Instant},
     };
+
+    use tokio::net::TcpSocket;
 
     use super::*;
 
@@ -407,7 +501,7 @@ mod tests {
             &[port],
             LOCALHOST,
             "/ready",
-            HttpReadinessRequirement::AllNodesReady,
+            ReadinessRequirement::AllNodesReady,
             Duration::from_millis(50),
             Duration::from_millis(5),
         )
@@ -415,5 +509,107 @@ mod tests {
 
         assert!(matches!(result, Err(ReadinessError::ProbeTimeout { .. })));
         assert!(started.elapsed() < Duration::from_millis(500));
+    }
+
+    #[tokio::test]
+    async fn tcp_readiness_does_not_require_an_http_response() {
+        let listener = TcpListener::bind((LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        wait_for_readiness_ports(
+            &[port],
+            LOCALHOST,
+            ReadinessProbe::Tcp,
+            ReadinessRequirement::AllNodesReady,
+            Duration::from_millis(200),
+            Duration::from_millis(5),
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn tcp_readiness_respects_node_counts_and_reports_failures() {
+        let listener = TcpListener::bind((LOCALHOST, 0)).unwrap();
+        let ready_port = listener.local_addr().unwrap().port();
+        // Reserve a port without listening so another test cannot take it.
+        let closed = TcpSocket::new_v4().unwrap();
+        closed
+            .bind(format!("{LOCALHOST}:0").parse().unwrap())
+            .unwrap();
+        let closed_port = closed.local_addr().unwrap().port();
+        let ports = [ready_port, closed_port];
+
+        for requirement in [
+            ReadinessRequirement::AnyNodeReady,
+            ReadinessRequirement::AtLeast(1),
+        ] {
+            wait_for_readiness_ports(
+                &ports,
+                LOCALHOST,
+                ReadinessProbe::Tcp,
+                requirement,
+                Duration::from_millis(200),
+                Duration::from_millis(5),
+            )
+            .await
+            .unwrap();
+        }
+
+        for requirement in [
+            ReadinessRequirement::AllNodesReady,
+            ReadinessRequirement::AtLeast(2),
+        ] {
+            let error = wait_for_readiness_ports(
+                &ports,
+                LOCALHOST,
+                ReadinessProbe::Tcp,
+                requirement,
+                Duration::from_millis(300),
+                Duration::from_millis(5),
+            )
+            .await
+            .unwrap_err();
+
+            let message = error.to_string();
+            assert!(message.contains("ready=1"), "{message}");
+            assert!(message.contains(&closed_port.to_string()), "{message}");
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_http_probe_uses_the_selected_path() {
+        use std::io::Write as _;
+
+        let listener = TcpListener::bind((LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = [0_u8; 1024];
+            let length = stream.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..length]);
+            assert!(request.starts_with("GET /custom-ready "), "{request}");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+        });
+
+        wait_for_readiness_ports(
+            &[port],
+            LOCALHOST,
+            ReadinessProbe::Http {
+                path: "custom-ready",
+            },
+            ReadinessRequirement::AllNodesReady,
+            Duration::from_secs(2),
+            Duration::from_millis(5),
+        )
+        .await
+        .unwrap();
+
+        server.join().unwrap();
     }
 }

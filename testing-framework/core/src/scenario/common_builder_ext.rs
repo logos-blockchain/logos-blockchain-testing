@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use super::{
-    Application, CleanupPolicy, DeploymentPolicy, Expectation, HttpReadinessRequirement,
-    RetryPolicy, RuntimeExtensionFactory, Workload, internal::CoreBuilderAccess,
+    Application, CleanupPolicy, DeploymentPolicy, Expectation, ReadinessRequirement, RetryPolicy,
+    RuntimeExtensionFactory, Workload, internal::CoreBuilderAccess,
 };
 use crate::{
     observation::{
@@ -118,8 +118,14 @@ pub trait CoreBuilderExt: CoreBuilderAccess + Sized {
     }
 
     #[must_use]
-    fn with_http_readiness_requirement(self, requirement: HttpReadinessRequirement) -> Self {
+    fn with_readiness_requirement(self, requirement: ReadinessRequirement) -> Self {
         self.map_core_builder(|builder| builder.with_http_readiness_requirement(requirement))
+    }
+
+    /// Compatibility name for the transport-independent readiness requirement.
+    #[must_use]
+    fn with_http_readiness_requirement(self, requirement: ReadinessRequirement) -> Self {
+        self.with_readiness_requirement(requirement)
     }
 
     #[must_use]
@@ -138,17 +144,17 @@ pub trait CoreBuilderExt: CoreBuilderAccess + Sized {
 
     #[must_use]
     fn with_http_readiness_all(self) -> Self {
-        self.with_http_readiness_requirement(HttpReadinessRequirement::AllNodesReady)
+        self.with_http_readiness_requirement(ReadinessRequirement::AllNodesReady)
     }
 
     #[must_use]
     fn with_http_readiness_any(self) -> Self {
-        self.with_http_readiness_requirement(HttpReadinessRequirement::AnyNodeReady)
+        self.with_http_readiness_requirement(ReadinessRequirement::AnyNodeReady)
     }
 
     #[must_use]
     fn with_http_readiness_at_least(self, min_ready_nodes: usize) -> Self {
-        self.with_http_readiness_requirement(HttpReadinessRequirement::AtLeast(min_ready_nodes))
+        self.with_http_readiness_requirement(ReadinessRequirement::AtLeast(min_ready_nodes))
     }
 
     #[must_use]

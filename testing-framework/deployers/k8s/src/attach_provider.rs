@@ -11,14 +11,14 @@ use kube::{
     api::{ListParams, ObjectList},
 };
 use testing_framework_core::scenario::{
-    CleanupGuard, ClusterWaitHandle, DynError, ExistingCluster, HttpReadinessRequirement,
-    wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+    CleanupGuard, ClusterWaitHandle, DEFAULT_READINESS_POLL_INTERVAL, DEFAULT_READINESS_TIMEOUT,
+    DynError, ExistingCluster, ReadinessRequirement, wait_for_readiness_ports, wait_readiness,
 };
 use tokio::net::TcpStream;
 use url::Url;
 
 use crate::{
-    env::{K8sDeployEnv, node_readiness_path},
+    env::K8sDeployEnv,
     host::node_host,
     lifecycle::wait::{
         ForwardSpec, PortForwardHandle, PortForwardSpawn, port_forward_service, respawn_forward,
@@ -260,9 +260,16 @@ impl<E: K8sDeployEnv> K8sAttachedClusterWait<E> {
         let services =
             discover_services(&self.client, request.namespace, request.label_selector).await?;
         let host = node_host();
-        let endpoints = collect_readiness_endpoints::<E>(&host, &services.items)?;
+        let endpoints = collect_readiness_endpoints(&host, &services.items)?;
 
-        wait_http_readiness(&endpoints, HttpReadinessRequirement::AllNodesReady).await?;
+        wait_readiness(
+            &endpoints,
+            E::node_readiness_probe(),
+            ReadinessRequirement::AllNodesReady,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
+        )
+        .await?;
 
         Ok(())
     }
@@ -597,16 +604,16 @@ impl<E: K8sDeployEnv> ClusterWaitHandle<E> for K8sAttachedClusterWait<E> {
     async fn wait_network_ready(&self) -> Result<(), DynError> {
         match &self.access {
             AttachedAccess::Direct => self.wait_direct_network_ready().await,
-            AttachedAccess::Forwarded { forwards } => {
-                wait_for_http_ports_with_host_and_requirement(
-                    &forwards.local_api_ports(),
-                    LOCALHOST,
-                    node_readiness_path::<E>(),
-                    HttpReadinessRequirement::AllNodesReady,
-                )
-                .await
-                .map_err(Into::into)
-            }
+            AttachedAccess::Forwarded { forwards } => wait_for_readiness_ports(
+                &forwards.local_api_ports(),
+                LOCALHOST,
+                E::node_readiness_probe(),
+                ReadinessRequirement::AllNodesReady,
+                DEFAULT_READINESS_TIMEOUT,
+                DEFAULT_READINESS_POLL_INTERVAL,
+            )
+            .await
+            .map_err(Into::into),
         }
     }
 }
@@ -626,16 +633,12 @@ fn k8s_wait_request(source: &ExistingCluster) -> Result<K8sAttachRequest<'_>, Dy
     })
 }
 
-fn collect_readiness_endpoints<E: K8sDeployEnv>(
-    host: &str,
-    services: &[Service],
-) -> Result<Vec<Url>, DynError> {
+fn collect_readiness_endpoints(host: &str, services: &[Service]) -> Result<Vec<Url>, DynError> {
     let mut endpoints = Vec::with_capacity(services.len());
 
     for service in services {
         let api_port = extract_api_node_port(service)?;
-        let mut endpoint = Url::parse(&format!("http://{host}:{api_port}/"))?;
-        endpoint.set_path(node_readiness_path::<E>());
+        let endpoint = Url::parse(&format!("http://{host}:{api_port}/"))?;
         endpoints.push(endpoint);
     }
 

@@ -8,8 +8,8 @@ use std::{
 
 use testing_framework_core::scenario::{
     ClusterControlProfile, ClusterControlRequest, ClusterProvisioner, ClusterRequest,
-    ClusterSource, ClusterStartMode, ClusterUnit, DeploymentPolicy, DynError,
-    HttpReadinessRequirement, NodeClients, ProvisionedCluster, RetryPolicy,
+    ClusterSource, ClusterStartMode, ClusterUnit, DeploymentPolicy, DynError, NodeClients,
+    ProvisionedCluster, ReadinessRequirement, RetryPolicy,
 };
 use tokio_retry::{
     RetryIf,
@@ -33,7 +33,7 @@ struct RetryExecutionConfig {
     max_attempts: usize,
     keep_tempdir: bool,
     readiness_enabled: bool,
-    readiness_requirement: HttpReadinessRequirement,
+    readiness_requirement: ReadinessRequirement,
 }
 
 #[derive(Debug, thiserror::Error)]

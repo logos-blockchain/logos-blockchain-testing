@@ -5,8 +5,8 @@ use thiserror::Error;
 use super::builder::Builder;
 use crate::{
     scenario::{
-        Application, ClusterControlSummary, DeploymentPolicy, DynError, HttpReadinessRequirement,
-        NodeClients,
+        Application, ClusterControlSummary, DeploymentPolicy, DynError, NodeClients,
+        ReadinessRequirement,
         expectation::Expectation,
         runtime::{
             CleanupGuard, RuntimeExtensionFactory, RuntimeExtensions, prepare_runtime_extensions,
@@ -90,7 +90,7 @@ impl<E: Application> Scenario<E> {
     }
 
     #[must_use]
-    pub const fn http_readiness_requirement(&self) -> HttpReadinessRequirement {
+    pub const fn http_readiness_requirement(&self) -> ReadinessRequirement {
         self.deployment_policy.readiness_requirement
     }
 
@@ -137,7 +137,7 @@ impl<E: Application> Builder<E> {
     }
 
     #[must_use]
-    pub const fn http_readiness_requirement(&self) -> HttpReadinessRequirement {
+    pub const fn http_readiness_requirement(&self) -> ReadinessRequirement {
         self.deployment_policy.readiness_requirement
     }
 

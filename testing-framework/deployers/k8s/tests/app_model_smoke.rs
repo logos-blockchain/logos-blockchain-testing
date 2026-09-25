@@ -17,7 +17,7 @@ use testing_framework_core::{
     scenario::{
         Application, ClusterControlRequest, ClusterHandle, ClusterNodeConfigApplication,
         ClusterNodeView, ClusterPeerView, ClusterRequest, DynError, NodeAccess, NodeClients,
-        serialize_cluster_yaml_config,
+        ReadinessProbe, serialize_cluster_yaml_config,
     },
     topology::ClusterTopology,
 };
@@ -43,10 +43,10 @@ struct SmokeNodeConfig {
 
 /// Minimal test-only environment deploying the kvstore example image through
 /// the standard binary+config k8s path.
-struct SmokeEnv;
+struct SmokeEnv<const TCP: bool>;
 
 #[async_trait::async_trait]
-impl Application for SmokeEnv {
+impl<const TCP: bool> Application for SmokeEnv<TCP> {
     type Deployment = ClusterTopology;
     type NodeClient = String;
     type NodeConfig = SmokeNodeConfig;
@@ -55,12 +55,18 @@ impl Application for SmokeEnv {
         Ok(access.api_base_url()?.to_string())
     }
 
-    fn node_readiness_path() -> &'static str {
-        "/health/ready"
+    fn node_readiness_probe() -> ReadinessProbe {
+        if TCP {
+            ReadinessProbe::Tcp
+        } else {
+            ReadinessProbe::Http {
+                path: "/health/ready",
+            }
+        }
     }
 }
 
-impl ClusterNodeConfigApplication for SmokeEnv {
+impl<const TCP: bool> ClusterNodeConfigApplication for SmokeEnv<TCP> {
     type ConfigError = IoError;
 
     fn static_network_port() -> u16 {
@@ -94,7 +100,7 @@ impl ClusterNodeConfigApplication for SmokeEnv {
     }
 }
 
-impl K8sBinaryApp for SmokeEnv {
+impl<const TCP: bool> K8sBinaryApp for SmokeEnv<TCP> {
     fn k8s_binary_spec() -> BinaryConfigK8sSpec {
         BinaryConfigK8sSpec::conventional(
             "k8s-app-smoke",
@@ -113,6 +119,15 @@ fn cluster_required() -> bool {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn app_model_smoke() -> Result<()> {
+    run_app_model_smoke::<false>().await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn app_model_tcp_readiness() -> Result<()> {
+    run_app_model_smoke::<true>().await
+}
+
+async fn run_app_model_smoke<const TCP: bool>() -> Result<()> {
     if !cluster_required() {
         eprintln!(
             "skipping k8s app-model smoke test; set K8S_RUNNER_REQUIRE_CLUSTER=1 with a \
@@ -127,14 +142,14 @@ async fn app_model_smoke() -> Result<()> {
         K8sClusterProvisioner,
     );
 
-    let handle: ClusterHandle<SmokeEnv> = ctx
-        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(2)).with_name("alpha"))
+    let handle: ClusterHandle<SmokeEnv<TCP>> = ctx
+        .deploy(ClusterApp::<SmokeEnv<TCP>>::new(ClusterTopology::new(2)).with_name("alpha"))
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("deploying the smoke cluster through the app model")?;
 
-    let sibling: ClusterHandle<SmokeEnv> = ctx
-        .deploy(ClusterApp::<SmokeEnv>::new(ClusterTopology::new(1)).with_name("beta"))
+    let sibling: ClusterHandle<SmokeEnv<TCP>> = ctx
+        .deploy(ClusterApp::<SmokeEnv<TCP>>::new(ClusterTopology::new(1)).with_name("beta"))
         .await
         .map_err(|source| anyhow!(source.to_string()))
         .context("deploying a sibling cluster into its own namespace")?;
@@ -211,7 +226,7 @@ async fn app_model_smoke() -> Result<()> {
         anyhow!("the managed cluster handle must expose an attachment descriptor")
     })?;
 
-    let attached: ClusterHandle<SmokeEnv> = ctx
+    let attached: ClusterHandle<SmokeEnv<TCP>> = ctx
         .deploy_cluster(
             ClusterRequest::attached(attachment).with_control(ClusterControlRequest::Full),
         )

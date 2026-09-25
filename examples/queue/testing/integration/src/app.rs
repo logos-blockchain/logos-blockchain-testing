@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use testing_framework_app::{AppDeployment, AppHostEnv, ClusterApp, DeployContext};
 use testing_framework_core::scenario::{
     Application, ClusterHandle, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView,
-    DynError, NodeAccess, serialize_cluster_yaml_config,
+    DynError, NodeAccess, ReadinessProbe, serialize_cluster_yaml_config,
 };
 
 pub type QueueTopology = testing_framework_core::topology::ClusterTopology;
@@ -36,8 +36,10 @@ impl Application for QueueEnv {
         Ok(QueueHttpClient::new(access.api_base_url()?))
     }
 
-    fn node_readiness_path() -> &'static str {
-        "/health/ready"
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Http {
+            path: "/health/ready",
+        }
     }
 }
 
