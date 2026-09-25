@@ -1,11 +1,12 @@
 use std::{
+    io::{Error, ErrorKind},
     net::TcpListener,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 
 use testing_framework_core::{
-    scenario::{Application, DynError, ReadinessProbe, ReadinessRequirement},
+    scenario::{Application, DynError, NodeAccess, ReadinessProbe, ReadinessRequirement},
     topology::DeploymentDescriptor,
 };
 
@@ -40,6 +41,10 @@ impl Application for TcpEnv {
     type Deployment = DummyTopology;
     type NodeClient = ();
     type NodeConfig = DummyConfig;
+
+    fn build_node_client(_access: &NodeAccess) -> Result<(), DynError> {
+        Err(Error::new(ErrorKind::PermissionDenied, "client credentials missing").into())
+    }
 
     fn node_readiness_probe() -> ReadinessProbe {
         ReadinessProbe::Tcp
@@ -263,4 +268,12 @@ fn named_ports_are_allocated_on_demand_and_reused() -> Result<(), DynError> {
     assert_eq!(ports.require("http")?, http);
     assert_ne!(ports.allocate("metrics")?, http);
     Ok(())
+}
+
+#[test]
+fn client_construction_preserves_the_original_error() {
+    let error = TcpEnv::node_client(&NodeEndpoints::from_api_port(1234)).unwrap_err();
+    let error = error.downcast_ref::<Error>().expect("original error type");
+    assert_eq!(error.kind(), ErrorKind::PermissionDenied);
+    assert_eq!(error.to_string(), "client credentials missing");
 }

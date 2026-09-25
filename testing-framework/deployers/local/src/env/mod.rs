@@ -159,25 +159,9 @@ where
         Err(std::io::Error::other("node_endpoints is not implemented for this app").into())
     }
 
-    /// Builds a node client directly from the API endpoint when the default
-    /// `NodeAccess`-based path is not suitable.
-    fn node_client_from_api_endpoint(_api: SocketAddr) -> Option<Self::NodeClient> {
-        None
-    }
-
     /// Builds a node client from discovered local endpoints.
     fn node_client(endpoints: &NodeEndpoints) -> Result<Self::NodeClient, DynError> {
-        if let Ok(client) =
-            <Self as Application>::build_node_client(&discovered_node_access(endpoints))
-        {
-            return Ok(client);
-        }
-
-        if let Some(client) = Self::node_client_from_api_endpoint(endpoints.api) {
-            return Ok(client);
-        }
-
-        Err(std::io::Error::other("node_client is not implemented for this app").into())
+        <Self as Application>::build_node_client(&discovered_node_access(endpoints))
     }
 
     /// Waits for any additional cluster-specific stabilization after the
