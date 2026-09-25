@@ -27,14 +27,14 @@ pub struct PreparedNode<Config> {
     pub network_port: u16,
 }
 
-/// Reserved local ports assigned to one node.
+/// Allocated local ports assigned to one node.
 pub struct LocalNodePorts {
     network_port: u16,
     named_ports: HashMap<&'static str, u16>,
 }
 
 impl LocalNodePorts {
-    /// Returns the reserved network port.
+    /// Returns the allocated network port.
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
@@ -51,19 +51,19 @@ impl LocalNodePorts {
         Ok(port)
     }
 
-    /// Returns a reserved named port, if present.
+    /// Returns an allocated named port, if present.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<u16> {
         self.named_ports.get(name).copied()
     }
 
-    /// Returns a reserved named port or an error if it is missing.
+    /// Returns an allocated named port or an error if it is missing.
     pub fn require(&self, name: &str) -> Result<u16, DynError> {
         self.get(name)
-            .ok_or_else(|| format!("missing reserved local port '{name}'").into())
+            .ok_or_else(|| format!("missing allocated local port '{name}'").into())
     }
 
-    /// Iterates over all reserved named ports.
+    /// Iterates over all allocated named ports.
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, u16)> + '_ {
         self.named_ports.iter().map(|(name, port)| (*name, *port))
     }
@@ -107,7 +107,7 @@ impl LocalPeerNode {
         self.index
     }
 
-    /// Returns the peer's reserved network port.
+    /// Returns the peer's allocated network port.
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
@@ -225,7 +225,7 @@ impl LocalProcessSpec {
     }
 }
 
-/// Preallocates `count` local TCP ports for later use.
+/// Selects `count` local TCP/UDP ports for later use without holding sockets.
 pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessSpawnError> {
     (0..count)
         .map(|_| allocate_available_port())
@@ -235,8 +235,10 @@ pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessS
         })
 }
 
-/// Reserves network and named ports for `count` local nodes.
-pub fn reserve_local_node_ports(
+/// Allocates network and named ports for `count` local nodes.
+/// Ports are checked for TCP and UDP availability, but are not held until
+/// launch.
+pub fn allocate_local_node_ports(
     count: usize,
     names: &[&'static str],
     label: &str,
@@ -340,14 +342,14 @@ pub fn build_generated_initial_nodes<E>(
 where
     E: Application,
 {
-    let mut reserved_ports = reserve_local_node_ports(topology.node_count(), &[], "node")?;
-    let peer_ports = reserved_ports
+    let mut allocated_ports = allocate_local_node_ports(topology.node_count(), &[], "node")?;
+    let peer_ports = allocated_ports
         .iter()
         .map(LocalNodePorts::network_port)
         .collect::<Vec<_>>();
     let options = testing_framework_core::scenario::StartNodeOptions::<E>::default();
 
-    reserved_ports
+    allocated_ports
         .iter_mut()
         .enumerate()
         .map(|(index, ports)| {

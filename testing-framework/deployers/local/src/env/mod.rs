@@ -22,9 +22,9 @@ mod tests;
 
 pub use helpers::{
     LocalConfigArgMode, LocalNodePorts, LocalPeerNode, LocalProcessSpec, PreparedNode,
-    build_indexed_http_peers, build_launch_spec_with_args, build_local_cluster_node_config,
-    build_local_peer_nodes, default_yaml_launch_spec, discovered_node_access, preallocate_ports,
-    reserve_local_node_ports, single_http_node_endpoints, text_config_launch_spec,
+    allocate_local_node_ports, build_indexed_http_peers, build_launch_spec_with_args,
+    build_local_cluster_node_config, build_local_peer_nodes, default_yaml_launch_spec,
+    discovered_node_access, preallocate_ports, single_http_node_endpoints, text_config_launch_spec,
     text_node_config, yaml_config_launch_spec, yaml_node_config,
 };
 
@@ -34,7 +34,7 @@ pub struct LocalBuildContext<'a, E: Application> {
     pub topology: &'a E::Deployment,
     /// Zero-based node index being built.
     pub index: usize,
-    /// Reserved local ports assigned to this node.
+    /// Allocated local ports assigned to this node.
     pub ports: &'a mut LocalNodePorts,
     /// Peer nodes visible to this node after excluding `index`.
     pub peers: &'a [LocalPeerNode],
@@ -96,7 +96,7 @@ where
         None
     }
 
-    /// Builds the executable, files, and arguments for this node.
+    /// Builds the full launch spec for a local node process.
     async fn build_launch_spec(
         config: &Self::NodeConfig,
         dir: &Path,
@@ -207,11 +207,11 @@ pub(crate) fn build_node_from_template<E: LocalDeployerEnv>(
     peers: &[LocalPeerNode],
     template_config: Option<&E::NodeConfig>,
 ) -> Result<PreparedNode<E::NodeConfig>, DynError> {
-    let mut reserved =
-        reserve_local_node_ports(1, &[], "node").map_err(|source| -> DynError { source.into() })?;
-    let mut ports = reserved
+    let mut allocated = allocate_local_node_ports(1, &[], "node")
+        .map_err(|source| -> DynError { source.into() })?;
+    let mut ports = allocated
         .pop()
-        .ok_or_else(|| std::io::Error::other("failed to reserve local node ports"))?;
+        .ok_or_else(|| std::io::Error::other("failed to allocate local node ports"))?;
     E::build_node_config(LocalBuildContext {
         topology,
         index,
