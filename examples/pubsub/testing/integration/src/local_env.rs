@@ -1,20 +1,22 @@
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    LocalBinaryApp, LocalBuildContext, LocalProcessSpec, build_local_cluster_node_config,
-    yaml_node_config,
+    LocalBinaryApp, LocalBuildContext, LocalProcessSpec, PreparedNode,
+    build_local_cluster_node_config, yaml_node_config,
 };
 
 use crate::{PubSubEnv, PubSubNodeConfig};
 
 impl LocalBinaryApp for PubSubEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "pubsub-node"
-    }
-
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<PubSubNodeConfig, DynError> {
-        build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)
+    ) -> Result<PreparedNode<PubSubNodeConfig>, DynError> {
+        let config =
+            build_local_cluster_node_config::<Self>(context.index, context.ports, context.peers)?;
+        Ok(PreparedNode {
+            name: format!("pubsub-node-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
+        })
     }
 
     fn local_process_spec() -> LocalProcessSpec {

@@ -145,6 +145,7 @@ pub enum ProcessSpawnError {
 
 pub struct ProcessNode<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'static>
 {
+    name: String,
     child: Child,
     tempdir: TempDir,
     keep_tempdir: bool,
@@ -157,6 +158,10 @@ pub struct ProcessNode<Config: Clone + Send + Sync + 'static, Client: Clone + Se
 impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'static>
     ProcessNode<Config, Client>
 {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub const fn config(&self) -> &Config {
         &self.config
     }
@@ -263,6 +268,7 @@ impl<Config: Clone + Send + Sync + 'static, Client: Clone + Send + Sync + 'stati
         let child = spawn_child_for_launch(tempdir.path(), &launch).await?;
 
         Ok(Self {
+            name: label.to_owned(),
             child,
             tempdir,
             keep_tempdir,

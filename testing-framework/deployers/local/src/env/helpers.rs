@@ -12,12 +12,15 @@ use testing_framework_core::{
 use crate::{
     binary::{BinaryProvider, BinaryProviderRef, EnvBinaryProvider, PathBinaryProvider},
     env::LocalBuildContext,
-    process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError},
+    process::{
+        LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError, allocate_available_port,
+    },
 };
 
-/// Result of building a local node config together with the node's reserved
-/// network port.
-pub struct BuiltNodeConfig<Config> {
+/// Application config and runtime metadata prepared for one local node.
+pub struct PreparedNode<Config> {
+    /// Default node name, used unless the caller supplies one.
+    pub name: String,
     /// Materialized node config value.
     pub config: Config,
     /// Reserved network port used for peer traffic.
@@ -43,6 +46,17 @@ impl LocalNodePorts {
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
+    }
+
+    /// Allocates a named port on first use, returning the same port on later
+    /// calls.
+    pub fn allocate(&mut self, name: &'static str) -> Result<u16, DynError> {
+        if let Some(port) = self.get(name) {
+            return Ok(port);
+        }
+        let port = allocate_available_port()?;
+        self.named_ports.insert(name, port);
+        Ok(port)
     }
 
     /// Returns a reserved named port, if present.
@@ -198,7 +212,7 @@ impl LocalProcessSpec {
 /// Preallocates `count` local TCP ports for later use.
 pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessSpawnError> {
     (0..count)
-        .map(|_| crate::process::allocate_available_port())
+        .map(|_| allocate_available_port())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|source| ProcessSpawnError::Config {
             source: format!("failed to pre-allocate {label} ports: {source}").into(),
@@ -324,15 +338,12 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
 /// Generates the initial local node configs for one deployment.
 pub fn build_generated_initial_nodes<E>(
     topology: &E::Deployment,
-    node_name_prefix: &str,
-    port_names: &[&'static str],
-    build_node: impl Fn(LocalBuildContext<'_, E>) -> Result<BuiltNodeConfig<E::NodeConfig>, DynError>,
+    build_node: impl Fn(LocalBuildContext<'_, E>) -> Result<PreparedNode<E::NodeConfig>, DynError>,
 ) -> Result<Vec<NodeConfigEntry<E::NodeConfig>>, ProcessSpawnError>
 where
     E: Application,
 {
-    let reserved_ports =
-        reserve_local_node_ports(topology.node_count(), port_names, node_name_prefix)?;
+    let mut reserved_ports = reserve_local_node_ports(topology.node_count(), &[], "node")?;
     let peer_ports = reserved_ports
         .iter()
         .map(LocalNodePorts::network_port)
@@ -341,7 +352,7 @@ where
     let options = testing_framework_core::scenario::StartNodeOptions::<E>::default();
 
     reserved_ports
-        .iter()
+        .iter_mut()
         .enumerate()
         .map(|(index, ports)| {
             let peers = build_local_peer_nodes(&peer_ports, index);
@@ -358,7 +369,7 @@ where
             .map_err(|source| ProcessSpawnError::Config { source })?;
 
             Ok(NodeConfigEntry {
-                name: format!("{node_name_prefix}-{index}"),
+                name: built.name,
                 config: built.config,
             })
         })

@@ -5,25 +5,21 @@ use std::{
 
 use testing_framework_core::scenario::DynError;
 use testing_framework_runner_local::{
-    BuiltNodeConfig, LocalBuildContext, LocalDeployerEnv, LocalProcessSpec, NodeEndpointPort,
-    NodeEndpoints, build_local_cluster_node_config, env::Node, text_node_config,
+    LocalBuildContext, LocalDeployerEnv, LocalProcessSpec, NodeEndpointPort, NodeEndpoints,
+    PreparedNode, build_local_cluster_node_config, env::Node, text_node_config,
 };
 
 use crate::{CLUSTER_PORT_KEY, NatsEnv, NatsNodeConfig, render_nats_config};
 
 impl LocalDeployerEnv for NatsEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "nats-node"
-    }
-
-    fn initial_local_port_names() -> &'static [&'static str] {
-        &["client", "monitor"]
-    }
-
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<BuiltNodeConfig<NatsNodeConfig>, DynError> {
-        Ok(BuiltNodeConfig {
+    ) -> Result<PreparedNode<NatsNodeConfig>, DynError> {
+        context.ports.allocate("client")?;
+        context.ports.allocate("monitor")?;
+
+        Ok(PreparedNode {
+            name: format!("nats-node-{}", context.index),
             config: build_local_cluster_node_config::<Self>(
                 context.index,
                 context.ports,

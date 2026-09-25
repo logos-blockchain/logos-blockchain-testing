@@ -50,7 +50,7 @@ impl Application for TcpEnv {
 impl LocalDeployerEnv for DummyEnv {
     fn build_node_config(
         _context: crate::LocalBuildContext<'_, Self>,
-    ) -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+    ) -> Result<PreparedNode<DummyConfig>, DynError> {
         build_dummy_node()
     }
 
@@ -85,12 +85,12 @@ impl LocalDeployerEnv for DummyEnv {
 impl LocalDeployerEnv for TcpEnv {
     fn build_node_config(
         _context: LocalBuildContext<'_, Self>,
-    ) -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+    ) -> Result<PreparedNode<DummyConfig>, DynError> {
         unreachable!("readiness tests do not build node configs")
     }
 }
 
-fn build_dummy_node() -> Result<BuiltNodeConfig<DummyConfig>, DynError> {
+fn build_dummy_node() -> Result<PreparedNode<DummyConfig>, DynError> {
     unreachable!("not used in this test")
 }
 
@@ -169,19 +169,13 @@ impl Application for ConfigEnv {
 
 #[async_trait::async_trait]
 impl LocalBinaryApp for ConfigEnv {
-    fn initial_node_name_prefix() -> &'static str {
-        "config"
-    }
-
-    fn initial_local_port_names() -> &'static [&'static str] {
-        &["api"]
-    }
-
-    fn build_node_config(context: LocalBuildContext<'_, Self>) -> Result<PreparedConfig, DynError> {
-        Ok(PreparedConfig {
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<PreparedConfig>, DynError> {
+        let config = PreparedConfig {
             index: context.index,
             network_port: context.ports.network_port(),
-            api_port: context.ports.require("api")?,
+            api_port: context.ports.allocate("api")?,
             peers: context
                 .peers
                 .iter()
@@ -190,6 +184,11 @@ impl LocalBinaryApp for ConfigEnv {
             value: context
                 .template_config
                 .map_or_else(|| "initial".into(), |config| config.value.clone()),
+        };
+        Ok(PreparedNode {
+            name: format!("config-{}", context.index),
+            config,
+            network_port: context.ports.network_port(),
         })
     }
 
@@ -251,5 +250,17 @@ fn individual_config_receives_template_and_current_peers() -> Result<(), DynErro
     );
     assert_eq!(built.network_port, built.config.network_port);
     assert_ne!(built.config.network_port, built.config.api_port);
+    Ok(())
+}
+
+#[test]
+fn named_ports_are_allocated_on_demand_and_reused() -> Result<(), DynError> {
+    let mut ports = reserve_local_node_ports(1, &[], "node")?;
+    let ports = &mut ports[0];
+    assert_eq!(ports.get("http"), None);
+    let http = ports.allocate("http")?;
+    assert_eq!(ports.allocate("http")?, http);
+    assert_eq!(ports.require("http")?, http);
+    assert_ne!(ports.allocate("metrics")?, http);
     Ok(())
 }

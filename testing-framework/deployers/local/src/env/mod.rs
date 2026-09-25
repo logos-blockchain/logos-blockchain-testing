@@ -21,8 +21,8 @@ mod helpers;
 mod tests;
 
 pub use helpers::{
-    BuiltNodeConfig, LocalConfigArgMode, LocalNodePorts, LocalPeerNode, LocalProcessSpec,
-    NodeConfigEntry, build_indexed_http_peers, build_indexed_node_configs,
+    LocalConfigArgMode, LocalNodePorts, LocalPeerNode, LocalProcessSpec, NodeConfigEntry,
+    PreparedNode, build_indexed_http_peers, build_indexed_node_configs,
     build_launch_spec_with_args, build_local_cluster_node_config, build_local_peer_nodes,
     default_yaml_launch_spec, discovered_node_access, preallocate_ports, reserve_local_node_ports,
     single_http_node_endpoints, text_config_launch_spec, text_node_config, yaml_config_launch_spec,
@@ -36,7 +36,7 @@ pub struct LocalBuildContext<'a, E: Application> {
     /// Zero-based node index being built.
     pub index: usize,
     /// Reserved local ports assigned to this node.
-    pub ports: &'a LocalNodePorts,
+    pub ports: &'a mut LocalNodePorts,
     /// Peer nodes visible to this node after excluding `index`.
     pub peers: &'a [LocalPeerNode],
     /// Network ports indexed by node index, including this node if already
@@ -69,38 +69,17 @@ where
     /// Releases application-specific resources associated with a local cluster.
     fn cleanup_local_cluster(_deployment: &Self::Deployment) {}
 
-    /// Returns named ports that should be reserved in addition to the main
-    /// network port for each node.
-    fn local_port_names() -> &'static [&'static str] {
-        Self::initial_local_port_names()
-    }
-
     /// Builds one node using the allocated resources and optional template.
     /// Applications with preplanned ports return their actual peer port.
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<BuiltNodeConfig<Self::NodeConfig>, DynError>;
+    ) -> Result<PreparedNode<Self::NodeConfig>, DynError>;
 
     /// Builds the initial local configs for every node in the deployment.
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<Vec<NodeConfigEntry<<Self as Application>::NodeConfig>>, ProcessSpawnError> {
-        helpers::build_generated_initial_nodes::<Self>(
-            topology,
-            Self::initial_node_name_prefix(),
-            Self::initial_local_port_names(),
-            Self::build_node_config,
-        )
-    }
-
-    /// Prefix used for generated node names such as `node-0`.
-    fn initial_node_name_prefix() -> &'static str {
-        "node"
-    }
-
-    /// Additional named ports to reserve for each initial node.
-    fn initial_local_port_names() -> &'static [&'static str] {
-        &[]
+        helpers::build_generated_initial_nodes::<Self>(topology, Self::build_node_config)
     }
 
     /// Returns the initial persist directory for a node, if one should be
@@ -225,18 +204,10 @@ pub trait LocalBinaryApp: Application + Sized
 where
     <Self as Application>::NodeConfig: Clone + Send + Sync + 'static,
 {
-    /// Prefix used for generated initial node names such as `node-0`.
-    fn initial_node_name_prefix() -> &'static str;
-
-    /// Additional named ports to reserve for each local node.
-    fn initial_local_port_names() -> &'static [&'static str] {
-        &[]
-    }
-
     /// Builds one node using the allocated resources and optional template.
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<Self::NodeConfig, DynError>;
+    ) -> Result<PreparedNode<Self::NodeConfig>, DynError>;
 
     /// Returns the standard process description for launching one local node.
     fn local_process_spec() -> LocalProcessSpec;
@@ -262,23 +233,10 @@ where
     T: LocalBinaryApp,
     <T as Application>::NodeConfig: Clone + Send + Sync + 'static,
 {
-    fn initial_node_name_prefix() -> &'static str {
-        T::initial_node_name_prefix()
-    }
-
-    fn initial_local_port_names() -> &'static [&'static str] {
-        T::initial_local_port_names()
-    }
-
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<BuiltNodeConfig<Self::NodeConfig>, DynError> {
-        let network_port = context.ports.network_port();
-        let config = T::build_node_config(context)?;
-        Ok(BuiltNodeConfig {
-            config,
-            network_port,
-        })
+    ) -> Result<PreparedNode<Self::NodeConfig>, DynError> {
+        T::build_node_config(context)
     }
 
     fn local_process_spec() -> Option<LocalProcessSpec> {
@@ -307,17 +265,17 @@ pub(crate) fn build_node_from_template<E: LocalDeployerEnv>(
     options: &StartNodeOptions<E>,
     peer_ports: &[u16],
     template_config: Option<&E::NodeConfig>,
-) -> Result<BuiltNodeConfig<E::NodeConfig>, DynError> {
-    let mut reserved = reserve_local_node_ports(1, E::local_port_names(), "node")
-        .map_err(|source| -> DynError { source.into() })?;
-    let ports = reserved
+) -> Result<PreparedNode<E::NodeConfig>, DynError> {
+    let mut reserved =
+        reserve_local_node_ports(1, &[], "node").map_err(|source| -> DynError { source.into() })?;
+    let mut ports = reserved
         .pop()
         .ok_or_else(|| std::io::Error::other("failed to reserve local node ports"))?;
     let peers = build_local_peer_nodes(peer_ports, index);
     E::build_node_config(LocalBuildContext {
         topology,
         index,
-        ports: &ports,
+        ports: &mut ports,
         peers: &peers,
         peer_ports_by_name,
         options,

@@ -3,9 +3,9 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use openraft_kv_node::OpenRaftKvNodeConfig;
 use testing_framework_core::{scenario::DynError, topology::DeploymentDescriptor};
 use testing_framework_runner_local::{
-    BinaryProviderRef, BuildBinaryProvider, BuildCommand, BuiltNodeConfig, EnvBinaryProvider,
+    BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
     FallbackBinaryProvider, LocalBuildContext, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec,
-    NodeConfigEntry, reserve_local_node_ports, yaml_node_config,
+    NodeConfigEntry, PreparedNode, reserve_local_node_ports, yaml_node_config,
 };
 
 use crate::OpenRaftKvEnv;
@@ -13,7 +13,7 @@ use crate::OpenRaftKvEnv;
 impl LocalDeployerEnv for OpenRaftKvEnv {
     fn build_node_config(
         context: LocalBuildContext<'_, Self>,
-    ) -> Result<BuiltNodeConfig<OpenRaftKvNodeConfig>, DynError> {
+    ) -> Result<PreparedNode<OpenRaftKvNodeConfig>, DynError> {
         let LocalBuildContext {
             index,
             ports,
@@ -33,7 +33,8 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
         config.public_addr = local_addr(network_port);
         config.peer_addrs = peer_addrs_from_ports(peer_ports, index);
 
-        Ok(BuiltNodeConfig {
+        Ok(PreparedNode {
+            name: format!("node-{}", index),
             config,
             network_port,
         })
@@ -66,10 +67,6 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
                 ),
             })
             .collect())
-    }
-
-    fn initial_node_name_prefix() -> &'static str {
-        "node"
     }
 
     fn local_process_spec() -> Option<LocalProcessSpec> {
