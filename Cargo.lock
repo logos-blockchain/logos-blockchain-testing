@@ -1952,15 +1952,20 @@ dependencies = [
 name = "multi-app-e2e"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "kvstore-runtime-ext",
  "multi-app-fixture",
+ "pubsub-runtime-ext",
  "queue-node",
  "queue-runtime-ext",
  "serde",
+ "serde_json",
  "testing-framework-app",
  "testing-framework-container",
  "testing-framework-core",
  "testing-framework-runner-compose",
+ "testing-framework-runner-k8s",
  "tokio",
 ]
 

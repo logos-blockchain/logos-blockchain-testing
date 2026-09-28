@@ -15,3 +15,10 @@ testing-framework-container      = { workspace = true }
 testing-framework-core           = { workspace = true }
 testing-framework-runner-compose = { workspace = true }
 tokio                            = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+anyhow                       = "1"
+kvstore-runtime-ext          = { path = "../../kvstore/testing/integration" }
+pubsub-runtime-ext           = { path = "../../pubsub/testing/integration" }
+serde_json                   = { workspace = true }
+testing-framework-runner-k8s = { workspace = true }
