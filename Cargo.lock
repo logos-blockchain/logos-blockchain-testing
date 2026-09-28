@@ -1731,6 +1731,7 @@ dependencies = [
  "testing-framework-core",
  "testing-framework-runner-compose",
  "testing-framework-runner-k8s",
+ "testing-framework-runner-local",
  "tokio",
  "tracing",
  "tracing-subscriber",

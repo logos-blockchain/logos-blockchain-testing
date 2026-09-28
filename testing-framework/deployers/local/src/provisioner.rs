@@ -260,7 +260,6 @@ async fn run_retry_attempt<E: LocalDeployerEnv>(
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashMap,
         path::Path,
         sync::{
             Arc,
@@ -271,16 +270,13 @@ mod tests {
     use testing_framework_core::{
         scenario::{
             Application, ClusterControlProfile, ClusterControlRequest, ClusterRequest,
-            ClusterStartMode, DynError, ExistingCluster, ExternalNodeSource, StartNodeOptions,
+            ClusterStartMode, DynError, ExistingCluster, ExternalNodeSource,
         },
         topology::DeploymentDescriptor,
     };
 
     use super::{LocalClusterProvisioner, LocalClusterProvisionerError};
-    use crate::{
-        BuiltNodeConfig, LaunchSpec, LocalDeployerEnv, NodeConfigEntry, NodeEndpoints,
-        ProcessSpawnError,
-    };
+    use crate::{LaunchSpec, LocalDeployerEnv, NodeEndpoints, PreparedNode, ProcessSpawnError};
 
     #[derive(Default)]
     struct LifecycleCalls {
@@ -329,18 +325,14 @@ mod tests {
         }
 
         fn build_node_config(
-            _topology: &Self::Deployment,
-            _index: usize,
-            _peer_ports_by_name: &HashMap<String, u16>,
-            _options: &StartNodeOptions<Self>,
-            _peer_ports: &[u16],
-        ) -> Result<BuiltNodeConfig<EmptyConfig>, DynError> {
+            _context: crate::LocalBuildContext<'_, Self>,
+        ) -> Result<PreparedNode<EmptyConfig>, DynError> {
             unreachable!("empty deployment never builds node configs")
         }
 
         fn build_initial_node_configs(
             _topology: &Self::Deployment,
-        ) -> Result<Vec<NodeConfigEntry<EmptyConfig>>, ProcessSpawnError> {
+        ) -> Result<Vec<PreparedNode<EmptyConfig>>, ProcessSpawnError> {
             Ok(Vec::new())
         }
 

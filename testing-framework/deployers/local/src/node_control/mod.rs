@@ -11,13 +11,13 @@ use testing_framework_core::scenario::{
 use thiserror::Error;
 
 use crate::{
+    LocalPeerNode, PreparedNode,
     env::{
         LocalDeployerEnv, Node, build_initial_node_configs, build_launch_spec_with_args,
         build_node_from_template, discovered_node_access, initial_persist_dir,
-        initial_snapshot_dir, node_peer_port, spawn_node_from_config,
-        wait_for_local_readiness_ports,
+        initial_snapshot_dir, spawn_node_from_config, wait_for_local_readiness_ports,
     },
-    process::ProcessSpawnError,
+    process::{NodeEndpointPort, ProcessSpawnError},
 };
 
 mod state;
@@ -29,9 +29,7 @@ const RESTART_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_mil
 
 #[derive(Clone)]
 struct NodeStartSnapshot<Config> {
-    peer_ports: Vec<u16>,
-    peer_ports_by_name: HashMap<String, u16>,
-    node_name: String,
+    peers: Vec<LocalPeerNode>,
     index: usize,
     template_config: Option<Config>,
 }
@@ -99,6 +97,14 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         keep_tempdir: bool,
     ) -> Result<Vec<Node<E>>, ProcessSpawnError> {
         let configs = build_initial_node_configs::<E>(descriptors)?;
+        let mut names = HashSet::new();
+        for entry in &configs {
+            if entry.name.trim().is_empty() || !names.insert(&entry.name) {
+                return Err(ProcessSpawnError::Config {
+                    source: format!("empty or duplicate node name '{}'", entry.name).into(),
+                });
+            }
+        }
         let mut spawned = Vec::with_capacity(configs.len());
 
         for (index, config_entry) in configs.into_iter().enumerate() {
@@ -106,8 +112,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             let snapshot_dir = initial_snapshot_dir::<E>(descriptors, &config_entry.name, index);
             spawned.push(
                 spawn_node_from_config::<E>(
-                    config_entry.name,
-                    config_entry.config,
+                    config_entry,
                     keep_tempdir,
                     persist_dir.as_deref(),
                     snapshot_dir.as_deref(),
@@ -208,9 +213,12 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         let mut state = self.lock_state();
         clear_registered_nodes(&mut state);
 
-        for (idx, node) in nodes.into_iter().enumerate() {
-            let name = default_node_label(idx);
-            let port = node_peer_port::<E>(&node);
+        for node in nodes {
+            let name = node.name().to_owned();
+            let port = node
+                .endpoints()
+                .port(&NodeEndpointPort::Network)
+                .expect("prepared node must retain its network port");
             let client = node.client();
 
             self.node_clients.add_node(client.clone());
@@ -297,17 +305,18 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         name: &str,
         options: StartNodeOptions<E>,
     ) -> Result<StartedNode<E>, NodeManagerError> {
-        let snapshot = self.start_snapshot(name)?;
+        let snapshot = self.start_snapshot();
 
         let mut built = build_node_from_template::<E>(
             &self.descriptors,
             snapshot.index,
-            &snapshot.peer_ports_by_name,
             &options,
-            &snapshot.peer_ports,
+            &snapshot.peers,
             snapshot.template_config.as_ref(),
         )
         .map_err(|source| NodeManagerError::Config { source })?;
+
+        let node_name = validate_new_node_name(&self.lock_state(), name, &built.name)?;
 
         if let Some(config_patch) = &options.config_patch {
             built.config =
@@ -318,7 +327,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
 
         let client = self
             .spawn_and_register_node(
-                &snapshot.node_name,
+                &node_name,
                 built.network_port,
                 built.config,
                 options.common.runtime,
@@ -329,7 +338,7 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
             .await?;
 
         Ok(StartedNode {
-            name: snapshot.node_name,
+            name: node_name,
             client,
         })
     }
@@ -399,8 +408,11 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         extra_args: &[String],
     ) -> Result<E::NodeClient, NodeManagerError> {
         let node = spawn_node_from_config::<E>(
-            node_name.to_string(),
-            config,
+            PreparedNode {
+                name: node_name.to_owned(),
+                config,
+                network_port,
+            },
             self.keep_tempdir,
             persist_dir,
             snapshot_dir,
@@ -480,21 +492,28 @@ impl<E: LocalDeployerEnv> NodeManager<E> {
         Ok(NodeReadinessTarget { port, runtime })
     }
 
-    fn start_snapshot(
-        &self,
-        requested_name: &str,
-    ) -> Result<NodeStartSnapshot<E::NodeConfig>, NodeManagerError> {
+    fn start_snapshot(&self) -> NodeStartSnapshot<E::NodeConfig> {
         let state = self.lock_state();
-        let index = state.node_count;
-        let node_name = validate_new_node_name::<E>(state.node_count, &state, requested_name)?;
-
-        Ok(NodeStartSnapshot {
-            peer_ports: state.peer_ports.clone(),
-            peer_ports_by_name: state.peer_ports_by_name.clone(),
-            node_name,
-            index,
+        NodeStartSnapshot {
+            peers: state
+                .peer_ports
+                .iter()
+                .enumerate()
+                .map(|(index, &port)| {
+                    let peer = LocalPeerNode::new(index, port);
+                    match state
+                        .peer_ports_by_name
+                        .iter()
+                        .find(|(_, peer_port)| **peer_port == port)
+                    {
+                        Some((name, _)) => peer.with_name(name.clone()),
+                        None => peer,
+                    }
+                })
+                .collect(),
+            index: state.node_count,
             template_config: state.template_config.clone(),
-        })
+        }
     }
 
     fn lock_state(&self) -> MutexGuard<'_, LocalNodeManagerState<E>> {
@@ -528,31 +547,26 @@ fn clear_registered_nodes<E: LocalDeployerEnv>(state: &mut LocalNodeManagerState
 }
 
 fn validate_new_node_name<E: LocalDeployerEnv>(
-    node_count: usize,
     state: &LocalNodeManagerState<E>,
     requested_name: &str,
+    built_name: &str,
 ) -> Result<String, NodeManagerError> {
-    let label = normalize_node_name(node_count, requested_name);
-
-    if state.peer_ports_by_name.contains_key(&label) {
+    let name = if requested_name.trim().is_empty() {
+        built_name
+    } else {
+        requested_name
+    };
+    if name.trim().is_empty() {
         return Err(NodeManagerError::InvalidArgument {
-            message: format!("node name '{label}' already exists"),
+            message: "node name must not be empty".into(),
         });
     }
-
-    Ok(label)
-}
-
-fn normalize_node_name(index: usize, requested_name: &str) -> String {
-    if requested_name.trim().is_empty() {
-        return default_node_label(index);
+    if state.peer_ports_by_name.contains_key(name) {
+        return Err(NodeManagerError::InvalidArgument {
+            message: format!("node name '{name}' already exists"),
+        });
     }
-
-    if requested_name.starts_with("node-") {
-        return requested_name.to_string();
-    }
-
-    format!("node-{requested_name}")
+    Ok(name.to_owned())
 }
 
 fn validate_restart_options<E: LocalDeployerEnv>(
@@ -620,10 +634,6 @@ fn node_runtime_options<E: LocalDeployerEnv>(
     name: &str,
 ) -> NodeRuntimeOptions {
     state.runtime_by_name.get(name).copied().unwrap_or_default()
-}
-
-fn default_node_label(index: usize) -> String {
-    format!("node-{index}")
 }
 
 fn remove_node_from_state<E: LocalDeployerEnv>(
@@ -742,7 +752,6 @@ impl<E: LocalDeployerEnv> NodeControlHandle<E> for NodeManager<E> {
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashMap,
         net::TcpListener,
         path::Path,
         sync::{
@@ -760,11 +769,29 @@ mod tests {
         topology::DeploymentDescriptor,
     };
 
-    use super::NodeManager;
+    use super::{NodeManager, validate_new_node_name};
     use crate::{
-        LaunchSpec, NodeEndpoints,
-        env::{BuiltNodeConfig, LocalDeployerEnv, spawn_node_from_config},
+        LaunchSpec, LocalBuildContext, NodeEndpointPort, NodeEndpoints, PreparedNode,
+        env::{LocalDeployerEnv, spawn_node_from_config},
     };
+
+    #[test]
+    fn explicit_node_name_overrides_builder_name() {
+        let manager = NodeManager::<SleepEnv>::new(SleepTopology, NodeClients::new(Vec::new()));
+        let mut state = manager.lock_state();
+        assert_eq!(
+            validate_new_node_name(&state, "", "custom-0").unwrap(),
+            "custom-0"
+        );
+        assert_eq!(
+            validate_new_node_name(&state, "chosen", "custom-0").unwrap(),
+            "chosen"
+        );
+        assert!(validate_new_node_name(&state, "", "").is_err());
+        state.peer_ports_by_name.insert("taken".into(), 1234);
+        assert!(validate_new_node_name(&state, "taken", "unused").is_err());
+        assert!(validate_new_node_name(&state, "", "taken").is_err());
+    }
 
     #[derive(Clone)]
     struct SleepConfig {
@@ -795,23 +822,19 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for SleepEnv {
-        fn build_node_config_from_template(
-            _topology: &SleepTopology,
-            _index: usize,
-            _peer_ports_by_name: &HashMap<String, u16>,
-            options: &StartNodeOptions<Self>,
-            _peer_ports: &[u16],
-            _template_config: Option<&SleepConfig>,
-        ) -> Result<BuiltNodeConfig<SleepConfig>, DynError> {
-            let config = options
-                .config_override
-                .clone()
-                .unwrap_or_else(|| SleepConfig {
-                    api_port: reserve_unbound_port(),
-                });
-            Ok(BuiltNodeConfig {
-                network_port: config.api_port,
+        fn build_node_config(
+            context: LocalBuildContext<'_, Self>,
+        ) -> Result<PreparedNode<SleepConfig>, DynError> {
+            let config = match context.options.config_override.clone() {
+                Some(config) => config,
+                None => SleepConfig {
+                    api_port: context.ports.allocate("api")?,
+                },
+            };
+            Ok(PreparedNode {
+                name: format!("sleep-{}", context.index),
                 config,
+                network_port: context.ports.network_port(),
             })
         }
 
@@ -847,11 +870,14 @@ mod tests {
     async fn manager_with_two_nodes(ports: [u16; 2]) -> NodeManager<SleepEnv> {
         let manager = NodeManager::new(SleepTopology, NodeClients::default());
         let mut nodes = Vec::new();
-        for port in ports {
+        for (index, port) in ports.into_iter().enumerate() {
             nodes.push(
                 spawn_node_from_config::<SleepEnv>(
-                    "node".to_string(),
-                    SleepConfig { api_port: port },
+                    PreparedNode {
+                        name: format!("node-{index}"),
+                        config: SleepConfig { api_port: port },
+                        network_port: port,
+                    },
                     false,
                     None,
                     None,
@@ -886,6 +912,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl LocalDeployerEnv for FlakySleepEnv {
+        fn build_node_config(
+            _context: LocalBuildContext<'_, Self>,
+        ) -> Result<PreparedNode<FlakyConfig>, DynError> {
+            unreachable!("lifecycle tests supply prebuilt node configs")
+        }
+
         async fn build_launch_spec(
             config: &FlakyConfig,
             _dir: &Path,
@@ -917,10 +949,13 @@ mod tests {
     ) -> NodeManager<FlakySleepEnv> {
         let manager = NodeManager::new(SleepTopology, NodeClients::default());
         let node = spawn_node_from_config::<FlakySleepEnv>(
-            "node".to_string(),
-            FlakyConfig {
-                api_port: port,
-                fail_launch,
+            PreparedNode {
+                name: "node-0".into(),
+                config: FlakyConfig {
+                    api_port: port,
+                    fail_launch,
+                },
+                network_port: port,
             },
             false,
             None,
@@ -1063,6 +1098,55 @@ mod tests {
             .stop_node(&started.name)
             .await
             .expect("common stop of typed node");
+    }
+
+    #[tokio::test]
+    async fn builder_names_survive_initial_registration_and_manual_start() {
+        let manager = NodeManager::<SleepEnv>::new(SleepTopology, NodeClients::default());
+        let nodes = NodeManager::<SleepEnv>::spawn_initial_nodes(&SleepTopology, false)
+            .await
+            .unwrap();
+        manager.initialize_with_nodes(nodes);
+        assert_eq!(manager.node_names(), ["sleep-0", "sleep-1"]);
+        let state = manager.lock_state();
+        for (index, node) in state.nodes.iter().enumerate() {
+            let node = node.as_ref().unwrap();
+            assert_ne!(state.peer_ports[index], node.endpoints().api.port());
+            assert_eq!(
+                Some(state.peer_ports[index]),
+                node.endpoints().port(&NodeEndpointPort::Network)
+            );
+        }
+        drop(state);
+        assert_eq!(
+            manager
+                .start_snapshot()
+                .peers
+                .iter()
+                .map(|peer| peer.name())
+                .collect::<Vec<_>>(),
+            [Some("sleep-0"), Some("sleep-1")]
+        );
+        let generated = manager
+            .start_node_with("", StartNodeOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(generated.name, "sleep-2");
+        let explicit = manager
+            .start_node_with("chosen", StartNodeOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(explicit.name, "chosen");
+        assert!(
+            manager
+                .start_node_with("chosen", StartNodeOptions::default())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            manager.node_names(),
+            ["sleep-0", "sleep-1", "sleep-2", "chosen"]
+        );
     }
 
     #[tokio::test]

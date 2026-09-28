@@ -203,8 +203,8 @@ impl<E: LocalDeployerEnv> LocalCluster<E> {
 
     pub async fn start_all(&self) -> Result<(), DynError> {
         self.owner.ensure_open()?;
-        for index in 0..self.node_count() {
-            self.start_node(&format!("node-{index}")).await?;
+        for _ in 0..self.node_count() {
+            self.start_node("").await?;
         }
         self.wait_network_ready().await
     }

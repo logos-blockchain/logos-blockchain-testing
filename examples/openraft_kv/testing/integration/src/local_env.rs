@@ -1,38 +1,31 @@
 use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
+    collections::BTreeMap,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
 use openraft_kv_node::OpenRaftKvNodeConfig;
-use testing_framework_core::{
-    scenario::{DynError, StartNodeOptions},
-    topology::DeploymentDescriptor,
-};
+use testing_framework_core::{scenario::DynError, topology::DeploymentDescriptor};
 use testing_framework_runner_local::{
-    BinaryProviderRef, BuildBinaryProvider, BuildCommand, BuiltNodeConfig, EnvBinaryProvider,
-    FallbackBinaryProvider, LocalDeployerEnv, LocalNodePorts, LocalProcessSpec, NodeConfigEntry,
-    reserve_local_node_ports, yaml_node_config,
+    BinaryProviderRef, BuildBinaryProvider, BuildCommand, EnvBinaryProvider,
+    FallbackBinaryProvider, LaunchSpec, LocalBuildContext, LocalDeployerEnv, LocalNodePorts,
+    LocalProcessSpec, PreparedNode, allocate_local_node_ports, yaml_config_launch_spec,
 };
 
 use crate::OpenRaftKvEnv;
 
+#[async_trait::async_trait]
 impl LocalDeployerEnv for OpenRaftKvEnv {
-    fn build_node_config_from_template(
-        _topology: &Self::Deployment,
-        index: usize,
-        _peer_ports_by_name: &HashMap<String, u16>,
-        _options: &StartNodeOptions<Self>,
-        peer_ports: &[u16],
-        template_config: Option<&OpenRaftKvNodeConfig>,
-    ) -> Result<BuiltNodeConfig<OpenRaftKvNodeConfig>, DynError> {
-        let mut reserved = reserve_local_node_ports(1, &[], "node")
-            .map_err(|source| -> DynError { source.into() })?;
-
-        let ports = reserved
-            .pop()
-            .ok_or_else(|| std::io::Error::other("failed to reserve local node ports"))?;
-
+    fn build_node_config(
+        context: LocalBuildContext<'_, Self>,
+    ) -> Result<PreparedNode<OpenRaftKvNodeConfig>, DynError> {
+        let LocalBuildContext {
+            index,
+            ports,
+            peers,
+            template_config,
+            ..
+        } = context;
         let mut config = template_config
             .cloned()
             .unwrap_or_else(|| local_node_config(index, ports.network_port(), BTreeMap::new()));
@@ -43,9 +36,13 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
         config.node_id = index as u64;
         config.http_port = network_port;
         config.public_addr = local_addr(network_port);
-        config.peer_addrs = peer_addrs_from_ports(peer_ports, index);
+        config.peer_addrs = peers
+            .iter()
+            .map(|peer| (peer.index() as u64, local_addr(peer.network_port())))
+            .collect();
 
-        Ok(BuiltNodeConfig {
+        Ok(PreparedNode {
+            name: format!("node-{}", index),
             config,
             network_port,
         })
@@ -54,23 +51,24 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
     fn build_initial_node_configs(
         topology: &Self::Deployment,
     ) -> Result<
-        Vec<NodeConfigEntry<OpenRaftKvNodeConfig>>,
+        Vec<PreparedNode<OpenRaftKvNodeConfig>>,
         testing_framework_runner_local::process::ProcessSpawnError,
     > {
-        let reserved_ports = reserve_local_node_ports(topology.node_count(), &[], "node")?;
+        let allocated_ports = allocate_local_node_ports(topology.node_count(), &[], "node")?;
 
-        let peer_ports = reserved_ports
+        let peer_ports = allocated_ports
             .iter()
             .map(LocalNodePorts::network_port)
             .collect::<Vec<_>>();
 
         // Build every node from the same reserved port view so the initial
         // cluster starts with a consistent peer list on all nodes.
-        Ok(reserved_ports
+        Ok(allocated_ports
             .iter()
             .enumerate()
-            .map(|(index, ports)| NodeConfigEntry {
+            .map(|(index, ports)| PreparedNode {
                 name: format!("node-{index}"),
+                network_port: ports.network_port(),
                 config: local_node_config(
                     index,
                     ports.network_port(),
@@ -80,20 +78,15 @@ impl LocalDeployerEnv for OpenRaftKvEnv {
             .collect())
     }
 
-    fn initial_node_name_prefix() -> &'static str {
-        "node"
-    }
-
-    fn local_process_spec() -> Option<LocalProcessSpec> {
-        Some(
-            LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN")
-                .with_binary_provider(openraft_binary_provider())
-                .with_rust_log("info"),
-        )
-    }
-
-    fn render_local_config(config: &OpenRaftKvNodeConfig) -> Result<Vec<u8>, DynError> {
-        yaml_node_config(config)
+    async fn build_launch_spec(
+        config: &OpenRaftKvNodeConfig,
+        _dir: &Path,
+        _label: &str,
+    ) -> Result<LaunchSpec, DynError> {
+        let spec = LocalProcessSpec::new("OPENRAFT_KV_NODE_BIN")
+            .with_binary_provider(openraft_binary_provider())
+            .with_rust_log("info");
+        yaml_config_launch_spec(config, &spec).await
     }
 
     fn http_api_port(config: &OpenRaftKvNodeConfig) -> Option<u16> {

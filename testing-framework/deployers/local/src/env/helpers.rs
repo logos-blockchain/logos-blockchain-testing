@@ -12,52 +12,58 @@ use testing_framework_core::{
 use crate::{
     binary::{BinaryProvider, BinaryProviderRef, EnvBinaryProvider, PathBinaryProvider},
     env::LocalBuildContext,
-    process::{LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError},
+    process::{
+        LaunchSpec, NodeEndpointPort, NodeEndpoints, ProcessSpawnError, allocate_available_port,
+    },
 };
 
-/// Result of building a local node config together with the node's reserved
-/// network port.
-pub struct BuiltNodeConfig<Config> {
+/// Application config and runtime metadata prepared for one local node.
+pub struct PreparedNode<Config> {
+    /// Default node name, used unless the caller supplies one.
+    pub name: String,
     /// Materialized node config value.
     pub config: Config,
     /// Reserved network port used for peer traffic.
     pub network_port: u16,
 }
 
-/// Named initial config entry generated for one node.
-pub struct NodeConfigEntry<NodeConfigValue> {
-    /// Stable generated node name.
-    pub name: String,
-    /// Config value associated with `name`.
-    pub config: NodeConfigValue,
-}
-
-/// Reserved local ports assigned to one node.
+/// Allocated local ports assigned to one node.
 pub struct LocalNodePorts {
     network_port: u16,
     named_ports: HashMap<&'static str, u16>,
 }
 
 impl LocalNodePorts {
-    /// Returns the reserved network port.
+    /// Returns the allocated network port.
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
     }
 
-    /// Returns a reserved named port, if present.
+    /// Allocates a named port on first use, returning the same port on later
+    /// calls.
+    pub fn allocate(&mut self, name: &'static str) -> Result<u16, DynError> {
+        if let Some(port) = self.get(name) {
+            return Ok(port);
+        }
+        let port = allocate_available_port()?;
+        self.named_ports.insert(name, port);
+        Ok(port)
+    }
+
+    /// Returns an allocated named port, if present.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<u16> {
         self.named_ports.get(name).copied()
     }
 
-    /// Returns a reserved named port or an error if it is missing.
+    /// Returns an allocated named port or an error if it is missing.
     pub fn require(&self, name: &str) -> Result<u16, DynError> {
         self.get(name)
-            .ok_or_else(|| format!("missing reserved local port '{name}'").into())
+            .ok_or_else(|| format!("missing allocated local port '{name}'").into())
     }
 
-    /// Iterates over all reserved named ports.
+    /// Iterates over all allocated named ports.
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, u16)> + '_ {
         self.named_ports.iter().map(|(name, port)| (*name, *port))
     }
@@ -67,17 +73,41 @@ impl LocalNodePorts {
 #[derive(Clone, Debug)]
 pub struct LocalPeerNode {
     index: usize,
+    name: Option<String>,
     network_port: u16,
 }
 
 impl LocalPeerNode {
+    /// Describes a peer whose name is not yet known during initial preparation.
+    #[must_use]
+    pub fn new(index: usize, network_port: u16) -> Self {
+        Self {
+            index,
+            name: None,
+            network_port,
+        }
+    }
+
+    /// Adds the registered node name for an existing peer.
+    #[must_use]
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// The registered name, absent while initial configs are still being built.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
     /// Returns the peer's zero-based node index.
     #[must_use]
     pub fn index(&self) -> usize {
         self.index
     }
 
-    /// Returns the peer's reserved network port.
+    /// Returns the peer's allocated network port.
     #[must_use]
     pub fn network_port(&self) -> u16 {
         self.network_port
@@ -195,34 +225,20 @@ impl LocalProcessSpec {
     }
 }
 
-/// Preallocates `count` local TCP ports for later use.
+/// Selects `count` local TCP/UDP ports for later use without holding sockets.
 pub fn preallocate_ports(count: usize, label: &str) -> Result<Vec<u16>, ProcessSpawnError> {
     (0..count)
-        .map(|_| crate::process::allocate_available_port())
+        .map(|_| allocate_available_port())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|source| ProcessSpawnError::Config {
             source: format!("failed to pre-allocate {label} ports: {source}").into(),
         })
 }
 
-/// Builds a stable `name_prefix-{index}` config list.
-pub fn build_indexed_node_configs<T>(
-    count: usize,
-    name_prefix: &str,
-    build: impl FnMut(usize) -> T,
-) -> Vec<NodeConfigEntry<T>> {
-    (0..count)
-        .map(build)
-        .enumerate()
-        .map(|(index, config)| NodeConfigEntry {
-            name: format!("{name_prefix}-{index}"),
-            config,
-        })
-        .collect()
-}
-
-/// Reserves network and named ports for `count` local nodes.
-pub fn reserve_local_node_ports(
+/// Allocates network and named ports for `count` local nodes.
+/// Ports are checked for TCP and UDP availability, but are not held until
+/// launch.
+pub fn allocate_local_node_ports(
     count: usize,
     names: &[&'static str],
     label: &str,
@@ -306,14 +322,6 @@ pub fn build_indexed_http_peers<T>(
         .collect()
 }
 
-pub(crate) fn compact_peer_ports(peer_ports: &[u16], self_index: usize) -> Vec<u16> {
-    peer_ports
-        .iter()
-        .enumerate()
-        .filter_map(|(index, port)| (index != self_index).then_some(*port))
-        .collect()
-}
-
 /// Builds local peer-node views from a full indexed port list while skipping
 /// `self_index`.
 pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<LocalPeerNode> {
@@ -321,10 +329,7 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
         .iter()
         .enumerate()
         .filter_map(|(index, port)| {
-            (index != self_index).then_some(LocalPeerNode {
-                index,
-                network_port: *port,
-            })
+            (index != self_index).then_some(LocalPeerNode::new(index, *port))
         })
         .collect()
 }
@@ -332,44 +337,34 @@ pub fn build_local_peer_nodes(peer_ports: &[u16], self_index: usize) -> Vec<Loca
 /// Generates the initial local node configs for one deployment.
 pub fn build_generated_initial_nodes<E>(
     topology: &E::Deployment,
-    node_name_prefix: &str,
-    port_names: &[&'static str],
-    build_node: impl Fn(LocalBuildContext<'_, E>) -> Result<BuiltNodeConfig<E::NodeConfig>, DynError>,
-) -> Result<Vec<NodeConfigEntry<E::NodeConfig>>, ProcessSpawnError>
+    build_node: impl Fn(LocalBuildContext<'_, E>) -> Result<PreparedNode<E::NodeConfig>, DynError>,
+) -> Result<Vec<PreparedNode<E::NodeConfig>>, ProcessSpawnError>
 where
     E: Application,
 {
-    let reserved_ports =
-        reserve_local_node_ports(topology.node_count(), port_names, node_name_prefix)?;
-    let peer_ports = reserved_ports
+    let mut allocated_ports = allocate_local_node_ports(topology.node_count(), &[], "node")?;
+    let peer_ports = allocated_ports
         .iter()
         .map(LocalNodePorts::network_port)
         .collect::<Vec<_>>();
-    let peer_ports_by_name = HashMap::new();
     let options = testing_framework_core::scenario::StartNodeOptions::<E>::default();
 
-    reserved_ports
-        .iter()
+    allocated_ports
+        .iter_mut()
         .enumerate()
         .map(|(index, ports)| {
-            let compact_peer_ports = compact_peer_ports(&peer_ports, index);
-            let peers = build_local_peer_nodes(&compact_peer_ports, index);
+            let peers = build_local_peer_nodes(&peer_ports, index);
             let built = build_node(LocalBuildContext {
                 topology,
                 index,
                 ports,
                 peers: &peers,
-                peer_ports: &compact_peer_ports,
-                peer_ports_by_name: &peer_ports_by_name,
                 options: &options,
                 template_config: None,
             })
             .map_err(|source| ProcessSpawnError::Config { source })?;
 
-            Ok(NodeConfigEntry {
-                name: format!("{node_name_prefix}-{index}"),
-                config: built.config,
-            })
+            Ok(built)
         })
         .collect()
 }

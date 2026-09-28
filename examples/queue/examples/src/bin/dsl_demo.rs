@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
         .done()
         .restart_nodes_randomly()
         .every_secs(5, 15)
-        .excluding_nodes(["node-0"])
+        .excluding_nodes(["queue-node-0"])
         .done()
         .expect_converged(400)
         .within_secs(60)
