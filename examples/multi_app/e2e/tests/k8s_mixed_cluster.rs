@@ -13,6 +13,7 @@ use testing_framework_core::{
     topology::ClusterTopology,
 };
 use testing_framework_runner_k8s::K8sClusterProvisioner;
+use tokio::time::timeout;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn different_apps_share_a_k8s_context_across_restarts() -> Result<()> {
@@ -70,6 +71,7 @@ async fn different_apps_share_a_k8s_context_across_restarts() -> Result<()> {
 
     assert_kv_roundtrip(&kv, "before-restart").await?;
     assert_pubsub_roundtrip(&pubsub, "before-restart").await?;
+    let pubsub_state = read_pubsub_state(&pubsub).await?;
 
     kv.restart_node("node-0")
         .await
@@ -78,6 +80,12 @@ async fn different_apps_share_a_k8s_context_across_restarts() -> Result<()> {
     kv.wait_node_ready("node-0")
         .await
         .map_err(|error| anyhow!(error))?;
+
+    // The kvstore restart must not erase the other application's state.
+    ensure!(
+        read_pubsub_state(&pubsub).await? == pubsub_state,
+        "restarting kvstore changed pubsub topic state"
+    );
 
     assert_kv_roundtrip(&kv, "after-kv-restart").await?;
     assert_pubsub_roundtrip(&pubsub, "after-kv-restart").await?;
@@ -96,10 +104,9 @@ async fn different_apps_share_a_k8s_context_across_restarts() -> Result<()> {
 
     // The pubsub restart must not erase the other application's state.
     let client = kv.node_client("node-0").context("kvstore client missing")?;
-    let stored: Value =
-        tokio::time::timeout(Duration::from_secs(30), client.get("/kv/after-kv-restart"))
-            .await
-            .context("reading preserved kvstore state timed out")??;
+    let stored: Value = timeout(Duration::from_secs(30), client.get("/kv/after-kv-restart"))
+        .await
+        .context("reading preserved kvstore state timed out")??;
 
     ensure!(
         stored["record"]["value"] == "after-kv-restart",
@@ -136,7 +143,7 @@ async fn different_apps_share_a_k8s_context_across_restarts() -> Result<()> {
 }
 
 async fn assert_kv_roundtrip(cluster: &ClusterHandle<KvEnv>, value: &str) -> Result<()> {
-    tokio::time::timeout(Duration::from_secs(30), async {
+    timeout(Duration::from_secs(30), async {
         let client = cluster
             .node_client("node-0")
             .context("kvstore client missing")?;
@@ -157,8 +164,19 @@ async fn assert_kv_roundtrip(cluster: &ClusterHandle<KvEnv>, value: &str) -> Res
     .context("kvstore roundtrip timed out")?
 }
 
+async fn read_pubsub_state(cluster: &ClusterHandle<PubSubEnv>) -> Result<Value> {
+    let client = cluster
+        .node_client("node-0")
+        .context("pubsub client missing")?;
+
+    timeout(Duration::from_secs(30), client.get("/topics/state"))
+        .await
+        .context("reading preserved pubsub state timed out")?
+        .map_err(|error| anyhow!(error))
+}
+
 async fn assert_pubsub_roundtrip(cluster: &ClusterHandle<PubSubEnv>, payload: &str) -> Result<()> {
-    tokio::time::timeout(Duration::from_secs(30), async {
+    timeout(Duration::from_secs(30), async {
         let client = cluster
             .node_client("node-0")
             .context("pubsub client missing")?;
