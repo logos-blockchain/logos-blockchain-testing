@@ -13,7 +13,10 @@ use testing_framework_app::{
     AppHost, AppHostDeployer, AppHostEnv, AppRunContextExt as _, AppScenarioBuilderExt as _,
     ClusterApp,
 };
-use testing_framework_core::scenario::{ClusterHandle, DynError, RunContext, Workload};
+use testing_framework_core::scenario::{
+    ClusterControlRequest, ClusterHandle, ClusterRequest, DynError, RunContext, Workload,
+};
+use testing_framework_runner_local::LocalClusterProvisioner;
 
 const NODE_COUNT: usize = 2;
 
@@ -86,6 +89,48 @@ async fn local_kvstore_runs_a_complete_scenario() {
             "local node still accepts connections after run cleanup: {address}"
         );
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_cluster_restart_all_preserves_application_names() -> Result<(), DynError> {
+    let request = ClusterRequest::<KvEnv>::managed(KvTopology::new(NODE_COUNT))
+        .with_control(ClusterControlRequest::Full);
+    let provisioned = LocalClusterProvisioner.provision(request).await?;
+    let (cluster, unit) = provisioned.into_parts();
+    let cluster = cluster.expect("managed local cluster");
+    let handle = unit.handle();
+    let expected_names = vec!["kv-node-0", "kv-node-1"];
+
+    assert_eq!(cluster.node_names(), expected_names);
+    let original_pids = expected_names
+        .iter()
+        .map(|name| cluster.node_pid(name).expect("original node process"))
+        .collect::<Vec<_>>();
+
+    cluster.restart_all().await?;
+
+    assert_eq!(cluster.node_names(), expected_names);
+    assert_eq!(handle.node_names(), expected_names);
+    for name in expected_names {
+        assert!(
+            handle.node_client(name).is_some(),
+            "missing client for {name}"
+        );
+        assert!(
+            handle.node_pid(name).is_some(),
+            "missing process for {name}"
+        );
+        handle.wait_node_ready(name).await?;
+    }
+    for pid in original_pids {
+        assert!(
+            !process_is_running(pid),
+            "original process survived restart"
+        );
+    }
+    put_value(&handle, "after-restart-all").await?;
+
+    Ok(())
 }
 
 #[derive(Clone)]
