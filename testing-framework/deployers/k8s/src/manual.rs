@@ -25,6 +25,7 @@ use testing_framework_core::{
     },
 };
 use thiserror::Error;
+use tokio::time::timeout;
 use tokio_retry::{RetryIf, strategy::FixedInterval};
 use tracing::warn;
 
@@ -796,6 +797,12 @@ where
 
     async fn stop_node(&self, name: &str) -> Result<(), DynError> {
         Self::stop_node(self, name).await.map_err(Into::into)
+    }
+
+    async fn stop_all(&self) -> Result<(), DynError> {
+        self.ensure_open()?;
+        timeout(CLEANUP_TIMEOUT, self.stop_all_with_client(&self.client)).await??;
+        Ok(())
     }
 
     async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
@@ -1571,6 +1578,34 @@ mod tests {
             Err(ManualClusterError::UnsupportedStartOptions { .. })
         ));
         assert!(validate_restart_options(&StartNodeOptions::<DummyEnv>::default()).is_ok());
+    }
+
+    #[tokio::test]
+    async fn node_control_stop_all_reports_backend_errors() {
+        let cluster = offline_cluster();
+        NodeControl::stop_all(&cluster)
+            .await
+            .expect("empty cluster");
+        cluster.state.lock().unwrap().running.insert(0);
+
+        let error = NodeControl::stop_all(&cluster)
+            .await
+            .expect_err("unreachable Kubernetes API must fail");
+        assert!(matches!(
+            error.downcast_ref::<ManualClusterError>(),
+            Some(ManualClusterError::PatchDeployment { .. })
+        ));
+        assert!(cluster.state.lock().unwrap().running.contains(&0));
+
+        cluster.state.lock().unwrap().running.clear();
+        cluster.close();
+        let error = NodeControl::stop_all(&cluster)
+            .await
+            .expect_err("closed cluster");
+        assert!(matches!(
+            error.downcast_ref::<ManualClusterError>(),
+            Some(ManualClusterError::Closed)
+        ));
     }
 
     #[tokio::test]

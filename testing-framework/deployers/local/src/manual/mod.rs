@@ -122,6 +122,10 @@ impl<E: LocalDeployerEnv> NodeControl for ManualCluster<E> {
         self.cluster.stop_node(name).await
     }
 
+    async fn stop_all(&self) -> Result<(), DynError> {
+        self.cluster.stop_all()
+    }
+
     async fn start_node(&self, name: &str) -> Result<StartedNodeAccess, DynError> {
         NodeControl::start_node(&self.cluster, name).await
     }

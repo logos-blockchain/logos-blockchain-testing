@@ -357,6 +357,10 @@ impl<E: Application> ClusterHandle<E> {
         self.require_control()?.stop_node(name).await
     }
 
+    pub async fn stop_all(&self) -> Result<(), DynError> {
+        self.require_control()?.stop_all().await
+    }
+
     pub async fn restart_node(&self, name: &str) -> Result<(), DynError> {
         self.require_control()?.restart_node(name).await
     }
@@ -626,6 +630,14 @@ mod tests {
         );
         assert_eq!(
             handle
+                .stop_all()
+                .await
+                .expect_err("missing control")
+                .to_string(),
+            "cluster node control is not available"
+        );
+        assert_eq!(
+            handle
                 .wait_network_ready()
                 .await
                 .expect_err("missing readiness handle must fail")
@@ -700,6 +712,25 @@ mod tests {
     }
 
     impl<E: Application> NodeControlHandle<E> for NamedControl {}
+
+    #[tokio::test]
+    async fn cluster_handle_reports_unsupported_bulk_stop() {
+        let unit = ClusterUnit::<TestApp>::new(
+            None,
+            NodeClients::default(),
+            ClusterControlProfile::ManualControlled,
+        )
+        .with_node_control(Arc::new(NamedControl { names: Vec::new() }));
+
+        assert_eq!(
+            unit.handle()
+                .stop_all()
+                .await
+                .expect_err("unsupported bulk stop")
+                .to_string(),
+            "stop_all not supported by this deployer"
+        );
+    }
 
     struct OtherApp;
 

@@ -383,11 +383,22 @@ mod tests {
         assert!(unit.node_control().is_some());
         assert!(unit.cluster_wait().is_some());
 
+        let handle = unit.handle();
+        handle
+            .stop_all()
+            .await
+            .expect("bulk stop through app handle");
+        assert_eq!(lifecycle.cleanup.load(Ordering::Relaxed), 0);
+
         unit.take_cleanup()
             .expect("managed unit should own cleanup")
             .cleanup();
         assert_eq!(lifecycle.cleanup.load(Ordering::Relaxed), 1);
         assert!(cluster.stop_all().is_err(), "cleanup must lock out clones");
+        assert!(
+            handle.stop_all().await.is_err(),
+            "closed app control must fail"
+        );
         drop(cluster);
         assert_eq!(lifecycle.cleanup.load(Ordering::Relaxed), 1);
     }

@@ -254,6 +254,10 @@ impl<E: LocalDeployerEnv> NodeControl for LocalCluster<E> {
         self.stop_node(name).await
     }
 
+    async fn stop_all(&self) -> Result<(), DynError> {
+        self.stop_all()
+    }
+
     async fn wait_node_ready(&self, name: &str) -> Result<(), DynError> {
         self.wait_node_ready(name).await
     }

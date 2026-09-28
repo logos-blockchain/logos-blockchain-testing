@@ -678,6 +678,11 @@ impl<E: LocalDeployerEnv> NodeControl for NodeManager<E> {
         self.stop_node(name).await.map_err(Into::into)
     }
 
+    async fn stop_all(&self) -> Result<(), DynError> {
+        self.stop_all();
+        Ok(())
+    }
+
     async fn start_node_with(
         &self,
         name: &str,
@@ -991,10 +996,19 @@ mod tests {
             started.access.api_port(),
         );
         assert!(control.stop_node("missing").await.is_err());
-        control
-            .stop_node(name)
-            .await
-            .expect("stop restarted process");
+        control.start_node("bob").await.expect("start second node");
+        control.stop_node(name).await.expect("stop first node");
+        control.stop_all().await.expect("stop all processes");
+        assert!(control.node_pid("bob").is_none());
+        assert!(control.node_pid(name).is_none());
+        assert!(control.node_names().is_empty());
+        assert!(typed.node_client(name).is_none());
+        assert!(manager.node_clients().snapshot().is_empty());
+        assert!(control.node_access(name).await.is_err());
+        control.stop_all().await.expect("stop empty cluster");
+
+        control.start_node(name).await.expect("reuse cleared name");
+        control.stop_all().await.expect("stop reused node");
     }
 
     #[tokio::test]

@@ -214,6 +214,11 @@ pub trait NodeControl: Send + Sync {
         Err("stop_node not supported by this deployer".into())
     }
 
+    /// Stops all nodes using the backend's bulk-stop behavior.
+    async fn stop_all(&self) -> Result<(), DynError> {
+        Err("stop_all not supported by this deployer".into())
+    }
+
     async fn wait_node_ready(&self, _name: &str) -> Result<(), DynError> {
         Err("wait_node_ready not supported by this deployer".into())
     }
