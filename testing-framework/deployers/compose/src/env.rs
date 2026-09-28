@@ -12,14 +12,10 @@ use testing_framework_core::{
         StaticArtifactRenderer, render_and_write_registration_server,
     },
     scenario::{
-        Application, DynError, HttpReadinessRequirement, NodeAccess, NodeClients,
-        wait_for_http_ports_with_host_and_requirement, wait_http_readiness,
+        Application, DEFAULT_READINESS_POLL_INTERVAL, DEFAULT_READINESS_TIMEOUT, DynError,
+        NodeAccess, NodeClients, ReadinessRequirement, wait_for_readiness_ports,
     },
     topology::DeploymentDescriptor,
-};
-use tokio::{
-    net::TcpStream,
-    time::{Instant, sleep},
 };
 
 use crate::{
@@ -53,15 +49,6 @@ pub enum ComposeConfigServerMode {
     Disabled,
     /// Start a Docker-backed config server sidecar.
     Docker,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-/// Readiness probe used for compose nodes.
-pub enum ComposeReadinessProbe {
-    /// Probe a concrete HTTP path on each node.
-    Http { path: &'static str },
-    /// Probe raw TCP reachability on the testing port.
-    Tcp,
 }
 
 #[derive(Clone, Copy)]
@@ -212,13 +199,6 @@ pub trait ComposeDeployEnv: Application + Sized {
         Ok(NodeClients::new(clients))
     }
 
-    /// Returns the readiness probe used for compose nodes.
-    fn readiness_probe() -> ComposeReadinessProbe {
-        ComposeReadinessProbe::Http {
-            path: <Self as Application>::node_readiness_path(),
-        }
-    }
-
     /// Returns the host that should be used to access forwarded compose ports.
     fn compose_runner_host() -> String {
         compose_runner_host()
@@ -228,43 +208,29 @@ pub trait ComposeDeployEnv: Application + Sized {
     async fn wait_remote_readiness(
         _topology: &<Self as Application>::Deployment,
         mapping: &HostPortMapping,
-        requirement: HttpReadinessRequirement,
+        requirement: ReadinessRequirement,
     ) -> Result<(), DynError> {
-        match Self::readiness_probe() {
-            ComposeReadinessProbe::Http { path } => {
-                let host = Self::compose_runner_host();
-                let urls = readiness_urls(&host, mapping, path)?;
-                wait_http_readiness(&urls, requirement).await?;
-                Ok(())
-            }
-            ComposeReadinessProbe::Tcp => wait_for_tcp_readiness(&mapping.nodes, requirement).await,
-        }
+        let ports = mapping.node_api_ports();
+
+        Self::wait_for_nodes(&ports, &Self::compose_runner_host(), requirement).await
     }
 
-    /// Waits for local host ports using the app's compose-specific probe model.
+    /// Waits for reachable node ports using the app's readiness probe.
     async fn wait_for_nodes(
         ports: &[u16],
         host: &str,
-        requirement: HttpReadinessRequirement,
+        requirement: ReadinessRequirement,
     ) -> Result<(), DynError> {
-        match Self::readiness_probe() {
-            ComposeReadinessProbe::Http { path } => {
-                wait_for_http_ports_with_host_and_requirement(ports, host, path, requirement)
-                    .await?;
-                Ok(())
-            }
-            ComposeReadinessProbe::Tcp => {
-                let ports = ports
-                    .iter()
-                    .copied()
-                    .map(|port| NodeHostPorts {
-                        api: port,
-                        testing: port,
-                    })
-                    .collect::<Vec<_>>();
-                wait_for_tcp_readiness(&ports, requirement).await
-            }
-        }
+        wait_for_readiness_ports(
+            ports,
+            host,
+            Self::node_readiness_probe(),
+            requirement,
+            DEFAULT_READINESS_TIMEOUT,
+            DEFAULT_READINESS_POLL_INTERVAL,
+        )
+        .await?;
+        Ok(())
     }
 }
 
@@ -304,13 +270,6 @@ pub trait ComposeBinaryApp:
         host: &str,
     ) -> Result<Self::NodeClient, DynError> {
         <Self as Application>::build_node_client(&discovered_node_access(host, ports))
-    }
-
-    /// Returns the readiness probe used for compose nodes.
-    fn readiness_probe() -> ComposeReadinessProbe {
-        ComposeReadinessProbe::Http {
-            path: <Self as Application>::node_readiness_path(),
-        }
     }
 
     /// Returns the host that should be used to access forwarded compose ports.
@@ -379,10 +338,6 @@ where
         T::node_client_from_ports(ports, host)
     }
 
-    fn readiness_probe() -> ComposeReadinessProbe {
-        T::readiness_probe()
-    }
-
     fn compose_runner_host() -> String {
         T::compose_runner_host()
     }
@@ -426,13 +381,6 @@ pub(crate) fn cfgsync_server_mode<E: ComposeDeployEnv>() -> ComposeConfigServerM
     E::cfgsync_server_mode()
 }
 
-pub(crate) fn readiness_http_path<E: ComposeDeployEnv>() -> &'static str {
-    match E::readiness_probe() {
-        ComposeReadinessProbe::Http { path } => path,
-        ComposeReadinessProbe::Tcp => <E as Application>::node_readiness_path(),
-    }
-}
-
 pub(crate) fn build_node_clients<E: ComposeDeployEnv>(
     topology: &E::Deployment,
     host_ports: &HostPortMapping,
@@ -444,7 +392,7 @@ pub(crate) fn build_node_clients<E: ComposeDeployEnv>(
 pub(crate) fn wait_remote_readiness<E: ComposeDeployEnv>(
     topology: &E::Deployment,
     mapping: &HostPortMapping,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<impl std::future::Future<Output = Result<(), DynError>>, DynError> {
     let topology = topology.clone();
     let mapping = mapping.clone();
@@ -454,7 +402,7 @@ pub(crate) fn wait_remote_readiness<E: ComposeDeployEnv>(
 pub(crate) fn wait_for_nodes<E: ComposeDeployEnv>(
     ports: &[u16],
     host: &str,
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<impl std::future::Future<Output = Result<(), DynError>>, DynError> {
     let node_ports = ports.to_vec();
     let host = host.to_owned();
@@ -536,76 +484,9 @@ fn parse_node_container_ports(index: usize, node: &NodeDescriptor) -> Option<Nod
     })
 }
 
-async fn wait_for_tcp_readiness(
-    ports: &[NodeHostPorts],
-    requirement: HttpReadinessRequirement,
-) -> Result<(), DynError> {
-    let timeout = Duration::from_secs(60);
-    let deadline = Instant::now() + timeout;
-
-    loop {
-        let mut ready = 0;
-        for node in ports {
-            if TcpStream::connect(("127.0.0.1", node.testing))
-                .await
-                .is_ok()
-            {
-                ready += 1;
-            }
-        }
-
-        let total = ports.len();
-        let satisfied = match requirement {
-            HttpReadinessRequirement::AllNodesReady => ready == total,
-            HttpReadinessRequirement::AnyNodeReady => ready >= 1,
-            HttpReadinessRequirement::AtLeast(min_ready) => ready >= min_ready,
-        };
-
-        if satisfied {
-            return Ok(());
-        }
-
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "tcp readiness timed out: ready={ready}, total={total}, requirement={requirement:?}"
-            )
-            .into());
-        }
-
-        sleep(Duration::from_millis(200)).await;
-    }
-}
-
 /// Converts mapped compose ports into generic node access.
 pub fn discovered_node_access(host: &str, ports: &NodeHostPorts) -> NodeAccess {
     NodeAccess::new(host, ports.api).with_testing_port(ports.testing)
-}
-
-fn readiness_urls(
-    host: &str,
-    mapping: &HostPortMapping,
-    endpoint_path: &str,
-) -> Result<Vec<Url>, DynError> {
-    let endpoint_path = normalize_endpoint_path(endpoint_path);
-
-    mapping
-        .nodes
-        .iter()
-        .map(|ports| readiness_url(host, ports.api, &endpoint_path))
-        .collect::<Result<_, _>>()
-}
-
-fn normalize_endpoint_path(endpoint_path: &str) -> String {
-    if endpoint_path.starts_with('/') {
-        endpoint_path.to_string()
-    } else {
-        format!("/{endpoint_path}")
-    }
-}
-
-fn readiness_url(host: &str, api_port: u16, endpoint_path: &str) -> Result<Url, DynError> {
-    let url = Url::parse(&format!("http://{host}:{api_port}{endpoint_path}"))?;
-    Ok(url)
 }
 
 fn make_extension_node_config_file_name(extension: &str) -> ComposeNodeConfigFileName {
@@ -618,5 +499,112 @@ fn make_extension_node_config_file_name(extension: &str) -> ComposeNodeConfigFil
             let leaked: &'static str = Box::leak(other.to_owned().into_boxed_str());
             ComposeNodeConfigFileName::FixedExtension(leaked)
         }
+    }
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use testing_framework_core::{scenario::ReadinessProbe, topology::ClusterTopology};
+    use tokio::{
+        net::{TcpListener, TcpSocket},
+        time::timeout,
+    };
+
+    use super::*;
+
+    struct TcpEnv;
+
+    impl Application for TcpEnv {
+        type Deployment = ClusterTopology;
+        type NodeClient = ();
+        type NodeConfig = ();
+
+        fn node_readiness_probe() -> ReadinessProbe {
+            ReadinessProbe::Tcp
+        }
+    }
+
+    #[async_trait]
+    impl ComposeDeployEnv for TcpEnv {
+        fn compose_descriptor(_: &ClusterTopology, _: u16) -> Result<ComposeDescriptor, DynError> {
+            unreachable!("this test probes existing listeners")
+        }
+
+        fn compose_runner_host() -> String {
+            "127.0.0.1".to_owned()
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_tcp_probe_works_without_http() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        timeout(
+            Duration::from_secs(1),
+            TcpEnv::wait_for_nodes(&[port], "localhost", ReadinessRequirement::AllNodesReady),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        // The same port on a different host must not probe localhost instead.
+        let other_host = timeout(
+            Duration::from_millis(200),
+            TcpEnv::wait_for_nodes(&[port], "127.0.0.2", ReadinessRequirement::AllNodesReady),
+        )
+        .await;
+
+        assert!(!matches!(other_host, Ok(Ok(()))));
+    }
+
+    #[tokio::test]
+    async fn tcp_probe_checks_the_api_endpoint_not_the_testing_port() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let listening_port = listener.local_addr().unwrap().port();
+        let closed = TcpSocket::new_v4().unwrap();
+        closed.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+        let closed_port = closed.local_addr().unwrap().port();
+
+        let mapping = HostPortMapping {
+            nodes: vec![NodeHostPorts {
+                api: listening_port,
+                testing: closed_port,
+            }],
+        };
+
+        timeout(
+            Duration::from_secs(1),
+            TcpEnv::wait_remote_readiness(
+                &ClusterTopology::new(1),
+                &mapping,
+                ReadinessRequirement::AllNodesReady,
+            ),
+        )
+        .await
+        .expect("TCP readiness must use the listening API port")
+        .unwrap();
+
+        let mapping = HostPortMapping {
+            nodes: vec![NodeHostPorts {
+                api: closed_port,
+                testing: listening_port,
+            }],
+        };
+
+        let result = timeout(
+            Duration::from_millis(200),
+            TcpEnv::wait_remote_readiness(
+                &ClusterTopology::new(1),
+                &mapping,
+                ReadinessRequirement::AllNodesReady,
+            ),
+        )
+        .await;
+
+        assert!(
+            !matches!(result, Ok(Ok(()))),
+            "an open testing port must not make the API endpoint ready"
+        );
     }
 }

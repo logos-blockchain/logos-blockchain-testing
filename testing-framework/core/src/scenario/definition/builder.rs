@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     scenario::{
-        Application, DeploymentPolicy, HttpReadinessRequirement, RuntimeExtensionFactory,
+        Application, DeploymentPolicy, ReadinessRequirement, RuntimeExtensionFactory,
         builder_ops::CoreBuilderAccess, expectation::Expectation, runtime::context::RunMetrics,
         workload::Workload,
     },
@@ -100,7 +100,7 @@ impl<E: Application> ScenarioBuilder<E> {
     }
 
     #[must_use]
-    pub fn with_http_readiness_requirement(self, requirement: HttpReadinessRequirement) -> Self {
+    pub fn with_http_readiness_requirement(self, requirement: ReadinessRequirement) -> Self {
         self.map_core_builder(|builder| builder.with_http_readiness_requirement(requirement))
     }
 
@@ -257,7 +257,7 @@ impl<E: Application> Builder<E> {
     #[must_use]
     pub const fn with_http_readiness_requirement(
         mut self,
-        requirement: HttpReadinessRequirement,
+        requirement: ReadinessRequirement,
     ) -> Self {
         self.deployment_policy.readiness_requirement = requirement;
         self
@@ -389,7 +389,7 @@ mod tests {
     use crate::{
         scenario::{
             Application, CleanupPolicy, DeploymentPolicy, DynError, Expectation,
-            HttpReadinessRequirement, RunContext, RunMetrics, ScenarioBuildError, Workload,
+            ReadinessRequirement, RunContext, RunMetrics, ScenarioBuildError, Workload,
         },
         topology::NodeCountTopology,
     };
@@ -496,7 +496,7 @@ mod tests {
             .with_run_duration(Duration::from_secs(3))
             .with_expectation_cooldown(Duration::from_secs(2))
             .with_deployment_policy(policy)
-            .with_http_readiness_requirement(HttpReadinessRequirement::AtLeast(1))
+            .with_http_readiness_requirement(ReadinessRequirement::AtLeast(1))
             .with_workload(InitializedWorkload {
                 init_calls: Arc::clone(&workload_init_calls),
                 expectation_init_calls: Arc::clone(&expectation_init_calls),
@@ -508,12 +508,12 @@ mod tests {
         assert_eq!(scenario.expectation_cooldown(), Duration::from_secs(2));
         assert_eq!(
             scenario.http_readiness_requirement(),
-            HttpReadinessRequirement::AtLeast(1)
+            ReadinessRequirement::AtLeast(1)
         );
         assert_eq!(
             scenario.deployment_policy(),
             DeploymentPolicy {
-                readiness_requirement: HttpReadinessRequirement::AtLeast(1),
+                readiness_requirement: ReadinessRequirement::AtLeast(1),
                 ..policy
             }
         );

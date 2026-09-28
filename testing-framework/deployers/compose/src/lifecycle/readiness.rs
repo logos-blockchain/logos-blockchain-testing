@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use testing_framework_core::scenario::{HttpReadinessRequirement, NodeClients};
+use testing_framework_core::scenario::{NodeClients, ReadinessRequirement};
 use tokio::time::sleep;
 
 use crate::{
@@ -14,7 +14,7 @@ const DISABLED_READINESS_SLEEP: Duration = Duration::from_secs(5);
 /// Wait until all nodes respond on their API ports.
 pub async fn ensure_nodes_ready_with_ports<E: ComposeDeployEnv>(
     ports: &[u16],
-    requirement: HttpReadinessRequirement,
+    requirement: ReadinessRequirement,
 ) -> Result<(), StackReadinessError> {
     if ports.is_empty() {
         return Ok(());

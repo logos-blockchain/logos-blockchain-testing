@@ -5,7 +5,7 @@ use pubsub_node::PubSubClient;
 use serde::{Deserialize, Serialize};
 use testing_framework_core::scenario::{
     Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
-    NodeAccess, serialize_cluster_yaml_config,
+    NodeAccess, ReadinessProbe, serialize_cluster_yaml_config,
 };
 
 pub type PubSubTopology = testing_framework_core::topology::ClusterTopology;
@@ -35,8 +35,10 @@ impl Application for PubSubEnv {
         Ok(PubSubClient::new(access.api_base_url()?))
     }
 
-    fn node_readiness_path() -> &'static str {
-        "/health/ready"
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Http {
+            path: "/health/ready",
+        }
     }
 }
 

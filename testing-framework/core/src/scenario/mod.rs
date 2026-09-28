@@ -38,8 +38,9 @@ pub use provisioning::{
     ClusterStartMode, ClusterUnit, ProvisionedCluster,
 };
 pub use runtime::{
-    CleanupGuard, ClusterControlSummary, HttpReadinessRequirement, NodeClients,
-    PreparedRuntimeExtension, ReadinessError, RunContext, RunHandle, RunMetrics, Runner,
+    CleanupGuard, ClusterControlSummary, DEFAULT_READINESS_POLL_INTERVAL,
+    DEFAULT_READINESS_TIMEOUT, NodeClients, PreparedRuntimeExtension, ReadinessError,
+    ReadinessProbe, ReadinessRequirement, RunContext, RunHandle, RunMetrics, Runner,
     RuntimeExtensionFactory, RuntimeExtensions, ScenarioError, StabilizationConfig,
     metrics::{
         CONSENSUS_PROCESSED_BLOCKS, CONSENSUS_TRANSACTIONS_TOTAL, Metrics, MetricsError,
@@ -48,7 +49,7 @@ pub use runtime::{
     wait_for_http_ports, wait_for_http_ports_with_host, wait_for_http_ports_with_host_and_config,
     wait_for_http_ports_with_host_and_requirement, wait_for_http_ports_with_requirement,
     wait_for_http_ports_with_requirement_and_timeout, wait_for_http_ports_with_timeout,
-    wait_http_readiness, wait_until_stable,
+    wait_for_readiness_ports, wait_http_readiness, wait_readiness, wait_until_stable,
 };
 pub use snapshot::{
     NodeStateSource, SnapshotArtifact, SnapshotArtifactProvider, SnapshotContext, SnapshotFactory,

@@ -5,7 +5,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use testing_framework_core::scenario::{
     Application, ClusterNodeConfigApplication, ClusterNodeView, ClusterPeerView, DynError,
-    NodeAccess,
+    NodeAccess, ReadinessProbe,
 };
 
 pub const CLUSTER_PORT_KEY: &str = "cluster";
@@ -63,8 +63,8 @@ impl Application for NatsEnv {
         Ok(NatsClient::new(server_url, monitor_base_url))
     }
 
-    fn node_readiness_path() -> &'static str {
-        "/healthz"
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Http { path: "/healthz" }
     }
 }
 

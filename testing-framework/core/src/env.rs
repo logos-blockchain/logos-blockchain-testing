@@ -3,7 +3,7 @@ use std::io;
 use async_trait::async_trait;
 
 use crate::{
-    scenario::{DynError, ExternalNodeSource, NodeAccess},
+    scenario::{DynError, ExternalNodeSource, NodeAccess, ReadinessProbe},
     topology::DeploymentDescriptor,
 };
 
@@ -28,8 +28,8 @@ pub trait Application: Send + Sync + 'static {
         Err(io::Error::other("node access is not supported").into())
     }
 
-    /// Path appended by deployers during default readiness probing.
-    fn node_readiness_path() -> &'static str {
-        "/"
+    /// Selects the node readiness check, including the path for HTTP probes.
+    fn node_readiness_probe() -> ReadinessProbe {
+        ReadinessProbe::Http { path: "/" }
     }
 }

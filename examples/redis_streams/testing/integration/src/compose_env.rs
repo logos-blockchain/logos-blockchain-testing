@@ -4,8 +4,8 @@ use testing_framework_core::{
     cfgsync::StaticArtifactRenderer, scenario::DynError, topology::DeploymentDescriptor,
 };
 use testing_framework_runner_compose::{
-    ComposeDeployEnv, ComposeNodeConfigFileName, ComposeReadinessProbe, EnvEntry,
-    LoopbackNodeRuntimeSpec, infrastructure::ports::NodeHostPorts, node_identifier,
+    ComposeDeployEnv, ComposeNodeConfigFileName, EnvEntry, LoopbackNodeRuntimeSpec,
+    infrastructure::ports::NodeHostPorts, node_identifier,
 };
 
 use crate::{RedisStreamsClient, RedisStreamsEnv};
@@ -61,10 +61,6 @@ impl ComposeDeployEnv for RedisStreamsEnv {
         host: &str,
     ) -> Result<Self::NodeClient, DynError> {
         redis_client_from_ports(ports, host)
-    }
-
-    fn readiness_probe() -> ComposeReadinessProbe {
-        ComposeReadinessProbe::Tcp
     }
 }
 
