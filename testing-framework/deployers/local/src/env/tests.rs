@@ -1,6 +1,7 @@
 use std::{
     io::{Error, ErrorKind},
     net::TcpListener,
+    path::Path,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
@@ -314,7 +315,7 @@ async fn simple_launch_selects_binary_from_each_node_config() -> Result<(), DynE
     for binary in ["/bin/echo", "/bin/sleep"] {
         nodes[0].config.value = binary.into();
         let launch = ConfigEnv::build_launch_spec(&nodes[0].config, dir.path(), "config-0").await?;
-        assert_eq!(launch.binary, std::fs::canonicalize(binary)?);
+        assert_eq!(launch.binary.as_path(), Path::new(binary));
         assert_eq!(launch.files[0].contents, binary.as_bytes());
     }
     Ok(())
